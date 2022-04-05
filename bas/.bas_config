@@ -1,0 +1,81 @@
+{
+    "ld_spec": [
+        "ld",
+        "*/ld",
+        "*-ld",
+        "ld.gold",
+        "*/ld.gold",
+        "*-ld.gold",
+        "ld.lld",
+        "*/ld.lld",
+        "*-ld.lld",
+        "ld.lld-[0-9][0-9]",
+        "*/ld.lld-[0-9][0-9]",
+        "*-ld.lld-[0-9][0-9]",
+        "*-link",
+        "*/armlink"
+    ],
+    "ar_spec": [
+        "ar",
+        "*/ar",
+        "*-ar",
+        "*/armar"
+    ],
+    "gcc_spec": [
+        "*gcc",
+        "*gcc.real",
+        "*gcc-[0-9].[0-9]",
+        "*gcc-[0-9].[0-9].real",
+        "*gcc-[0-9]",
+        "*gcc-[0-9].real"
+    ],
+    "gpp_spec": [
+        "*/g++",
+        "*-g++",
+        "*/g++.real",
+        "*-g++.real",
+        "*/g++-[0-9].[0-9]",
+        "*-g++-[0-9].[0-9]",
+        "*/g++-[0-9].[0-9].real",
+        "*-g++-[0-9].[0-9].real",
+        "*/g++-[0-9]",
+        "*-g++-[0-9]",
+        "*/g++-[0-9].real",
+        "*-g++-[0-9].real"
+    ],
+    "clang_spec": [
+        "*clang",
+        "*clang.real",
+        "*clang-[0-9].[0-9]",
+        "*clang-[0-9]",
+        "*clang-[0-9].[0-9].real",
+        "*clang-[0-9].real",
+        "*clang-[0-9][0-9]",
+        "*clang-[0-9][0-9].real"
+    ],
+    "clangpp_spec": [
+        "*clang++",
+        "*clang++.real",
+        "*clang++-[0-9].[0-9]",
+        "*clang++-[0-9]",
+        "*clang++-[0-9].[0-9].real",
+        "*clang++-[0-9].real"
+    ],
+    "armcc_spec": [
+        "*armcc"
+    ],
+    "clang_tailopts": [
+        "-fwhole-program-vtables",
+        "-faddrsig",
+        "-fno-c++-static-destructors",
+        "-undef",
+        "-fsplit-lto-unit"
+    ],
+    "integrated_clang_compilers": [
+        "/usr/lib/llvm-10/bin/clang"
+    ],
+    "rbm_wrapping_binaries": [
+        "/bin/bash",
+        "/bin/sh"
+    ]
+}

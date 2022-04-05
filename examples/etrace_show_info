@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+import sys
+import libetrace
+
+nfsdb = libetrace.nfsdb()
+nfsdb.load(sys.argv[1],quiet=True)
+
+# List all linked modules
+L = [x for x in nfsdb if x.is_linking()]
+print ("# Linked modules")
+for x in L:
+	print ("  %s"%(x.linked_file))
+print()
+
+# List compiled files
+C = [x for x in nfsdb if x.has_compilations()]
+print ("# Compiled files")
+for x in C:
+	for u in x.compilation_info.files:
+		print ("  %s"%(u))
+print()
+
+# List all compilation commands
+print ("# Compilation commands")
+for x in C:
+	print ("$ %s\n"%(" ".join(x.argv)))

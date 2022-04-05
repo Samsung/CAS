@@ -1,0 +1,123 @@
+{
+	"exact_name":
+	{
+		"memcpy":
+		[
+		    [1, 2],
+		    [1, 3],
+		    [2, 3]
+		],
+		"sscanf": 
+		[
+		    [0, 1]
+		],
+		"strcpy":
+		[
+		    [1, 2]
+		],
+		"kstrndup":
+		[
+		    [1, 2]
+		],
+		"kmemdup":
+		[
+		    [1, 2]
+		],
+		"kmemdup_nul":
+		[
+		    [1, 2]
+		],
+		"memdup_user":
+		[
+		    [1, 2]
+		],
+		"strndup_user":
+		[
+		    [1, 2]
+		],
+		"memdup_user_nul":
+		[
+		    [1, 2]
+		],
+		"sprintf":
+		[
+		    [0, 1]
+		],
+		"strncpy":
+		[
+		    [1, 2],
+		    [1, 3],
+		    [2, 3]
+		],
+		"strlcpy":
+		[
+		    [1, 2],
+		    [1, 3],
+		    [2, 3]
+		],
+		"strstr":
+		[
+		    [1, 2]
+		],
+		"strsep":
+		[
+		    [1, 2]
+		],
+		"strpbrk":
+		[
+		    [1, 2]
+		],
+		"strspn":
+		[
+		    [1, 2]
+		],
+		"strchr":
+		[
+		    [1, 2]
+		],
+		"strrchr":
+		[
+		    [1, 2]
+		],
+		"memchr":
+		[
+		    [1, 2],
+		    [1, 3]
+		],
+		"copy_from_user":
+		[
+		    [1, 2],
+		    [1, 3],
+		    [2, 3]
+		],
+		"copy_to_user":
+		[
+		    [1, 2],
+		    [1, 3],
+		    [2, 3]
+		],
+		"simple_write_to_buffer":
+		[
+			[1, 4],
+			[1, 5],
+			[4, 5]
+		],
+		"simple_read_from_buffer":
+		[
+			[1, 4],
+			[1, 2],
+			[4, 2]
+		]
+	},
+	"regex_name":
+    {
+        "kstrto":
+        [
+            [3,1]
+        ],
+        "simple_strto":
+        [
+            [2,1]
+        ]
+    }
+}

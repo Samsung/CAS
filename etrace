@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Run syscalls tracing of a given command
+# Usage:
+# netrace COMMAND ...
+
+print_usage () {
+    echo "Usage: netrace [-h] [-l] [-a] [-w WORK_DIR] [--] COMMAND ..."
+}
+
+echo_err () {
+    echo "[!] $1"
+}
+
+if [ "$#" -lt 1 ]; then
+    print_usage
+    exit 1
+fi
+
+# -------- parse args
+SAVE_KERNEL_LOG=
+WORK_DIR=$(pwd)
+MODULE_PARAMS="ignore_repeated_opens=1"
+
+while getopts "ahlw:" opt; do
+    case "$opt" in
+    h)
+        print_usage
+        exit 0
+        ;;
+    l)
+        SAVE_KERNEL_LOG=y
+        ;;
+    w)
+        WORK_DIR="$OPTARG"
+        mkdir -p "$WORK_DIR"
+        ;;
+    a)
+        MODULE_PARAMS=""
+        ;;
+    esac
+done
+
+# Remove script's arguments so that "$@" contains the command to run
+# under tracer
+shift $((OPTIND-1))
+# If arguments were separated from the command by "--", remove it too
+[ "${1:-}" = "--" ] && shift
+
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+NPROC=$(nproc)
+NPROC=$(expr $NPROC - 1)
+
+# -------- setting up ftrace
+sudo -n setup_etrace.sh -f
+if [ "$?" -ne 0 ]; then
+    echo_err "setup_etrace.sh -f failed"
+    exit 1
+fi
+
+# -------- save our CWD
+echo "INITCWD=$WORK_DIR" > "$WORK_DIR/.nfsdb"
+
+# -------- set up event listener
+#${DIR}/etrace_cat "/sys/kernel/debug/tracing/trace_pipe" > "$WORK_DIR/.nfsdb" &
+${DIR}/cati "/sys/kernel/debug/tracing/trace_pipe" >> "$WORK_DIR/.nfsdb" &
+LISTENER_PID="$!"
+sudo -n renice -n -18 -p $LISTENER_PID
+
+# -------- save kernel log
+if [ "$SAVE_KERNEL_LOG" = "y" ]; then
+    dmesg -w > "$WORK_DIR/.nfsdb.klog" &
+    KLOGGER_PID="$!"
+fi
+
+# -------- install execve_trace module
+MYPID="$$"
+sudo -n setup_etrace.sh -i $MYPID $MODULE_PARAMS
+if [ "$?" -ne 0 ]; then
+    echo_err "setup_etrace.sh -i failed"
+    exit 1
+fi
+
+# -------- run the command
+"$@"
+RV="$?"
+
+# -------- remove execve_trace module
+sudo -n setup_etrace.sh -r
+if [ "$?" -ne 0 ]; then
+    echo_err "setup_etrace.sh -r failed"
+    exit 1
+fi
+
+# Save stat information to see if any events have been missing
+rm -f "$WORK_DIR/.nfsdb.stats" && touch "$WORK_DIR/.nfsdb.stats"
+for i in `seq 0 $NPROC`; do
+    echo "##---------- CPU $i ---------- ##" >> "$WORK_DIR/.nfsdb.stats"
+    cat "/sys/kernel/debug/tracing/per_cpu/cpu$i/stats" >> "$WORK_DIR/.nfsdb.stats"
+done
+
+# -------- stop event listener
+kill -SIGINT "${LISTENER_PID}"
+
+# -------- stop kernel logger
+if [ "$SAVE_KERNEL_LOG" = "y" ]; then
+    kill -SIGINT "${KLOGGER_PID}"
+fi
+
+# We're done here
+exit $RV
