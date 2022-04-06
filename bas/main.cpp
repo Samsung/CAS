@@ -457,10 +457,12 @@ int main(int argc, char** argv) {
 
     uint32_t pipe_index=0;
     for (auto i=context.srvec.begin(); i!=context.srvec.end(); ++i) {
-    	if ((std::distance(context.srvec.begin(),i) % (context.srvec.size()/100))==0) {
-			printf("\r%lu%%",std::distance(context.srvec.begin(),i) / (context.srvec.size()/100));
-			fflush(stdout);
-		}
+        if (context.srvec.size()>=100) {
+            if ((std::distance(context.srvec.begin(),i) % (context.srvec.size()/100))==0) {
+                printf("\r%lu%%",std::distance(context.srvec.begin(),i) / (context.srvec.size()/100));
+                fflush(stdout);
+            }
+        }
     	syscall_raw& sys = (*i);
     	if (sys.sysname==syscall_raw::SYS_PIPE) {
 			if (fdmap_process_map.find(sys.pid)==fdmap_process_map.end()) {
