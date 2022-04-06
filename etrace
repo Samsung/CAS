@@ -5,7 +5,7 @@
 # netrace COMMAND ...
 
 print_usage () {
-    echo "Usage: netrace [-h] [-l] [-a] [-w WORK_DIR] [--] COMMAND ..."
+    echo "Usage: etrace [-h] [-l] [-a] [-w WORK_DIR] [--] COMMAND ..."
 }
 
 echo_err () {
