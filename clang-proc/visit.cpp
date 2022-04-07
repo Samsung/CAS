@@ -824,7 +824,102 @@ bool DbJSONClassVisitor::VisitCompoundStmtComplete(const CompoundStmt *CS) {
 	return true;
 }
 
+void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
+	if(!Cond) return;
+	QualType CT = Cond->getType();
+	VarRef_t VR;
+	VR.VDCAMUAS.setCond(Cond,cf_id);
+	std::vector<VarRef_t> vVR;
+	DbJSONClassVisitor::DREMap_t DREMap;
+
+	std::string Expr;
+	llvm::raw_string_ostream exprstream(Expr);
+	exprstream << "[" << Cond->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+	Cond->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+	exprstream.flush();
+
+	std::vector<CStyleCastOrType> castVec;
+	const class Expr* E = stripCastsEx(Cond,castVec);
+	bool isAddress = false;
+	/* We might have address constant if we cast the value to pointer type or the return type is a pointer */
+	if (castVec.size()>0) {
+		if (castVec.front().getFinalType()->getTypeClass()==Type::Pointer) {
+			isAddress = true;
+		}
+	  }
+	if (!isAddress) {
+		if (CT->getTypeClass()==Type::Pointer) {
+			isAddress = true;
+		}
+	}
+	// Check if there's implicit (or explicit) cast to the return value
+	QualType castType;
+	if (Cond->getStmtClass()==Stmt::ImplicitCastExprClass) {
+		const ImplicitCastExpr* ICE = static_cast<const ImplicitCastExpr*>(Cond);
+		castType = ICE->getSubExpr()->getType();
+	}
+	else if (Cond->getStmtClass()==Stmt::CStyleCastExprClass) {
+		const CStyleCastExpr* CSCE = static_cast<const CStyleCastExpr*>(Cond);
+		castType = CSCE->getType();
+	}
+	if (!castType.isNull()) {
+		noticeTypeClass(castType);
+	  }
+
+	 // Check if return expression can be evaluated as a constant expression
+	Expr::EvalResult Res;
+	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
+		int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+		CStyleCastOrType valuecast;
+		if (!castType.isNull()) {
+			valuecast.setType(castType);
+		  }
+		if (isAddress) {
+			  v.setAddress(i,valuecast);
+		  }
+		  else {
+			  v.setInteger(i,valuecast);
+		  }
+		vMCtuple_t vMCtuple;
+		v.setPrimaryFlag(false);
+		DREMap_add(DREMap,v,vMCtuple);
+	}
+	else {
+		lookup_cache_t cache;
+		bool compundStmtSeen = false;
+		unsigned MECnt = 0;
+		lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
+	}
+
+	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
+		VarRef_t iVR;
+		iVR.VDCAMUAS = (*i).first;
+		vVR.push_back(iVR);
+	}
+
+	std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
+			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,cf_id,vVR,Expr,getCurrentCSPtr(),DereferenceCond));
+	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+}
+
 bool DbJSONClassVisitor::VisitSwitchStmt(SwitchStmt *S){
+	// add compound statement if not present(should never happen)
+	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getBody();
+		S->setBody(CS);
+	}
+
+	// add control flow info
+	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getBody());
+	size_t cf_id = lastFunctionDef->cfData.size();
+	lastFunctionDef->cfData.push_back({cf_switch,CS});
+	lastFunctionDef->csInfoMap.insert({CS,cf_id});
+
+	// add condition deref
+	handleConditionDeref(S->getCond(),cf_id);
+
 	if (_opts.switchopt) {
 		const Expr* cond = S->getCond();
 		std::vector<std::pair<DbJSONClassVisitor::caseinfo_t,DbJSONClassVisitor::caseinfo_t>> caselst;
@@ -874,21 +969,110 @@ bool DbJSONClassVisitor::VisitSwitchStmt(SwitchStmt *S){
 }
 
 bool DbJSONClassVisitor::VisitIfStmt(IfStmt *S){
-	if (lastFunctionDef) {
-		struct DbJSONClassVisitor::IfInfo_t ii = {0,0,0};
-		if (currentWithinCS()) {
-			ii.CSPtr = getCurrentCSPtr();
-			if (hasParentCS()) {
-				ii.parentCSPtr = getParentCSPtr();
-			}
-		}
-		ii.ifstmt = S;
-		if (_opts.debug3) {
-			llvm::outs() << "IfStmt: " << "" << " (" << lastFunctionDef->this_func->getName().str() << ")["
-					<< lastFunctionDef->csIdMap[ii.CSPtr] << "] " << S->getCond()->getExprLoc().printToString(Context.getSourceManager()) << "\n";
-		}
-		lastFunctionDef->ifMap.insert(std::pair<const IfStmt*,IfInfo_t>(S,ii));
+	if (!lastFunctionDef) return true;
+
+	// add compound statement if not present
+	if(S->getThen()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getThen();
+		S->setThen(CS);
 	}
+	if(S->getElse() && S->getElse()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getElse();
+		S->setElse(CS);
+	}
+	
+	// add control flow info
+	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getThen());
+	size_t cf_id = lastFunctionDef->cfData.size();
+	lastFunctionDef->cfData.push_back({cf_if,CS});
+	lastFunctionDef->csInfoMap.insert({CS,cf_id});
+	handleConditionDeref(S->getCond(),cf_id);
+
+	if(S->getElse()){
+		CS = static_cast<CompoundStmt*>(S->getElse());
+		cf_id = lastFunctionDef->cfData.size();
+		lastFunctionDef->cfData.push_back({cf_else,CS});
+		lastFunctionDef->csInfoMap.insert({CS,cf_id});
+		handleConditionDeref(S->getCond(),cf_id);
+	}
+	struct DbJSONClassVisitor::IfInfo_t ii = {0,0,0};
+	if (currentWithinCS()) {
+		ii.CSPtr = getCurrentCSPtr();
+		if (hasParentCS()) {
+			ii.parentCSPtr = getParentCSPtr();
+		}
+	}
+	ii.ifstmt = S;
+	if (_opts.debug3) {
+		llvm::outs() << "IfStmt: " << "" << " (" << lastFunctionDef->this_func->getName().str() << ")["
+				<< lastFunctionDef->csIdMap[ii.CSPtr] << "] " << S->getCond()->getExprLoc().printToString(Context.getSourceManager()) << "\n";
+	}
+	lastFunctionDef->ifMap.insert(std::pair<const IfStmt*,IfInfo_t>(S,ii));
+	return true;
+}
+
+bool DbJSONClassVisitor::VisitForStmt(ForStmt *S){
+	if(!lastFunctionDef) return true;
+
+	// add compound statement if not present
+	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getBody();
+		S->setBody(CS);
+	}
+
+	// add control flow info
+	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getBody());
+	size_t cf_id = lastFunctionDef->cfData.size();
+	lastFunctionDef->cfData.push_back({cf_for,CS});
+	lastFunctionDef->csInfoMap.insert({CS,cf_id});
+
+	// add condition deref
+	handleConditionDeref(S->getCond(),cf_id);
+	return true;
+}
+
+bool DbJSONClassVisitor::VisitWhileStmt(WhileStmt *S){
+	if(!lastFunctionDef) return true;
+
+	// add compound statement if not present
+	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getBody();
+		S->setBody(CS);
+	}
+
+	// add control flow info
+	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getBody());
+	size_t cf_id = lastFunctionDef->cfData.size();
+	lastFunctionDef->cfData.push_back({cf_while,CS});
+	lastFunctionDef->csInfoMap.insert({CS,cf_id});
+
+	// add condition deref
+	handleConditionDeref(S->getCond(),cf_id);
+	return true;
+}
+
+bool DbJSONClassVisitor::VisitDoStmt(DoStmt *S){
+	if(!lastFunctionDef) return true;
+
+	// add compound statement if not present
+	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
+		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CS->body_begin()[0] = S->getBody();
+		S->setBody(CS);
+	}
+
+	// add control flow info
+	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getBody());
+	size_t cf_id = lastFunctionDef->cfData.size();
+	lastFunctionDef->cfData.push_back({cf_do,CS});
+	lastFunctionDef->csInfoMap.insert({CS,cf_id});
+
+	// add condition deref
+	handleConditionDeref(S->getCond(),cf_id);
 	return true;
 }
 
@@ -1177,10 +1361,92 @@ bool DbJSONClassVisitor::VisitCastExpr(const CastExpr *Node) {
 }
 
 bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
-	if ((BO->getOpcode()==BO_Assign)||(BO->getOpcode()==BO_AddAssign)||(BO->getOpcode()==BO_AndAssign)
-			||(BO->getOpcode()==BO_DivAssign)||(BO->getOpcode()==BO_MulAssign)||(BO->getOpcode()==BO_OrAssign)
-			||(BO->getOpcode()==BO_RemAssign)||(BO->getOpcode()==BO_ShlAssign)||(BO->getOpcode()==BO_ShrAssign)
-			||(BO->getOpcode()==BO_SubAssign)||(BO->getOpcode()==BO_XorAssign)) {
+
+	// logic operators (includes bitwise operators)
+	if(BO->getOpcode() >= BO_Cmp && BO->getOpcode() <= BO_LOr){
+		if (_opts.debugME) {
+			llvm::outs() << "@VisitBinaryOperator()\n";
+			BO->dumpColor();
+		}
+
+		if (!lastFunctionDef) return true; // TODO: When derefs for globals are implemented handle this
+
+		// Ignore if evaluates to constant value
+		Expr::EvalResult Res;
+		if((!BO->isValueDependent()) && BO->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(BO,Res)) {
+			return true;
+		}
+
+		const Expr* LHS = BO->getLHS();
+		const Expr* RHS = BO->getRHS();
+
+		DbJSONClassVisitor::DREMap_t LDREMap;
+		std::vector<CStyleCastOrType> castVec;
+		const Expr* E = stripCastsEx(LHS,castVec);
+		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
+			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			CStyleCastOrType valuecast;
+			v.setInteger(i,valuecast);
+			vMCtuple_t vMCtuple;
+			v.setPrimaryFlag(false);
+			DREMap_add(LDREMap,v,vMCtuple);
+		}
+		else {
+			lookup_cache_t cache;
+			bool compundStmtSeen = false;
+			unsigned MECnt = 0;
+			lookForDeclRefWithMemberExprsInternal(LHS,LHS,LDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
+		}
+
+		DbJSONClassVisitor::DREMap_t RDREMap;
+		castVec.clear();
+		E = stripCastsEx(RHS,castVec);
+		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
+			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			CStyleCastOrType valuecast;
+			v.setInteger(i,valuecast);
+			vMCtuple_t vMCtuple;
+			v.setPrimaryFlag(false);
+			DREMap_add(RDREMap,v,vMCtuple);
+		}
+		else {
+			lookup_cache_t cache;
+			bool compundStmtSeen = false;
+			unsigned MECnt = 0;
+			lookForDeclRefWithMemberExprsInternal(RHS,RHS,RDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
+		}
+
+		std::string Expr;
+		llvm::raw_string_ostream exprstream(Expr);
+		exprstream << "[" << BO->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+		exprstream.flush();
+
+		VarRef_t VR;
+		VR.VDCAMUAS.setLogic(BO);
+		std::vector<VarRef_t> vVR;
+		unsigned Lsize = LDREMap.size();
+
+		for (DbJSONClassVisitor::DREMap_t::iterator i = LDREMap.begin(); i!=LDREMap.end(); ++i) {
+			VarRef_t iVR;
+			iVR.VDCAMUAS = (*i).first;
+			vVR.push_back(iVR);
+		}
+		for (DbJSONClassVisitor::DREMap_t::iterator i = RDREMap.begin(); i!=RDREMap.end(); ++i) {
+			VarRef_t iVR;
+			iVR.VDCAMUAS = (*i).first;
+			vVR.push_back(iVR);
+		}
+
+		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),Lsize,vVR,Expr,getCurrentCSPtr(),DereferenceLogic));
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+	}
+
+	// assignment operators
+	if(BO->getOpcode() >= BO_Assign && BO->getOpcode() <= BO_OrAssign){
 
 		if (_opts.debugME) {
 			llvm::outs() << "@VisitBinaryOperator()\n";

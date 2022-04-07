@@ -382,6 +382,9 @@ public:
           ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE,
 		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET,
 		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm,
+      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond,
+      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic,
+
 	  };
 	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
 			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone), primary(true) {}
@@ -464,6 +467,10 @@ public:
             	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET";
               case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm:
             	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm";
+              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond:
+            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond";
+              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic:
+            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic";
 		  }
 		  return "";
 	  }
@@ -519,6 +526,10 @@ public:
           return cao;
       }
 
+      const BinaryOperator* getLogic() {
+          return cao;
+      }
+
       const OffsetOfExpr* getOOE() {
           return ooe;
       }
@@ -553,6 +564,12 @@ public:
           kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO;
       }
 
+      void setLogic(const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
+          cao = CAO;
+          valuecast = cast;
+          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic;
+      }
+
       void setOOE(const OffsetOfExpr* OOE, CStyleCastOrType cast = CStyleCastOrType()) {
           ooe = OOE;
           valuecast = cast;
@@ -570,6 +587,13 @@ public:
 			valuecast = cast;
 			kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm;
 		}
+    
+    void setCond(const Expr *E,size_t cf_id, CStyleCastOrType cast = CStyleCastOrType()){
+      re = E;
+      address = cf_id;
+      valuecast = cast;
+      kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond;
+    }
 
 	  void setRefCall(const CallExpr* c, const UnaryOperator* __UO, CStyleCastOrType cast = CStyleCastOrType()) {
 		  call = c;
@@ -875,6 +899,8 @@ public:
 		  CALLVAR_MEMBER,
           CALLVAR_ASSIGN,
           CALLVAR_OFFSETOF,
+          CALLVAR_LOGIC,
+
 	  } type;
 	  unsigned long mi;
 	  unsigned long di;
@@ -927,11 +953,12 @@ public:
 		  if (type==CALLVAR_MEMBER) return "member";
           if (type==CALLVAR_ASSIGN) return "assign";
           if (type==CALLVAR_OFFSETOF) return "offsetof";
+          if (type==CALLVAR_LOGIC) return "logic";
 		  return "";
 	  }
 
     bool isReferrent() {
-      return (type==CALLVAR_UNARY)||(type==CALLVAR_ARRAY)||(type==CALLVAR_MEMBER)||(type==CALLVAR_ASSIGN)||(type==CALLVAR_OFFSETOF);
+      return (type==CALLVAR_UNARY)||(type==CALLVAR_ARRAY)||(type==CALLVAR_MEMBER)||(type==CALLVAR_ASSIGN)||(type==CALLVAR_OFFSETOF)||(type==CALLVAR_LOGIC);
     }
 
       std::string idString();
@@ -1032,6 +1059,33 @@ public:
 	  long varId;
   };
 
+  enum ControlFlowKind{
+    cf_none,
+    cf_if,
+    cf_else,
+    cf_for,
+    cf_while,
+    cf_do,
+    cf_switch,
+  };
+  static std::string ControlFlowName(ControlFlowKind kind = cf_none){
+    switch(kind){
+      case cf_none: return "none";
+      case cf_if: return "if";
+      case cf_else: return "else";
+      case cf_for: return "for";
+      case cf_while: return "while";
+      case cf_do: return "do";
+      case cf_switch: return "switch";
+    }
+  }
+  struct ControlFlowData{
+    ControlFlowData(ControlFlowKind k, CompoundStmt *_CS) : kind(k), CS(_CS) {}
+    ControlFlowKind kind;
+    CompoundStmt *CS;
+    size_t cond = -1;
+  };
+
   struct IfInfo_t {
 	  const IfStmt* ifstmt;
 	  const CompoundStmt* CSPtr;
@@ -1055,6 +1109,8 @@ public:
 	  DereferenceOffsetOf,
 	  DereferenceReturn,
 	  DereferenceParm,
+    DereferenceCond,
+    DereferenceLogic,
   };
   /*
    * VR: variable being dereferenced
@@ -1124,6 +1180,8 @@ public:
     	if (Kind==DereferenceOffsetOf) return "offsetof";
     	if (Kind==DereferenceReturn) return "return";
     	if (Kind==DereferenceParm) return "parm";
+      if (Kind==DereferenceCond) return "cond";
+      if (Kind==DereferenceLogic) return "logic";
     	return "";
     }
   };
@@ -1142,6 +1200,8 @@ public:
 	  long CSId;
 	  std::map<const CompoundStmt*,long> csIdMap;
 	  std::map<const CompoundStmt*,const CompoundStmt*> csParentMap;
+    std::map<const CompoundStmt*,size_t> csInfoMap;
+    std::vector<ControlFlowData> cfData;
 	  long varId;
 	  std::map<const VarDecl*,VarInfo_t> varMap;
 	  std::map<const IfStmt*,IfInfo_t> ifMap;
@@ -1308,8 +1368,12 @@ public:
   bool TraverseStmt(Stmt* S);
   bool VisitCompoundStmtStart(const CompoundStmt *CS);
   bool VisitCompoundStmtComplete(const CompoundStmt *CS);
+  void handleConditionDeref(Expr *Cond,size_t cf_id);
   bool VisitSwitchStmt(SwitchStmt *S);
   bool VisitIfStmt(IfStmt *S);
+  bool VisitForStmt(ForStmt *S);
+  bool VisitWhileStmt(WhileStmt *S);
+  bool VisitDoStmt(DoStmt *S);
   bool VisitGCCAsmStmt(GCCAsmStmt *S);
   // bool VisitInitListExpr(InitListExpr* ILE); [CHECK IF NEEDED - DOES NOTHING]
   bool VisitBinaryOperator(BinaryOperator *BO);
@@ -1353,9 +1417,8 @@ public:
   int fieldToFieldIndex(const FieldDecl* FD, const RecordDecl* RD);
   void setSwitchData(const Expr* caseExpr, int64_t* enumtp, std::string* enumstr, std::string* macroValue, std::string* raw_code, int64_t* exprVal);
   void varInfoForRefs(FuncData &func_data, const std::set<ValueHolder>& refs, std::set<LiteralHolder> literals, std::vector<struct refvarinfo_t>& refvarList);
-  bool VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef,
-    		std::set<const UnaryOperator*>& UnaryRef, std::set<const ArraySubscriptExpr*>& ASRef,
-        std::set<const BinaryOperator*>& CAORef, std::set<const OffsetOfExpr*>& OOERef);
+  bool VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef,std::set<const UnaryOperator*>& UnaryRef, std::set<const ArraySubscriptExpr*>& ASRef,
+        std::set<const BinaryOperator*>& CAORef,std::set<const BinaryOperator*>& LogicRef, std::set<const OffsetOfExpr*>& OOERef);
   bool varInfoForVarRef(FuncData &func_data, VarRef_t VR,  struct refvarinfo_t& refvar,
 		  std::map<const CallExpr*,unsigned long>& CEIdxMap,
 		  std::map<const MemberExpr*,unsigned>& MEIdxMap,
@@ -1363,6 +1426,7 @@ public:
 		  std::map<const ArraySubscriptExpr*,unsigned>& ASIdxMap,
 		  std::map<const ValueDecl*,unsigned>& VDIdxMap,
       std::map<const BinaryOperator*,unsigned>& CAOIdxMap,
+      std::map<const BinaryOperator*,unsigned>& LogicIdxMap,
       std::map<const OffsetOfExpr*,unsigned>& OOEIdxMap);
   void notice_class_references(RecordDecl* rD);
   void notice_field_attributes(RecordDecl* rD, std::vector<QualType>& QV);

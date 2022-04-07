@@ -5,19 +5,23 @@ Function/Type database (DBJSON) provides a possibility to gather information reg
 ```
 "derefs": [ 
             {
-                "kind":         dereference kind; this is "unary", "array", "member", "function", "assign", "init", "offsetof", "return" or "parm"
+                "kind":         dereference kind; this is "unary", "array", "member", "function", "assign", "init", "offsetof", "return", "parm", "cond" or "logic"
                 "offset":       computed constant offset value in the dereference expression [not present for the "member" and "return" kind]
                                 for the "function" kind this is an index into the 'callrefs'+'refcallrefs' concatenated array of call information for this function
                                 for the "assign" kind this is a value that describes the kind of this assignment operator
                                 for the "parm" kind this is an index of the function call argument this entry pertains to
                                 for the "init" kind this field indicates how many elements (in case of structure type initializer list) have been actually initialized
                                 for the "offsetof" kind this is the computed offset value from a given member expression (or -1 if the value cannot be computed statically)
+                                for the "cond" kind this is the associated compound statement id in 'csamp'
+                                for the "logic" kind this is a value that describes the kind of this operator
                 "basecnt":      number of variables referenced in the base array expression (most of the times the value is 1) [only present for the "array" kind]
+                                number of variables referenced on the left-hand-side expression [only present for the "logic" kind]
                 "offsetrefs" :  variables referenced in the dereference offset expression
                                   for the "array" kind the first 'basecnt' elements describe the base variable of the array
                                   for the "init" kind the first element describes the variable being initialized
                                   for the "assign" kind the first element describes the variable expression being assigned to
                 "expr": full dereference expression written in plain text combined with the location of the expression in the source (i.e. "[<loc>]: <expr>")
+                "ord": indicates order of expressions within function (not present in the examples below)
                 "csid": compound statement id where this dereference expression was taken
             // The following entries are present only for the "member" and "offsetof" kinds
                 "member" : list of member references for the variable being dereferenced for "member" kind
@@ -42,8 +46,8 @@ where the `offsetrefs` single entry has the following format:
                 "global", "local", "parm", // ordinary variable id
                 "integer", "float", "string", "address", // literal values
                 "callref", "refcallref", "addrcallref", // function call information
-                "unary", "array", "member", "assign" or "function" // variable-like expressions
-              "unary", "array", "member" and "assign" kind variables are actually indexes into parent array with corresponding dereference entry
+                "unary", "array", "member", "assign", "function" or "logic" // variable-like expressions
+              "unary", "array", "member", "assign" and "logic" kind variables are actually indexes into parent array with corresponding dereference entry
       "id":   unique id of the referenced variable;
                 for "address" or "integer" type this is the integer value extracted from original expression
                 for "callref", "refcallref" or "addrcallref" type this is an index into the 'callrefs'+'refcallrefs' concatenated array of call information for this function
@@ -53,6 +57,24 @@ where the `offsetrefs` single entry has the following format:
       "di":   index into parent array with corresponding dereference entry [only present for "refcallref" kind] or constant address used as a base for the function call [only present for the "addrcallref" kind]
       "cast": type of the cast used directly on the expression for the referenced variable
               for the first variable expression referenced for the parent "assign" entry this is the type of the variable expression
+}
+```
+
+The different kind values for logic operator are:
+```
+{
+    '<=>': 9,
+    '<': 10,
+    '>': 11,
+    '<=': 12,
+    '>=': 13,
+    '==': 14,
+    '!=': 15,
+    '&': 16,
+    '^': 17,
+    '|': 18,
+    '&&': 19,
+    '||': 20
 }
 ```
 
@@ -259,6 +281,8 @@ void f(int* px, char b) {
     long vl0 = 0xff; vl0&=0x3f;                                                // (96)
     unsigned long vul3 = (long)*((int*)pB->p)-(short)T[2]+(int)(gi+=3);        // (97)
     unsigned long ul = 4+__builtin_offsetof(struct C,b.Ta[4][oA.i].p);         // (98)
+    if(pfi) pfi();                                                             // (99)
+    while(i<10) i++;                                                           // (100)
 }
 ```
 The first kind of dereference is ordinary pointer dereference (through so called unary expression). 
@@ -3722,3 +3746,54 @@ Here we have 5 function calls, each with 2 arguments. This gives 8 `parm` entrie
 ],
 ```
 The values in the `args` array of each call information entry points to the appropriate `parm` entry in the `derefs` array.
+
+In (99) and (100) we have examples of `cond` and `logic` derefs. First `cond` refers to global checked in `if(pfi)`.
+Second `cond` refers to `logic` deref which represents comparison `i < 10`. In `logic` deref `offset` vaule 10 indicates use of `<` operator and `basecnt` 1 informs us that only the first of `offsetrefs` is on the left-hand-side of the operator.
+Value of `offset` in `cond` is the id in `csmap` of (implicit) compound statement containing conditional expressions.
+```json
+{
+  "kind" : "cond",
+  "offset" : 22,
+  "offsetrefs" : [
+    {
+      "kind" : "global",
+      "cast" : 23,
+      "id" : 3
+    }		
+  ],
+  "ord" : [ 272 ],
+  "expr" : "[/home/m.manko/sec-tools/clang-proc/build-6443078/test.c:294:8]: pfi",
+  "csid" : 0
+},
+{
+  "kind" : "cond",
+  "offset" : 23,
+  "offsetrefs" : [
+    {
+      "kind" : "logic",
+      "id" : 206
+    }		
+  ],
+  "ord" : [ 274 ],
+  "expr" : "[/home/m.manko/sec-tools/clang-proc/build-6443078/test.c:295:11]: i < 10",
+  "csid" : 0
+},
+{
+  "kind" : "logic",
+  "offset" : 10,
+  "basecnt" : 1,
+  "offsetrefs" : [
+    {
+      "kind" : "local",
+      "id" : 2
+    },
+    {
+      "kind" : "integer",
+      "id" : 10
+    }		
+  ],
+  "ord" : [ 275 ],
+  "expr" : "[/home/m.manko/sec-tools/clang-proc/build-6443078/test.c:295:11]: i < 10",
+  "csid" : 0
+}
+```

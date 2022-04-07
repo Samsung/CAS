@@ -1655,6 +1655,61 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					}
 				}
 			}
+			else if(BO->getOpcode() >= BO_Cmp && BO->getOpcode() <= BO_LOr){
+				Expr::EvalResult Res;
+				ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+				CStyleCastOrType valuecast;
+				if (get_ccast(cache).size()>0) {
+					valuecast = getMatchingCast(get_ccast(cache));
+				}
+				if (CE) {
+					v.setRefCall(CE,BO,valuecast);
+				}
+				else if((!BO->isValueDependent()) && BO->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(BO,Res)) {
+					v.setInteger(Res.Val.getInt().extOrTrunc(64).getExtValue(),valuecast);
+				}
+				else {
+					v.setLogic(BO,valuecast);
+				}
+				v.setMeIdx(MEIdx);
+				typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
+				vMCtuple_t vMCtuple;
+
+				if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
+					QualType T = BO->getType();
+					if (verifyMemberExprBaseType(T)) {
+						get_type(cache).push_back(CastExprOrType(T));
+					}
+					else {
+						llvm::outs() << "\nERROR: cache size for CompoundAssignOperator > CastExpr cache size (" << get_member(cache).size() <<
+										") vs (" << get_type(cache).size() << ")\n";
+						BO->dumpColor();
+						llvm::outs() << "CompoundAssignOperator Type: " << T->getTypeClassName() << "\n";
+						T.dump();
+						llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
+						origExpr->dumpColor();
+						exit(EXIT_FAILURE);
+					}
+				}
+
+				if (!secondaryChain) {
+					if (MECnt) {
+						v.setMeCnt(*MECnt);
+					}
+					for (size_t i=0; i!=get_member(cache).size(); ++i) {
+						vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
+								get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
+					}
+				}
+				else {
+					v.setPrimaryFlag(false);
+				}
+
+				lookup_cache_clear(cache);
+				DREMap_add(refs,v,vMCtuple);
+				break;
+				// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!	
+			}
 			else {
 				lookup_cache_t lcache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
 				get_ccast(lcache).clear();

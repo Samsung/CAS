@@ -1359,9 +1359,9 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 
   }
 
-  bool DbJSONClassVisitor::VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef,
-  		std::set<const UnaryOperator*>& UnaryRef, std::set<const ArraySubscriptExpr*>& ASRef,
-  		std::set<const BinaryOperator*>& CAORef, std::set<const OffsetOfExpr*>& OOERef) {
+  bool DbJSONClassVisitor::VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef, std::set<const UnaryOperator*>& UnaryRef,
+  		std::set<const ArraySubscriptExpr*>& ASRef, std::set<const BinaryOperator*>& CAORef, std::set<const BinaryOperator*>& LogicRef,
+		std::set<const OffsetOfExpr*>& OOERef) {
 
 	  if (VR.VDCAMUAS.getKind()==
 			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary) {
@@ -1380,6 +1380,10 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  return CAORef.find(VR.VDCAMUAS.getCAO())!=CAORef.end();
 	  }
 	  if (VR.VDCAMUAS.getKind()==
+			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
+		  return LogicRef.find(VR.VDCAMUAS.getLogic())!=LogicRef.end();
+	  }
+	  if (VR.VDCAMUAS.getKind()==
 			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
 		  return OOERef.find(VR.VDCAMUAS.getOOE())!=OOERef.end();
 	  }
@@ -1391,7 +1395,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  std::map<const CallExpr*,unsigned long>& CEIdxMap,std::map<const MemberExpr*,unsigned>& MEIdxMap,
 		  std::map<const UnaryOperator*,unsigned>& UnaryIdxMap, std::map<const ArraySubscriptExpr*,unsigned>& ASIdxMap,
 		  std::map<const ValueDecl*,unsigned>& VDIdxMap, std::map<const BinaryOperator*,unsigned>& CAOIdxMap,
-		  std::map<const OffsetOfExpr*,unsigned>& OOEIdxMap) {
+		  std::map<const BinaryOperator*,unsigned>& LogicIdxMap, std::map<const OffsetOfExpr*,unsigned>& OOEIdxMap) {
 
 	long valueCastId = -1;
 	CStyleCastOrType valuecast = VR.VDCAMUAS.getValueCast();
@@ -1587,6 +1591,19 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		refvar.set(CAOIdxMap[CAO],refvarinfo_t::CALLVAR_ASSIGN,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
 		return true;
 	}
+	
+	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
+		const BinaryOperator* CAO = VR.VDCAMUAS.getLogic();
+		if (LogicIdxMap.find(CAO)==LogicIdxMap.end()) {
+			llvm::outs() << "Missing logic BinaryOperator in Index Map\n";
+			CAO->dumpColor();
+			llvm::outs() << "@FunctionDecl:\n";
+			func_data.this_func->dumpColor();
+			assert(0);
+		}
+		refvar.set(LogicIdxMap[CAO],refvarinfo_t::CALLVAR_LOGIC,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		return true;
+	}
 
 	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
 		const OffsetOfExpr* OOE= VR.VDCAMUAS.getOOE();
@@ -1635,14 +1652,19 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			else {
 				const BinaryOperator* CAO = VR.VDCAMUAS.getCAO();
 				if (CAO) {
-					if (CAOIdxMap.find(CAO)==CAOIdxMap.end()) {
-						llvm::outs() << "Missing CompoundAssigOperator in Index Map\n";
+					if (CAOIdxMap.find(CAO)!=CAOIdxMap.end()){
+						refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),CAOIdxMap[CAO],valueCastId);
+					}
+					else if(LogicIdxMap.find(CAO) != LogicIdxMap.end()){
+						refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),LogicIdxMap[CAO],valueCastId);
+					}
+					else{
+						llvm::outs() << "Missing CompoundAssigOperator or logic BinaryOperator in Index Map\n";
 						CAO->dumpColor();
 						llvm::outs() << "@FunctionDecl:\n";
 						func_data.this_func->dumpColor();
 						assert(0);
 					}
-					refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),CAOIdxMap[CAO],valueCastId);
 				}
 				else {
 					/* Formality? As we almost surely cannot get here */
@@ -2072,6 +2094,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  std::map<const ArraySubscriptExpr*,unsigned> ASIdxMap;
 		  std::map<const ValueDecl*,unsigned> VDIdxMap;
 		  std::map<const BinaryOperator*,unsigned> CAOIdxMap;
+		  std::map<const BinaryOperator*,unsigned> LogicIdxMap;
 		  std::map<const OffsetOfExpr*,unsigned> OOEIdxMap;
 		  /* Keep dereference information entries in predefined order */
 		  std::vector<DbJSONClassVisitor::DereferenceInfo_t> derefList(func_data.derefList.begin(),func_data.derefList.end());
@@ -2092,6 +2115,9 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  else if (DI.Kind==DbJSONClassVisitor::DereferenceAssign) {
 				  CAOIdxMap.insert(std::pair<const BinaryOperator*,unsigned>(DI.VR.VDCAMUAS.getCAO(),std::distance(derefList.begin(),u)));
 			  }
+			  else if (DI.Kind==DbJSONClassVisitor::DereferenceLogic) {
+				  LogicIdxMap.insert(std::pair<const BinaryOperator*,unsigned>(DI.VR.VDCAMUAS.getLogic(),std::distance(derefList.begin(),u)));
+			  }
 			  else if (DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf) {
 				  OOEIdxMap.insert(std::pair<const OffsetOfExpr*,unsigned>(DI.VR.VDCAMUAS.getOOE(),std::distance(derefList.begin(),u)));
 			  }
@@ -2101,6 +2127,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  std::set<const UnaryOperator*> UnaryRef;
 		  std::set<const ArraySubscriptExpr*> ASRef;
 		  std::set<const BinaryOperator*> CAORef;
+		  std::set<const BinaryOperator*> LogicRef;
 		  std::set<const OffsetOfExpr*> OOERef;
 		  for (auto u = derefList.begin(); u!=derefList.end(); ++u) {
 			  DbJSONClassVisitor::DereferenceInfo_t DI = *u;
@@ -2126,6 +2153,11 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO) {
 						const BinaryOperator* CAO = iVR.VDCAMUAS.getCAO();
 						CAORef.insert(CAO);
+					}
+					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
+							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
+						const BinaryOperator* CAO = iVR.VDCAMUAS.getLogic();
+						LogicRef.insert(CAO);
 					}
 					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
 							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
@@ -2296,10 +2328,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  }
 			  deref_core << Indent << "\t\t\t\t\"kind\" : \"" << DI.KindString() << "\",\n";
 			  if ((DI.Kind!=DbJSONClassVisitor::DereferenceMember)&&(DI.Kind!=DbJSONClassVisitor::DereferenceReturn)) {
-				  if (DI.Kind!=DbJSONClassVisitor::DereferenceFunction) {
-					  deref_core << Indent << "\t\t\t\t\"offset\" : " << offset << ",\n";
-				  }
-				  else {
+				  if (DI.Kind==DbJSONClassVisitor::DereferenceFunction) {
 					  DbJSONClassVisitor::VarRef_t& CEVR = DI.VR;
 					  if (CEIdxMap.find(CEVR.VDCAMUAS.getCall())==CEIdxMap.end()) {
 						  llvm::outs() << "Missing Call Expression in Index Map\n";
@@ -2308,8 +2337,16 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					  }
 					  deref_core << Indent << "\t\t\t\t\"offset\" : " << CEIdxMap[CEVR.VDCAMUAS.getCall()] << ",\n";
 				  }
+				  else if(DI.Kind==DbJSONClassVisitor::DereferenceCond){
+					  auto CS = func_data.cfData[offset].CS;
+					  deref_core << Indent << "\t\t\t\t\"offset\" : " << func_data.csIdMap.at(CS) << ",\n";
+				  }
+				  else {
+					  deref_core << Indent << "\t\t\t\t\"offset\" : " << offset << ",\n";
+					  
+				  }
 			  }
-			  if (DI.Kind==DbJSONClassVisitor::DereferenceArray) {
+			  if (DI.Kind==DbJSONClassVisitor::DereferenceArray || DI.Kind==DbJSONClassVisitor::DereferenceLogic) {
 				  deref_core << Indent << "\t\t\t\t\"basecnt\" : " << DI.baseCnt << ",\n";
 			  }
 			  const char* exprstr = Expr.c_str();
@@ -2320,7 +2357,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  for (size_t x=0; x<vVR.size(); ++x) {
 				  DbJSONClassVisitor::VarRef_t iVR = vVR[x];
 				  DbJSONClassVisitor::refvarinfo_t irefvar;
-				  if (Visitor.varInfoForVarRef(func_data,iVR,irefvar,CEIdxMap,MEIdxMap,UnaryIdxMap,ASIdxMap,VDIdxMap,CAOIdxMap,OOEIdxMap)) {
+				  if (Visitor.varInfoForVarRef(func_data,iVR,irefvar,CEIdxMap,MEIdxMap,UnaryIdxMap,ASIdxMap,VDIdxMap,CAOIdxMap,LogicIdxMap,OOEIdxMap)) {
 					  if (ideref_first) {
 					  	deref_core << "\n";
 					  	deref_core_subst << "\n";
@@ -2382,7 +2419,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			   *  even though it is the same as other entry encountered before
 			   *  TODO: make proper deduplication with proper link resolution
 			   */
-			  if ((deref_set.find(deref_core_subst.str())==deref_set.end())||(Visitor.VR_referenced(DI.VR,MERef,UnaryRef,ASRef,CAORef,OOERef))) {
+			  if ((deref_set.find(deref_core_subst.str())==deref_set.end())||(Visitor.VR_referenced(DI.VR,MERef,UnaryRef,ASRef,CAORef,LogicRef,OOERef))) {
 				  deref_entry_t dentry(deref_intro.str(),deref_core.str(),deref_expr.str(),Indent+"\t\t\t}",offrefids,ords);
 				  deref_entries.push_back(dentry);
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceParm) {
@@ -2895,14 +2932,19 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
                                               parentCS=0;
                                           }
 				  }
+				  DbJSONClassVisitor::ControlFlowKind kind = DbJSONClassVisitor::cf_none;
+				  if(func_data.csInfoMap.find(CS) != func_data.csInfoMap.end()){
+					  kind = func_data.cfData[func_data.csInfoMap.at(CS)].kind;
+				  }
 				  llvm::outs() << Indent << "\t\t\t{\n";
 				  llvm::outs() << Indent << "\t\t\t\"id\": " << func_data.csIdMap[CS] << ",\n";
 				  if (parentCS) {
-					  llvm::outs() << Indent << "\t\t\t\"pid\": " << func_data.csIdMap[parentCS] << "\n";
+					  llvm::outs() << Indent << "\t\t\t\"pid\": " << func_data.csIdMap[parentCS] << ",\n";
 				  }
 				  else {
-					  llvm::outs() << Indent << "\t\t\t\"pid\": " << -1 << "\n";
+					  llvm::outs() << Indent << "\t\t\t\"pid\": " << -1 << ",\n";
 				  }
+				  llvm::outs() << Indent << "\t\t\t\"cf\": \"" << DbJSONClassVisitor::ControlFlowName(kind) <<"\"\n";
 				  llvm::outs() << Indent << "\t\t\t}";
 				  ++u;
 				  if (u!=func_data.csParentMap.end()) {
