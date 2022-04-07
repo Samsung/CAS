@@ -1819,6 +1819,7 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 		PyObject* py_csitem = PyDict_New();
 		FTDB_SET_ENTRY_INT64(py_csitem,pid,csitem->pid);
 		FTDB_SET_ENTRY_ULONG(py_csitem,id,csitem->id);
+		FTDB_SET_ENTRY_STRING(py_csitem,cf,csitem->cf);
 		PyList_Append(csmap,py_csitem);
 		Py_DecRef(py_csitem);
 	}
@@ -2523,6 +2524,7 @@ PyObject* libftdb_ftdb_func_entry_get_csmap(PyObject* self, void* closure) {
 		PyObject* py_csitem = PyDict_New();
 		FTDB_SET_ENTRY_INT64(py_csitem,pid,csitem->pid);
 		FTDB_SET_ENTRY_ULONG(py_csitem,id,csitem->id);
+		FTDB_SET_ENTRY_STRING(py_csitem,cf,csitem->cf);
 		PyList_Append(csmap,py_csitem);
 		Py_DecRef(py_csitem);
 	}
@@ -7380,7 +7382,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(case_data,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(csitem,
-	/* No recipes needed */
+		AGGREGATE_FLATTEN_STRING2(cf);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(local_info,
@@ -8061,6 +8063,7 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 		struct csitem* csitem = &new_entry->csmap[i];
 		csitem->pid = FTDB_ENTRY_INT64(py_csitem,pid);
 		csitem->id = FTDB_ENTRY_ULONG(py_csitem,id);
+		csitem->cf = FTDB_ENTRY_STRING(py_csitem,cf);
 	}
 
 	PyObject* key_locals = PyUnicode_FromString("locals");

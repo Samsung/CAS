@@ -75,6 +75,8 @@ enum exprType {
 	EXPR_OFFSETOF,
 	EXPR_INIT,
 	EXPR_RETURN,
+	EXPR_COND,
+	EXPR_LOGIC,
 	EXPR_UNDEF,
 };
 
@@ -144,6 +146,12 @@ static enum exprType get_exprType(const char* s) {
 	}
 	else if (!strcmp(s,"return")) {
 		return EXPR_RETURN;
+	}
+	else if (!strcmp(s,"cond")) {
+		return EXPR_COND;
+	}
+	else if (!strcmp(s,"logic")) {
+		return EXPR_LOGIC;
 	}
 
 	return EXPR_UNDEF;
@@ -216,6 +224,12 @@ static const char* set_exprType(enum exprType exprType) {
 	}
 	else if (exprType==EXPR_RETURN) {
 		return "return";
+	}
+	else if (exprType==EXPR_COND) {
+		return "cond";
+	}
+	else if (exprType==EXPR_LOGIC) {
+		return "logic";
 	}
 
 	return "undef";
@@ -401,6 +415,7 @@ struct switch_info {
 struct csitem {
 	int64_t pid;
 	unsigned long id;
+	const char* cf;
 };
 
 struct local_info {
