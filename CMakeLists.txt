@@ -2,7 +2,11 @@
 
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
+if (LLVM_CONFIG_BIN)
+set(LLVM_CONFIG ${LLVM_CONFIG_BIN} CACHE STRING "LLVM config executable to use")
+else()
 set(LLVM_CONFIG "llvm-config" CACHE STRING "LLVM config executable to use")
+endif()
 
 set(MIN_LLVM_MAJOR_VERSION 10)
 set(MIN_LLVM_VERSION ${MIN_LLVM_MAJOR_VERSION}.0)
