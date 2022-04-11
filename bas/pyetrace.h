@@ -84,6 +84,10 @@ PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args)
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_fpath_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_linked_modules(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
 
 #ifdef __cplusplus
@@ -103,6 +107,10 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"fpaths",(PyCFunction)libetrace_nfsdb_fpath_list,METH_VARARGS,"Returns the list of all unique opened file paths in the database"},
 	{"linked_modules",(PyCFunction)libetrace_nfsdb_linked_modules,METH_VARARGS,"Returns the list of all linked modules present in the database"},
 	{"fdeps",(PyCFunction)libetrace_nfsdb_file_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of dependencies for a given file"},
+	{"path_exists",(PyCFunction)libetrace_nfsdb_path_exists,METH_VARARGS,"Returns True if a given path exists after the build"},
+	{"path_read",(PyCFunction)libetrace_nfsdb_path_read,METH_VARARGS,"Returns True if a given path was opened for read during the build"},
+	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
+	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -212,6 +220,9 @@ PyObject* libetrace_nfsdb_entry_get_cwd(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_bpath(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_argv(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_openpaths(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_openfiles_with_children(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_openpaths_with_children(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_pcp(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_wrapper_pid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_pipe_eids(PyObject* self, void* closure);
@@ -245,6 +256,9 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"bpath",libetrace_nfsdb_entry_get_bpath,0,"nfsdb entry binary path value",0},
 	{"argv",libetrace_nfsdb_entry_get_argv,0,"nfsdb entry argv list",0},
 	{"opens",libetrace_nfsdb_entry_get_openfiles,0,"nfsdb entry open files list",0},
+	{"openpaths",libetrace_nfsdb_entry_get_openpaths,0,"nfsdb entry open file paths list",0},
+	{"opens_with_children",libetrace_nfsdb_entry_get_openfiles_with_children,0,"nfsdb entry open files list in the current process and all its children",0},
+	{"openpaths_with_children",libetrace_nfsdb_entry_get_openpaths_with_children,0,"nfsdb entry open file paths list in the current process and all its children",0},
 	{"pcp",libetrace_nfsdb_entry_get_pcp,0,"nfsdb entry for precomputed command patterns",0},
 	{"wpid",libetrace_nfsdb_entry_get_wrapper_pid,0,"nfsdb entry wrapper pid",0},
 	{"pipe_eids",libetrace_nfsdb_entry_get_pipe_eids,0,"nfsdb entry pipe eid values",0},
@@ -437,7 +451,7 @@ static PyMemberDef libetrace_nfsdb_entry_compilation_info_members[] = {
 static PyGetSetDef libetrace_nfsdbEntryCompilationInfo_getset[] = {
 	{"files",libetrace_nfsdb_entry_compilation_info_get_compiled_files,0,"list of compiled files from the compilation info object",0},
 	{"objects",libetrace_nfsdb_entry_compilation_info_get_object_files,0,"list of object files produced by this compilation",0},
-	{"headers",libetrace_nfsdb_entry_compilation_info_get_headers,0,"list of files included at the command line by this compilation",0},
+	{"ifiles",libetrace_nfsdb_entry_compilation_info_get_headers,0,"list of files included at the command line by this compilation",0},
 	{"ipaths",libetrace_nfsdb_entry_compilation_info_get_include_paths,0,"list of include paths used by this compilation",0},
 	{"type",libetrace_nfsdb_entry_compilation_info_get_type,0,"source type used by this compilation",0},
 	{"defs",libetrace_nfsdb_entry_compilation_info_get_defines,0,"list of internal or command line preprocessor definitions used by this compilation",0},

@@ -25,10 +25,13 @@ struct nfsdb_fileMap_node {
 	struct rb_node node;
 	unsigned long key;
 	struct nfsdb_entry** rd_entry_list;
+	unsigned long* rd_entry_index;
 	unsigned long rd_entry_count;
 	struct nfsdb_entry** wr_entry_list;
+	unsigned long* wr_entry_index;
 	unsigned long wr_entry_count;
 	struct nfsdb_entry** rw_entry_list;
+	unsigned long* rw_entry_index;
 	unsigned long rw_entry_count;
 };
 

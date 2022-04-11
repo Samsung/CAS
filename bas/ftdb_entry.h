@@ -739,6 +739,14 @@
 	Py_DECREF(__node);	\
 } while(0)
 
+#define PYSET_ADD_PYOBJECT(__set,__node)	do {\
+	if (!PySet_Contains(__set,__node)) {	\
+		if (!PySet_Add(__set,__node)) {	\
+			Py_DECREF(__node);	\
+		}	\
+	}	\
+} while(0)
+
 #define PYTUPLE_SET_ULONG(__tuple,__index,__node)	do {\
 	PyObject* __val = PyLong_FromUnsignedLong(__node);	\
 	PyTuple_SetItem(__tuple,__index,__val);	\

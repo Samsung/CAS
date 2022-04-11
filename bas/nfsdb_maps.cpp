@@ -151,11 +151,12 @@ int nfsdb_maps(struct nfsdb* nfsdb, PyObject* ddepmap, int show_stats) {
 	std::map<unsigned long,vexecs_t> processMap;
 	std::map<unsigned long,vexecs_t> bexeMap;
 	forkMap_t forkMap;
-	typedef std::set<unsigned long> uLongSet;
+	typedef std::pair<unsigned long,unsigned long> openfileHandle;
+	typedef std::set<openfileHandle> openfileHandleSet;
 	std::map<unsigned long,std::set<unsigned long>> pipeMap;
 	std::map<unsigned long,std::set<unsigned long>> wrMap;
 	std::map<unsigned long,std::set<unsigned long>> rdMap;
-	std::map<unsigned long,std::tuple<uLongSet,uLongSet,uLongSet>> fileMap;
+	std::map<unsigned long,std::tuple<openfileHandleSet,openfileHandleSet,openfileHandleSet>> fileMap;
 	std::map<unsigned long,struct nfsdb_entry*> linkedMap;
 	for (unsigned long u=0; u<nfsdb->nfsdb_count; ++u) {
 
@@ -177,11 +178,11 @@ int nfsdb_maps(struct nfsdb* nfsdb, PyObject* ddepmap, int show_stats) {
 		for (unsigned long i=0; i<entry->open_files_count; ++i) {
 			if ((entry->open_files[i].mode&3)>=1) {
 				wrMap[pid].insert(entry->open_files[i].path);
-				std::get<1>(fileMap[entry->open_files[i].path]).insert(u);
+				std::get<1>(fileMap[entry->open_files[i].path]).insert(openfileHandle(u,i));
 			}
 			if ((entry->open_files[i].mode&3)!=1) {
 				rdMap[pid].insert(entry->open_files[i].path);
-				std::get<0>(fileMap[entry->open_files[i].path]).insert(u);
+				std::get<0>(fileMap[entry->open_files[i].path]).insert(openfileHandle(u,i));
 			}
 		}
 
@@ -227,34 +228,40 @@ int nfsdb_maps(struct nfsdb* nfsdb, PyObject* ddepmap, int show_stats) {
 	}
 
 	for (decltype(fileMap)::iterator i=fileMap.begin(); i!=fileMap.end(); ++i) {
-		uLongSet& rdSet = std::get<0>((*i).second);
-		uLongSet& wrSet = std::get<1>((*i).second);
-		uLongSet& rwSet = std::get<2>((*i).second);
+		openfileHandleSet& rdSet = std::get<0>((*i).second);
+		openfileHandleSet& wrSet = std::get<1>((*i).second);
+		openfileHandleSet& rwSet = std::get<2>((*i).second);
 		std::set_intersection(rdSet.begin(), rdSet.end(),
 							  wrSet.begin(), wrSet.end(),
 							  std::inserter(rwSet,rwSet.begin()));
-		for (uLongSet::iterator u=rwSet.begin(); u!=rwSet.end(); ++u) {
+		for (openfileHandleSet::iterator u=rwSet.begin(); u!=rwSet.end(); ++u) {
 			rdSet.erase(*u);
 			wrSet.erase(*u);
 		}
 		struct nfsdb_fileMap_node* node = fileMap_insert_key(&nfsdb->filemap, (*i).first);
 		node->rd_entry_list = (struct nfsdb_entry**)malloc(rdSet.size()*sizeof(struct nfsdb_entry*));
+		node->rd_entry_index = (unsigned long*)malloc(rdSet.size()*sizeof(unsigned long));
 		node->rd_entry_count = rdSet.size();
 		size_t u=0;
-		for (uLongSet::iterator j=rdSet.begin(); j!=rdSet.end(); ++j,++u) {
-			node->rd_entry_list[u] = &nfsdb->nfsdb[*j];
+		for (openfileHandleSet::iterator j=rdSet.begin(); j!=rdSet.end(); ++j,++u) {
+			node->rd_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->rd_entry_index[u] = (*j).second;
 		}
 		node->wr_entry_list = (struct nfsdb_entry**)malloc(wrSet.size()*sizeof(struct nfsdb_entry*));
+		node->wr_entry_index = (unsigned long*)malloc(wrSet.size()*sizeof(unsigned long));
 		node->wr_entry_count = wrSet.size();
 		u=0;
-		for (uLongSet::iterator j=wrSet.begin(); j!=wrSet.end(); ++j,++u) {
-			node->wr_entry_list[u] = &nfsdb->nfsdb[*j];
+		for (openfileHandleSet::iterator j=wrSet.begin(); j!=wrSet.end(); ++j,++u) {
+			node->wr_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->wr_entry_index[u] = (*j).second;
 		}
 		node->rw_entry_list = (struct nfsdb_entry**)malloc(rwSet.size()*sizeof(struct nfsdb_entry*));
+		node->rw_entry_index = (unsigned long*)malloc(rwSet.size()*sizeof(unsigned long));
 		node->rw_entry_count = rwSet.size();
 		u=0;
-		for (uLongSet::iterator j=rwSet.begin(); j!=rwSet.end(); ++j,++u) {
-			node->rw_entry_list[u] = &nfsdb->nfsdb[*j];
+		for (openfileHandleSet::iterator j=rwSet.begin(); j!=rwSet.end(); ++j,++u) {
+			node->rw_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->rw_entry_index[u] = (*j).second;
 		}
 	}
 	if (show_stats) {

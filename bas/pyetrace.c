@@ -444,14 +444,17 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(rd_entry_list),ATTR(rd_entry_count),
 		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
 	);
+	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,rd_entry_index,ATTR(rd_entry_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,wr_entry_list,ATTR(wr_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(wr_entry_list),ATTR(wr_entry_count),
 		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
 	);
+	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,wr_entry_index,ATTR(wr_entry_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,rw_entry_list,ATTR(rw_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(rw_entry_list),ATTR(rw_entry_count),
 		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
 	);
+	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,rw_entry_index,ATTR(rw_entry_count));
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb,
@@ -1024,6 +1027,137 @@ PyObject* libetrace_nfsdb_linked_modules(libetrace_nfsdb_object *self, PyObject 
 	return linked_modules;
 }
 
+PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		if (node->rd_entry_count>0) {
+			struct nfsdb_entry* entry = node->rd_entry_list[0];
+			unsigned long index = node->rd_entry_index[0];
+			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+		}
+		else if (node->rw_entry_count>0) {
+			struct nfsdb_entry* entry = node->rw_entry_list[0];
+			unsigned long index = node->rw_entry_index[0];
+			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+		}
+		else if (node->wr_entry_count>0) {
+			struct nfsdb_entry* entry = node->wr_entry_list[0];
+			unsigned long index = node->wr_entry_index[0];
+			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+		}
+		Py_RETURN_FALSE;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
+PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		if (node->rd_entry_count>0) {
+			struct nfsdb_entry* entry = node->rd_entry_list[0];
+			unsigned long index = node->rd_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+		}
+		else if (node->rw_entry_count>0) {
+			struct nfsdb_entry* entry = node->rw_entry_list[0];
+			unsigned long index = node->rw_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+		}
+		else if (node->wr_entry_count>0) {
+			struct nfsdb_entry* entry = node->wr_entry_list[0];
+			unsigned long index = node->wr_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+		}
+		Py_RETURN_FALSE;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
+PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		if ((node->rd_entry_count>0)||(node->rw_entry_count>0)) {
+			Py_RETURN_TRUE;
+		}
+		Py_RETURN_FALSE;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
+PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		if ((node->rw_entry_count>0)||(node->wr_entry_count>0)) {
+			Py_RETURN_TRUE;
+		}
+		Py_RETURN_FALSE;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
@@ -1429,6 +1563,75 @@ PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure) {
 	return opens;
 }
 
+PyObject* libetrace_nfsdb_entry_get_openpaths(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	PyObject* openpaths = PyList_New(0);
+
+	for (unsigned long i=0; i<__self->entry->open_files_count; ++i) {
+		PyObject* py_openpath = PyUnicode_FromString(__self->nfsdb->string_table[__self->entry->open_files[i].path]);
+		PYLIST_ADD_PYOBJECT(openpaths,py_openpath);
+	}
+
+	return openpaths;
+}
+
+static void fill_openfile_list_with_children(const struct nfsdb* nfsdb, PyObject* opens, const struct nfsdb_entry* entry) {
+
+	for (unsigned long i=0; i<entry->open_files_count; ++i) {
+		PyObject* args = PyTuple_New(4);
+		PYTUPLE_SET_ULONG(args,0,(uintptr_t)nfsdb);
+		PYTUPLE_SET_ULONG(args,1,entry->open_files[i].path);
+		PYTUPLE_SET_ULONG(args,2,entry->open_files[i].mode);
+		PYTUPLE_SET_ULONG(args,3,entry->nfsdb_index);
+		PyObject *openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
+		Py_DECREF(args);
+		PYLIST_ADD_PYOBJECT(opens,openfile);
+	}
+
+	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
+		for (unsigned long j=0; j<node->entry_count; ++j) {
+			struct nfsdb_entry* child_entry = node->entry_list[j];
+			fill_openfile_list_with_children(nfsdb,opens,child_entry);
+		}
+	}
+}
+
+PyObject* libetrace_nfsdb_entry_get_openfiles_with_children(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	PyObject* opens = PyList_New(0);
+	fill_openfile_list_with_children(__self->nfsdb,opens,__self->entry);
+	return opens;
+}
+
+static void fill_openpath_list_with_children(const struct nfsdb* nfsdb, PyObject* openpaths, const struct nfsdb_entry* entry) {
+
+	for (unsigned long i=0; i<entry->open_files_count; ++i) {
+		PyObject* py_openpath = PyUnicode_FromString(nfsdb->string_table[entry->open_files[i].path]);
+		PYSET_ADD_PYOBJECT(openpaths,py_openpath);
+	}
+
+	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
+		for (unsigned long j=0; j<node->entry_count; ++j) {
+			struct nfsdb_entry* child_entry = node->entry_list[j];
+			fill_openpath_list_with_children(nfsdb,openpaths,child_entry);
+		}
+	}
+}
+
+PyObject* libetrace_nfsdb_entry_get_openpaths_with_children(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	PyObject* openpaths = PySet_New(0);
+	fill_openpath_list_with_children(__self->nfsdb,openpaths,__self->entry);
+	return openpaths;
+}
+
 PyObject* libetrace_nfsdb_entry_filtered_openfiles(PyObject* self, PyObject *args) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
@@ -1729,6 +1932,13 @@ PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closur
 	return entry;
 }
 
+PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
+
+	if ((self->mode&0x40)!=0) Py_RETURN_TRUE;
+
+	Py_RETURN_FALSE;
+}
+
 PyObject* libetrace_nfsdb_entry_openfile_is_read(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
 	if ((self->mode&0x01)==0) Py_RETURN_TRUE;
@@ -1745,56 +1955,49 @@ PyObject* libetrace_nfsdb_entry_openfile_is_write(libetrace_nfsdb_entry_openfile
 
 PyObject* libetrace_nfsdb_entry_openfile_is_reg(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0x8) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_dir(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0x4) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0x4)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_chr(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0x2) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0x2)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_block(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0x6) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0x6)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_symlink(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0xA) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_fifo(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0x1) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0x1)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
 
-	if (((self->mode&0x3C)>>2)==0xC) Py_RETURN_TRUE;
-
-	Py_RETURN_FALSE;
-}
-
-PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
-
-	if ((self->mode&0x40)!=0) Py_RETURN_TRUE;
+	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0xC)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
 }
@@ -1930,16 +2133,19 @@ PyObject* libetrace_nfsdb_filemap_new(PyTypeObject *subtype, PyObject *args, PyO
 }
 
 static void libetrace_nfsdb_fill_entry_list(libetrace_nfsdb_filemap* self, PyObject* fill_entries,
-		struct nfsdb_entry** entry_list, unsigned long entry_count) {
+		struct nfsdb_entry** entry_list, unsigned long* entry_index, unsigned long entry_count) {
 
 	for (unsigned long i=0; i<entry_count; ++i) {
 		struct nfsdb_entry* entry = entry_list[i];
-		PyObject* args = PyTuple_New(2);
+		unsigned long index = entry_index[i];
+		PyObject* args = PyTuple_New(4);
 		PYTUPLE_SET_ULONG(args,0,(uintptr_t)self->nfsdb);
-		PYTUPLE_SET_ULONG(args,1,entry->nfsdb_index);
-		PyObject *nfsdb_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryType, args);
+		PYTUPLE_SET_ULONG(args,1,entry->open_files[index].path);
+		PYTUPLE_SET_ULONG(args,2,entry->open_files[index].mode);
+		PYTUPLE_SET_ULONG(args,3,entry->nfsdb_index);
+		PyObject *openfile_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 		Py_DECREF(args);
-		PYLIST_ADD_PYOBJECT(fill_entries,nfsdb_entry);
+		PYLIST_ADD_PYOBJECT(fill_entries,openfile_entry);
 	}
 }
 
@@ -1959,9 +2165,9 @@ PyObject* libetrace_nfsdb_filemap_mp_subscript(PyObject* self, PyObject* slice) 
 		struct nfsdb_fileMap_node* node = fileMap_search(&__self->nfsdb->filemap,hfpath);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
 		PyObject* rL = PyList_New(0);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_count);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_count);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_count);
+		libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
+		libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
+		libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
 		return rL;
 	}
 	else if (PyTuple_Check(slice)) {
@@ -1979,13 +2185,13 @@ PyObject* libetrace_nfsdb_filemap_mp_subscript(PyObject* self, PyObject* slice) 
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
 		PyObject* rL = PyList_New(0);
 		if (filter_mode==0) {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_count);
+			libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
 		}
 		else if (filter_mode==1) {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_count);
+			libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
 		}
 		else {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_count);
+			libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
 		}
 		return rL;
 	}
