@@ -40,7 +40,7 @@ def parse_config(out):
 
 class clang(libetrace.clang):
 
-    def __init__(self,verbose,debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,debug_compilations=False):
+    def __init__(self,verbose,debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,debug_compilations=False,allow_pp_in_compilations=False):
         super(clang, self).__init__(verbose,debug,debug_compilations)
         self.c_compilers = clang_compilers
         self.c_preprocessors = clang_compilers
@@ -49,6 +49,7 @@ class clang(libetrace.clang):
         self.cc_preprocessors = clangpp_compilers
         self.cc_include_paths = list()
         self.integrated_clang_compilers = integrated_clang_compilers
+        self.allow_pp_in_compilations = allow_pp_in_compilations
         for cp in self.c_preprocessors:
             pn = subprocess.Popen([cp,"-E","-x","c","-","-v"],shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             out,err = pn.communicate("")

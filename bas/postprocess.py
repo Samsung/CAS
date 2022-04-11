@@ -22,6 +22,7 @@ parser.add_argument("--create-nfsdb-cache", action="store_true", help="")
 parser.add_argument("--debug", action="store_true", help="")
 parser.add_argument("--verbose", action="store_true", help="")
 parser.add_argument("--debug-compilations", action="store_true", help="")
+parser.add_argument("--allow-pp-in-compilations", action="store_true", help="")
 parser.add_argument("--config", action="store", help="")
 parser.add_argument("--integrated-clang-compilers", action="store", help="")
 parser.add_argument("--exclude-command-patterns", action="store", help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
@@ -268,6 +269,12 @@ def clang_ir_generation(cmds):
             return True
     return False
 
+def clang_pp_input(cmds):
+    if "-x" in cmds:
+        if cmds[cmds.index("-x")+1]=="cpp-output":
+            return True
+    return False
+
 def have_integrated_cc1(exe):
     if os.path.realpath(os.path.join(exe[1],exe[0])) in integrated_clang_compilers:
         if "-fno-integrated-cc1" not in exe[2]:
@@ -296,9 +303,9 @@ def is_ELF_interpreter(path):
 
 comp_pids = set()
 clang_execs = [copy.deepcopy(e) for e in nfsdb if any((u for u in config["clang_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u))) and ("-cc1" in e["v"] or (have_integrated_cc1((e["b"],e["w"],e["v"])) and "-c" in e["v"])) and "-o" in e["v"]\
-  and ("-emit-llvm-bc" not in e["v"] or allow_llvm_bc) and not clang_ir_generation(e["v"]) and e["p"] not in comp_pids and comp_pids.add(e["p"]) is None]
+  and ("-emit-llvm-bc" not in e["v"] or allow_llvm_bc) and not clang_ir_generation(e["v"]) and not clang_pp_input(e["v"]) and "-analyze" not in e["v"] and e["p"] not in comp_pids and comp_pids.add(e["p"]) is None]
 clangpp_execs = [copy.deepcopy(e) for e in nfsdb if any((u for u in config["clangpp_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u))) and ("-cc1" in e["v"] or (have_integrated_cc1((e["b"],e["w"],e["v"])) and "-c" in e["v"])) and "-o" in e["v"]\
-  and ("-emit-llvm-bc" not in e["v"] or allow_llvm_bc) and not clang_ir_generation(e["v"]) and e["p"] not in comp_pids and comp_pids.add(e["p"]) is None]
+  and ("-emit-llvm-bc" not in e["v"] or allow_llvm_bc) and not clang_ir_generation(e["v"]) and not clang_pp_input(e["v"]) and "-analyze" not in e["v"] and e["p"] not in comp_pids and comp_pids.add(e["p"]) is None]
 clang_pattern_match_execs = [e for e in nfsdb  if any((u for u in config["clang_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
 clangpp_pattern_match_execs = [e for e in nfsdb  if any((u for u in config["clangpp_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
 
@@ -428,6 +435,7 @@ def get_clang_compilations_parallel(clang_c, clangxx_input_execs, internal_jobs)
                 'debug': clang_c.debug,
                 'verbose': clang_c.verbose,
                 'debug_compilations': clang_c.debug_compilations,
+                'allow_pp_in_compilations': clang_c.allow_pp_in_compilations,
                 'chunk_number': p
             }, f)
 
@@ -584,7 +592,7 @@ real_clang_comps = list()
 clang_c = None
 if process_clang and len(clangxx_input_execs)>0:
     clang_nexecs = [(e["b"],e["w"],e["v"],e["p"],e["x"],e["t"],int(e["i"]==0)) for e in clangxx_input_execs]
-    clang_c = clang.clang(args.verbose,args.debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,args.debug_compilations)
+    clang_c = clang.clang(args.verbose,args.debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,args.debug_compilations,args.allow_pp_in_compilations)
 
     os.system('setterm -cursor off')
     clangd = get_clang_compilations_parallel(clang_c,clang_nexecs,args.jobs)

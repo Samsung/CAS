@@ -54,6 +54,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(clang) {
          *  - tailopts is an array of arguments to be appended at the end of provided compilation command
          */
         const char** tailopts = 0;
+        int allowpp = 0;
         size_t tailopts_size = 0;
         if (kwargs) {
             PyObject* Py_tailopts = PyDict_GetItemString(kwargs, "tailopts");
@@ -66,6 +67,10 @@ DEFINE_COMPILER_GET_COMPILATIONS(clang) {
                     DBG(self->debug,"        tailopt: %s\n",tailopts[u]);
                 }
             }
+            PyObject* Py_allowpp = PyDict_GetItemString(kwargs, "allowpp");
+            if (Py_allowpp) {
+            	allowpp = PyObject_IsTrue(Py_allowpp);
+    		}
         }
 
         /*
@@ -192,7 +197,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(clang) {
                             REPR(PyUnicode_FromStringAndSize((const char*)job.buff.data,buffer_size(&job.buff))),job.index);
                     /* Parse include paths and macro definitions */
                     PyObject* original_args = PyTuple_GetItem(job.comp,2);
-                    if (!PySequence_Contains(original_args,Py_BuildValue("s","-E"))) {
+                    if (allowpp || (!PySequence_Contains(original_args,Py_BuildValue("s","-E")))) {
                         PyObject* im = PyUnicode_FromStringAndSize((const char*)job.buff.data,buffer_size(&job.buff));
                         PyObject* vt = PyTuple_New(2);
                         PyTuple_SetItem(vt,0,job.fns);
