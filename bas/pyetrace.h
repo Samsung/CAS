@@ -90,6 +90,7 @@ PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *arg
 PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure);
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +119,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 static PyGetSetDef libetrace_nfsdb_getset[] = {
 	{"filemap",libetrace_nfsdb_get_filemap,0,"nfsdb filemap object",0},
 	{"source_root",libetrace_nfsdb_get_source_root,0,"nfsdb database source root",0},
+	{"dbversion",libetrace_nfsdb_get_dbversion,0,"nfsdb database version string",0},
 	{0,0,0,0,0},
 };
 

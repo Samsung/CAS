@@ -24,6 +24,7 @@ parser.add_argument("--verbose", action="store_true", help="")
 parser.add_argument("--debug-compilations", action="store_true", help="")
 parser.add_argument("--allow-pp-in-compilations", action="store_true", help="")
 parser.add_argument("--config", action="store", help="")
+parser.add_argument("--dbversion", action="store", help="Database version string")
 parser.add_argument("--integrated-clang-compilers", action="store", help="")
 parser.add_argument("--exclude-command-patterns", action="store", help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
 parser.add_argument("-j", "--jobs", action="store", help="Specify number of jobs for the compilation processing [ default: cpu_count() ]")
@@ -34,6 +35,11 @@ if not args.jobs:
     args.jobs = multiprocessing.cpu_count()
 else:
     args.jobs = int(args.jobs)
+
+if not args.dbversion:
+    dbversion = ""
+else:
+    dbversion = args.dbversion
 
 if not args.integrated_clang_compilers:
     args.integrated_clang_compilers = []
@@ -70,7 +76,7 @@ nfsdb = nnfsdb
 
 if args.create_nfsdb_cache:
     import libetrace
-    libetrace.create_nfsdb(nfsdb,source_root,None,args.exclude_command_patterns,"%s.img"%(args.db_path))
+    libetrace.create_nfsdb(nfsdb,source_root,dbversion,None,args.exclude_command_patterns,"%s.img"%(args.db_path))
     sys.exit(0)
 
 bins = set(os.path.join(e["w"],e["b"]) for e in nfsdb)
