@@ -70,7 +70,7 @@ nfsdb = nnfsdb
 
 if args.create_nfsdb_cache:
     import libetrace
-    libetrace.create_nfsdb(nfsdb,None,args.exclude_command_patterns,"%s.img"%(args.db_path))
+    libetrace.create_nfsdb(nfsdb,source_root,None,args.exclude_command_patterns,"%s.img"%(args.db_path))
     sys.exit(0)
 
 bins = set(os.path.join(e["w"],e["b"]) for e in nfsdb)

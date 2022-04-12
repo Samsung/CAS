@@ -459,6 +459,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb,
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry,nfsdb,ATTR(nfsdb_count));
+	AGGREGATE_FLATTEN_STRING2(source_root);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,string_table,ATTR(string_count));
 	FOREACH_POINTER(const char*,s,ATTR(string_table),ATTR(string_count),
 		FLATTEN_STRING(s);
@@ -532,17 +533,19 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 
 	PyObject* stringMap = PyDict_New();
 	PyObject* nfsdbJSON = PyTuple_GetItem(args,0);
-	PyObject* ddepmap = PyTuple_GetItem(args,1);
-	PyObject* pcp_patterns = PyTuple_GetItem(args,2);
-	PyObject* dbfn = PyTuple_GetItem(args,3);
+	PyObject* source_root = PyTuple_GetItem(args,1);
+	PyObject* ddepmap = PyTuple_GetItem(args,2);
+	PyObject* pcp_patterns = PyTuple_GetItem(args,3);
+	PyObject* dbfn = PyTuple_GetItem(args,4);
 	int show_stats = 0;
-	if (PyTuple_Size(args)>4) {
-		PyObject* show_stats_arg = PyTuple_GetItem(args,4);
+	if (PyTuple_Size(args)>5) {
+		PyObject* show_stats_arg = PyTuple_GetItem(args,5);
 		if (show_stats_arg==Py_True) {
 			show_stats = 1;
 		}
 	}
 	struct nfsdb nfsdb = {};
+	nfsdb.source_root = PyString_get_c_str(source_root);
 	nfsdb.string_table_size = PyList_Size(nfsdbJSON);
 	nfsdb.string_table = malloc(nfsdb.string_table_size*sizeof(const char*));
 	nfsdb.string_size_table = malloc(nfsdb.string_table_size*sizeof(uint32_t));
@@ -1168,6 +1171,12 @@ PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure) {
 	Py_DECREF(args);
 
 	return filemap;
+}
+
+PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
+	return PyUnicode_FromString(__self->nfsdb->source_root);
 }
 
 PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs ) {

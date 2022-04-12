@@ -66,6 +66,7 @@ struct nfsdb_entry {
 struct nfsdb {
 	struct nfsdb_entry* nfsdb;
 	unsigned long nfsdb_count;
+	const char* source_root;
 	const char** string_table;
 	uint32_t* string_size_table;
 	unsigned long string_table_size;

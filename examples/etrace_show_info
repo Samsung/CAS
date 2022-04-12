@@ -6,6 +6,8 @@ import libetrace
 nfsdb = libetrace.nfsdb()
 nfsdb.load(sys.argv[1],quiet=True)
 
+print ("Source root of the build: %s"%(nfsdb.source_root))
+
 # List all linked modules
 L = [x for x in nfsdb if x.is_linking()]
 print ("# Linked modules")
