@@ -20,6 +20,7 @@ fi
 # -------- parse args
 SAVE_KERNEL_LOG=
 WORK_DIR=$(pwd)
+INITCWD=$(pwd)
 MODULE_PARAMS="ignore_repeated_opens=1"
 
 while getopts "ahlw:" opt; do
@@ -60,7 +61,7 @@ if [ "$?" -ne 0 ]; then
 fi
 
 # -------- save our CWD
-echo "INITCWD=$WORK_DIR" > "$WORK_DIR/.nfsdb"
+echo "INITCWD=$INITCWD" > "$WORK_DIR/.nfsdb"
 
 # -------- set up event listener
 #${DIR}/etrace_cat "/sys/kernel/debug/tracing/trace_pipe" > "$WORK_DIR/.nfsdb" &
