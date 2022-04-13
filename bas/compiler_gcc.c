@@ -192,8 +192,8 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                 pfds[u].fd = -1;
                                 if (!pjob[u].input) {
                                 	int cp = get_compiler_phases(&pjob[u].buff);
-                                	DBG(self->debug_compilations,"@[#] {%d}(%d) [%d][%s]\n",
-                                			pjob[u].pid,pjob[u].index,cp,
+                                	DBG(self->debug_compilations,"@[#] [%d] {%d}(%d) [%s]\n",
+                                			cp,pjob[u].pid,pjob[u].index,
                                             REPR(PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff))));
                                     if (cp & PP_SEEN) {
                                         /* Spawn the process for reading input files */
