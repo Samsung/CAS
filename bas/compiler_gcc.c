@@ -64,7 +64,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
 
 	if (self->debug_compilations) {
 		ssize_t ux;
-		printf("--- libetrace_compiler_gcc_input_files() [%d]: (%ld)\n",getpid(),PyList_Size(comps));
+		printf("--- libetrace_compiler_gcc_get_compilations() [%d]: (%ld)\n",getpid(),PyList_Size(comps));
 		for (ux=0; ux<PyList_Size(comps); ++ux) {
 			PyObject* comp = PyList_GetItem(comps,ux);
 			PyObject* cmd = PyTuple_GetItem(comp,2);
@@ -72,7 +72,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
 		}
 	}
 
-    DBG(self->debug,"--- libetrace_compiler_gcc_input_files(%ld,%d)\n",PyList_Size(comps),jobs);
+    DBG(self->debug,"--- libetrace_compiler_gcc_get_compilations(%ld,%d)\n",PyList_Size(comps),jobs);
 
     DBG(self->debug_compilations,"Searching for gcc compilations ...\n");
 
@@ -111,7 +111,8 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
         int pid = run_child(bin,cwd,bargs,&pfds[proc_index].fd,0);
         if (pid>0) {
             if (self->debug) {
-                DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED: \n%s\n\n",getpid(),STRJOIN(bargs));
+                DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED [#]: \n%s [%s] %s\n\n",
+                		getpid(),bin,cwd,STRJOIN(bargs));
             }
             DBG(self->debug_compilations, " *** %d created [%s](hcmd)\n",pid,bin);
             pfds[proc_index].events = POLLIN|POLLHUP;
@@ -127,6 +128,9 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
             job_num++;
         }
         else {
+            if (self->debug) {
+                DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULE FAILED [#]: \n%s\n\n",getpid(),STRJOIN(bargs));
+            }
             DBG(self->debug_compilations, " *** Failed to create child: [%s](hcmd): %d\n",bin,errno);
         }
         comp_index++;
@@ -187,10 +191,10 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                 close(pfds[u].fd);
                                 pfds[u].fd = -1;
                                 if (!pjob[u].input) {
-                                    DBG(self->debug_compilations,"@[%s]:(%d)\n",
-                                            REPR(PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff))),pjob[u].index);
-                                    int cp = get_compiler_phases(&pjob[u].buff);
-                                    DBG(self->debug_compilations, "--- libetrace_compiler_gcc_get_compilations(): [%d] compiler phases: %x\n",pjob[u].pid,cp);
+                                	int cp = get_compiler_phases(&pjob[u].buff);
+                                	DBG(self->debug_compilations,"@[#] {%d}(%d) [%d][%s]\n",
+                                			pjob[u].pid,pjob[u].index,cp,
+                                            REPR(PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff))));
                                     if (cp & PP_SEEN) {
                                         /* Spawn the process for reading input files */
                                         const char* bin;
@@ -222,8 +226,11 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                         	PyList_Append(bargs,Py_BuildValue("s","-c"));
                                         }
                                         int pid = run_child(bin,cwd,bargs,&pfds[u].fd,0);
-                                        Py_DecRef(bargs);
                                         if (pid>0) {
+                                        	if (self->debug) {
+                                        		DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED [I]: \n%s [%s] %s\n\n",
+                                        				getpid(),bin,cwd,STRJOIN(bargs));
+                                        	}
                                             DBG(self->debug_compilations, " *** %d created [%s](icmd)\n",pid,bin);
                                             pfds[u].events = POLLIN|POLLHUP;
                                             pjob[u].pid = pid;
@@ -234,8 +241,12 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                             continue;
                                         }
                                         else {
+                                        	if (self->debug) {
+                                        		DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULE FAILED [I]: \n%s\n\n",getpid(),STRJOIN(bargs));
+                                        	}
                                             DBG(self->debug_compilations, " *** Failed to create child: [%s](icmd): %d\n",bin,errno);
                                         }
+                                        Py_DecRef(bargs);
                                     }
                                     else {
                                         const int debug_err = 0;
@@ -245,7 +256,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                 }
                                 else {
                                     if (pjob[u].fns) {
-                                        DBG(self->debug_compilations,"@@@[%s]:(%d)\n",
+                                        DBG(self->debug_compilations,"@[M] [%s]:(%d)\n",
                                                 REPR(PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff))),pjob[u].index);
                                         /* Parse include paths and macro definitions */
                                         PyObject* im = PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff));
@@ -267,7 +278,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                         /* Parse the input files */
                                         const char* cwd = PyString_get_c_str(PyTuple_GetItem(pjob[u].comp,1));
                                         size_t cwdLen = strlen(cwd);
-                                        DBG(self->debug_compilations,"@@[%s]:(%d)\n",
+                                        DBG(self->debug_compilations,"@[I] [%s]:(%d)\n",
                                                 REPR(PyUnicode_FromStringAndSize((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff))),pjob[u].index);
                                         PyObject* fns = splitn((const char*)pjob[u].buff.data,buffer_size(&pjob[u].buff));
                                         Py_ssize_t i = 0;
@@ -324,8 +335,11 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                             }
                                             PyList_Append(bargs,Py_BuildValue("s","-"));
                                             int pid = run_child(bin,cwd,bargs,&pfds[u].fd,1);
-                                            Py_DecRef(bargs);
                                             if (pid>0) {
+                                                if (self->debug) {
+                                                    DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED [M]: \n%s [%s] %s\n\n",
+                                                    		getpid(),bin,cwd,STRJOIN(bargs));
+                                                }
                                                 DBG(self->debug_compilations, " *** %d created [%s](mcmd)\n",pid,bin);
                                                 pfds[u].events = POLLIN|POLLHUP;
                                                 pjob[u].pid = pid;
@@ -335,8 +349,12 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                                 continue;
                                             }
                                             else {
+                                                if (self->debug) {
+                                                    DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULE FAILED [M]: \n%s\n\n",getpid(),STRJOIN(bargs));
+                                                }
                                                 DBG(self->debug_compilations, " *** Failed to create child: [%s](mcmd): %d\n",bin,errno);
                                             }
+                                            Py_DecRef(bargs);
                                         }
                                     }
                                 }
@@ -357,22 +375,26 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                     int pid = run_child(bin,cwd,bargs,&pfds[u].fd,0);
                                     if (pid>0) {
                                         if (self->debug) {
-                                            DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED: \n%s\n\n",getpid(),STRJOIN(bargs));
+                                            DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULED [#]: \n%s [%s] %s\n\n",
+                                            		getpid(),bin,cwd,STRJOIN(bargs));
                                         }
-                                      DBG(self->debug_compilations, " *** %d created [%s]\n",pid,bin);
-                                      pfds[u].events = POLLIN|POLLHUP;
-                                      DBG(self->debug_compilations,"{%s}:(%ld)\n",REPR(comp),comp_index);
-                                      pjob[u].index = comp_index;
-                                      pjob[u].pid = pid;
-                                      buffer_clear(&pjob[u].buff);
-                                      pjob[u].pfd = &pfds[u];
-                                      pjob[u].comp = comp;
-                                      pjob[u].input = 0;
-                                      pjob[u].fns = 0;
-                                      job_num++;
-                                      try_spawn--;
+									  DBG(self->debug_compilations, " *** %d created [%s]\n",pid,bin);
+									  pfds[u].events = POLLIN|POLLHUP;
+									  DBG(self->debug_compilations,"{%s}:(%ld)\n",REPR(comp),comp_index);
+									  pjob[u].index = comp_index;
+									  pjob[u].pid = pid;
+									  buffer_clear(&pjob[u].buff);
+									  pjob[u].pfd = &pfds[u];
+									  pjob[u].comp = comp;
+									  pjob[u].input = 0;
+									  pjob[u].fns = 0;
+									  job_num++;
+									  try_spawn--;
                                     }
                                     else {
+                                        if (self->debug) {
+                                            DBG(self->debug_compilations,"--- libetrace_compiler_gcc_get_compilations() [%d] | SCHEDULE FAILED [#]: \n%s\n\n",getpid(),STRJOIN(bargs));
+                                        }
                                       DBG(self->debug_compilations, " *** Failed to create child: [%s](hcmd): %d\n",bin,errno);
                                     }
                                     comp_index++;
