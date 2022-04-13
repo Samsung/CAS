@@ -208,12 +208,18 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
                                                 PySequence_DelItem(bargs, i);
                                                 PySequence_DelItem(bargs, i);
                                             }
-                                            PyList_Append(bargs,Py_BuildValue("s","-c"));
                                         }
                                         PyList_Append(bargs,plugin_arg);
                                         if (PySequence_Contains(bargs,Py_BuildValue("s","-pipe"))) {
                                             Py_ssize_t j = PySequence_Index(bargs,Py_BuildValue("s","-pipe"));
                                             PySequence_DelItem(bargs,j);
+                                        }
+                                        if (PySequence_Contains(bargs,Py_BuildValue("s","-E"))) {
+											Py_ssize_t j = PySequence_Index(bargs,Py_BuildValue("s","-E"));
+											PySequence_DelItem(bargs,j);
+										}
+                                        if (!PySequence_Contains(bargs,Py_BuildValue("s","-c"))) {
+                                        	PyList_Append(bargs,Py_BuildValue("s","-c"));
                                         }
                                         int pid = run_child(bin,cwd,bargs,&pfds[u].fd,0);
                                         Py_DecRef(bargs);
