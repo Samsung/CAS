@@ -1003,6 +1003,12 @@ def create_json_db_main(args,allowed_phases):
     JDB["source_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["sources"]]
     if "modules" in JDB:
         JDB["module_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["modules"]]
+    # Try to update absolute path in function locations where it is missing
+    for f in JDB["funcs"]:
+        floc = f["location"].split(":")
+        if os.path.isabs(floc[0]) and f["abs_location"]=="":
+            floc[0] = os.path.realpath(floc[0])
+            f["abs_location"] = ":".join(floc)
     with open(output,"w") as f:
         f.write(json.dumps(JDB,indent=4))
     print "Done. Written %s [%.2fMB]"%(output,float(os.stat(output).st_size)/1048576)
