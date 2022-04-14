@@ -2,7 +2,7 @@
 
 # Run syscalls tracing of a given command
 # Usage:
-# netrace COMMAND ...
+# etrace COMMAND ...
 
 print_usage () {
     echo "Usage: etrace [-h] [-l] [-a] [-w WORK_DIR] [--] COMMAND ..."
