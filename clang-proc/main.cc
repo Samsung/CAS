@@ -114,6 +114,7 @@ int main(int argc, const char **argv)
     cl::opt<std::string> BreakFunctionPlaceholder("B", cl::cat(ctCategory));
     cl::opt<bool> BreakOption("k", cl::cat(ctCategory));
     cl::opt<bool> IncludeOption("i", cl::cat(ctCategory));
+    cl::list<std::string> AdditionalIncludePathsOption("A", cl::cat(ctCategory));
     cl::opt<bool> BodyOption("b", cl::cat(ctCategory));
     cl::opt<bool> DefsOption("F", cl::cat(ctCategory));
     cl::opt<bool> SwitchOption("s", cl::cat(ctCategory));
@@ -149,6 +150,11 @@ int main(int argc, const char **argv)
 
         if (IncludeOption.getValue()) {
           auto arg = "-I" + utils::getClangBuiltInIncludePath(argv[0]);
+          Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+        }
+
+        for (unsigned i = 0; i != AdditionalIncludePathsOption.size(); ++i) {
+          auto arg = "-I" + AdditionalIncludePathsOption[i];
           Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
         }
 

@@ -612,7 +612,11 @@ def create_json_db_main(args,allowed_phases):
             for df in addDefs:
                 command.append("-D")
                 command.append("%s"%(df))
-
+    
+    if args.additional_include_paths:
+        for ipath in args.additional_include_paths:
+            command.append("-A")
+            command.append("%s"%(ipath))
 
     command+=["-c","-t","-L","-p",compdbf]
 
