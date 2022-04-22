@@ -166,6 +166,8 @@ target_compile_options(clang-proc PRIVATE -Wno-missing-field-initializers)
 target_compile_options(clang-proc PRIVATE -Wno-comment)
 target_compile_options(clang-proc PRIVATE -Wno-strict-aliasing)
 target_compile_options(clang-proc PRIVATE "-DCLANG_VERSION=${CLANG_VERSION}")
+target_compile_options(clang-proc PRIVATE "-DCLANG_BUILTIN_INCLUDE_PATH=\"${LLVM_INCLUDE_DIR}\"")
+
 if(IS_CLANG)
     target_compile_options(clang-proc PRIVATE -Wno-unused-private-field)
 endif()

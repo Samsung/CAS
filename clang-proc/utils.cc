@@ -83,14 +83,7 @@ std::string getSourceCode(const std::string &sourceFile)
 
 std::string getClangBuiltInIncludePath(const std::string &fullCallPath)
 {
-    auto currentPath = fullCallPath;
-    currentPath.erase(currentPath.rfind("/"));
-
-    std::string line;
-    std::ifstream file(currentPath + "/builtInInclude.path");
-    std::getline(file, line);
-
-    return line;
+    return std::string(CLANG_BUILTIN_INCLUDE_PATH);
 }
 
 }
