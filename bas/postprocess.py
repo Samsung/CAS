@@ -479,10 +479,12 @@ def get_clang_compilations_parallel(clang_c, clangxx_input_execs, internal_jobs)
 def get_gcc_compilations_parallel(gcc_c,gxx_input_execs,internal_jobs,input_compiler_parser):
 
     def gcc_executor(p,gcc_c,gxx_input_execs,start_offset,jobs,input_compiler_parser,conn):
+        plugin_path = os.path.join(os.path.dirname(sys.argv[0]),"../libgcc_input_name.so")
+        plugin_path = "-fplugin=" + os.path.realpath(plugin_path)
         if input_compiler_parser is None:
-            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,"-fplugin=%s"%(os.path.join(os.path.dirname(sys.argv[0]),"../libgcc_input_name.so")))
+            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,plugin_path)
         else:
-            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,"-fplugin=%s"%(os.path.join(os.path.dirname(sys.argv[0]),"../libgcc_input_name.so")),input_compiler_parser)
+            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,plugin_path,input_compiler_parser)
         conn.send((p,{ x+start_offset:y for x,y in comp_dict_gcc.items() }))
 
     jobs = 2*internal_jobs
