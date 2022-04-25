@@ -1077,6 +1077,7 @@ public:
       case cf_while: return "while";
       case cf_do: return "do";
       case cf_switch: return "switch";
+      default: return "";
     }
   }
   struct ControlFlowData{
