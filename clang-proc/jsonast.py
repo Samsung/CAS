@@ -463,7 +463,7 @@ def create_json_db_main(args,allowed_phases):
     
     script_dir = os.path.dirname(os.path.abspath( __file__ ))
 
-    if not os.path.abspath(args.proc_binary):
+    if not os.path.isabs(args.proc_binary):
         print ("Please provide full path to the clang processor binary (not %s)"%(args.proc_binary))
         return 1
 
