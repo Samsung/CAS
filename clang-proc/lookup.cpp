@@ -88,7 +88,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 			const IntegerLiteral* IL = static_cast<const IntegerLiteral*>(E);
 			DbJSONClassVisitor::LiteralHolder lh;
 			lh.type = DbJSONClassVisitor::LiteralHolder::LiteralInteger;
-			lh.prvLiteral.integerLiteral = IL->getValue();
+			lh.prvLiteral.integerLiteral = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType());
 			lh.pos = pos;
 			refs.insert(lh);
 			break;
@@ -1070,7 +1070,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			int64_t i;
 			if (E->getStmtClass()==Stmt::IntegerLiteralClass) {
 				const IntegerLiteral* IL = static_cast<const IntegerLiteral*>(E);
-				i = IL->getValue().getSExtValue();
+				i = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType()).extOrTrunc(64).getExtValue();
 			}
 			else {
 				const CharacterLiteral* CL = static_cast<const CharacterLiteral*>(E);
@@ -2094,10 +2094,10 @@ bool DbJSONClassVisitor::computeOffsetExpr(const Expr* E, int64_t* LiteralOffset
 	}
 	if((!nE->isValueDependent()) && nE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(nE,Res)){
 		if (kind==BO_Add) {
-			*LiteralOffset += Res.Val.getInt().getSExtValue();
+			*LiteralOffset += Res.Val.getInt().extOrTrunc(64).getExtValue();
 		}
 		else {
-			*LiteralOffset -= Res.Val.getInt().getSExtValue();
+			*LiteralOffset -= Res.Val.getInt().extOrTrunc(64).getExtValue();
 		}
 		return true;
 	}
@@ -2121,10 +2121,10 @@ bool DbJSONClassVisitor::tryComputeOffsetExpr(const Expr* E, int64_t* LiteralOff
 	}
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)){
 		if (kind==BO_Add) {
-			*LiteralOffset += Res.Val.getInt().getSExtValue();
+			*LiteralOffset += Res.Val.getInt().extOrTrunc(64).getExtValue();
 		}
 		else {
-			*LiteralOffset -= Res.Val.getInt().getSExtValue();
+			*LiteralOffset -= Res.Val.getInt().extOrTrunc(64).getExtValue();
 		}
 	}
 	else {
@@ -2270,7 +2270,7 @@ bool DbJSONClassVisitor::lookForASExprs(const ArraySubscriptExpr *Node, VarRef_t
 	// Check if expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
-		*LiteralOffset = Res.Val.getInt().getSExtValue();
+		*LiteralOffset = Res.Val.getInt().extOrTrunc(64).getExtValue();
 	}
 	else {
 		DbJSONClassVisitor::DREMap_t DREMap;

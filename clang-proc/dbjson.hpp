@@ -152,7 +152,7 @@ public:
   	} type;
   	struct PrivLiterals {
   		std::string stringLiteral;
-  		llvm::APInt integerLiteral;
+  		llvm::APSInt integerLiteral;
   		unsigned int charLiteral;
   		double floatingLiteral;
   	} prvLiteral;
@@ -164,7 +164,7 @@ public:
   			return prvLiteral.stringLiteral.compare(other.prvLiteral.stringLiteral)<0;
   		}
   		if (type==LiteralInteger) {
-  			return prvLiteral.integerLiteral.getSExtValue() < other.prvLiteral.integerLiteral.getSExtValue();
+  			return prvLiteral.integerLiteral.extOrTrunc(64).getExtValue() < other.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
   		}
   		if (type==LiteralChar) {
   			return prvLiteral.charLiteral < other.prvLiteral.charLiteral;

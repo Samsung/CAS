@@ -142,7 +142,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		// Check if init can be evaluated as a constant expression
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().getSExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
@@ -1139,7 +1139,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					const Expr* E = CSCE->getSubExpr();
 					Expr::EvalResult Res;
 					if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)){
-						if (handleCallAddress(Res.Val.getInt().getSExtValue(),E,callrefs,literalRefs,&baseType,CE,CSCE)) __callserved++;
+						if (handleCallAddress(Res.Val.getInt().extOrTrunc(64).getExtValue(),E,callrefs,literalRefs,&baseType,CE,CSCE)) __callserved++;
 					}
 				}
 			}
@@ -1234,7 +1234,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					// Check if function argument can be evaluated as a constant expression
 					Expr::EvalResult Res;
 					if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-						int64_t i = Res.Val.getInt().getSExtValue();
+						int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 						ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 						CStyleCastOrType valuecast;
 						if (!castType.isNull()) {
@@ -1500,7 +1500,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		// Check if init can be evaluated as a constant expression
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().getSExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
@@ -1641,7 +1641,7 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 	// Check if expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
-		idx_i = Res.Val.getInt().getSExtValue();
+		idx_i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 	}
 	else {
 		idx_done = lookForDerefExprs(idxE,&idx_i,idx_vVR);
@@ -1750,7 +1750,7 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
             // Check if offset expression can be evaluated as a constant expression
             Expr::EvalResult Res;
             if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-                int64_t i = Res.Val.getInt().getSExtValue();
+                int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 
                 QualType rRT = resolve_Record_Type(lastFieldType);
                 if (!rRT.isNull()) {
@@ -1872,7 +1872,7 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	 // Check if return expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-		int64_t i = Res.Val.getInt().getSExtValue();
+		int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
 		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 		CStyleCastOrType valuecast;
 		if (!castType.isNull()) {
@@ -2082,7 +2082,7 @@ bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
 bool DbJSONClassVisitor::VisitIntegerLiteral(IntegerLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralInteger;
-	lh.prvLiteral.integerLiteral = L->getValue();
+	lh.prvLiteral.integerLiteral = llvm::APSInt(L->getValue(),L->getType()->isUnsignedIntegerOrEnumerationType());
 	if(lastFunctionDef){
 		lastFunctionDef->literals.insert(lh);
 	}

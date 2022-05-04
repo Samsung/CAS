@@ -478,12 +478,12 @@ void DbJSONClassVisitor::setSwitchData(const Expr* caseExpr, int64_t* enumv,
 	const DeclRefExpr* DRE = lookForBottomDeclRef(caseExpr);
 	if (DRE && (DRE->getDecl()->getKind()==Decl::EnumConstant)) {
 		const EnumConstantDecl* ecd = static_cast<const EnumConstantDecl*>(DRE->getDecl());
-		*enumv = ecd->getInitVal().getExtValue();
+		*enumv = ecd->getInitVal().extOrTrunc(64).getExtValue();
 		*enumstr = ecd->getIdentifier()->getName().str();
 	}
 	Expr::EvalResult Res;
 	if((!caseExpr->isValueDependent()) && caseExpr->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(caseExpr,Res)){
-		*exprVal = Res.Val.getInt().getSExtValue();
+		*exprVal = Res.Val.getInt().extOrTrunc(64).getExtValue();
 	}
 }
 
@@ -1028,7 +1028,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  }
 	  if (lh.type==LiteralHolder::LiteralInteger) {
 		  std::stringstream ss;
-		  ss << lh.prvLiteral.integerLiteral.getSExtValue();
+		  ss << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
 		  return ss.str();
 	  }
 	  if (lh.type==LiteralHolder::LiteralString) {
@@ -1164,7 +1164,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					  else{
 						  int_literals << ", ";
 					  }
-					  int_literals << lh.prvLiteral.integerLiteral.getSExtValue();
+					  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
 					  break;
 				  }
 				  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
@@ -2629,7 +2629,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					  else{
 						  int_literals << ", ";
 					  }
-					  int_literals << lh.prvLiteral.integerLiteral.getSExtValue();
+					  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
 					  break;
 				  }
 				  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
@@ -5399,7 +5399,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
                                           if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (width) {
-						  ConstantValues.push_back(ED->getInitVal().getExtValue());
+						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(64).getExtValue());
 					  }
 					  else {
 						  // This is dependent EnumConstantDecl which cannot be resolved to integer value just yet
