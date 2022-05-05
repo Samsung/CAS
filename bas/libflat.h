@@ -113,8 +113,10 @@ int flatten_write(FILE* f);
 void flatten_fini();
 void unflatten_init();
 int unflatten_read(FILE* f);
-int unflatten_map(int fd, off_t offset);
+int unflatten_map_internal(int fd, off_t offset, int map_flags);
 int unflatten_map_rdonly(int fd, off_t offset);
+int unflatten_map(int fd, off_t offset);
+int unflatten_map_private(int fd, off_t offset);
 void unflatten_fini();
 
 enum flatten_option {

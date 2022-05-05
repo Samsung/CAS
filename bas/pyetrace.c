@@ -1199,10 +1199,12 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
     PyObject* py_debug = PyUnicode_FromString("debug");
     PyObject* py_quiet = PyUnicode_FromString("quiet");
     PyObject* py_no_map_memory = PyUnicode_FromString("no_map_memory");
+    PyObject* py_mp_safe = PyUnicode_FromString("mp_safe");
 
     int debug = self->debug;
     int quiet = 0;
     int no_map_memory = 0;
+    int mp_safe = 0;
     int err=0;
 
     if (kwargs) {
@@ -1214,6 +1216,9 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 		}
     	if (PyDict_Contains(kwargs,py_no_map_memory)) {
     		no_map_memory = PyLong_AsLong(PyDict_GetItem(kwargs,py_no_map_memory));
+		}
+    	if (PyDict_Contains(kwargs,py_mp_safe)) {
+    		mp_safe = PyLong_AsLong(PyDict_GetItem(kwargs,py_mp_safe));
 		}
     }
 
@@ -1248,9 +1253,23 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
     	unflatten_init();
     	if (quiet)
     		flatten_set_option(option_silent);
-    	int err = unflatten_map(map_fd,0);
+    	int map_err;
+    	if (!mp_safe) {
+    		/* Try to map the cache file to the previously used address
+    		 * When it fails map to new address and update all the pointers in the file
+    		 * (we're not going concurrently here)
+    		 */
+    		map_err = unflatten_map(map_fd,0);
+    	}
+    	else {
+    		/* Try to map the cache file to the previously used address
+			 * When it fails map to new address privately (do not update the pointers in the file)
+			 * (this can save us some trouble when running concurrently)
+			 */
+    		map_err = unflatten_map_private(map_fd,0);
+    	}
     	close(map_fd);
-    	if (err) {
+    	if (map_err) {
     		PyErr_SetString(libetrace_nfsdbError, "Failed to map cache file");
     		goto done;
     	}

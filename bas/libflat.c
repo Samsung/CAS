@@ -1054,6 +1054,13 @@ int unflatten_map_rdonly(int fd, off_t offset) {
 }
 
 int unflatten_map(int fd, off_t offset) {
+	return unflatten_map_internal(fd,offset,MAP_SHARED);
+}
+int unflatten_map_private(int fd, off_t offset) {
+	return unflatten_map_internal(fd,offset,MAP_PRIVATE);
+}
+
+int unflatten_map_internal(int fd, off_t offset, int map_flags) {
 
 	TIME_MARK_START(unfl_b);
 
@@ -1088,7 +1095,7 @@ int unflatten_map(int fd, off_t offset) {
 		}
 	}
 	if (reqaddr==0) {
-		mem = mmap(0, memsz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+		mem = mmap(0, memsz, PROT_READ|PROT_WRITE, map_flags, fd, 0);
 		assert(mem!=MAP_FAILED);
 	}
 	FLCTRL.map_size = memsz;
