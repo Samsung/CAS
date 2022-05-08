@@ -482,6 +482,11 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb,
 	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,linkedmap.rb_node);
 );
 
+FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_deps,
+	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,depmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,ddepmap.rb_node);
+);
+
 unsigned long string_table_add(struct nfsdb* nfsdb, PyObject* s, PyObject* stringMap) {
 
 	static unsigned long stringIndex = 0;
@@ -742,6 +747,107 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 
 	destroy_nfsdb(&nfsdb);
 
+	Py_RETURN_TRUE;
+}
+
+static void destroy_nfsdb_deps(struct nfsdb_deps* nfsdb_deps) {
+
+	// TODO
+}
+
+PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args) {
+
+	PyObject* depmap = PyTuple_GetItem(args,0);
+	PyObject* ddepmap = PyTuple_GetItem(args,1);
+	PyObject* dbfn = PyTuple_GetItem(args,2);
+	int show_stats = 0;
+	if (PyTuple_Size(args)>3) {
+		PyObject* show_stats_arg = PyTuple_GetItem(args,3);
+		if (show_stats_arg==Py_True) {
+			show_stats = 1;
+		}
+	}
+	struct nfsdb_deps nfsdb_deps = {};
+
+	/* Make a cache string table object */
+	PyObject* stringTable = PyDict_New();
+	for (unsigned long u=0; u<self->nfsdb->string_count; ++u) {
+		PyObject* s = PyUnicode_FromString(self->nfsdb->string_table[u]);
+		PyDict_SetItem(stringTable, s, PyLong_FromUnsignedLong(u));
+	}
+
+	PyObject* depmap_keys = PyDict_Keys(depmap);
+	unsigned long depmap_vals = 0;
+	for (Py_ssize_t i=0; i<PyList_Size(depmap_keys); ++i) {
+		PyObject* mpath = PyList_GetItem(depmap_keys,i);
+		assert(PyDict_Contains(stringTable, mpath));
+		PyObject* mpath_handle = PyDict_GetItem(stringTable, mpath);
+		PyObject* deps = PyDict_GetItem(depmap,mpath);
+		unsigned long* values = malloc(PyList_Size(deps)*sizeof(unsigned long));
+		depmap_vals+=PyList_Size(deps);
+		for (Py_ssize_t j=0; j<PyList_Size(deps); ++j) {
+			PyObject* dpath = PyList_GetItem(deps,j);
+			assert(PyDict_Contains(stringTable, dpath));
+			PyObject* dpath_handle = PyDict_GetItem(stringTable, dpath);
+			values[j] = PyLong_AsUnsignedLong(dpath_handle);
+		}
+		ulongMap_insert(&nfsdb_deps.depmap, PyLong_AsUnsignedLong(mpath_handle), values, PyList_Size(deps));
+	}
+	if (show_stats) {
+		printf("depmap entries: %ld\n",PyList_Size(depmap_keys));
+		printf("depmap values: %ld\n",depmap_vals);
+	}
+	Py_DecRef(depmap_keys);
+
+	PyObject* ddepmap_keys = PyDict_Keys(ddepmap);
+	unsigned long ddepmap_vals = 0;
+	for (Py_ssize_t i=0; i<PyList_Size(ddepmap_keys); ++i) {
+		PyObject* mpath = PyList_GetItem(ddepmap_keys,i);
+		assert(PyDict_Contains(stringTable, mpath));
+		PyObject* mpath_handle = PyDict_GetItem(stringTable, mpath);
+		PyObject* ddeps = PyDict_GetItem(ddepmap,mpath);
+		unsigned long* values = malloc(PyList_Size(ddeps)*sizeof(unsigned long));
+		ddepmap_vals+=PyList_Size(ddeps);
+		for (Py_ssize_t j=0; j<PyList_Size(ddeps); ++j) {
+			PyObject* ddpath = PyList_GetItem(ddeps,j);
+			assert(PyDict_Contains(stringTable, ddpath));
+			PyObject* ddpath_handle = PyDict_GetItem(stringTable, ddpath);
+			values[j] = PyLong_AsUnsignedLong(ddpath_handle);
+		}
+		ulongMap_insert(&nfsdb_deps.ddepmap, PyLong_AsUnsignedLong(mpath_handle), values, PyList_Size(ddeps));
+	}
+	if (show_stats) {
+		printf("ddepmap entries: %ld\n",PyList_Size(ddepmap_keys));
+		printf("ddepmap values: %ld\n",ddepmap_vals);
+	}
+	Py_DecRef(ddepmap_keys);
+
+	FILE* out = fopen(PyString_get_c_str(dbfn), "w");
+	if (!out) {
+		printf("Couldn't create flatten image file: %s\n",PyString_get_c_str(dbfn));
+		Py_RETURN_FALSE;
+	}
+
+	flatten_init();
+	FOR_ROOT_POINTER(&nfsdb_deps,
+		UNDER_ITER_HARNESS2(
+			FLATTEN_STRUCT2_ITER(nfsdb_deps,&nfsdb_deps);
+		);
+	);
+
+	int err;
+	if ((err = flatten_write(out)) != 0) {
+		printf("flatten_write(): %d\n",err);
+		Py_RETURN_FALSE;
+	}
+
+	flatten_fini();
+	fclose(out);
+
+
+	destroy_nfsdb_deps(&nfsdb_deps);
+
+	Py_DecRef(stringTable);
 	Py_RETURN_TRUE;
 }
 
@@ -1190,7 +1296,7 @@ PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure) {
 
 PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs ) {
 
-    const char* cache_filename = ".nfsdb.json.img";
+    const char* cache_filename = ".nfsdb.img";
 
     if (PyTuple_Size(args)>0) {
     	cache_filename = PyBytes_AsString(PyUnicode_AsASCIIString(PyTuple_GetItem(args,0)));
@@ -1286,6 +1392,162 @@ done:
 	PYASSTR_DECREF(cache_filename);
 	if (!err) Py_RETURN_FALSE;
 	Py_RETURN_TRUE;
+}
+
+PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs) {
+
+	const char* cache_filename = ".nfsdb.deps.img";
+
+	if (PyTuple_Size(args)>0) {
+		cache_filename = PyBytes_AsString(PyUnicode_AsASCIIString(PyTuple_GetItem(args,0)));
+	}
+
+	PyObject* py_debug = PyUnicode_FromString("debug");
+	PyObject* py_quiet = PyUnicode_FromString("quiet");
+	PyObject* py_no_map_memory = PyUnicode_FromString("no_map_memory");
+	PyObject* py_mp_safe = PyUnicode_FromString("mp_safe");
+
+	int debug = self->debug;
+	int quiet = 0;
+	int no_map_memory = 0;
+	int mp_safe = 0;
+	int err=0;
+
+	if (kwargs) {
+		if (PyDict_Contains(kwargs,py_debug)) {
+			debug = PyLong_AsLong(PyDict_GetItem(kwargs,py_debug));
+		}
+		if (PyDict_Contains(kwargs,py_quiet)) {
+			quiet = PyLong_AsLong(PyDict_GetItem(kwargs,py_quiet));
+		}
+		if (PyDict_Contains(kwargs,py_no_map_memory)) {
+			no_map_memory = PyLong_AsLong(PyDict_GetItem(kwargs,py_no_map_memory));
+		}
+		if (PyDict_Contains(kwargs,py_mp_safe)) {
+			mp_safe = PyLong_AsLong(PyDict_GetItem(kwargs,py_mp_safe));
+		}
+	}
+
+	DBG( debug, "--- libetrace_nfsdb_load_deps(\"%s\")\n",cache_filename);
+
+	if (self->nfsdb_deps) {
+		PyErr_SetString(libetrace_nfsdbError, "nfsdb dependency cache already initialized");
+		goto done;
+	}
+
+	if (no_map_memory) {
+		FILE* in = fopen(cache_filename, "rb");
+		if (!in) {
+			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
+			goto done;
+		}
+		unflatten_init();
+		if (quiet)
+			flatten_set_option(option_silent);
+		if (unflatten_read(in)) {
+			PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
+			goto done;
+		}
+		fclose(in);
+	}
+	else {
+		int map_fd = open(cache_filename,O_RDWR);
+		if (map_fd<0) {
+			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
+			goto done;
+		}
+		unflatten_init();
+		if (quiet)
+			flatten_set_option(option_silent);
+		int map_err;
+		if (!mp_safe) {
+			/* Try to map the cache file to the previously used address
+			 * When it fails map to new address and update the file address
+			 * (we're not going concurrently here)
+			 */
+			map_err = unflatten_map(map_fd,0);
+		}
+		else {
+			/* Try to map the cache file to the previously used address
+			 * When it fails map to new address privately
+			 * (this will incur a small penalty on updating all the image pointers
+			 *  but can save us some trouble when running concurrently)
+			 */
+			map_err = unflatten_map_private(map_fd,0);
+		}
+		close(map_fd);
+		if (map_err) {
+			PyErr_SetString(libetrace_nfsdbError, "Failed to map cache file");
+			goto done;
+		}
+	}
+
+	self->nfsdb_deps = ROOT_POINTER_NEXT(const struct nfsdb_deps*);
+	err = 1;
+
+done:
+	Py_DecRef(py_debug);
+	Py_DecRef(py_quiet);
+	Py_DecRef(py_no_map_memory);
+	PYASSTR_DECREF(cache_filename);
+	if (!err) Py_RETURN_FALSE;
+	Py_RETURN_TRUE;
+}
+
+PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
+
+	PyObject* module_path = PyTuple_GetItem(args,0);
+	PyObject* py_direct = PyUnicode_FromString("direct");
+	int direct = 0;
+
+	if (kwargs) {
+		if (PyDict_Contains(kwargs,py_direct)) {
+			direct = PyLong_AsLong(PyDict_GetItem(kwargs,py_direct));
+		}
+	}
+
+	if (!self->nfsdb_deps) {
+		PyErr_SetString(libetrace_nfsdbError, "nfsdb dependency cache not initialized");
+		Py_DecRef(py_direct);
+		return 0;
+	}
+
+	const struct rb_root* dmap = 0;
+	if (direct) {
+		dmap = &self->nfsdb_deps->ddepmap;
+	}
+	else {
+		dmap = &self->nfsdb_deps->depmap;
+	}
+
+	PyObject* mL = PyList_New(0);
+
+	if (PyUnicode_Check(module_path)) {
+		const char* mpath = PyString_get_c_str(module_path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, mpath);
+		PYASSTR_DECREF(mpath);
+		if (!srefnode) {
+			goto done;
+		}
+		unsigned long hmpath = srefnode->value;
+		struct ulongMap_node* node = ulongMap_search(dmap, hmpath);
+		if (!node) {
+			goto done;
+		}
+		for (unsigned long i=0; i<node->value_count; ++i) {
+			const char* fpath = self->nfsdb->string_table[node->value_list[i]];
+			PyList_Append(mL,PyUnicode_FromString(fpath));
+		}
+	}
+	else {
+		PyErr_SetString(libetrace_nfsdbError, "Invalid module path type (not a string)");
+		Py_DecRef(py_direct);
+		return 0;
+	}
+
+done:
+	Py_DecRef(py_direct);
+	return mL;
 }
 
 void libetrace_nfsdb_entry_dealloc(libetrace_nfsdb_entry_object* self) {

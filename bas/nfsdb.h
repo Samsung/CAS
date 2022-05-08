@@ -63,6 +63,11 @@ struct nfsdb_entry {
 	int linked_type;
 };
 
+struct nfsdb_deps {
+	struct rb_root depmap;
+	struct rb_root ddepmap;
+};
+
 struct nfsdb {
 	struct nfsdb_entry* nfsdb;
 	unsigned long nfsdb_count;
