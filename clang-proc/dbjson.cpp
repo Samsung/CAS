@@ -5396,6 +5396,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				                                       D != DEnd; ++D) {
 
 					  if (D->isImplicit()) continue;
+                                          if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (width) {
 						  ConstantValues.push_back(ED->getInitVal().getExtValue());
@@ -5478,6 +5479,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  for (DeclContext::decl_iterator D = DC->decls_begin(), DEnd = DC->decls_end();
 													   D != DEnd; ++D) {
 					  if (D->isImplicit()) continue;
+                                          if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (ED->getInitExpr()) {
 						  Visitor.lookForDeclRefExprs(ED->getInitExpr(),enumrefs);

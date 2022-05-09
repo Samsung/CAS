@@ -774,6 +774,7 @@ bool autoforward = false;
 				                                       D != DEnd; ++D) {
 
 					  if (D->isImplicit()) continue;
+                                          if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (width) {
 						  ConstantValues.push_back(ED->getInitVal().getExtValue());
