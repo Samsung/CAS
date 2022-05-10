@@ -1593,6 +1593,10 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
   if(csd){
     auto &Ctx = D->getASTContext();
     QualType T = D->getType().getCanonicalType();
+    if (T->isAtomicType()) {
+        const AtomicType* tp = cast<AtomicType>(T);
+        T = tp->getValueType();
+    }
     if(in_decl_group){
       if(group_unused){
         if(Policy.IncludeTagDefinition) Out<<"char ";
