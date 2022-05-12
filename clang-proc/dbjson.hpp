@@ -117,6 +117,8 @@ public:
         BaseType = RTy->getPointeeType();
       else if (const AutoType *ATy = BaseType->getAs<AutoType>())
         BaseType = ATy->getDeducedType();
+      else if (const AttributedType *AtrTy = BaseType->getAs<AttributedType>())
+        BaseType = AtrTy->getModifiedType();
       else if (const ParenType *PTy = BaseType->getAs<ParenType>())
         BaseType = PTy->desugar();
       else
@@ -1555,6 +1557,8 @@ public:
         BaseType = ATy->getDeducedType();
       else if (const AttributedType *AtrTy = BaseType->getAs<AttributedType>())
     	  BaseType = AtrTy->getModifiedType();
+      else if (const ParenType *PTy = BaseType->getAs<ParenType>())
+        BaseType = PTy->desugar();
       else
         llvm_unreachable("Unknown declarator!");
     }
