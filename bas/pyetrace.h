@@ -240,6 +240,8 @@ PyObject* libetrace_nfsdb_entry_get_pipe_eids(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_compilation_info(PyObject* self, void* closure);
+Py_hash_t libetrace_nfsdb_entry_hash(PyObject *o);
+PyObject* libetrace_nfsdb_entry_richcompare(PyObject *self, PyObject *other, int op);
 
 static PyMethodDef libetrace_nfsdbEntry_methods[] = {
 	{"json",(PyCFunction)libetrace_nfsdb_entry_json,METH_VARARGS,"Returns the json representation of the nfsdb entry"},
@@ -285,7 +287,9 @@ static PyTypeObject libetrace_nfsdbEntryType = {
 	.tp_basicsize = sizeof(libetrace_nfsdbEntryType),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_repr,
+	.tp_hash = (hashfunc)libetrace_nfsdb_entry_hash,
 	.tp_doc = "libetrace nfsdbEntry object",
+	.tp_richcompare = libetrace_nfsdb_entry_richcompare,
 	.tp_methods = libetrace_nfsdbEntry_methods,
 	.tp_members = libetrace_nfsdbEntry_members,
 	.tp_getset = &libetrace_nfsdbEntry_getset[0],
@@ -385,6 +389,7 @@ typedef struct {
     unsigned long mode;
     const struct nfsdb* nfsdb;
     unsigned long parent; /* Parent nfsdb entry that contains this openfile */
+    unsigned long index; /* Index of this openfile in the parent nfsdb entry */
 } libetrace_nfsdb_entry_openfile_object;
 
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self);
@@ -401,6 +406,8 @@ PyObject* libetrace_nfsdb_entry_openfile_is_symlink(libetrace_nfsdb_entry_openfi
 PyObject* libetrace_nfsdb_entry_openfile_is_fifo(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+Py_hash_t libetrace_nfsdb_entry_openfile_hash(PyObject *o);
+PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *other, int op);
 
 static PyMemberDef libetrace_nfsdb_entry_openfile_members[] = {
 	{"mode",T_ULONG,offsetof(libetrace_nfsdb_entry_openfile_object,mode),READONLY},
@@ -432,7 +439,9 @@ static PyTypeObject libetrace_nfsdbEntryOpenfileType = {
 	.tp_name = "libetrace.nfsdbEntryOpenfile",
 	.tp_basicsize = sizeof(libetrace_nfsdbEntryOpenfileType),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_openfile_dealloc,
+	.tp_hash = (hashfunc)libetrace_nfsdb_entry_openfile_hash,
 	.tp_doc = "libetrace nfsdb entry openfile type",
+	.tp_richcompare = libetrace_nfsdb_entry_openfile_richcompare,
 	.tp_methods = libetrace_nfsdbEntryOpenfile_methods,
 	.tp_members = libetrace_nfsdb_entry_openfile_members,
 	.tp_getset = libetrace_nfsdbEntryOpenfile_getset,

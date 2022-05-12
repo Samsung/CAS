@@ -1849,11 +1849,12 @@ PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure) {
 	PyObject* opens = PyList_New(0);
 
 	for (unsigned long i=0; i<__self->entry->open_files_count; ++i) {
-		PyObject* args = PyTuple_New(4);
+		PyObject* args = PyTuple_New(5);
 		PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
-		PYTUPLE_SET_ULONG(args,1,__self->entry->open_files[i].path);
-		PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].mode);
-		PYTUPLE_SET_ULONG(args,3,__self->nfsdb_index);
+		PYTUPLE_SET_ULONG(args,1,i);
+		PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].path);
+		PYTUPLE_SET_ULONG(args,3,__self->entry->open_files[i].mode);
+		PYTUPLE_SET_ULONG(args,4,__self->nfsdb_index);
 		PyObject *openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 		Py_DECREF(args);
 		PYLIST_ADD_PYOBJECT(opens,openfile);
@@ -1878,11 +1879,12 @@ PyObject* libetrace_nfsdb_entry_get_openpaths(PyObject* self, void* closure) {
 static void fill_openfile_list_with_children(const struct nfsdb* nfsdb, PyObject* opens, const struct nfsdb_entry* entry) {
 
 	for (unsigned long i=0; i<entry->open_files_count; ++i) {
-		PyObject* args = PyTuple_New(4);
+		PyObject* args = PyTuple_New(5);
 		PYTUPLE_SET_ULONG(args,0,(uintptr_t)nfsdb);
-		PYTUPLE_SET_ULONG(args,1,entry->open_files[i].path);
-		PYTUPLE_SET_ULONG(args,2,entry->open_files[i].mode);
-		PYTUPLE_SET_ULONG(args,3,entry->nfsdb_index);
+		PYTUPLE_SET_ULONG(args,1,i);
+		PYTUPLE_SET_ULONG(args,2,entry->open_files[i].path);
+		PYTUPLE_SET_ULONG(args,3,entry->open_files[i].mode);
+		PYTUPLE_SET_ULONG(args,4,entry->nfsdb_index);
 		PyObject *openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 		Py_DECREF(args);
 		PYLIST_ADD_PYOBJECT(opens,openfile);
@@ -1946,11 +1948,12 @@ PyObject* libetrace_nfsdb_entry_filtered_openfiles(PyObject* self, PyObject *arg
 
 	for (unsigned long i=0; i<__self->entry->open_files_count; ++i) {
 		if ((__self->entry->open_files[i].mode&filter)==filter) {
-			PyObject* args = PyTuple_New(4);
+			PyObject* args = PyTuple_New(5);
 			PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
-			PYTUPLE_SET_ULONG(args,1,__self->entry->open_files[i].path);
-			PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].mode);
-			PYTUPLE_SET_ULONG(args,3,(uintptr_t)self);
+			PYTUPLE_SET_ULONG(args,1,i);
+			PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].path);
+			PYTUPLE_SET_ULONG(args,3,__self->entry->open_files[i].mode);
+			PYTUPLE_SET_ULONG(args,4,(uintptr_t)self);
 			PyObject *openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 			Py_DECREF(args);
 			PYLIST_ADD_PYOBJECT(filtered_opens,openfile);
@@ -1975,11 +1978,12 @@ PyObject* libetrace_nfsdb_entry_accessed_openfiles(PyObject* self, PyObject *arg
 
 	for (unsigned long i=0; i<__self->entry->open_files_count; ++i) {
 		if ((__self->entry->open_files[i].mode&0x03)==filter) {
-			PyObject* args = PyTuple_New(4);
+			PyObject* args = PyTuple_New(5);
 			PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
-			PYTUPLE_SET_ULONG(args,1,__self->entry->open_files[i].path);
-			PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].mode);
-			PYTUPLE_SET_ULONG(args,3,(uintptr_t)self);
+			PYTUPLE_SET_ULONG(args,1,i);
+			PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].path);
+			PYTUPLE_SET_ULONG(args,3,__self->entry->open_files[i].mode);
+			PYTUPLE_SET_ULONG(args,4,(uintptr_t)self);
 			PyObject *openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 			Py_DECREF(args);
 			PYLIST_ADD_PYOBJECT(filtered_opens,openfile);
@@ -2066,6 +2070,19 @@ PyObject* libetrace_nfsdb_entry_get_compilation_info(PyObject* self, void* closu
 	Py_DECREF(args);
 
 	return ci;
+}
+
+Py_hash_t libetrace_nfsdb_entry_hash(PyObject *o) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)o;
+	return __self->nfsdb_index;
+}
+
+PyObject* libetrace_nfsdb_entry_richcompare(PyObject *self, PyObject *other, int op) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	libetrace_nfsdb_entry_object* __other = (libetrace_nfsdb_entry_object*)other;
+	Py_RETURN_RICHCOMPARE(__self->nfsdb_index, __other->nfsdb_index , op);
 }
 
 void libetrace_nfsdb_iter_dealloc(libetrace_nfsdb_iter_object* self) {
@@ -2204,9 +2221,10 @@ PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *ar
 	self = (libetrace_nfsdb_entry_openfile_object*)subtype->tp_alloc(subtype, 0);
 	if (self != 0) {
 		self->nfsdb = (const struct nfsdb*)PyLong_AsLong(PyTuple_GetItem(args,0));
-		self->path = PyLong_AsLong(PyTuple_GetItem(args,1));
-		self->mode = PyLong_AsLong(PyTuple_GetItem(args,2));
-		self->parent = PyLong_AsLong(PyTuple_GetItem(args,3));
+		self->index = PyLong_AsUnsignedLong(PyTuple_GetItem(args,1));
+		self->path = PyLong_AsUnsignedLong(PyTuple_GetItem(args,2));
+		self->mode = PyLong_AsUnsignedLong(PyTuple_GetItem(args,3));
+		self->parent = PyLong_AsUnsignedLong(PyTuple_GetItem(args,4));
 	}
 
 	return (PyObject *)self;
@@ -2299,6 +2317,31 @@ PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfil
 	if (((self->mode&0x40)!=0)&&(((self->mode&0x3C)>>2)==0xC)) Py_RETURN_TRUE;
 
 	Py_RETURN_FALSE;
+}
+
+Py_hash_t libetrace_nfsdb_entry_openfile_hash(PyObject *o) {
+
+	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)o;
+	return _Py_HashBytes(&__self->parent,2*sizeof(unsigned long));
+}
+
+PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *other, int op) {
+
+	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
+	libetrace_nfsdb_entry_openfile_object* __other = (libetrace_nfsdb_entry_openfile_object*)other;
+
+    int cmp = memcmp(&__self->parent,&__other->parent,2*sizeof(unsigned long));
+
+	switch (op) {
+		case Py_EQ: if (cmp==0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_NE: if (cmp!=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_LT: if (cmp<0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_GT: if (cmp>0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_LE: if (cmp<=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_GE: if (cmp>=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		default:
+			Py_UNREACHABLE();
+    }
 }
 
 void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_openfile_object* self) {
@@ -2437,11 +2480,12 @@ static void libetrace_nfsdb_fill_entry_list(libetrace_nfsdb_filemap* self, PyObj
 	for (unsigned long i=0; i<entry_count; ++i) {
 		struct nfsdb_entry* entry = entry_list[i];
 		unsigned long index = entry_index[i];
-		PyObject* args = PyTuple_New(4);
+		PyObject* args = PyTuple_New(5);
 		PYTUPLE_SET_ULONG(args,0,(uintptr_t)self->nfsdb);
-		PYTUPLE_SET_ULONG(args,1,entry->open_files[index].path);
-		PYTUPLE_SET_ULONG(args,2,entry->open_files[index].mode);
-		PYTUPLE_SET_ULONG(args,3,entry->nfsdb_index);
+		PYTUPLE_SET_ULONG(args,1,index);
+		PYTUPLE_SET_ULONG(args,2,entry->open_files[index].path);
+		PYTUPLE_SET_ULONG(args,3,entry->open_files[index].mode);
+		PYTUPLE_SET_ULONG(args,4,entry->nfsdb_index);
 		PyObject *openfile_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
 		Py_DECREF(args);
 		PYLIST_ADD_PYOBJECT(fill_entries,openfile_entry);
