@@ -25,7 +25,7 @@ PyObject * libetrace_parse_compiler_triple_hash(PyObject *self, PyObject *args);
 PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args);
 
 unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb);
-int nfsdb_maps(struct nfsdb* nfsdb, PyObject* ddepmap, int show_stats);
+int nfsdb_maps(struct nfsdb* nfsdb, int show_stats);
 
 #ifdef __cplusplus
 }

@@ -541,12 +541,11 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 	PyObject* nfsdbJSON = PyTuple_GetItem(args,0);
 	PyObject* source_root = PyTuple_GetItem(args,1);
 	PyObject* dbversion = PyTuple_GetItem(args,2);
-	PyObject* ddepmap = PyTuple_GetItem(args,3);
-	PyObject* pcp_patterns = PyTuple_GetItem(args,4);
-	PyObject* dbfn = PyTuple_GetItem(args,5);
+	PyObject* pcp_patterns = PyTuple_GetItem(args,3);
+	PyObject* dbfn = PyTuple_GetItem(args,4);
 	int show_stats = 0;
-	if (PyTuple_Size(args)>6) {
-		PyObject* show_stats_arg = PyTuple_GetItem(args,6);
+	if (PyTuple_Size(args)>5) {
+		PyObject* show_stats_arg = PyTuple_GetItem(args,5);
 		if (show_stats_arg==Py_True) {
 			show_stats = 1;
 		}
@@ -716,7 +715,7 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 		}
 	}
 
-	int ok = nfsdb_maps(&nfsdb,ddepmap,show_stats);
+	int ok = nfsdb_maps(&nfsdb,show_stats);
 	(void)ok;
 
 	FILE* out = fopen(PyString_get_c_str(dbfn), "w");

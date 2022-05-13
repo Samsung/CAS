@@ -146,7 +146,7 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
  * }
  */
 
-int nfsdb_maps(struct nfsdb* nfsdb, PyObject* ddepmap, int show_stats) {
+int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 
 	std::map<unsigned long,vexecs_t> processMap;
 	std::map<unsigned long,vexecs_t> bexeMap;
