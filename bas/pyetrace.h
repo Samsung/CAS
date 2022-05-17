@@ -408,6 +408,8 @@ PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfil
 PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 Py_hash_t libetrace_nfsdb_entry_openfile_hash(PyObject *o);
 PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *other, int op);
+libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(const struct nfsdb* nfsdb,
+		const struct nfsdb_entry* entry,unsigned long entry_index, unsigned long nfsdb_index);
 
 static PyMemberDef libetrace_nfsdb_entry_openfile_members[] = {
 	{"mode",T_ULONG,offsetof(libetrace_nfsdb_entry_openfile_object,mode),READONLY},

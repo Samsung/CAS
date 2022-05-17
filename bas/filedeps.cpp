@@ -1,4 +1,6 @@
+extern "C" {
 #include "pyetrace.h"
+}
 #include <iostream>
 #include <unordered_set>
 #include <deque>
@@ -47,6 +49,12 @@ static int pattern_match(const char* p, const char** excl_patterns, size_t excl_
     return 0;
 }
 
+struct libetrace_nfsdb_entry_openfile_object_less {
+    bool operator()(const libetrace_nfsdb_entry_openfile_object * lhs, const libetrace_nfsdb_entry_openfile_object * rhs) const {
+    	return memcmp(&lhs->parent,&rhs->parent,2*sizeof(unsigned long))<0;
+    }
+};
+
 struct depproc_context {
 	std::set<unsigned long> excl_set;					/* 'exclude_files' parameter */
 	const char** excl_patterns;							/* 'exclude_patterns' parameter */	/* ALLOC */
@@ -68,6 +76,7 @@ struct depproc_context {
 	std::deque<upid_t> qpid;
 	std::set<upid_t> writing_process_list;
 	std::set<upid_t> all_writing_process_list;
+	std::set<libetrace_nfsdb_entry_openfile_object*,libetrace_nfsdb_entry_openfile_object_less> openfile_deps;
 	std::deque<unsigned long> files;
 	std::unordered_set<unsigned long> files_set;
 	std::unordered_set<unsigned long> fdone;
@@ -491,7 +500,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 		return processed;
 	}
 
-	/* Here we get a list of processes that have written to the 'f' file */
+	/* Here we get a list of processes that have written to the 'fh' file */
 	DBG(context->fd_debug,"   writing process count: %ld\n",fnode->wr_entry_count+fnode->rw_entry_count);
 	/* Process the pids in sorted order (to simplify potential debugging) */
 	unsigned long wri=0, rwi=0;
@@ -499,21 +508,31 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 	while(1) {
 		if ((wri>=fnode->wr_entry_count) && (rwi>=fnode->rw_entry_count)) break;
 		upid_t writing_pid;
+		struct nfsdb_entry* writing_entry;
+		unsigned long writing_open_index;
 		if ((wri<fnode->wr_entry_count) && (rwi>=fnode->rw_entry_count)) {
+			writing_entry = fnode->wr_entry_list[wri];
 			writing_pid = fnode->wr_entry_list[wri]->eid.pid;
+			writing_open_index = fnode->wr_entry_index[wri];
 			wri++;
 		}
 		else if ((wri>=fnode->wr_entry_count) && (rwi<fnode->rw_entry_count)) {
+			writing_entry = fnode->rw_entry_list[rwi];
 			writing_pid = fnode->rw_entry_list[rwi]->eid.pid;
+			writing_open_index = fnode->rw_entry_index[rwi];
 			rwi++;
 		}
 		else {
 			if (fnode->wr_entry_list[wri]->eid.pid<fnode->rw_entry_list[rwi]->eid.pid) {
+				writing_entry = fnode->wr_entry_list[wri];
 				writing_pid = fnode->wr_entry_list[wri]->eid.pid;
+				writing_open_index = fnode->wr_entry_index[wri];
 				wri++;
 			}
 			else {
+				writing_entry = fnode->rw_entry_list[rwi];
 				writing_pid = fnode->rw_entry_list[rwi]->eid.pid;
+				writing_open_index = fnode->rw_entry_index[rwi];
 				rwi++;
 			}
 		}
@@ -574,6 +593,9 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 			writing_pid_map[CLEAR_MSB_UPID(wrapping_pid)] = self->nfsdb->string_table[fh];
 		}
 		context->all_writing_process_list.insert(writing_pid);
+		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
+				self->nfsdb,writing_entry,writing_open_index,writing_entry->nfsdb_index);
+		context->openfile_deps.insert(openfile);
 		context->qpid.push_back(wrapping_pid);
 		if (g_timer||interrupt) return -1;
 		std::string f = self->nfsdb->string_table[fh];
@@ -681,6 +703,9 @@ static long get_process_read_files(libetrace_nfsdb_object* self, struct depproc_
 						dep_flist.push_back(rdh);
 					}
 					if ((context->files_set.find(rdh)==context->files_set.end()) && (context->fdone.find(rdh)==context->fdone.end())) {
+						libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
+								self->nfsdb,entry,i,entry->nfsdb_index);
+						context->openfile_deps.insert(openfile);
 						if ((context->excl_set.find(rdh)==context->excl_set.end()) &&
 								(pattern_match(self->nfsdb->string_table[rdh],
 										context->excl_patterns,context->excl_patterns_size)==context->negate_pattern)) {
@@ -714,7 +739,7 @@ static int workaround_gcc_pipe_compilation_mode(libetrace_nfsdb_object* self, st
 			if (!strncmp(bpath+len-4,"/cc1",4)) {
 				struct ulongMap_node* node = ulongMap_search(&self->nfsdb->revforkmap, pid);
 				ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(node,"Internal nfsdb error at parent search [%lu]",-1,pid);
-				context->all_writing_process_list.insert(node->value_count);
+				context->all_writing_process_list.insert(node->value_list[0]);
 				break;
 			}
 		}
@@ -724,7 +749,7 @@ static int workaround_gcc_pipe_compilation_mode(libetrace_nfsdb_object* self, st
 }
 
 /* TODO: memory leaks */
-static int build_dep_grapth_entry(libetrace_nfsdb_object* self, struct depproc_context* context, upid_t pid,
+static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_context* context, upid_t pid,
 		std::map<upid_t,std::string>& writing_pid_map, PyObject* dgraph, std::vector<unsigned long>& dep_flist) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
@@ -840,18 +865,20 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 
 	PyObject* argv = 0;
 	if (context.dep_graph) {
-		argv = PyTuple_New(3);
+		argv = PyTuple_New(4);
 	}
 	else {
-		argv = PyTuple_New(2);
+		argv = PyTuple_New(3);
 	}
 	PyObject* deps = PyList_New(0);
 	PyObject* pids = PyList_New(0);
+	PyObject* openfile_deps = PyList_New(0);
 	PyTuple_SetItem(argv,0,pids);
 	PyTuple_SetItem(argv,1,deps);
+	PyTuple_SetItem(argv,2,openfile_deps);
 	if (context.dep_graph) {
 		dgraph = PyDict_New();
-		PyTuple_SetItem(argv,2,dgraph);
+		PyTuple_SetItem(argv,3,dgraph);
 	}
 
 	/* Do not process files that weren't open for write.
@@ -894,19 +921,19 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 		std::map<upid_t,std::string> writing_pid_map;
 		DBG(context.debug,"@ main pass[%lu] files to proc: %zu\n",pass_count,context.files.size());
 		while(file_iter!=context.files.end()) {
-			/* f - the file that's been written to
+			/* fh - handle of the file that's been written to
 			 * Find all processes that have written to it */
 			unsigned long fh = *file_iter;
 			DBG(context.fd_debug,"   considering file: %s\n",self->nfsdb->string_table[fh]);
 			if ((!context.direct_deps) ||
 					(context.all_modules_set.find(fh)==context.all_modules_set.end())) {
-				/* Gets a list of processes that have written to the 'f' file
+				/* Gets a list of processes that have written to the 'fh' file
 				 * For each such process:
 				 *  - check if wrapping process should be considered instead of the original ('wrapping_pid' vs 'writing_pid')
 				 *  - check if any command executed by this process matches the exclusion command pattern (skip this process in such a case)
 				 *  - mark this process as a writing process for further processing
 				 *      (fills 'writing_process_list' and 'all_writing_process_list')
-				 *  - check if this process could write to any other process (parent or sibling) through pipe. In such a case repeat
+				 *  - check if this process could write to any other processes (parent or sibling) through pipe. In such case repeat
 				 *     the above steps for each such process (which can also be wrapped-up).
 				 */
 				long procs = depproc_process_written_file(self,&context,writing_pid_map,fh);
@@ -972,7 +999,7 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 			}
 			pid_iter++;
 			if (context.dep_graph) {
-				if (build_dep_grapth_entry(self,&context,pid,writing_pid_map,dgraph,dep_flist)) {
+				if (build_dep_graph_entry(self,&context,pid,writing_pid_map,dgraph,dep_flist)) {
 					expired = 2;
 					goto maybe_expired;
 				}
@@ -1004,8 +1031,10 @@ maybe_expired:
 	context.fdone.erase(phandle);
 	auto file_iter = context.fdone.begin();
 	auto pid_iter = context.all_writing_process_list.begin();
+	auto openfile_iter = context.openfile_deps.begin();
 	pids = PyTuple_GetItem(argv,0);
 	deps = PyTuple_GetItem(argv,1);
+	openfile_deps = PyTuple_GetItem(argv,2);
 	while (file_iter!=context.fdone.end()) {
 		unsigned long v = *file_iter;
 		PyObject* s = Py_BuildValue("s",self->nfsdb->string_table[v]);
@@ -1018,6 +1047,10 @@ maybe_expired:
 		PyList_Append(pids,pi);
 		Py_DECREF(pi);
 		pid_iter++;
+	}
+	while(openfile_iter!=context.openfile_deps.end()) {
+		PyList_Append(openfile_deps,(PyObject*)*openfile_iter);
+		openfile_iter++;
 	}
 
 	if (context.dep_graph) {

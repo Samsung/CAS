@@ -2343,6 +2343,20 @@ PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *o
     }
 }
 
+libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(const struct nfsdb* nfsdb, const struct nfsdb_entry* entry,
+		unsigned long entry_index, unsigned long nfsdb_index) {
+
+	PyObject* args = PyTuple_New(5);
+	PYTUPLE_SET_ULONG(args,0,(uintptr_t)nfsdb);
+	PYTUPLE_SET_ULONG(args,1,entry_index);
+	PYTUPLE_SET_ULONG(args,2,entry->open_files[entry_index].path);
+	PYTUPLE_SET_ULONG(args,3,entry->open_files[entry_index].mode);
+	PYTUPLE_SET_ULONG(args,4,nfsdb_index);
+	PyObject* openfile_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
+	Py_DECREF(args);
+	return (libetrace_nfsdb_entry_openfile_object*)openfile_entry;
+}
+
 void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_openfile_object* self) {
 
     PyTypeObject *tp = Py_TYPE(self);
