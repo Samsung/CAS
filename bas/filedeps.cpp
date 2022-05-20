@@ -590,7 +590,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 			log_write_process_commands(self,context,wrapping_pid,"     ");
 		}
 		if (context->dep_graph) {
-			writing_pid_map[CLEAR_MSB_UPID(wrapping_pid)] = self->nfsdb->string_table[fh];
+			writing_pid_map[wrapping_pid] = self->nfsdb->string_table[fh];
 		}
 		context->all_writing_process_list.insert(writing_pid);
 		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
@@ -755,6 +755,10 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
 	static char errmsg[ERRMSG_BUFFER_SIZE];
 
 	if (writing_pid_map.find(pid)!=writing_pid_map.end()) {
+		if ((context->wrap_deps)&&(MSB_IS_SET_UPID(pid))) {
+			/* We have a pid of the wrapping process, get the real pid */
+			pid = CLEAR_MSB_UPID(pid);
+		}
 		const std::string& f = writing_pid_map[pid];
 		PyObject* dgraph_item = PyDict_GetItem(dgraph,PyUnicode_FromString(f.c_str()));
 		PyObject* cmdTuple = PyTuple_New(2);
@@ -999,7 +1003,7 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 			}
 			pid_iter++;
 			if (context.dep_graph) {
-				if (build_dep_graph_entry(self,&context,pid,writing_pid_map,dgraph,dep_flist)) {
+				if (build_dep_graph_entry(self,&context,wrapping_pid,writing_pid_map,dgraph,dep_flist)) {
 					expired = 2;
 					goto maybe_expired;
 				}
