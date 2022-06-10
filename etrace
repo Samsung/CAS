@@ -5,7 +5,7 @@
 # etrace COMMAND ...
 
 print_usage () {
-    echo "Usage: etrace [-h] [-l] [-a] [-w WORK_DIR] [--] COMMAND ..."
+    echo "Usage: etrace [-h] [-l] [-i] [-w WORK_DIR] [--] COMMAND ..."
 }
 
 echo_err () {
@@ -21,7 +21,7 @@ fi
 SAVE_KERNEL_LOG=
 WORK_DIR=$(pwd)
 INITCWD=$(pwd)
-MODULE_PARAMS="ignore_repeated_opens=1"
+MODULE_PARAMS=""
 
 while getopts "ahlw:" opt; do
     case "$opt" in
@@ -36,8 +36,8 @@ while getopts "ahlw:" opt; do
         WORK_DIR="$OPTARG"
         mkdir -p "$WORK_DIR"
         ;;
-    a)
-        MODULE_PARAMS=""
+    i)
+        MODULE_PARAMS="ignore_repeated_opens=1"
         ;;
     esac
 done
