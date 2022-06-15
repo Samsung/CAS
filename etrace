@@ -23,7 +23,7 @@ WORK_DIR=$(pwd)
 INITCWD=$(pwd)
 MODULE_PARAMS=""
 
-while getopts "ahlw:" opt; do
+while getopts "hilw:" opt; do
     case "$opt" in
     h)
         print_usage
