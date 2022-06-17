@@ -1517,6 +1517,8 @@ private:
   const struct main_opts& _opts;
 };
 
+typedef std::tuple<std::string,std::string,std::string> MacroDefInfo;
+
 class DbJSONClassConsumer : public clang::ASTConsumer {
 public:
   explicit DbJSONClassConsumer(ASTContext &Context, const std::string* sourceFile,
@@ -1524,7 +1526,7 @@ public:
     : Visitor(Context,opts), CSVisitor(Context,opts), _sourceFile(sourceFile), _directory(directory), _opts(opts),
 	  TUId(0), Context(Context) {
 	  	  // PP takes ownership.
-	      PP.addPPCallbacks(MAKE_UNIQUE<PPCallbacksTracker>(PP));
+	      PP.addPPCallbacks(MAKE_UNIQUE<PPCallbacksTracker>(PP,_opts,mexps));
   }
 
   static QualType getDeclType(Decl* D) {
@@ -1678,6 +1680,7 @@ private:
   const struct main_opts& _opts;
   uint64_t TUId;
   ASTContext &Context;
+  std::vector<MacroDefInfo> mexps;
 };
 void load_database(std::string filepath);
 void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig);

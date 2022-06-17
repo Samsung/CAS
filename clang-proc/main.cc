@@ -98,6 +98,8 @@ int main(int argc, const char **argv)
     cl::opt<std::string> JSONRecordOption("R", cl::cat(ctCategory));
     cl::list<std::string> MacroReplaceOption("M", cl::cat(ctCategory));
     MacroReplaceOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
+    cl::list<std::string> SaveMacroExpansionOption("X", cl::cat(ctCategory));
+    SaveMacroExpansionOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
     cl::list<std::string> AdditionalDefinesOption("D", cl::cat(ctCategory));
     AdditionalDefinesOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
     cl::opt<bool> FopsOption("f", cl::cat(ctCategory));
@@ -213,6 +215,10 @@ int main(int argc, const char **argv)
         	MacroReplacementDefStream << "-D__macro_replacement__" << macroReplacementName << "__=" << macroReplacementValue << "";
         	Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(MacroReplacementDefStream.str().c_str()));
                 Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-implicit-function-declaration"));
+        }
+
+        for (unsigned i = 0; i != SaveMacroExpansionOption.size(); ++i) {
+        	opts.macroExpansionNames.insert(SaveMacroExpansionOption[i]);
         }
 
         for (unsigned i = 0; i != AdditionalDefinesOption.size(); ++i) {

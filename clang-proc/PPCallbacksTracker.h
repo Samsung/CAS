@@ -31,6 +31,8 @@
 #include <string>
 #include <vector>
 
+typedef std::tuple<std::string,std::string,std::string> MacroDefInfo;
+
 /// \brief This class represents one callback function argument by name
 ///   and value.
 class Argument {
@@ -78,7 +80,7 @@ public:
   /// \param Ignore - Set of names of callbacks to ignore.
   /// \param CallbackCalls - Trace buffer.
   /// \param PP - The preprocessor.  Needed for getting some argument strings.
-  PPCallbacksTracker(clang::Preprocessor &PP);
+  PPCallbacksTracker(clang::Preprocessor &PP, const struct main_opts& _opts, std::vector<MacroDefInfo>& mexps);
 
   ~PPCallbacksTracker() override;
 
@@ -239,6 +241,8 @@ public:
   bool DisableTrace;
 
   clang::Preprocessor &PP;
+  const struct main_opts& opts;
+  std::vector<MacroDefInfo>& mexps; // [ (macroName,expandedValue,Location),... ]
 };
 
 #endif // PPTRACE_PPCALLBACKSTRACKER_H

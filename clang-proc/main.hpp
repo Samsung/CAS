@@ -44,4 +44,5 @@ struct main_opts {
 	std::string BreakFunPlaceholder;
 	std::set<std::string> fopsRecords;
 	std::map<std::string,std::string> macroReplacementTokens;
+	std::set<std::string> macroExpansionNames;
 };

@@ -20,6 +20,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include <sstream>
 
+#include "main.hpp"
+
 #define DBG(on,...)		do { if (on) { __VA_ARGS__; } } while(0)
 
 int DEBUG_PP;
@@ -95,7 +97,8 @@ static const char *const MappingStrings[] = { "0",          "MAP_IGNORE",
 
 // PPCallbacksTracker functions.
 
-PPCallbacksTracker::PPCallbacksTracker(clang::Preprocessor &PP): PP(PP) {}
+PPCallbacksTracker::PPCallbacksTracker(clang::Preprocessor &PP, const struct main_opts& _opts,
+		std::vector<MacroDefInfo>& mexps): PP(PP), opts(_opts), mexps(mexps) {}
 
 PPCallbacksTracker::~PPCallbacksTracker() {}
 
@@ -321,6 +324,127 @@ void PPCallbacksTracker::PragmaWarningPop(clang::SourceLocation Loc) {
 	<< getArgument("Loc", Loc) << "\n" );
 }
 
+void dump_MacroInfo(const clang::MacroInfo * __this, llvm::raw_ostream& Out) {
+
+  if (__this->isFunctionLike()) {
+    Out << "(";
+    for (unsigned I = 0; I != __this->getNumParams(); ++I) {
+      if (I) Out << ", ";
+      Out << __this->params()[I]->getName();
+    }
+    if (__this->isC99Varargs() || __this->isGNUVarargs()) {
+      if (__this->getNumParams() && __this->isC99Varargs()) Out << ", ";
+      Out << "...";
+    }
+    Out << ")";
+  }
+
+  bool First = true;
+  for (const clang::Token &Tok : __this->tokens()) {
+    // Leading space is semantically meaningful in a macro definition,
+    // so preserve it in the dump output.
+    if (First || Tok.hasLeadingSpace())
+      Out << " ";
+    First = false;
+
+    if (const char *Punc = clang::tok::getPunctuatorSpelling(Tok.getKind()))
+      Out << Punc;
+    else if (Tok.isLiteral() && Tok.getLiteralData())
+      Out << clang::StringRef(Tok.getLiteralData(), Tok.getLength());
+    else if (auto *II = Tok.getIdentifierInfo())
+      Out << II->getName();
+    else
+      Out << Tok.getName();
+  }
+}
+
+// Get the string for the Unexpanded macro instance.
+// The soureRange is expected to end at the last token
+// for the macro instance, which in the case of a function-style
+// macro will be a ')', but for an object-style macro, it
+// will be the macro name itself.
+static std::string getMacroUnexpandedString(clang::SourceRange Range,
+                                            clang::Preprocessor &PP,
+                                            llvm::StringRef MacroName,
+                                            const clang::MacroInfo *MI) {
+  clang::SourceLocation BeginLoc(Range.getBegin());
+  const char *BeginPtr = PP.getSourceManager().getCharacterData(BeginLoc);
+  size_t Length;
+  std::string Unexpanded;
+  if (MI->isFunctionLike()) {
+    clang::SourceLocation EndLoc(Range.getEnd());
+    const char *EndPtr = PP.getSourceManager().getCharacterData(EndLoc) + 1;
+    Length = (EndPtr - BeginPtr) + 1; // +1 is ')' width.
+  } else
+    Length = MacroName.size();
+  return llvm::StringRef(BeginPtr, Length).trim().str();
+}
+
+// Get the expansion for a macro instance, given the information
+// provided by PPCallbacks.
+// FIXME: This doesn't support function-style macro instances
+// passed as arguments to another function-style macro. However,
+// since it still expands the inner arguments, it still
+// allows modularize to effectively work with respect to macro
+// consistency checking, although it displays the incorrect
+// expansion in error messages.
+static std::string getMacroExpandedString(clang::Preprocessor &PP,
+                                          llvm::StringRef MacroName,
+                                          const clang::MacroInfo *MI,
+                                          const clang::MacroArgs *Args) {
+  std::string Expanded;
+  // Walk over the macro Tokens.
+  for (const auto &T : MI->tokens()) {
+    clang::IdentifierInfo *II = T.getIdentifierInfo();
+    int ArgNo = (II && Args ? MI->getParameterNum(II) : -1);
+    if (ArgNo == -1) {
+      // This isn't an argument, just add it.
+      if (II == nullptr)
+        Expanded += PP.getSpelling(T); // Not an identifier.
+      else {
+        // Token is for an identifier.
+        std::string Name = II->getName().str();
+        // Check for nexted macro references.
+        clang::MacroInfo *MacroInfo = PP.getMacroInfo(II);
+        if (MacroInfo && (Name != MacroName))
+          Expanded += getMacroExpandedString(PP, Name, MacroInfo, nullptr);
+        else
+          Expanded += Name;
+      }
+      continue;
+    }
+    // We get here if it's a function-style macro with arguments.
+    const clang::Token *ResultArgToks;
+    const clang::Token *ArgTok = Args->getUnexpArgument(ArgNo);
+    if (Args->ArgNeedsPreexpansion(ArgTok, PP))
+      ResultArgToks = &(const_cast<clang::MacroArgs *>(Args))
+          ->getPreExpArgument(ArgNo, PP)[0];
+    else
+      ResultArgToks = ArgTok; // Use non-preexpanded Tokens.
+    // If the arg token didn't expand into anything, ignore it.
+    if (ResultArgToks->is(clang::tok::eof))
+      continue;
+    unsigned NumToks = clang::MacroArgs::getArgLength(ResultArgToks);
+    // Append the resulting argument expansions.
+    for (unsigned ArgumentIndex = 0; ArgumentIndex < NumToks; ++ArgumentIndex) {
+      const clang::Token &AT = ResultArgToks[ArgumentIndex];
+      clang::IdentifierInfo *II = AT.getIdentifierInfo();
+      if (II == nullptr)
+        Expanded += PP.getSpelling(AT); // Not an identifier.
+      else {
+        // It's an identifier.  Check for further expansion.
+        std::string Name = II->getName().str();
+        clang::MacroInfo *MacroInfo = PP.getMacroInfo(II);
+        if (MacroInfo)
+          Expanded += getMacroExpandedString(PP, Name, MacroInfo, nullptr);
+        else
+          Expanded += Name;
+      }
+    }
+  }
+  return Expanded;
+}
+
 // Called by Preprocessor::HandleMacroExpandedIdentifier when a
 // macro invocation is found.
 void
@@ -361,6 +485,20 @@ PPCallbacksTracker::MacroExpands(const clang::Token &MacroNameTok,
 		DBG(DEBUG_PP, MI->dump(); llvm::errs() << " : " << PP.getSpelling(MacroNameTok) << "\n"; );
 	}
 
+	clang::SourceLocation Loc = Range.getBegin();
+	// Ignore macro argument expansions.
+	if (!Loc.isFileID())
+		return;
+
+	clang::IdentifierInfo *II = MacroNameTok.getIdentifierInfo();
+	const clang::MacroInfo *MI = MacroDefinition.getMacroInfo();
+	std::string MacroName = II->getName().str();
+
+	if (opts.macroExpansionNames.find(MacroName)!=opts.macroExpansionNames.end()) {
+		std::string Unexpanded(getMacroUnexpandedString(Range, PP, MacroName, MI));
+		std::string Expanded(getMacroExpandedString(PP, MacroName, MI, Args));
+		mexps.push_back(MacroDefInfo(MacroName,Expanded,Loc.printToString(PP.getSourceManager())));
+	}
 }
 
 // Hook called whenever a macro definition is seen.
@@ -371,6 +509,7 @@ PPCallbacksTracker::MacroDefined(const clang::Token &MacroNameTok,
 	DBG(DEBUG_PP, llvm::outs() << "# MacroDefined: "
 	<< getArgument("MacroNameTok", MacroNameTok) << " | "
 	<< getArgument("MacroDirective", MacroDirective) << "\n" );
+
 }
 
 // Hook called whenever a macro #undef is seen.

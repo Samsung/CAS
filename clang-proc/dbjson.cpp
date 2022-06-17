@@ -5699,6 +5699,16 @@ void DbJSONClassConsumer::printDatabase(){
 	llvm::outs() << ",\n";
 	llvm::outs() << "\t\"unresolvedfuncs\":" << "\n";
 	printUnresolvedFuncArray(2);
+	llvm::outs() << ",\n\t\"macroinfo\": [";
+	for (std::vector<MacroDefInfo>::iterator i=mexps.begin(); i!=mexps.end(); ++i) {
+		if (i==mexps.begin()) llvm::outs() << "\n\t\t\t"; else llvm::outs() << ",\n\t\t\t";
+		llvm::outs() << "{\n";
+		llvm::outs() << "\t\t\t\t\"name\": \"" << std::get<0>((*i)) << "\",\n";
+		llvm::outs() << "\t\t\t\t\"expanded\": \"" << std::get<1>((*i)) << "\",\n";
+		llvm::outs() << "\t\t\t\t\"loc\": \"" << std::get<2>((*i)) << "\"\n";
+		llvm::outs() << "\t\t\t}";
+	}
+	llvm::outs() << "\n\t]";
 	llvm::outs() << ",\n\t\"missingcallexprn\": " << Visitor.MissingCallExpr.size() << ",\n";
 	llvm::outs() << "\n\t\"missingvardecl\": " << Visitor.MissingVarDecl.size() << ",\n";
 	llvm::outs() << "\t\"missingrefsn\": " << Visitor.missingRefsCount << ",\n";

@@ -55,6 +55,7 @@ if __name__ == "__main__":
 	parser.add_argument("-E", "--processor-error", action="store_true", help="pass '-E' option to the underlying processor",required=False)
 	parser.add_argument("-DD", "--additional-defines", required=False, action="store", help="Path to JSON file that contains a list of additional preprocessor definitions to pass to all source files")
 	parser.add_argument("-mr", "--macro-replacement", required=False, action="store", help="Path to JSON file that describes macro replacement to be done on sources")
+	parser.add_argument("-me", "--macro-expansion", required=False, action="store", help="Path to a file that lists macro names to include expansion information in resulting JSON file")
 	parser.add_argument("-sa", "--enable-static-assert", required=False, action="store_true", help="Enable printing of static_assert in definitions' code")
 
 	# for debugging
