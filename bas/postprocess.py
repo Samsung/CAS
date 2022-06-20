@@ -203,7 +203,7 @@ if pcp_map:
         pid = k[0]
         exeidx = k[1]
         e = pm[pid][exeidx]
-        e["n"] = base64.b64encode(v)
+        e["n"] = base64.b64encode(v).decode("utf-8")
 print ("--- command patterns precomputed (%d patterns)  [%.2fs]"%(len(args.exclude_command_patterns),time.time()-start_time))
 
 start_time = time.time()
