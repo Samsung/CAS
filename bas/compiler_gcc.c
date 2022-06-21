@@ -50,7 +50,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
 /*
  *  get_compilations(self,args,kwargs) {...}
  *
- *  gcc.get_compilations([ (bin, CWD, hcmd, icmd), ... ],jobs)
+ *  gcc.get_compilations([ (bin, CWD, cmdLst, pid), ... ], jobs, plugin_arg [,input_compiler_path])
  */
 
     PyObject* comps = PyTuple_GetItem(args,0);

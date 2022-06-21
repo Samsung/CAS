@@ -79,7 +79,7 @@ def replace_cc1_executor(x):
 def get_clang_comps(clangxx_input_execs, clang_tailopts,
             clang_compilers, clangpp_compilers, integrated_clang_compilers, start_offset, debug, verbose, debug_compilations, allow_pp_in_compilations, chunk_number  ):
 
-    clang_c = clang.clang(debug,verbose,clang_compilers,clangpp_compilers,integrated_clang_compilers,debug_compilations)
+    clang_c = clang.clang(verbose,debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,debug_compilations)
 
     result = {}
     for i in range(len(clangxx_input_execs)):

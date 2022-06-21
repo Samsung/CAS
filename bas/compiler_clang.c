@@ -17,7 +17,7 @@ DEFINE_COMPILER_GET_COMPILATIONS(clang) {
     /*
      *  get_compilations(self,args,kwargs) {...}
      *
-     *  clang.get_compilations([ (bin, CWD, cmdLst, pid, comp_type ), ... ],jobs)
+     *  clang.get_compilations([ (bin, CWD, cmdLst, pid, comp_type ), ... ], jobs)
      *  ex. 
      *      (u'/usr/lib/llvm-10/bin/clang', 
      *       u'/mnt/HugeDisk/Linux_VMs/nbas/linux', 

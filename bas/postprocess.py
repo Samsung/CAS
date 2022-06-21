@@ -265,7 +265,7 @@ gpp_comp_pids = dict()
 for e in nfsdb:
     if any((u for u in config["gcc_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u))):
         gcc_comp_pids[e["p"]] = e
-    if any((u for u in config["gcc_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u))):
+    if any((u for u in config["gpp_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u))):
         gpp_comp_pids[e["p"]] = e
 gcc_execs = gcc_comp_pids.values()
 gpp_execs = gpp_comp_pids.values()
@@ -296,7 +296,7 @@ clangpp_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in 
 clangx_bins = list(set(clang_bins + clangpp_bins))
 
 integrated_clang_compilers = detect_integrated_clang_compilers(clangx_bins)
-if not integrated_clang_compilers:
+if integrated_clang_compilers is None:
     integrated_clang_compilers = nonauto_integrated_clang_compilers
 
 def clang_ir_generation(cmds):
@@ -445,12 +445,6 @@ if True:
 def get_clang_compilations_parallel(clang_c, clangxx_input_execs, internal_jobs):
     scriptDir = os.path.dirname(os.path.realpath(__file__))
 
-    def safe_remove(filename):
-        try:
-            os.remove(filename)
-        except OSError:
-            pass
-
     def clang_executor(p, clangxx_input_execs, start_offset, conn):
         inFile, outFile = ('/dev/shm/clangxx_' + str(p) + '.pkl', '/dev/shm/clangxx_result_' + str(p) + '.pkl', )
 
@@ -501,28 +495,46 @@ def get_clang_compilations_parallel(clang_c, clangxx_input_execs, internal_jobs)
 
 
 def get_gcc_compilations_parallel(gcc_c,gxx_input_execs,internal_jobs,input_compiler_parser):
+    scriptDir = os.path.dirname(os.path.realpath(__file__))
 
-    def gcc_executor(p,gcc_c,gxx_input_execs,start_offset,jobs,input_compiler_parser,conn):
-        plugin_path = os.path.join(os.path.dirname(sys.argv[0]),"../libgcc_input_name.so")
-        plugin_path = "-fplugin=" + os.path.realpath(plugin_path)
-        if input_compiler_parser is None:
-            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,plugin_path)
-        else:
-            comp_dict_gcc = gcc_c.get_compilations(gxx_input_execs,jobs,plugin_path,input_compiler_parser)
-        conn.send((p,{ x+start_offset:y for x,y in comp_dict_gcc.items() }))
+    def gcc_executor(p,gxx_input_execs,start_offset,conn):
 
-    jobs = 2*internal_jobs
-    jobs_per_run = float(len(gxx_input_execs))/jobs
-    if jobs_per_run < float(16):
-        jobs = int(math.floor(float(len(gxx_input_execs))/16)) if len(gxx_input_execs)>=16 else 1
-    print ("Searching for gcc compilations ... (%d candidates; %d jobs)"%(len(gxx_input_execs),jobs))
-    m = float(len(gxx_input_execs))/jobs
+        inFile, outFile = ('/dev/shm/gccxx_' + str(p) + '.pkl', '/dev/shm/gccxx_result_' + str(p) + '.pkl', )
+
+        with open(inFile, 'wb') as f:
+            cPickle.dump({
+                'gxx_input_execs': gxx_input_execs,
+                'gcc_compilers': gcc_compilers,
+                'gpp_compilers': gpp_compilers,
+                'start_offset': start_offset,
+                'debug': gcc_c.debug,
+                'verbose': gcc_c.verbose,
+                'debug_compilations': gcc_c.debug_compilations,
+                'input_compiler_parser': input_compiler_parser,
+                'chunk_number': p
+            }, f)
+
+        proc = subprocess.Popen(
+                ['taskset', '-c', str(p), 'python3', scriptDir + '/get_gcc_comps.py', 'gcc', inFile, outFile], 
+                shell=False)
+        proc.communicate()
+
+        with open(outFile, 'rb') as f:
+            result = cPickle.load(f)
+
+        safe_remove(inFile)
+        safe_remove(outFile)
+        conn.send((p, result))
+
+
+    print ("Searching for gcc compilations ... (%d candidates; %d jobs)"%(len(gxx_input_execs),internal_jobs))
+    m = float(len(gxx_input_execs))/internal_jobs
     job_list = []
     pipe_list = []
-    for i in range(jobs):
+    for i in range(internal_jobs):
         x = gxx_input_execs[int(m*i):int(m*(i+1))]
         recv_conn, send_conn = multiprocessing.Pipe(False)
-        p = multiprocessing.Process(target=gcc_executor, args=(i,gcc_c,x,int(m*i),internal_jobs,input_compiler_parser,send_conn))
+        p = multiprocessing.Process(target=gcc_executor, args=(i, x, int(m*i), send_conn))
         job_list.append(p)
         pipe_list.append(recv_conn)
         p.start()
@@ -530,6 +542,7 @@ def get_gcc_compilations_parallel(gcc_c,gxx_input_execs,internal_jobs,input_comp
         r = x.recv()
         job_list[ r[0] ].join()
         job_list[ r[0] ] = r[1]
+    print ()
     return job_list
 
 
