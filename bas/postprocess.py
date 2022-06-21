@@ -26,6 +26,7 @@ parser.add_argument("--allow-pp-in-compilations", action="store_true", help="")
 parser.add_argument("--config", action="store", help="")
 parser.add_argument("--dbversion", action="store", help="Database version string")
 parser.add_argument("--integrated-clang-compilers", action="store", help="")
+parser.add_argument("-na", "--no-auto-detect-icc", action="store_true", help="Disable autodetection of integrated clang compilers")
 parser.add_argument("--exclude-command-patterns", action="store", help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
 parser.add_argument("-j", "--jobs", action="store", help="Specify number of jobs for the compilation processing [ default: cpu_count() ]")
 parser.add_argument('db_path', action="store")
@@ -179,11 +180,11 @@ def build_reverse_binary_mapping(binlst):
 with open(os.path.join(args.config,".bas_config"),"r") as f:
     config = json.loads(f.read())
 
-integrated_clang_compilers = []
+nonauto_integrated_clang_compilers = []
 if args.integrated_clang_compilers:
-    integrated_clang_compilers=list(set(integrated_clang_compilers+args.integrated_clang_compilers))
+    nonauto_integrated_clang_compilers=list(set(nonauto_integrated_clang_compilers+args.integrated_clang_compilers))
 if "integrated_clang_compilers" in config:
-    integrated_clang_compilers=list(set(integrated_clang_compilers+config["integrated_clang_compilers"]))
+    nonauto_integrated_clang_compilers=list(set(nonauto_integrated_clang_compilers+config["integrated_clang_compilers"]))
 
 start_time = time.time()
 rbm = build_reverse_binary_mapping(config["rbm_wrapping_binaries"])
@@ -269,6 +270,35 @@ for e in nfsdb:
 gcc_execs = gcc_comp_pids.values()
 gpp_execs = gpp_comp_pids.values()
 
+def safe_remove(filename):
+    try:
+        os.remove(filename)
+    except OSError:
+        pass
+
+def detect_integrated_clang_compilers(compiler_list):
+    if args.no_auto_detect_icc is True:
+        return None
+    safe_remove(".nfsdb__test.c")
+    with open(".nfsdb__test.c","w") as f:
+        f.write(";\n")
+    icl = list()
+    for comp in compiler_list:
+        pn = subprocess.Popen(["%s"%(comp),"-c","-Wall","-o","/dev/null",".nfsdb__test.c","-###"],shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out,err = pn.communicate("")
+        if len([x for x in out.decode("utf-8").split("\n") if " (in-process)" in x])==1:
+            icl.append(comp)
+    safe_remove(".nfsdb__test.c")
+    return icl
+
+clang_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config.clang_spec if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
+clangpp_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config.clangpp_spec if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
+clangx_bins = list(set(clang_bins + clangpp_bins))
+
+integrated_clang_compilers = detect_integrated_clang_compilers(clangx_bins)
+if not integrated_clang_compilers:
+    integrated_clang_compilers = nonauto_integrated_clang_compilers
+
 def clang_ir_generation(cmds):
     if "-x" in cmds:
         if cmds[cmds.index("-x")+1]=="ir":
@@ -342,12 +372,6 @@ clangxx_input_execs = [(xT[0],xT[1]) for xT in clangxx_input_execs if os.path.jo
 
 # For clang compiler invocation that uses integrated cc1 calls (clang 10 and above without -fno-integrated-cc1 option (we also assume that CCC_OVERRIDE_OPTION is not used))
 #  replace the command with underlying (in-process) cc1 command call to be further processed by compilation processor
-def safe_remove(filename):
-        try:
-            os.remove(filename)
-        except OSError:
-            pass
-    
 safe_remove('cc1_replace.pkl')
 safe_remove('cc1_replace_result2.pkl')
 
