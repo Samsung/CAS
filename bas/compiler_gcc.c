@@ -74,11 +74,14 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
 
     DBG(self->debug,"--- libetrace_compiler_gcc_get_compilations(%ld,%d)\n",PyList_Size(comps),jobs);
 
-    DBG(self->debug_compilations,"Searching for gcc compilations ...\n");
-
+    /*
+     * No compilations provided - get the hell out of here!
+     */
     if (PyList_Size(comps)<=0) {
         return argv;
     }
+
+    DBG(self->debug_compilations,"Searching for gcc compilations ...\n");
 
     struct sigaction act;
     act.sa_handler = intHandler;
@@ -94,10 +97,8 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
     Py_ssize_t comp_num = PyList_Size(comps);
     progress_max_g = comp_num;
     progress_g = 0;
-    update_progress(comp_index);
     DBG(self->debug_compilations, " *** comp_num: %ld\n",comp_num);
     while((job_num<jobs) && (comp_index<comp_num)) {
-        update_progress(comp_index);
         PyObject* comp = PyList_GetItem(comps,comp_index);
         if (self->debug) {
             PyObject* cmd = PyTuple_GetItem(comp,2);
@@ -162,7 +163,6 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
             goto done;
         }
 
-        update_progress(comp_index);
         poll(pfds,jobs,-1);
         for (u=0; u<jobs; ++u) {
             if (pfds[u].fd!=-1) {
@@ -411,7 +411,6 @@ DEFINE_COMPILER_GET_COMPILATIONS(gcc) {
         }
 
     }
-    DBG(PRINT_PROGRESS,"\n");
 
 done:
     for (u=0; u<initial_job_num; ++u) {
