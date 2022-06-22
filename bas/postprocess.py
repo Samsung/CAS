@@ -291,8 +291,8 @@ def detect_integrated_clang_compilers(compiler_list):
     safe_remove(".nfsdb__test.c")
     return icl
 
-clang_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config.clang_spec if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
-clangpp_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config.clangpp_spec if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
+clang_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config["clang_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
+clangpp_bins = [maybe_compiler_binary(e["b"]) for e in nfsdb if any((u for u in config["clangpp_spec"] if fnmatch.fnmatch(maybe_compiler_binary(e["b"]),u)))]
 clangx_bins = list(set(clang_bins + clangpp_bins))
 
 integrated_clang_compilers = detect_integrated_clang_compilers(clangx_bins)
