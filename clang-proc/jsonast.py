@@ -1020,6 +1020,9 @@ def create_json_db_main(args,allowed_phases):
         if os.path.isabs(floc[0]) and f["abs_location"]=="":
             floc[0] = os.path.realpath(floc[0])
             f["abs_location"] = ":".join(floc)
+    # Re-shuffle the macro information data into list-like manner
+    JDB["macroinfo"] = [ {"name":k,"occurences":JDB["macroinfo"][k]} for k in JDB["macroinfo"]]
+    # Now save the final JSON
     with open(output,"w") as f:
         f.write(json.dumps(JDB,indent=4))
     print "Done. Written %s [%.2fMB]"%(output,float(os.stat(output).st_size)/1048576)

@@ -5704,7 +5704,7 @@ void DbJSONClassConsumer::printDatabase(){
 		if (i==mexps.begin()) llvm::outs() << "\n\t\t\t"; else llvm::outs() << ",\n\t\t\t";
 		llvm::outs() << "{\n";
 		llvm::outs() << "\t\t\t\t\"name\": \"" << std::get<0>((*i)) << "\",\n";
-		llvm::outs() << "\t\t\t\t\"expanded\": \"" << std::get<1>((*i)) << "\",\n";
+		llvm::outs() << "\t\t\t\t\"expanded\": \"" << json::json_escape(std::get<1>((*i))) << "\",\n";
 		llvm::outs() << "\t\t\t\t\"loc\": \"" << std::get<2>((*i)) << "\"\n";
 		llvm::outs() << "\t\t\t}";
 	}
