@@ -395,6 +395,17 @@ PyObject* libftdb_ftdb_get_fops_as_dict(PyObject* self, void* closure) {
 	return fops;
 }
 
+PyObject* libftdb_ftdb_get_macroinfo(PyObject* self, void* closure) {
+
+	libftdb_ftdb_object* __self = (libftdb_ftdb_object*)self;
+
+	PyObject* args = PyTuple_New(1);
+	PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->ftdb);
+	PyObject *macroinfo = PyObject_CallObject((PyObject *) &libftdb_ftdbMacroinfoType, args);
+	Py_DECREF(args);
+	return macroinfo;
+}
+
 PyObject* libftdb_ftdb_get_matrix_data_as_dict(struct matrix_data* matrix_data) {
 
 	PyObject* md = PyList_New(0);
@@ -740,6 +751,10 @@ PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice) {
 	else if (!strcmp(attr,"fops")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_get_fops_as_dict(self,0);
+	}
+	else if (!strcmp(attr,"macroinfo")) {
+		PYASSTR_DECREF(attr);
+		return libftdb_ftdb_get_macroinfo(self,0);
 	}
 	else if (!strcmp(attr,"funcs_tree_calls_no_asm")) {
 		PYASSTR_DECREF(attr);
@@ -1257,6 +1272,173 @@ PyObject* libftdb_ftdb_modules_iter_next(PyObject *self) {
 	PYTUPLE_SET_STR(args,1,__self->ftdb->sourceindex_table[__self->index]);
 	__self->index++;
 	return args;
+}
+
+void libftdb_ftdb_macroinfo_dealloc(libftdb_ftdb_macroinfo_object* self) {
+
+    PyTypeObject *tp = Py_TYPE(self);
+    tp->tp_free(self);
+}
+
+PyObject* libftdb_ftdb_macroinfo_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
+
+	libftdb_ftdb_macroinfo_object* self;
+
+    self = (libftdb_ftdb_macroinfo_object*)subtype->tp_alloc(subtype, 0);
+    if (self != 0) {
+    	self->ftdb = (const struct ftdb*)PyLong_AsLong(PyTuple_GetItem(args,0));
+    }
+
+    return (PyObject *)self;
+}
+
+PyObject* libftdb_ftdb_macroinfo_repr(PyObject* self) {
+
+	static char repr[1024];
+
+	libftdb_ftdb_macroinfo_object* __self = (libftdb_ftdb_macroinfo_object*)self;
+	int written = snprintf(repr,1024,"<ftdbMacroinfo object at %lx : ",(uintptr_t)self);
+	written+=snprintf(repr+written,1024-written,"%ld macros>",__self->ftdb->macroinfo_count);
+
+	return PyUnicode_FromString(repr);
+}
+
+Py_ssize_t libftdb_ftdb_macroinfo_sq_length(PyObject* self) {
+
+	libftdb_ftdb_macroinfo_object* __self = (libftdb_ftdb_macroinfo_object*)self;
+	return __self->ftdb->macroinfo_count;
+}
+
+PyObject* libftdb_ftdb_macroinfo_getiter(PyObject* self) {
+
+	libftdb_ftdb_macroinfo_object* __self = (libftdb_ftdb_macroinfo_object*)self;
+
+	PyObject* args = PyTuple_New(2);
+	PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self);
+	PYTUPLE_SET_ULONG(args,1,0);
+	PyObject *iter = PyObject_CallObject((PyObject *) &libftdb_ftdbMacroinfoIterType, args);
+	Py_DecRef(args);
+	return iter;
+}
+
+static inline PyObject* get_py_macroinfo(const struct ftdb* ftdb, unsigned long index) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	if (index>=ftdb->macroinfo_count) {
+		snprintf(errmsg,ERRMSG_BUFFER_SIZE,"macroinfo table index out of range: %ld\n",index);
+		PyErr_SetString(libftdb_ftdbError, errmsg);
+		return 0;
+	}
+	struct macroinfo_item* macroinfo_item = &ftdb->macroinfo[index];
+	PyObject* py_macroinfo_entry = PyDict_New();
+	FTDB_SET_ENTRY_STRING(py_macroinfo_entry,name,macroinfo_item->name);
+	PyObject* py_occurences = PyList_New(0);
+	for (unsigned long i=0; i<macroinfo_item->occurences_count; ++i) {
+		PyObject* py_occurence = PyDict_New();
+		struct macro_occurence* occurence = &macroinfo_item->occurences[i];
+		FTDB_SET_ENTRY_STRING(py_occurence,loc,occurence->loc);
+		FTDB_SET_ENTRY_STRING(py_occurence,expanded,occurence->expanded);
+		FTDB_SET_ENTRY_ULONG(py_occurence,fid,occurence->fid);
+		PyList_Append(py_occurences,py_occurence);
+		Py_DecRef(py_occurence);
+	}
+	FTDB_SET_ENTRY_PYOBJECT(py_macroinfo_entry,occurences,py_occurences);
+	return py_macroinfo_entry;
+}
+
+PyObject* libftdb_ftdb_macroinfo_mp_subscript(PyObject* self, PyObject* slice) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	libftdb_ftdb_macroinfo_object* __self = (libftdb_ftdb_macroinfo_object*)self;
+
+	if (PyLong_Check(slice)) {
+		unsigned long index = PyLong_AsUnsignedLong(slice);
+		return get_py_macroinfo(__self->ftdb,index);
+	}
+	else if (PyUnicode_Check(slice)) {
+		const char* key = PyString_get_c_str(slice);
+		struct stringRefMap_node* node = stringRefMap_search(&__self->ftdb->macromap,key);
+		if (!node) {
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,"macroinfo table file missing: %s\n",key);
+			PYASSTR_DECREF(key);
+			PyErr_SetString(libftdb_ftdbError, errmsg);
+			return 0;
+		}
+		PYASSTR_DECREF(key);
+		return get_py_macroinfo(__self->ftdb,node->value);
+	}
+	else {
+		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+		return 0;
+	}
+}
+
+int libftdb_ftdb_macroinfo_sq_contains(PyObject* self, PyObject* key) {
+
+	if (!PyUnicode_Check(key)) {
+		PyErr_SetString(libftdb_ftdbError, "Invalid type in macroinfo contains check (not a str)");
+		return 0;
+	}
+
+	libftdb_ftdb_macroinfo_object* __self = (libftdb_ftdb_macroinfo_object*)self;
+	const char* ckey = PyString_get_c_str(key);
+	struct stringRefMap_node* node = stringRefMap_search(&__self->ftdb->macromap,ckey);
+	PYASSTR_DECREF(ckey);
+	if (node) return 1;
+	return 0;
+}
+
+PyObject* libftdb_ftdb_macroinfo_keys(libftdb_ftdb_macroinfo_object* self, PyObject* args, PyObject* kwargs) {
+
+	PyObject* macroinfo_keys = PyList_New(0);
+    struct rb_node * p = rb_first(&self->ftdb->macromap);
+    while(p) {
+        struct stringRefMap_node* data = (struct stringRefMap_node*)p;
+        PyObject* key = PyUnicode_FromString(data->key);
+        PyList_Append(macroinfo_keys,key);
+        Py_DecRef(key);
+        p = rb_next(p);
+    }
+	return macroinfo_keys;
+}
+
+void libftdb_ftdb_macroinfo_iter_dealloc(libftdb_ftdb_macroinfo_iter_object* self) {
+
+	PyTypeObject *tp = Py_TYPE(self);
+    tp->tp_free(self);
+}
+
+PyObject* libftdb_ftdb_macroinfo_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
+
+	libftdb_ftdb_macroinfo_iter_object* self;
+
+    self = (libftdb_ftdb_macroinfo_iter_object*)subtype->tp_alloc(subtype, 0);
+    if (self != 0) {
+    	self->ftdb = ((libftdb_ftdb_macroinfo_object*)PyLong_AsLong(PyTuple_GetItem(args,0)))->ftdb;
+    	self->index = PyLong_AsLong(PyTuple_GetItem(args,1));
+    }
+
+    return (PyObject *)self;
+}
+
+Py_ssize_t libftdb_ftdb_macroinfo_iter_sq_length(PyObject* self) {
+
+	libftdb_ftdb_macroinfo_iter_object* __self = (libftdb_ftdb_macroinfo_iter_object*)self;
+	return __self->ftdb->macroinfo_count;
+}
+
+PyObject* libftdb_ftdb_macroinfo_iter_next(PyObject *self) {
+
+	libftdb_ftdb_macroinfo_iter_object* __self = (libftdb_ftdb_macroinfo_iter_object*)self;
+
+	if (__self->index >= __self->ftdb->macroinfo_count) {
+		/* Raising of standard StopIteration exception with empty value. */
+		PyErr_SetNone(PyExc_StopIteration);
+		return 0;
+	}
+
+	return get_py_macroinfo(__self->ftdb,__self->index++);
 }
 
 void libftdb_ftdb_funcs_dealloc(libftdb_ftdb_funcs_object* self) {
@@ -7349,6 +7531,8 @@ FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_type_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(bitfield);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_fops_var_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(fops_member_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(macroinfo_item);
+FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(macro_occurence);
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(taint_data,
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(taint_element,taint_list,ATTR(taint_list_count));
@@ -7677,6 +7861,8 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb,
 	FOREACH_POINTER(const char*,s,ATTR(moduleindex_table),ATTR(moduleindex_table_count),
 		FLATTEN_STRING(s);
 	);
+	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(macroinfo_item,macroinfo,ATTR(macroinfo_count));
+	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,macromap.rb_node);
 	AGGREGATE_FLATTEN_STRING2(version);
 	AGGREGATE_FLATTEN_STRING2(module);
 	AGGREGATE_FLATTEN_STRING2(directory);
@@ -7856,6 +8042,16 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_fops_var_entry,
 	AGGREGATE_FLATTEN_STRING2(name);
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(fops_member_info,members,ATTR(members_count));
 	AGGREGATE_FLATTEN_STRING2(location);
+);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(macroinfo_item,
+	AGGREGATE_FLATTEN_STRING2(name);
+	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(macro_occurence,occurences,ATTR(occurences_count));
+);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(macro_occurence,
+	AGGREGATE_FLATTEN_STRING2(loc);
+	AGGREGATE_FLATTEN_STRING2(expanded);
 );
 
 /* TODO: memory leaks */
@@ -8500,6 +8696,23 @@ static void destroy_ftdb(struct ftdb* ftdb) {
 	// TODO
 }
 
+static inline void libftdb_create_macroinfo_entry(PyObject* py_macroinfo_item, struct macroinfo_item* macroinfo_item) {
+
+	macroinfo_item->name = FTDB_ENTRY_STRING(py_macroinfo_item,name);
+	macroinfo_item->occurences_count = FTDB_ENTRY_ARRAY_SIZE(py_macroinfo_item,occurences);
+	macroinfo_item->occurences = calloc(macroinfo_item->occurences_count,sizeof(struct macro_occurence));
+	PyObject* key_occurences = PyUnicode_FromString("occurences");
+	PyObject* py_occurences = PyDict_GetItem(py_macroinfo_item,key_occurences);
+	Py_DecRef(key_occurences);
+	for (Py_ssize_t i=0; i<PyList_Size(py_occurences); ++i) {
+		PyObject* py_occurence = PyList_GetItem(py_occurences,i);
+		struct macro_occurence* occurence = &macroinfo_item->occurences[i];
+		occurence->loc = FTDB_ENTRY_STRING(py_occurence,loc);
+		occurence->expanded = FTDB_ENTRY_STRING(py_occurence,expanded);
+		occurence->fid = FTDB_ENTRY_ULONG(py_occurence,fid);
+	}
+}
+
 PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 
 	PyObject* dbJSON = PyTuple_GetItem(args,0);
@@ -8644,6 +8857,22 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 			ftdb.moduleindex_table[PyLong_AsUnsignedLong(py_module_id)] = PyString_get_c_str(py_module_path);
 		}
 	}
+	Py_DecRef(key_module_info);
+	Py_DecRef(key_modules);
+
+	PyObject* key_macroinfo = PyUnicode_FromString("macroinfo");
+	if (PyDict_Contains(dbJSON, key_macroinfo)) {
+		PyObject* macroinfo = PyDict_GetItem(dbJSON,key_macroinfo);
+		ftdb.macroinfo_count = FTDB_ENTRY_ARRAY_SIZE(dbJSON,macroinfo);
+		ftdb.macroinfo = calloc(ftdb.macroinfo_count,sizeof(struct macroinfo_item));
+		for (Py_ssize_t i=0; i<PyList_Size(macroinfo); ++i) {
+			PyObject* py_macroinfo_item = PyList_GetItem(macroinfo,i);
+			struct macroinfo_item* macroinfo_item = &ftdb.macroinfo[i];
+			libftdb_create_macroinfo_entry(py_macroinfo_item,macroinfo_item);
+			stringRefMap_insert(&ftdb.macromap, macroinfo_item->name, i);
+		}
+	}
+	Py_DecRef(key_macroinfo);
 
 	ftdb.version = FTDB_ENTRY_STRING(dbJSON,version);
 	ftdb.module = FTDB_ENTRY_STRING(dbJSON,module);
@@ -8684,6 +8913,7 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	printf("types entry count: %zu\n",ftdb.types_count);
 	printf("fops vars count: %ld\n",PyList_Size(vars));
 	printf("fops vars entry count: %zu\n",ftdb.fops.vars_count);
+	printf("macroinfo entry count: %zu\n",ftdb.macroinfo_count);
 	if (ftdb.funcs_tree_calls_no_asm) printf("funcs_tree_calls_no_asm: OK\n");
 	if (ftdb.funcs_tree_calls_no_known) printf("funcs_tree_calls_no_known: OK\n");
 	if (ftdb.funcs_tree_calls_no_known_no_asm) printf("funcs_tree_calls_no_known_no_asm: OK\n");
@@ -8847,6 +9077,14 @@ PyInit_libftdb(void)
 	if (PyType_Ready(&libftdb_ftdbFuncOffsetrefInfoEntryType) < 0)
 		return 0;
 	Py_XINCREF(&libftdb_ftdbFuncOffsetrefInfoEntryType);
+
+	if (PyType_Ready(&libftdb_ftdbMacroinfoType) < 0)
+		return 0;
+	Py_XINCREF(&libftdb_ftdbMacroinfoType);
+
+	if (PyType_Ready(&libftdb_ftdbMacroinfoIterType) < 0)
+		return 0;
+	Py_XINCREF(&libftdb_ftdbMacroinfoIterType);
 
     if (PyModule_AddObject(m, "ftdb", (PyObject *)&libftdb_ftdbType)<0) {
     	Py_DECREF(m);

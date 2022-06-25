@@ -28,6 +28,10 @@ ftdb.load(args.db_path+".img")
 fids = [f["id"] for f in db["funcs"]]
 assert(len(fids)==len(set(fids))),"%d vs %d"%(len(fids),len(set(fids)))
 
+if "macroinfo" in db:
+	assert len(db["macroinfo"])==len(ftdb["macroinfo"])
+	for i,MI in enumerate(db["macroinfo"]):
+		assert MI==ftdb["macroinfo"][i]
 if "sources" in db:
 	assert db["sources"]==ftdb["sources"]
 if "source_info" in db:

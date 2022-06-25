@@ -75,6 +75,7 @@ PyObject* libftdb_ftdb_get_globals(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_types(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_fops(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_fops_as_dict(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_get_macroinfo(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_asm(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known_no_asm(PyObject* self, void* closure);
@@ -1794,6 +1795,85 @@ static PyTypeObject libftdb_ftdbFopsEntryType = {
 	.tp_members = libftdb_ftdbFopsEntry_members,
 	.tp_getset = &libftdb_ftdbFopsEntry_getset[0],
 	.tp_new = libftdb_ftdb_fops_entry_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+    const struct ftdb* ftdb;
+} libftdb_ftdb_macroinfo_object;
+
+void libftdb_ftdb_macroinfo_dealloc(libftdb_ftdb_macroinfo_object* self);
+PyObject* libftdb_ftdb_macroinfo_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+PyObject* libftdb_ftdb_macroinfo_repr(PyObject* self);
+Py_ssize_t libftdb_ftdb_macroinfo_sq_length(PyObject* self);
+PyObject* libftdb_ftdb_macroinfo_getiter(PyObject* self);
+PyObject* libftdb_ftdb_macroinfo_mp_subscript(PyObject* self, PyObject* slice);
+int libftdb_ftdb_macroinfo_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_macroinfo_keys(libftdb_ftdb_macroinfo_object* self, PyObject* args, PyObject* kwargs);
+
+static PyMethodDef libftdb_ftdbMacroinfo_methods[] = {
+	{"keys",(PyCFunction)libftdb_ftdb_macroinfo_keys,METH_VARARGS,"Returns the list of macro names with macro information present"},
+	{NULL, NULL, 0, NULL}        /* Sentinel */
+};
+
+static PySequenceMethods libftdb_ftdbMacroinfo_sequence_methods = {
+	.sq_length = libftdb_ftdb_macroinfo_sq_length,
+	.sq_contains = libftdb_ftdb_macroinfo_sq_contains
+};
+
+static PyMemberDef libftdb_ftdbMacroinfo_members[] = {
+    {0}  /* Sentinel */
+};
+
+static PyGetSetDef libftdb_ftdbMacroinfo_getset[] = {
+	{0,0,0,0,0},
+};
+
+static PyMappingMethods libftdb_ftdbMacroinfo_mapping_methods = {
+		.mp_subscript = libftdb_ftdb_macroinfo_mp_subscript,
+};
+
+static PyTypeObject libftdb_ftdbMacroinfoType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libftdb.ftdbMacroinfo",
+	.tp_basicsize = sizeof(libftdb_ftdbMacroinfoType),
+	.tp_dealloc = (destructor)libftdb_ftdb_macroinfo_dealloc,
+	.tp_repr = (reprfunc)libftdb_ftdb_macroinfo_repr,
+	.tp_as_sequence = &libftdb_ftdbMacroinfo_sequence_methods,
+	.tp_as_mapping = &libftdb_ftdbMacroinfo_mapping_methods,
+	.tp_doc = "libftdb ftdbMacroinfo object",
+	.tp_iter = libftdb_ftdb_macroinfo_getiter,
+	.tp_methods = libftdb_ftdbMacroinfo_methods,
+	.tp_members = libftdb_ftdbMacroinfo_members,
+	.tp_getset = &libftdb_ftdbMacroinfo_getset[0],
+	.tp_new = libftdb_ftdb_macroinfo_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+	unsigned long index;
+    const struct ftdb* ftdb;
+} libftdb_ftdb_macroinfo_iter_object;
+
+void libftdb_ftdb_macroinfo_iter_dealloc(libftdb_ftdb_macroinfo_iter_object* self);
+PyObject* libftdb_ftdb_macroinfo_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libftdb_ftdb_macroinfo_iter_sq_length(PyObject* self);
+PyObject* libftdb_ftdb_macroinfo_iter_next(PyObject *self);
+
+static PySequenceMethods libftdb_ftdbMacroinfoIter_sequence_methods = {
+		.sq_length = libftdb_ftdb_macroinfo_iter_sq_length,
+};
+
+static PyTypeObject libftdb_ftdbMacroinfoIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libftdb.ftdbMacroinfoIter",
+	.tp_basicsize = sizeof(libftdb_ftdbMacroinfoIterType),
+	.tp_dealloc = (destructor)libftdb_ftdb_macroinfo_iter_dealloc,
+	.tp_as_sequence = &libftdb_ftdbMacroinfoIter_sequence_methods,
+	.tp_doc = "libftdb ftdb macroinfo iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libftdb_ftdb_macroinfo_iter_next,
+	.tp_new = libftdb_ftdb_macroinfo_iter_new,
 };
 
 #endif /* __PYFTDB_H__ */
