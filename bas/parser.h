@@ -138,8 +138,10 @@ struct parsed_entry {
 	void addUpdateFile(const char* p, unsigned flags, upid_t pid=-1, const char* o = 0) {
 		std::pair<std::string,std::string> k;
 		k.first = p;
+		const char* original_path = p;
 		if (o && strcmp(p,o)) {
 			k.second = o;
+			original_path = o;
 		}
 		if (this->rwmap.find(k)!=this->rwmap.end()) {
 			/* If both are the same the value is unchanged, otherwise it gets O_RDWR */
@@ -152,7 +154,7 @@ struct parsed_entry {
 		}
 		if (access(k.first.c_str(),F_OK)!=-1) {
 			struct stat path_stat;
-			lstat(p, &path_stat);
+			lstat(original_path, &path_stat);
 			/* bits: 0EMMMM00 where E is 1 (file exists) and MMMM are 4 bits of the stat mode parameter */
 			unsigned mode = 0x40 | ((path_stat.st_mode&0170000)>>10);
 			this->rwmap[k] |= mode;
