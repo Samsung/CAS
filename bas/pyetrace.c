@@ -2281,7 +2281,6 @@ PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void*
 	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
 
 	if (__self->original_path==ULONG_MAX) {
-		PyErr_SetString(libetrace_nfsdbError, "No original path present in database (no differs from resolved path)");
 		Py_RETURN_NONE;
 	}
 
