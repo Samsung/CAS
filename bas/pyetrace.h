@@ -461,7 +461,7 @@ typedef struct {
     const struct nfsdb* nfsdb;
 } libetrace_nfsdb_entry_compilation_info;
 
-void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_openfile_object* self);
+void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_compilation_info* self);
 PyObject* libetrace_nfsdb_entry_compilation_info_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_compiled_files(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_object_files(PyObject* self, void* closure);
@@ -470,6 +470,7 @@ PyObject* libetrace_nfsdb_entry_compilation_info_get_include_paths(PyObject* sel
 PyObject* libetrace_nfsdb_entry_compilation_info_get_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_defines(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_undefs(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_compilation_info_is_integrated(libetrace_nfsdb_entry_compilation_info *self, PyObject *args);
 
 static PyMemberDef libetrace_nfsdb_entry_compilation_info_members[] = {
 	{0},  /* Sentinel */
@@ -486,12 +487,18 @@ static PyGetSetDef libetrace_nfsdbEntryCompilationInfo_getset[] = {
 	{0,0,0,0,0},
 };
 
+static PyMethodDef libetrace_nfsdbEntryCompilationInfo_methods[] = {
+	{"is_integrated",(PyCFunction)libetrace_nfsdb_entry_compilation_info_is_integrated,METH_VARARGS,"Returns true if the driver invocation is in the same process as an actual compilation (integrated compiler)"},
+	{NULL, NULL, 0, NULL}        /* Sentinel */
+};
+
 static PyTypeObject libetrace_nfsdbEntryCompilationInfoType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntryCompilationInfo",
 	.tp_basicsize = sizeof(libetrace_nfsdbEntryCompilationInfoType),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_compilation_info_dealloc,
 	.tp_doc = "libetrace nfsdb entry compilation info type",
+	.tp_methods = libetrace_nfsdbEntryCompilationInfo_methods,
 	.tp_members = libetrace_nfsdb_entry_compilation_info_members,
 	.tp_getset = libetrace_nfsdbEntryCompilationInfo_getset,
 	.tp_new = libetrace_nfsdb_entry_compilation_info_new,

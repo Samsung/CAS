@@ -36,6 +36,7 @@ struct compilation_info {
 	unsigned long* header_list;
 	unsigned long header_list_count;
 	int compilation_type;
+	int integrated_compilation;
 	unsigned long* object_list;
 	unsigned long object_list_count;
 };

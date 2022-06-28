@@ -714,6 +714,9 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 				new_entry->compilation_info->object_list[u] =
 						string_table_add(&nfsdb, PyList_GetItem(objectEntryList,u), stringMap);
 			}
+			/* integrated or not */
+			new_entry->compilation_info->integrated_compilation =
+					(PyLong_AsLong(PyDict_GetItem(compilationEntry, PyUnicode_FromString("p")))==0);
 		}
 		/* linked file */
 		if (PyDict_Contains(item, PyUnicode_FromString("l"))) {
@@ -1027,7 +1030,7 @@ PyObject* libetrace_nfsdb_mp_subscript(PyObject* self, PyObject* slice) {
 	}
 
 	PyObject* rL = PyList_New(0);
-	for (Py_ssize_t i=start; i<end; i+=step) {
+	for (Py_ssize_t i=start; i<((end<__self->nfsdb->nfsdb_count)?(end):(__self->nfsdb->nfsdb_count)); i+=step) {
 		PyObject* entry = libetrace_nfsdb_sq_item(self,i);
 		PYLIST_ADD_PYOBJECT(rL,entry);
 	}
@@ -2423,7 +2426,7 @@ libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(con
 	return (libetrace_nfsdb_entry_openfile_object*)openfile_entry;
 }
 
-void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_openfile_object* self) {
+void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_compilation_info* self) {
 
     PyTypeObject *tp = Py_TYPE(self);
     tp->tp_free(self);
@@ -2533,6 +2536,15 @@ PyObject* libetrace_nfsdb_entry_compilation_info_get_undefs(PyObject* self, void
 	}
 
 	return udefs;
+}
+
+PyObject* libetrace_nfsdb_entry_compilation_info_is_integrated(libetrace_nfsdb_entry_compilation_info *self, PyObject *args) {
+
+	if (self->ci->integrated_compilation) {
+		Py_RETURN_TRUE;
+	}
+
+	Py_RETURN_FALSE;
 }
 
 void libetrace_nfsdb_filemap_dealloc(libetrace_nfsdb_filemap* self) {
