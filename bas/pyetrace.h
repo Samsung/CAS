@@ -17,6 +17,22 @@ extern "C" {
 #include "nfsdb.h"
 #include "ftdb_entry.h"
 
+#define LIBETRACE_EMPTY_STRING_HANDLE 0
+typedef int (*nfsdb_entry_filter_func)(const struct nfsdb_entry* entry);
+typedef struct {
+	const char* nfsdb_entry_filter_funcname;
+	nfsdb_entry_filter_func fp;
+} nfsdb_entry_filter_func_array_t;
+
+extern nfsdb_entry_filter_func_array_t nfsdb_entry_filter_func_array[];
+
+#define LIBETRACE_NFSDB_ENTRY_FILTER_FUNC_ARRAY_SIZE \
+		(sizeof(nfsdb_entry_filter_func_array)/sizeof(nfsdb_entry_filter_func_array_t))
+
+int libetrace_nfsdb_entry_filter_has_comp_info(const struct nfsdb_entry* entry);
+int libetrace_nfsdb_entry_filter_has_linked_file(const struct nfsdb_entry* entry);
+int libetrace_nfsdb_entry_filter_has_command(const struct nfsdb_entry* entry);
+
 PyObject * libetrace_is_LLVM_BC_file(PyObject *self, PyObject *args);
 PyObject * libetrace_is_ELF_file(PyObject *self, PyObject *args);
 PyObject * libetrace_pytools_is_ELF_or_LLVM_BC_file(PyObject *self, PyObject *args);
@@ -67,6 +83,7 @@ typedef struct {
     int init_done;
     const struct nfsdb* nfsdb;
     const struct nfsdb_deps* nfsdb_deps;
+    PyObject* libetrace_nfsdb_entry_filterMap;
 } libetrace_nfsdb_object;
 
 void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self);
@@ -81,6 +98,8 @@ PyObject* libetrace_nfsdb_getiter(PyObject* self);
 PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_iter(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_filtered_iter(libetrace_nfsdb_object *self, PyObject* args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_opens_iter(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pcp_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
@@ -108,6 +127,8 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"load",(PyCFunction)libetrace_nfsdb_load,METH_VARARGS|METH_KEYWORDS,"Load the database cache file"},
 	{"load_deps",(PyCFunction)libetrace_nfsdb_load_deps,METH_VARARGS|METH_KEYWORDS,"Load the dependency database cache file"},
 	{"iter",(PyCFunction)libetrace_nfsdb_iter,METH_VARARGS,"Returns the cache iterator"},
+	{"filtered",(PyCFunction)libetrace_nfsdb_filtered_iter,METH_VARARGS|METH_KEYWORDS,"Returns the cache iterator with some predefined filter for entries"},
+	{"opens",(PyCFunction)libetrace_nfsdb_opens_iter,METH_VARARGS,"Returns the open files iterator across entire database"},
 	{"pcp_list",(PyCFunction)libetrace_nfsdb_pcp_list,METH_VARARGS,"Returns the list of command patterns to be precomputed"},
 	{"pids",(PyCFunction)libetrace_nfsdb_pid_list,METH_VARARGS,"Returns the list of all unique pids in the database"},
 	{"bpaths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
@@ -323,6 +344,68 @@ static PyTypeObject libetrace_nfsdbIterType = {
 	.tp_iter = PyObject_SelfIter,
 	.tp_iternext = libetrace_nfsdb_iter_next,
 	.tp_new = libetrace_nfsdb_iter_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+	unsigned long start;
+    unsigned long step;
+    unsigned long end;
+    const struct nfsdb* nfsdb;
+    nfsdb_entry_filter_func* filters;
+    Py_ssize_t filters_count;
+
+} libetrace_nfsdb_filtered_iter_object;
+
+void libetrace_nfsdb_filtered_iter_dealloc(libetrace_nfsdb_filtered_iter_object* self);
+PyObject* libetrace_nfsdb_filtered_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libetrace_nfsdb_filtered_iter_sq_length(PyObject* self);
+PyObject* libetrace_nfsdb_filtered_iter_next(PyObject *self);
+
+static PySequenceMethods libetrace_nfsdbFilteredIter_sequence_methods = {
+		.sq_length = libetrace_nfsdb_filtered_iter_sq_length,
+};
+
+static PyTypeObject libetrace_nfsdbFilteredIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbFilteredIter",
+	.tp_basicsize = sizeof(libetrace_nfsdbFilteredIterType),
+	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_iter_dealloc,
+	.tp_as_sequence = &libetrace_nfsdbFilteredIter_sequence_methods,
+	.tp_doc = "libetrace nfsdb filtered iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libetrace_nfsdb_filtered_iter_next,
+	.tp_new = libetrace_nfsdb_filtered_iter_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+	unsigned long start;
+    unsigned long step;
+    unsigned long end;
+    unsigned long open_index;
+    const struct nfsdb* nfsdb;
+} libetrace_nfsdb_opens_iter_object;
+
+void libetrace_nfsdb_opens_iter_dealloc(libetrace_nfsdb_opens_iter_object* self);
+PyObject* libetrace_nfsdb_opens_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libetrace_nfsdb_opens_iter_sq_length(PyObject* self);
+PyObject* libetrace_nfsdb_opens_iter_next(PyObject *self);
+
+static PySequenceMethods libetrace_nfsdbOpensIter_sequence_methods = {
+		.sq_length = libetrace_nfsdb_opens_iter_sq_length,
+};
+
+static PyTypeObject libetrace_nfsdbOpensIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbOpensIter",
+	.tp_basicsize = sizeof(libetrace_nfsdbOpensIterType),
+	.tp_dealloc = (destructor)libetrace_nfsdb_opens_iter_dealloc,
+	.tp_as_sequence = &libetrace_nfsdbOpensIter_sequence_methods,
+	.tp_doc = "libetrace nfsdb openfile iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libetrace_nfsdb_opens_iter_next,
+	.tp_new = libetrace_nfsdb_opens_iter_new,
 };
 
 typedef struct {
