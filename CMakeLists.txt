@@ -323,11 +323,60 @@ if(IS_CLANG)
 endif()
 target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-O0>)
 
-target_include_directories(etrace PRIVATE /usr/include/python3.8)
+if (PYTHON3_CONFIG_BIN)
+set(PYTHON3_CONFIG ${PYTHON3_CONFIG_BIN} CACHE STRING "Python3 config executable to use")
+else()
+set(PYTHON3_CONFIG "python3-config" CACHE STRING "Python3 config executable to use")
+endif()
+
+find_program(PYTHON3_CONFIG_PATH "${PYTHON3_CONFIG}")
+if(NOT PYTHON3_CONFIG_PATH)
+    message(FATAL_ERROR "python3-config not found -- ${PYTHON3_CONFIG_PATH}: ${PYTHON3_CONFIG}")
+endif()
+
+# Similar function for python3 configuration (as for LLVM)
+function(python3_config VARNAME switch)
+    set(CONFIG_COMMAND "${PYTHON3_CONFIG_PATH}" "${switch}")
+
+    execute_process(
+        COMMAND ${CONFIG_COMMAND} ${LIB_TYPE}
+        RESULT_VARIABLE HAD_ERROR
+        OUTPUT_VARIABLE CONFIG_OUTPUT
+    )
+
+    if (HAD_ERROR)
+        string(REPLACE ";" " " CONFIG_COMMAND_STR "${CONFIG_COMMAND}")
+        message(STATUS "${CONFIG_COMMAND_STR}")
+        message(FATAL_ERROR "python3-config failed with status ${HAD_ERROR}")
+    endif()
+
+    # replace linebreaks with semicolon
+    string(REGEX REPLACE
+        "[ \t]*[\r\n]+[ \t]*" ";"
+        CONFIG_OUTPUT ${CONFIG_OUTPUT})
+
+    # take the first path from the output
+    string(REPLACE " " ";" CONFIG_OUTPUT ${CONFIG_OUTPUT})
+    list(GET CONFIG_OUTPUT 0 CONFIG_OUTPUT)
+    string(SUBSTRING ${CONFIG_OUTPUT} 2 -1 CONFIG_OUTPUT)
+
+    # make result available outside
+    set(${VARNAME} ${CONFIG_OUTPUT} PARENT_SCOPE)
+
+    # Optionally output the configured value
+    message(STATUS "python3_config(${VARNAME}) => ${CONFIG_OUTPUT}")
+
+    # cleanup
+    unset(CONFIG_COMMAND)
+endfunction(python3_config)
+
+python3_config(PYTHON3_INCLUDES "--includes")
+
+target_include_directories(etrace PRIVATE ${PYTHON3_INCLUDES})
 target_link_libraries(etrace PRIVATE "-lrt")
 install(TARGETS etrace DESTINATION .)
 
-target_include_directories(ftdb PRIVATE /usr/include/python3.8)
+target_include_directories(ftdb PRIVATE ${PYTHON3_INCLUDES})
 target_link_libraries(ftdb PRIVATE "-lrt")
 install(TARGETS ftdb DESTINATION .)
 
