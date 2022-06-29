@@ -259,6 +259,7 @@ PyObject* libetrace_nfsdb_entry_get_pcp(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_wrapper_pid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_pipe_eids(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_linked_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_compilation_info(PyObject* self, void* closure);
 Py_hash_t libetrace_nfsdb_entry_hash(PyObject *o);
@@ -296,7 +297,8 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"pcp",libetrace_nfsdb_entry_get_pcp,0,"nfsdb entry for precomputed command patterns",0},
 	{"wpid",libetrace_nfsdb_entry_get_wrapper_pid,0,"nfsdb entry wrapper pid",0},
 	{"pipe_eids",libetrace_nfsdb_entry_get_pipe_eids,0,"nfsdb entry pipe eid values",0},
-	{"linked_file",libetrace_nfsdb_entry_get_linked_file,0,"nfsdb entry linked file path",0},
+	{"linked_file",libetrace_nfsdb_entry_get_linked_file,0,"nfsdb entry linked file entry",0},
+	{"linked_path",libetrace_nfsdb_entry_get_linked_path,0,"nfsdb entry linked file path",0},
 	{"linked_type",libetrace_nfsdb_entry_get_linked_type,0,"nfsdb entry linked file type",0},
 	{"compilation_info",libetrace_nfsdb_entry_get_compilation_info,0,"nfsdb entry compilation info",0},
 	{0,0,0,0,0},
@@ -542,13 +544,17 @@ typedef struct {
     PyObject_HEAD
 	struct compilation_info* ci;
     const struct nfsdb* nfsdb;
+    unsigned long parent; /* Parent nfsdb entry that contains this compilation info */
 } libetrace_nfsdb_entry_compilation_info;
 
 void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_compilation_info* self);
 PyObject* libetrace_nfsdb_entry_compilation_info_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_compiled_files(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_compilation_info_get_compiled_file_paths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_object_files(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_compilation_info_get_object_file_paths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_headers(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_compilation_info_get_header_paths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_include_paths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_compilation_info_get_defines(PyObject* self, void* closure);
@@ -560,9 +566,12 @@ static PyMemberDef libetrace_nfsdb_entry_compilation_info_members[] = {
 };
 
 static PyGetSetDef libetrace_nfsdbEntryCompilationInfo_getset[] = {
+	{"file_paths",libetrace_nfsdb_entry_compilation_info_get_compiled_file_paths,0,"list of compiled file paths from the compilation info object",0},
 	{"files",libetrace_nfsdb_entry_compilation_info_get_compiled_files,0,"list of compiled files from the compilation info object",0},
+	{"object_paths",libetrace_nfsdb_entry_compilation_info_get_object_file_paths,0,"list of object file paths produced by this compilation",0},
 	{"objects",libetrace_nfsdb_entry_compilation_info_get_object_files,0,"list of object files produced by this compilation",0},
-	{"ifiles",libetrace_nfsdb_entry_compilation_info_get_headers,0,"list of files included at the command line by this compilation",0},
+	{"header_paths",libetrace_nfsdb_entry_compilation_info_get_header_paths,0,"list of file paths included at the command line by this compilation",0},
+	{"headers",libetrace_nfsdb_entry_compilation_info_get_headers,0,"list of files included at the command line by this compilation",0},
 	{"ipaths",libetrace_nfsdb_entry_compilation_info_get_include_paths,0,"list of include paths used by this compilation",0},
 	{"type",libetrace_nfsdb_entry_compilation_info_get_type,0,"source type used by this compilation",0},
 	{"defs",libetrace_nfsdb_entry_compilation_info_get_defines,0,"list of internal or command line preprocessor definitions used by this compilation",0},
