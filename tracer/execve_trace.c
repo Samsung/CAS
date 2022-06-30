@@ -377,8 +377,8 @@ static void update_last_open(char* path, unsigned long path_size, int flags,
 				str_offset = path_size - (MAX_REP_OPEN_PATH_LEN - 1);
 			}
 
-			memcpy(&tmp->last_open.fname, path + str_offset,
-			       MAX_REP_OPEN_PATH_LEN - 1);
+			strscpy(tmp->last_open.fname, path + str_offset,
+			       MAX_REP_OPEN_PATH_LEN);
 			tmp->last_open.flags = flags;
 			tmp->last_open.mode = mode;
 			tmp->last_open.fds[0] = fd;
