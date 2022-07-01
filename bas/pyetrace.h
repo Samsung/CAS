@@ -33,6 +33,11 @@ int libetrace_nfsdb_entry_filter_has_comp_info(const struct nfsdb_entry* entry);
 int libetrace_nfsdb_entry_filter_has_linked_file(const struct nfsdb_entry* entry);
 int libetrace_nfsdb_entry_filter_has_command(const struct nfsdb_entry* entry);
 
+void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
+void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
+void libetrace_nfsdb_entry_precompute_compilation_info_headers(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
+void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
+
 PyObject * libetrace_is_LLVM_BC_file(PyObject *self, PyObject *args);
 PyObject * libetrace_is_ELF_file(PyObject *self, PyObject *args);
 PyObject * libetrace_pytools_is_ELF_or_LLVM_BC_file(PyObject *self, PyObject *args);
@@ -105,6 +110,7 @@ PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args)
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_fpath_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_linked_modules(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_linked_module_paths(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *args);
@@ -134,6 +140,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"bpaths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
 	{"fpaths",(PyCFunction)libetrace_nfsdb_fpath_list,METH_VARARGS,"Returns the list of all unique opened file paths in the database"},
 	{"linked_modules",(PyCFunction)libetrace_nfsdb_linked_modules,METH_VARARGS,"Returns the list of all linked modules present in the database"},
+	{"linked_module_paths",(PyCFunction)libetrace_nfsdb_linked_module_paths,METH_VARARGS,"Returns the list of all linked module paths present in the database"},
 	{"fdeps",(PyCFunction)libetrace_nfsdb_file_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given file"},
 	{"mdeps",(PyCFunction)libetrace_nfsdb_module_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given module"},
 	{"path_exists",(PyCFunction)libetrace_nfsdb_path_exists,METH_VARARGS,"Returns True if a given path exists after the build"},
@@ -483,6 +490,7 @@ PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *ar
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_openfile_get_ptr(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_is_read(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_is_write(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_is_reg(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
@@ -508,6 +516,7 @@ static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 	{"path",libetrace_nfsdb_entry_openfile_get_path,0,"nfsdb entry openfile path value",0},
 	{"original_path",libetrace_nfsdb_entry_openfile_get_original_path,0,"nfsdb entry openfile original path value",0},
 	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry openfile containing nfsdb entry",0},
+	{"ptr",libetrace_nfsdb_entry_openfile_get_ptr,0,"low level information about this openfile entry (tuple with nfsdb index and open index in the nfsdb entry)",0},
 	{0,0,0,0,0},
 };
 

@@ -24,8 +24,14 @@ struct pp_def {
 	unsigned long value;
 };
 
+struct nfsdb_entry_file_index {
+	unsigned long nfsdb_index;
+	unsigned long open_index;
+};
+
 struct compilation_info {
 	unsigned long* compiled_list;
+	struct nfsdb_entry_file_index* compiled_index;
 	unsigned long compiled_count;
 	unsigned long* include_paths;
 	unsigned long include_paths_count;
@@ -34,10 +40,12 @@ struct compilation_info {
 	struct pp_def* pp_udefs;
 	unsigned long pp_udefs_count;
 	unsigned long* header_list;
+	struct nfsdb_entry_file_index* header_index;
 	unsigned long header_list_count;
 	int compilation_type;
 	int integrated_compilation;
 	unsigned long* object_list;
+	struct nfsdb_entry_file_index* object_index;
 	unsigned long object_list_count;
 };
 
@@ -62,6 +70,7 @@ struct nfsdb_entry {
 	unsigned long pipe_eids_count;
 	struct compilation_info* compilation_info;
 	unsigned long* linked_file;
+	struct nfsdb_entry_file_index linked_index;
 	int linked_type;
 };
 
