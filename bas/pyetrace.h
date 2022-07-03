@@ -516,7 +516,7 @@ static PyMemberDef libetrace_nfsdb_entry_openfile_members[] = {
 
 static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 	{"path",libetrace_nfsdb_entry_openfile_get_path,0,"nfsdb entry openfile path value",0},
-	{"original_path",libetrace_nfsdb_entry_openfile_get_original_path,0,"nfsdb entry openfile original path value",0},
+	{"original_path",libetrace_nfsdb_entry_openfile_get_original_path,0,"nfsdb entry openfile original path value (the same as path if original path doesn't differ from resolved path)",0},
 	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry openfile containing nfsdb entry",0},
 	{"ptr",libetrace_nfsdb_entry_openfile_get_ptr,0,"low level information about this openfile entry (tuple with nfsdb index and open index in the nfsdb entry)",0},
 	{0,0,0,0,0},

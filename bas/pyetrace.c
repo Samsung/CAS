@@ -2860,7 +2860,7 @@ PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void*
 	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
 
 	if (__self->original_path==ULONG_MAX) {
-		Py_RETURN_NONE;
+		return PyUnicode_FromString(__self->nfsdb->string_table[__self->path]);
 	}
 
 	return PyUnicode_FromString(__self->nfsdb->string_table[__self->original_path]);
