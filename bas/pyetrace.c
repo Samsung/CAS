@@ -562,25 +562,11 @@ static void destroy_nfsdb(struct nfsdb* nfsdb) {
 	// TODO
 }
 
-void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
-
-	for (unsigned long i=0; i<entry->open_files_count; ++i) {
-		struct openfile* openfile = &entry->open_files[i];
-		if ((openfile->mode&0x03)>0) {
-			if (match_openfile_path(openfile,*entry->linked_file)) {
-				entry->linked_index.nfsdb_index = entry->nfsdb_index;
-				entry->linked_index.open_index = i;
-				break;
-			}
-		}
-	}
-}
-
-typedef int (*scan_openfile_cb)(const struct nfsdb_entry* root_entry, const struct nfsdb_entry* open_entry,
+typedef int (*scan_openfile_cb)(struct nfsdb_entry* root_entry, const struct nfsdb_entry* open_entry,
 		unsigned long open_index, const void* arg);
 
 static int scan_openfile_list_with_children(const struct nfsdb* nfsdb, const struct nfsdb_entry* entry,
-		scan_openfile_cb cb, const struct nfsdb_entry* root_entry, const void* arg) {
+		scan_openfile_cb cb, struct nfsdb_entry* root_entry, const void* arg) {
 
 	for (unsigned long i=0; i<entry->open_files_count; ++i) {
 		if (cb(root_entry,entry,i,arg)) return 1;
@@ -598,7 +584,7 @@ static int scan_openfile_list_with_children(const struct nfsdb* nfsdb, const str
 }
 
 static int scan_wr_openfile_list_with_children(const struct nfsdb* nfsdb, const struct nfsdb_entry* entry,
-		scan_openfile_cb cb, const struct nfsdb_entry* root_entry, const void* arg) {
+		scan_openfile_cb cb, struct nfsdb_entry* root_entry, const void* arg) {
 
 	for (unsigned long i=0; i<entry->open_files_count; ++i) {
 		struct openfile* openfile = &entry->open_files[i];
@@ -618,7 +604,31 @@ static int scan_wr_openfile_list_with_children(const struct nfsdb* nfsdb, const 
 	return 0;
 }
 
-static int scan_openfile_precompute_compiled_file(const struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
+static int scan_openfile_precompute_linked_file(struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
+		unsigned long open_index, const void* arg) {
+
+	struct openfile* openfile = &open_entry->open_files[open_index];
+
+	if (match_openfile_path(openfile,*entry->linked_file)) {
+		entry->linked_index.nfsdb_index = open_entry->nfsdb_index;
+		entry->linked_index.open_index = open_index;
+		return 1;
+	}
+
+	return 0;
+}
+
+void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
+
+	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->eid.pid);
+
+	for (unsigned long i=0; i<node->entry_count; ++i) {
+		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
+		scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_linked_file,entry,0);
+	}
+}
+
+static int scan_openfile_precompute_compiled_file(struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
 		unsigned long open_index, const void* arg) {
 
 	unsigned long* compiled_index = (unsigned long*)arg;
@@ -634,7 +644,7 @@ static int scan_openfile_precompute_compiled_file(const struct nfsdb_entry* entr
 	return 0;
 }
 
-static int scan_openfile_precompute_header_file(const struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
+static int scan_openfile_precompute_header_file(struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
 		unsigned long open_index, const void* arg) {
 
 	unsigned long* compiled_index = (unsigned long*)arg;
@@ -650,7 +660,7 @@ static int scan_openfile_precompute_header_file(const struct nfsdb_entry* entry,
 	return 0;
 }
 
-static int scan_openfile_precompute_object_file(const struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
+static int scan_openfile_precompute_object_file(struct nfsdb_entry* entry, const struct nfsdb_entry* open_entry,
 		unsigned long open_index, const void* arg) {
 
 	unsigned long* compiled_index = (unsigned long*)arg;
@@ -2446,6 +2456,21 @@ PyObject* libetrace_nfsdb_entry_get_linked_path(PyObject* self, void* closure) {
 	return PyUnicode_FromString(__self->nfsdb->string_table[*__self->entry->linked_file]);
 }
 
+PyObject* libetrace_nfsdb_entry_get_linked_ptr(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	if (!__self->entry->linked_file) {
+		Py_RETURN_NONE;
+	}
+
+	const struct nfsdb_entry_file_index* lindex = &__self->entry->linked_index;
+	PyObject* ptr = PyTuple_New(2);
+	PyTuple_SetItem(ptr,0,PyLong_FromUnsignedLong(lindex->nfsdb_index));
+	PyTuple_SetItem(ptr,1,PyLong_FromUnsignedLong(lindex->open_index));
+	return ptr;
+}
+
 PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
@@ -2454,30 +2479,11 @@ PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure) {
 		Py_RETURN_NONE;
 	}
 
-	for (unsigned long i=0; i<__self->entry->open_files_count; ++i) {
-		struct openfile* openfile = &__self->entry->open_files[i];
-		if ((openfile->mode&0x03)>0) {
-			if (match_openfile_path(openfile,*__self->entry->linked_file)) {
-				PyObject* args = PyTuple_New(6);
-				PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
-				PYTUPLE_SET_ULONG(args,1,i);
-				PYTUPLE_SET_ULONG(args,2,__self->entry->open_files[i].path);
-				if (__self->entry->open_files[i].original_path) {
-					PYTUPLE_SET_ULONG(args,3,*(__self->entry->open_files[i].original_path));
-				}
-				else {
-					PYTUPLE_SET_ULONG(args,3,ULONG_MAX);
-				}
-				PYTUPLE_SET_ULONG(args,4,__self->entry->open_files[i].mode);
-				PYTUPLE_SET_ULONG(args,5,__self->nfsdb_index);
-				PyObject *py_openfile = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryOpenfileType, args);
-				Py_DECREF(args);
-				return py_openfile;
-			}
-		}
-	}
+	const struct nfsdb_entry_file_index* lindex = &__self->entry->linked_index;
+	libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
+			&__self->nfsdb->nfsdb[lindex->nfsdb_index], lindex->open_index, lindex->nfsdb_index);
 
-	Py_RETURN_NONE;
+	return (PyObject*)openfile;
 }
 
 PyObject* libetrace_nfsdb_entry_get_linked_type(PyObject* self, void* closure) {

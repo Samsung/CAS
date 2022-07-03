@@ -267,6 +267,7 @@ PyObject* libetrace_nfsdb_entry_get_wrapper_pid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_pipe_eids(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_path(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_linked_ptr(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_linked_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_compilation_info(PyObject* self, void* closure);
 Py_hash_t libetrace_nfsdb_entry_hash(PyObject *o);
@@ -306,6 +307,7 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"pipe_eids",libetrace_nfsdb_entry_get_pipe_eids,0,"nfsdb entry pipe eid values",0},
 	{"linked_file",libetrace_nfsdb_entry_get_linked_file,0,"nfsdb entry linked file entry",0},
 	{"linked_path",libetrace_nfsdb_entry_get_linked_path,0,"nfsdb entry linked file path",0},
+	{"linked_ptr",libetrace_nfsdb_entry_get_linked_ptr,0,"nfsdb low-level pointer representation of the inked file",0},
 	{"linked_type",libetrace_nfsdb_entry_get_linked_type,0,"nfsdb entry linked file type",0},
 	{"compilation_info",libetrace_nfsdb_entry_get_compilation_info,0,"nfsdb entry compilation info",0},
 	{0,0,0,0,0},
