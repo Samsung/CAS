@@ -66,6 +66,7 @@ struct depproc_context {
 	int direct_deps;									/* 'direct' parameter */
 	int debug;											/* 'debug' parameter */
 	int fd_debug;										/* 'debug_fd' parameter */
+	int dry_run;										/* 'dry_run' parameter */
 	int negate_pattern;									/* 'negate_pattern' parameter */
 	int dep_graph;										/* 'dep_graph' parameter */
 	int wrap_deps;										/* 'wrap_deps' parameter */
@@ -83,7 +84,7 @@ struct depproc_context {
 	depproc_context():
 		excl_patterns(0), excl_patterns_size(0), excl_commands(0), excl_commands_size(0),
 		excl_commands_index(0), excl_commands_index_size(0), direct_deps(0), debug(0), fd_debug(0),
-		negate_pattern(0), dep_graph(0), wrap_deps(0), timeout(0), use_pipes(1), timer_id(0) {}
+		dry_run(0), negate_pattern(0), dep_graph(0), wrap_deps(0), timeout(0), use_pipes(1), timer_id(0) {}
 };
 
 static volatile int interrupt = 0;
@@ -104,7 +105,16 @@ static void depproc_context_free(struct depproc_context* context) {
 	free(context->excl_commands_index);
 }
 
-static int depproc_parse_args(libetrace_nfsdb_object* self,unsigned long phandle,
+static int phs_find(std::vector<std::pair<unsigned long,const char*>>& phs, unsigned long phandle) {
+
+	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i!=phs.end(); ++i) {
+		if ((*i).first==phandle) return 1;
+	}
+
+	return 0;
+}
+
+static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair<unsigned long,const char*>>& phs,
 		PyObject* kwargs, struct depproc_context* context) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
@@ -180,6 +190,12 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,unsigned long phandle
 		}
 		DBG(context->debug,"        debug_fd=%s\n",context->fd_debug?"true":"false");
 
+		PyObject* dry_run = PyDict_GetItemString(kwargs, "dry_run");
+		if (dry_run) {
+			context->dry_run = PyObject_IsTrue(dry_run);
+		}
+		DBG(context->debug,"        dry_run=%s\n",context->dry_run?"true":"false");
+
 		PyObject* neg_pattern = PyDict_GetItemString(kwargs, "negate_pattern");
 		if (neg_pattern) {
 			context->negate_pattern = PyObject_IsTrue(neg_pattern) ? 1 : 0;
@@ -233,8 +249,10 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,unsigned long phandle
 				DBG(context->debug,"        module: %s\n",module_name);
 				PYASSTR_DECREF(module_name);
 			}
-			if (context->all_modules_set.find(phandle)!=context->all_modules_set.end()) {
-				context->all_modules_set.erase(phandle);
+			for (std::vector<std::pair<unsigned long,const char*>>::iterator pi = phs.begin(); pi!=phs.end(); ++pi) {
+				if (context->all_modules_set.find((*pi).first)!=context->all_modules_set.end()) {
+					context->all_modules_set.erase((*pi).first);
+				}
 			}
 		}
 
@@ -243,12 +261,12 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,unsigned long phandle
 			context->direct_deps = PyObject_IsTrue(direct);
 		}
 		DBG(context->debug,"        direct=%s\n",context->direct_deps?"true":"false");
-		if (context->all_modules_set.size()==0) {
+		if (!all_modules) {
 			/* Fill the all modules set with all linked modules paths */
 			struct rb_node * p = rb_first(&self->nfsdb->linkedmap);
 			while(p) {
 				struct nfsdb_entryMap_node* data = (struct nfsdb_entryMap_node*)p;
-				if (data->key!=phandle) {
+				if (!phs_find(phs, data->key)) {
 					context->all_modules_set.insert(data->key);
 				}
 				p = rb_next(p);
@@ -819,7 +837,6 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
 	return 0;
 }
 
-
 /*
  *	file_dependencies(<PATH>,
  *	  exclude_files = [<PATH>,...],
@@ -827,6 +844,7 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
  *	  exclude_commands = [<CMD_PATTERN>,...],
  *	  exclude_commands_index = [<CMD_PATTERN_ID>,...],
  *	  debug = True/False
+ *	  dry_run = True/False
  *	  direct = True/False,
  *	  debug_fd = True/False,
  *	  negate_pattern = True/False,
@@ -838,19 +856,53 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
  */
 PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
 
-	const char* pathname;
 	struct depproc_context context;
 	static char errmsg[ERRMSG_BUFFER_SIZE];
 
-	if (!PyArg_ParseTuple(args,"s",&pathname)) Py_RETURN_NONE;
+	if (PyTuple_Size(args)<=0) {
+		ASSERT_WITH_NFSDB_ERROR(0,"File dependency processing requires at least one argument");
+	}
 
-	struct stringRefMap_node* pnode = stringRefMap_search(&self->nfsdb->revstringmap, pathname);
-	ASSERT_WITH_NFSDB_FORMAT_ERROR(pnode,"Invalid pathname key [%s]",pathname);
-	unsigned long phandle = pnode->value;
-	struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,phandle);
-	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at binary path handle [%lu]",phandle);
+	PyObject* path_args = PyList_New(0);
+	for (Py_ssize_t i=0; i<PyTuple_Size(args); ++i) {
+		PyObject* arg = PyTuple_GetItem(args,i);
+		if (PyUnicode_Check(arg)) {
+			PyList_Append(path_args,arg);
+		}
+		else if (PyList_Check(arg)) {
+			for (Py_ssize_t j=0; j<PyList_Size(arg); ++j) {
+				PyObject* __arg = PyList_GetItem(arg,j);
+				if (PyUnicode_Check(__arg)) {
+					PyList_Append(path_args,__arg);
+				}
+				else {
+					ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+				}
+			}
+		}
+		else {
+			ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+		}
+	}
 
-	if (!depproc_parse_args(self,phandle,kwargs,&context)) {
+	std::vector<std::pair<unsigned long,const char*>> phs;
+	for (Py_ssize_t i=0; i<PyList_Size(path_args); ++i) {
+		PyObject* arg = PyList_GetItem(path_args,i);
+		const char* arg_cstr = PyBytes_AsString(PyUnicode_AsASCIIString(arg));
+		struct stringRefMap_node* pnode = stringRefMap_search(&self->nfsdb->revstringmap, arg_cstr);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(pnode,"Invalid pathname key [%s]",arg_cstr);
+		unsigned long phandle = pnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,phandle);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at binary path handle [%lu]",phandle);
+		if ((node->wr_entry_count<=0) && (node->rw_entry_count<=0)) {
+			/* Do not process files that weren't open for write.
+			 * They don't depend on other files in dependency processing context */
+			continue;
+		}
+		phs.push_back(std::pair<unsigned long,const char*>(phandle,arg_cstr));
+	}
+
+	if (!depproc_parse_args(self,phs,kwargs,&context)) {
 		return 0;
 	}
 
@@ -862,7 +914,11 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 	sigaction(SIGINT, &act, 0);
 	interrupt = 0;
 
-	DBG(context.debug,"--- file_dependencies(%s)\n",pathname);
+	DBG(context.debug,"--- file_dependencies(\n");
+	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i<phs.end(); ++i) {
+		DBG(context.debug,"                       %s\n",(*i).second);
+	}
+	DBG(context.debug,"                     )\n");
 
 	int expired = 0;
 	PyObject* dgraph = 0;
@@ -885,9 +941,20 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 		PyTuple_SetItem(argv,3,dgraph);
 	}
 
-	/* Do not process files that weren't open for write.
-	 * They don't depend on other files in dependency processing context */
-	if ((node->wr_entry_count<=0) && (node->rw_entry_count<=0)) {
+	std::set<unsigned long> _phs;
+	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i<phs.end(); ++i) {
+		unsigned long phandle = (*i).first;
+		const char* pathname = (*i).second;
+		if ((context.excl_set.find(phandle)!=context.excl_set.end()) ||
+			(pattern_match(pathname,context.excl_patterns,context.excl_patterns_size)!=context.negate_pattern)) {
+			// We're matching the root path for exclusion; no dependencies and no processes that's written to any of its dependencies
+			continue;
+		}
+		_phs.insert(phandle);
+	}
+
+	if (_phs.size()<=0) {
+		/* Nothing left to process */
 		if (context.timeout>0) {
 			timer_delete(context.timer_id);
 			g_timer = 0;
@@ -896,20 +963,15 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 		return argv;
 	}
 
-
-	if ((context.excl_set.find(phandle)!=context.excl_set.end()) ||
-		(pattern_match(pathname,context.excl_patterns,context.excl_patterns_size)!=context.negate_pattern)) {
-		// We're matching the root path for exclusion; no dependencies and no processes that's written to any of its dependencies
-		if (context.timeout>0) {
-			timer_delete(context.timer_id);
-			g_timer = 0;
-		}
+	if (context.dry_run) {
 		depproc_context_free(&context);
 		return argv;
 	}
 
-	context.files.push_back(phandle);
-	context.files_set.insert(phandle);
+	for (std::set<unsigned long>::iterator i=_phs.begin(); i!=_phs.end(); ++i) {
+		context.files.push_back(*i);
+		context.files_set.insert(*i);
+	}
 	start = clock();
 
 	/*
@@ -1025,14 +1087,16 @@ maybe_expired:
 		Py_DECREF(argv);
 
 		if (expired==1) {
-			DBG(context.debug,"--- file_dependencies(%s): TIMEOUT\n",pathname);
+			DBG(context.debug,"--- file_dependencies(...): TIMEOUT\n");
 			PyErr_SetString(PyExc_ValueError, "Timeout for command");
 		}
 
 		return NULL;
 	}
 
-	context.fdone.erase(phandle);
+	for (std::set<unsigned long>::iterator i=_phs.begin(); i!=_phs.end(); ++i) {
+		context.fdone.erase(*i);
+	}
 	auto file_iter = context.fdone.begin();
 	auto pid_iter = context.all_writing_process_list.begin();
 	auto openfile_iter = context.openfile_deps.begin();
@@ -1083,6 +1147,10 @@ maybe_expired:
 		Py_DECREF(dgraph_keys);
 	}
 
+	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i<phs.end(); ++i) {
+		PYASSTR_DECREF((*i).second);
+	}
+
 	if (context.timeout>0) {
 		timer_delete(context.timer_id);
 		g_timer = 0;
@@ -1090,7 +1158,7 @@ maybe_expired:
 
 	depproc_context_free(&context);
 
-	DBG(context.debug,"--- file_dependencies(%s) - pids(%ld) deps(%ld) elapsed(%.2f[ms]): OK\n",pathname,PyList_Size(pids),PyList_Size(deps),
+	DBG(context.debug,"--- file_dependencies(...) - pids(%ld) deps(%ld) elapsed(%.2f[ms]): OK\n",PyList_Size(pids),PyList_Size(deps),
 			1000*(((double) (end - start)) / CLOCKS_PER_SEC));
 
 	return argv;
