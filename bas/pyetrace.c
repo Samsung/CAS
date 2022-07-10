@@ -2000,6 +2000,9 @@ PyObject* libetrace_nfsdb_entry_json(libetrace_nfsdb_entry_object *self, PyObjec
 	for (unsigned long u=0; u<self->entry->open_files_count; ++u) {
 		PyObject* openEntry = PyDict_New();
 		FTDB_SET_ENTRY_STRING(openEntry,p,self->nfsdb->string_table[self->entry->open_files[u].path]);
+		if (self->entry->open_files[u].original_path) {
+			FTDB_SET_ENTRY_STRING(openEntry,o,self->nfsdb->string_table[*self->entry->open_files[u].original_path]);
+		}
 		FTDB_SET_ENTRY_ULONG(openEntry,m,self->entry->open_files[u].mode);
 		FTDB_SET_ENTRY_ULONG(openEntry,s,self->entry->open_files[u].size);
 		PYLIST_ADD_PYOBJECT(openEntries,openEntry);
@@ -2071,11 +2074,13 @@ PyObject* libetrace_nfsdb_entry_json(libetrace_nfsdb_entry_object *self, PyObjec
 			PYLIST_ADD_STRING(obj_list,self->nfsdb->string_table[self->entry->compilation_info->object_list[u]]);
 		}
 		FTDB_SET_ENTRY_PYOBJECT(ci,o,obj_list);
+		FTDB_SET_ENTRY_INT(ci,p,!self->entry->compilation_info->integrated_compilation);
 		FTDB_SET_ENTRY_PYOBJECT(json,d,ci);
 	}
 
 	if (self->entry->linked_file) {
 		FTDB_SET_ENTRY_STRING(json,l,self->nfsdb->string_table[*self->entry->linked_file]);
+		FTDB_SET_ENTRY_INT(json,t,self->entry->linked_type);
 	}
 
 	return json;
