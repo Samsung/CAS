@@ -778,12 +778,13 @@ print_entry:
 		for (; rwi!=e.rwmap.end(); ++rwi) {
 			if (rwi!=chi) fprintf(context.outfd,",");
 			if ((*rwi).first.second.length()<=0) {
-				fprintf(context.outfd,"{\"p\":\"%s\",\"m\":%u}",(*rwi).first.first.c_str(),(*rwi).second);
+				fprintf(context.outfd,"{\"p\":\"%s\",\"m\":%u,\"s\":%ld}",
+						(*rwi).first.first.c_str(),(*rwi).second.first,(*rwi).second.second);
 				chsize+=15+strlen((*rwi).first.first.c_str());
 			}
 			else {
-				fprintf(context.outfd,"{\"p\":\"%s\",\"o\":\"%s\",\"m\":%u}",
-						(*rwi).first.first.c_str(),(*rwi).first.second.c_str(),(*rwi).second);
+				fprintf(context.outfd,"{\"p\":\"%s\",\"o\":\"%s\",\"m\":%u,\"s\":%ld}",
+						(*rwi).first.first.c_str(),(*rwi).first.second.c_str(),(*rwi).second.first,(*rwi).second.second);
 				chsize+=22+strlen((*rwi).first.first.c_str())+strlen((*rwi).first.second.c_str());
 			}
 #if SPLIT_EXEC_ENTRY_AT_SIZE>0

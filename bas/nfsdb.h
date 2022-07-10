@@ -16,6 +16,7 @@ struct cid {
 struct openfile {
 	unsigned long path;
 	unsigned long mode;
+	unsigned long size;
 	unsigned long* original_path;
 };
 

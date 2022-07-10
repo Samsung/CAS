@@ -67,7 +67,9 @@ BAS is a tool for extracting information regarding executed processes and opened
       "b": "<path_to_executed_binary>",
       "w": "<cwd>",
       "v": ["<argv>",...], // list of program execution command line (argv)
-      "o": [{"p":"<path>","o":<original path>,"m":<mode>},...], // list of opened files in this execution ('original_path' entry is only present when it differs from the 'path' entry)
+      "o": [{"p":"<path>","o":<original path>,"m":<mode>,"s":<size>},...],
+        // list of opened files in this execution ('original_path' entry is only present when it differs from the 'path' entry)
+        // 'size' entry is only meaningful if the mode indicates that the file exists after the build
       "n": "<base64 pcp array>", // precomputed command patterns for this execution (more info below)
       "m": <wrapper_pid>, // reverse binary mapping wrapper pid (more info below)
       "i": [{"p": <pid>, "x": <exeidx>},...] // list of executions that could read data from this execution through pipe
