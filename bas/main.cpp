@@ -22,6 +22,12 @@ static void intHandler(int v) {
     interrupt = 1;
 }
 
+#ifdef LIBRARY_BUILD
+extern "C" {
+	int parser_main(int argc, char** argv);
+}
+#endif
+
 struct eventlist_node {
 	struct rb_node node;
 	upid_t pid;
@@ -132,7 +138,7 @@ static inline int compare_peventTuple_t (const void* a, const void* b) {
 	return 1;
 }
 
-int main(int argc, char** argv) {
+int parser_main(int argc, char** argv) {
 
 	if (argc>=2) {
 		if (!strcmp(argv[1],"-h") || !strcmp(argv[1],"--help")) {
@@ -172,7 +178,7 @@ int main(int argc, char** argv) {
 	struct parse_context context = {};
 	ssize_t nlcount = count_file_lines(dbpath);
 	if (nlcount<0) {
-		return EXIT_SUCCESS;
+		return nlcount;
 	}
 
 	if (rawpath) {
@@ -189,7 +195,10 @@ int main(int argc, char** argv) {
 	}
 
 	FILE* fd = fopen(dbpath,"rb");
-	assert(fd!=0);
+	if (!fd) {
+		printf("Failed to open %s for reading: %d\n",dbpath,errno);
+		return ENOENT;
+	}
 
 	char * line = NULL;
 	size_t len = 0;
@@ -802,4 +811,9 @@ print_entry:
 	fclose(context.outfd);
 
 	return 0;
+}
+
+int main(int argc, char** argv) {
+
+	return parser_main(argc,argv);
 }

@@ -57,6 +57,7 @@ typedef int64_t upid_t;
 #define PY_ARG_PID_FMT "l"
 
 PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args);
+PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args);
 extern PyObject *libetrace_nfsdbError;
 
 static PyMethodDef libetrace_methods[] = {
@@ -66,6 +67,7 @@ static PyMethodDef libetrace_methods[] = {
 	{"precompute_command_patterns", (PyCFunction)libetrace_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
 	{"parse_compiler_triple_hash", (PyCFunction)libetrace_parse_compiler_triple_hash, METH_VARARGS,"Parse compiler -### output for clang"},
 	{"create_nfsdb", (PyCFunction)libetrace_create_nfsdb, METH_VARARGS,""},
+	{"parse_nfsdb", (PyCFunction)libetrace_parse_nfsdb, METH_VARARGS,""},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -125,6 +127,7 @@ PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyOb
 extern "C" {
 #endif
 PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+int parser_main(int argc, char** argv);
 #ifdef __cplusplus
 }
 #endif

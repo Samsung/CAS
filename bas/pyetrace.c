@@ -1059,6 +1059,37 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 	Py_RETURN_TRUE;
 }
 
+PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args) {
+
+	int argc = 1;
+	Py_ssize_t nargs = PyTuple_Size(args);
+
+	if (nargs>=1) {
+		argc += nargs;
+	}
+
+	const char** argv = malloc(argc*sizeof(char**));
+	argv[0] = "libetrace.parse_nfsdb";
+
+	for (Py_ssize_t i=0; i<nargs; ++i) {
+		PyObject* arg = PyTuple_GetItem(args,i);
+		if (!PyUnicode_Check(arg)) {
+			free(argv);
+			Py_RETURN_NONE;
+		}
+		argv[1+i] = PyString_get_c_str(arg);
+	}
+
+	int r = parser_main(argc,(char**)argv);
+
+	for (Py_ssize_t i=0; i<nargs; ++i) {
+		PYASSTR_DECREF(argv[1+i]);
+	}
+	free(argv);
+
+	return PyLong_FromLong(r);
+}
+
 void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self) {
 
     PyTypeObject *tp = Py_TYPE(self);

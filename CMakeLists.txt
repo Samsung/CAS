@@ -299,6 +299,8 @@ add_library(etrace SHARED
         bas/utils.c
         bas/filedeps.cpp
         bas/nfsdb_maps.cpp
+        bas/parser.cpp
+        bas/main.cpp
 )
 
 target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
@@ -306,6 +308,8 @@ if(IS_CLANG)
     target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
 endif()
 target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
+target_compile_options(etrace PRIVATE "-DLIBRARY_BUILD=1")
 
 add_library(ftdb SHARED
         bas/pyftdb.c

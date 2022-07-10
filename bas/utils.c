@@ -74,6 +74,10 @@ ssize_t safe_rd (int fd, void const *buf, size_t count)
 ssize_t count_file_lines(const char* path) {
 
 	int fdr = open(path,O_RDONLY);
+	if (fdr<0) {
+		printf("Failed to open %s for reading: %d\n",path,errno);
+		return fdr;
+	}
 	/* Count number of lines */
 	void* pgbuff = malloc(RD_BUFSIZE);
 	assert(pgbuff!=0);
