@@ -2179,7 +2179,20 @@ PyObject* libetrace_nfsdb_entry_get_parent_eid(PyObject* self, void* closure) {
 	return parent_eid;
 }
 
-PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
+PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,__self->entry->parent_eid.pid);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",__self->entry->parent_eid.pid);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(__self->entry->parent_eid.exeidx<node->entry_count,
+			"nfsdb entry index [%ld] out of range",__self->entry->parent_eid.exeidx);
+	struct nfsdb_entry* entry = node->entry_list[__self->entry->parent_eid.exeidx];
+	return libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+}
+
+PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 	PyObject* cL = PyList_New(0);
@@ -2191,6 +2204,23 @@ PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
 		PyObject *cid = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryCidType, args);
 		Py_DECREF(args);
 		PYLIST_ADD_PYOBJECT(cL,cid);
+	}
+
+	return cL;
+}
+
+PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	PyObject* cL = PyList_New(0);
+
+	for (unsigned long i=0; i<__self->entry->child_ids_count; ++i) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,__self->entry->child_ids[i].pid);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",__self->entry->child_ids[i].pid);
+		struct nfsdb_entry* entry = node->entry_list[0];
+		PyObject* child_entry =  libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+		PYLIST_ADD_PYOBJECT(cL,child_entry);
 	}
 
 	return cL;
@@ -2838,7 +2868,8 @@ PyObject* libetrace_nfsdb_entry_eid_repr(PyObject* self) {
 
 	libetrace_nfsdb_entry_eid_object* __self = (libetrace_nfsdb_entry_eid_object*)self;
 
-	int written = snprintf(repr,128,"<%lu",__self->pid);
+	int written = snprintf(repr,128,"<nfsdbEntryEidType object at %lx : ",(uintptr_t)self);
+	written += snprintf(repr+written,128,"<%lu",__self->pid);
 	if (__self->exeidx<ULONG_MAX) {
 		written+=snprintf(repr+written,128-written,":%lu>",__self->exeidx);
 	}
@@ -2866,6 +2897,18 @@ PyObject* libetrace_nfsdb_entry_cid_new(PyTypeObject *subtype, PyObject *args, P
 	}
 
 	return (PyObject *)self;
+}
+
+PyObject* libetrace_nfsdb_entry_cid_repr(PyObject* self) {
+
+	static char repr[128];
+
+	libetrace_nfsdb_entry_cid_object* __self = (libetrace_nfsdb_entry_cid_object*)self;
+
+	int written = snprintf(repr,128,"<nfsdbEntryCidType object at %lx : ",(uintptr_t)self);
+	written += snprintf(repr+written,128,"<%lu:0x%08lx>",__self->pid,__self->flags);
+
+	return PyUnicode_FromString(repr);
 }
 
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self) {

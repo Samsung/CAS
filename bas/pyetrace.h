@@ -256,7 +256,9 @@ PyObject* libetrace_nfsdb_entry_accessed_openfiles(PyObject* self, PyObject *arg
 PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent_eid(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_binary(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_cwd(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_bpath(PyObject* self, void* closure);
@@ -296,7 +298,9 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"eid",libetrace_nfsdb_entry_get_eid,0,"nfsdb entry eid value",0},
 	{"etime",libetrace_nfsdb_entry_get_etime,0,"nfsdb entry etime value",0},
 	{"parent_eid",libetrace_nfsdb_entry_get_parent_eid,0,"nfsdb entry parent eid value",0},
-	{"childs",libetrace_nfsdb_entry_get_childs,0,"nfsdb entry child list",0},
+	{"parent",libetrace_nfsdb_entry_get_parent,0,"nfsdb entry parent entry",0},
+	{"child_cids",libetrace_nfsdb_entry_get_child_cids,0,"nfsdb entry child cids list",0},
+	{"childs",libetrace_nfsdb_entry_get_childs,0,"nfsdb entry childs list",0},
 	{"binary",libetrace_nfsdb_entry_get_binary,0,"nfsdb entry binary value",0},
 	{"cwd",libetrace_nfsdb_entry_get_cwd,0,"nfsdb entry cwd value",0},
 	{"bpath",libetrace_nfsdb_entry_get_bpath,0,"nfsdb entry binary path value",0},
@@ -463,6 +467,7 @@ typedef struct {
 
 void libetrace_nfsdb_entry_cid_dealloc(libetrace_nfsdb_entry_cid_object* self);
 PyObject* libetrace_nfsdb_entry_cid_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+PyObject* libetrace_nfsdb_entry_cid_repr(PyObject* self);
 
 static PyMemberDef libetrace_nfsdb_entry_cid_members[] = {
 	{"pid",T_ULONG,offsetof(libetrace_nfsdb_entry_cid_object,pid),READONLY},
@@ -475,6 +480,7 @@ static PyTypeObject libetrace_nfsdbEntryCidType = {
 	.tp_name = "libetrace.nfsdbEntryCid",
 	.tp_basicsize = sizeof(libetrace_nfsdbEntryCidType),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_cid_dealloc,
+	.tp_repr = (reprfunc)libetrace_nfsdb_entry_cid_repr,
 	.tp_doc = "libetrace nfsdb entry child id type",
 	.tp_members = libetrace_nfsdb_entry_cid_members,
 	.tp_new = libetrace_nfsdb_entry_cid_new,
@@ -522,7 +528,7 @@ static PyMemberDef libetrace_nfsdb_entry_openfile_members[] = {
 static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 	{"path",libetrace_nfsdb_entry_openfile_get_path,0,"nfsdb entry openfile path value",0},
 	{"original_path",libetrace_nfsdb_entry_openfile_get_original_path,0,"nfsdb entry openfile original path value (the same as path if original path doesn't differ from resolved path)",0},
-	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry openfile containing nfsdb entry",0},
+	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry that contains this openfile entry",0},
 	{"size",libetrace_nfsdb_entry_openfile_get_size,0,"Returns the size of the existing file (otherwise returns None)",0},
 	{"ptr",libetrace_nfsdb_entry_openfile_get_ptr,0,"low level information about this openfile entry (tuple with nfsdb index and open index in the nfsdb entry)",0},
 	{0,0,0,0,0},
