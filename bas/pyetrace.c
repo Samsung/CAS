@@ -1191,84 +1191,164 @@ static PyObject* libetrace_nfsdb_entry_list(libetrace_nfsdb_object* self, struct
 	return rL;
 }
 
-PyObject* libetrace_nfsdb_mp_subscript(PyObject* self, PyObject* slice) {
+static void libetrace_nfsdb_entry_list_append(libetrace_nfsdb_object* self,
+		struct nfsdb_entryMap_node* node, PyObject* entryList) {
+
+	for (unsigned long i=0; i<node->entry_count; ++i) {
+		struct nfsdb_entry* entry = node->entry_list[i];
+		PyObject* item = libetrace_nfsdb_sq_item((PyObject*)self,entry->nfsdb_index);
+		PYLIST_ADD_PYOBJECT(entryList,item);
+	}
+}
+
+static int libetrace_nfsdb_entry_from_tuple(libetrace_nfsdb_object* self, PyObject* entryList, PyObject* slice_tuple) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	ASSERT_WITH_NFSDB_ERROR(PyTuple_Size(slice_tuple)>=1,"Invalid subscript argument (empty tuple)");
+	PyObject* pypid = PyTuple_GetItem(slice_tuple,0);
+	ASSERT_WITH_NFSDB_ERROR(PyLong_Check(pypid),"Invalid subscript argument (not (long))");
+	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->procmap,PyLong_AsLong(pypid));
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",PyLong_AsLong(pypid));
+	if (PyTuple_Size(slice_tuple)<2) {
+		/* Return the list of all executions for a given pid */
+		libetrace_nfsdb_entry_list_append(self,node,entryList);
+	}
+	else {
+		/* Return specific execution given pid:exeidx value */
+		PyObject* pyexeidx = PyTuple_GetItem(slice_tuple,1);
+		ASSERT_WITH_NFSDB_ERROR(PyLong_Check(pyexeidx),"Invalid subscript argument (not (long))");
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(PyLong_AsLong(pyexeidx)<node->entry_count,
+				"nfsdb entry index [%ld] out of range",PyLong_AsLong(pyexeidx));
+		struct nfsdb_entry* entry = node->entry_list[PyLong_AsLong(pyexeidx)];
+		PYLIST_ADD_PYOBJECT(entryList,libetrace_nfsdb_sq_item((PyObject*)self,entry->nfsdb_index));
+	}
+
+	return 1;
+}
+
+static int libetrace_nfsdb_entry_from_string(libetrace_nfsdb_object* self, PyObject* entryList, PyObject* slice_string) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	const char* bpath = PyString_get_c_str(slice_string);
+	struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, bpath);
+	if (!srefnode) {
+		snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid binary path key [%s] at nfsdb entry",bpath);
+		PyErr_SetString(libetrace_nfsdbError, errmsg);
+		PYASSTR_DECREF(bpath);
+		return 0;
+	}
+	PYASSTR_DECREF(bpath);
+	unsigned long hbpath = srefnode->value;
+	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->bmap,hbpath);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at binary path handle [%lu]",hbpath);
+	libetrace_nfsdb_entry_list_append(self,node,entryList);
+	return 1;
+}
+
+static int libetrace_nfsdb_entry_from_Eid(libetrace_nfsdb_object* self, PyObject* entryList,
+		libetrace_nfsdb_entry_eid_object* eid) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->procmap,eid->pid);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",eid->pid);
+	if (eid->exeidx==ULONG_MAX) {
+		/* Return the list of all executions for a given pid */
+		libetrace_nfsdb_entry_list_append(self,node,entryList);
+	}
+	else {
+		/* Return specific execution given pid:exeidx value */
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(eid->exeidx<node->entry_count,
+				"nfsdb entry index [%ld] out of range",eid->exeidx);
+		struct nfsdb_entry* entry = node->entry_list[eid->exeidx];
+		PYLIST_ADD_PYOBJECT(entryList,libetrace_nfsdb_sq_item((PyObject*)self,entry->nfsdb_index));
+	}
+
+	return 1;
+}
+
+static int libetrace_nfsdb_entry_from_slice(libetrace_nfsdb_object* self, PyObject* entryList, PyObject* real_slice) {
+
+	Py_ssize_t start,end,step;
+	if (PySlice_Unpack(real_slice,&start,&end,&step)) {
+		PyErr_SetString(libetrace_nfsdbError, "Cannot decode slice argument");
+		return 0;
+	}
+
+	for (Py_ssize_t i=start; i<((end<self->nfsdb->nfsdb_count)?(end):(self->nfsdb->nfsdb_count)); i+=step) {
+		PyObject* entry = libetrace_nfsdb_sq_item((PyObject*)self,i);
+		PYLIST_ADD_PYOBJECT(entryList,entry);
+	}
+
+	return 1;
+}
+
+PyObject* libetrace_nfsdb_mp_subscript(PyObject* self, PyObject* slice) {
+
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
+	PyObject* rL = PyList_New(0);
 
 	if (PyLong_Check(slice)) {
 		return libetrace_nfsdb_sq_item(self,PyLong_AsLong(slice));
 	}
 	else if (PyTuple_Check(slice)) {
-		ASSERT_WITH_NFSDB_ERROR(PyTuple_Size(slice)>=1,"Invalid subscript argument");
-		PyObject* pypid = PyTuple_GetItem(slice,0);
-		ASSERT_WITH_NFSDB_ERROR(PyLong_Check(pypid),"Invalid subscript argument");
-		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,PyLong_AsLong(pypid));
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",PyLong_AsLong(pypid));
-		if (PyTuple_Size(slice)<2) {
-			/* Return the list of all executions for a given pid */
-			return libetrace_nfsdb_entry_list(__self,node);
-		}
-		else {
-			/* Return specific execution given pid:exeidx value */
-			PyObject* pyexeidx = PyTuple_GetItem(slice,1);
-			ASSERT_WITH_NFSDB_ERROR(PyLong_Check(pyexeidx),"Invalid subscript argument");
-			ASSERT_WITH_NFSDB_FORMAT_ERROR(PyLong_AsLong(pyexeidx)<node->entry_count,
-					"nfsdb entry index [%ld] out of range",PyLong_AsLong(pyexeidx));
-			struct nfsdb_entry* entry = node->entry_list[PyLong_AsLong(pyexeidx)];
-			return libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+		if (libetrace_nfsdb_entry_from_tuple(__self,rL,slice)) {
+			NFSDB_ENTRYLIST_RETURN_ITEM_OR_LIST(rL);
 		}
 	}
 	else if (PyUnicode_Check(slice)) {
-		const char* bpath = PyString_get_c_str(slice);
-		struct stringRefMap_node* srefnode = stringRefMap_search(&__self->nfsdb->revstringmap, bpath);
-		if (!srefnode) {
-			snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid binary path key [%s] at nfsdb entry",bpath);
-			PyErr_SetString(libetrace_nfsdbError, errmsg);
-			PYASSTR_DECREF(bpath);
-			return 0;
+		if (libetrace_nfsdb_entry_from_string(__self,rL,slice)) {
+			return rL;
 		}
-		PYASSTR_DECREF(bpath);
-		unsigned long hbpath = srefnode->value;
-		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->bmap,hbpath);
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at binary path handle [%lu]",hbpath);
-		return libetrace_nfsdb_entry_list(__self,node);
 	}
 	else if (PyObject_IsInstance(slice, (PyObject *)&libetrace_nfsdbEntryEidType)) {
-		libetrace_nfsdb_entry_eid_object* eid = (libetrace_nfsdb_entry_eid_object*)slice;
-		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,eid->pid);
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",eid->pid);
-		if (eid->exeidx==ULONG_MAX) {
-			/* Return the list of all executions for a given pid */
-			return libetrace_nfsdb_entry_list(__self,node);
+		if (libetrace_nfsdb_entry_from_Eid(__self,rL,(libetrace_nfsdb_entry_eid_object*)slice)) {
+			NFSDB_ENTRYLIST_RETURN_ITEM_OR_LIST(rL);
 		}
-		else {
-			/* Return specific execution given pid:exeidx value */
-			ASSERT_WITH_NFSDB_FORMAT_ERROR(eid->exeidx<node->entry_count,
-					"nfsdb entry index [%ld] out of range",eid->exeidx);
-			struct nfsdb_entry* entry = node->entry_list[eid->exeidx];
-			return libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+	}
+	else if (PyList_Check(slice)) {
+		Py_ssize_t i;
+		for (i=0; i<PyList_Size(slice); ++i) {
+			PyObject* item = PyList_GetItem(slice,i);
+			if (PyLong_Check(item)) {
+				PyObject* entry = libetrace_nfsdb_sq_item(self,PyLong_AsLong(item));
+				PYLIST_ADD_PYOBJECT(rL,entry);
+			}
+			else if (PyTuple_Check(item)) {
+				if (!libetrace_nfsdb_entry_from_tuple(__self,rL,item)) {
+					break;
+				}
+			}
+			else if (PyUnicode_Check(item)) {
+				if (!libetrace_nfsdb_entry_from_string(__self,rL,item)) {
+					break;
+				}
+			}
+			else if (PyObject_IsInstance(item, (PyObject *)&libetrace_nfsdbEntryEidType)) {
+				if (!libetrace_nfsdb_entry_from_Eid(__self,rL,(libetrace_nfsdb_entry_eid_object*)item)) {
+					break;
+				}
+			}
+			else {
+				PyErr_SetString(libetrace_nfsdbError, "Invalid subscript argument");
+				break;
+			}
 		}
+		if (i>=PyList_Size(slice)) return rL; /* The loop finished normally */
 	}
 	else if (!PySlice_Check(slice)) {
 		PyErr_SetString(libetrace_nfsdbError, "Invalid subscript argument");
-		return 0;
+	}
+	else {
+		/* Now we have a real slice with numbers */
+		if (libetrace_nfsdb_entry_from_slice(__self,rL,slice)) {
+			return rL;
+		}
 	}
 
-	/* Now we have a real slice with numbers */
-	Py_ssize_t start,end,step;
-	if (PySlice_Unpack(slice,&start,&end,&step)) {
-		PyErr_SetString(libetrace_nfsdbError, "Cannot decode slice argument");
-		return 0;
-	}
-
-	PyObject* rL = PyList_New(0);
-	for (Py_ssize_t i=start; i<((end<__self->nfsdb->nfsdb_count)?(end):(__self->nfsdb->nfsdb_count)); i+=step) {
-		PyObject* entry = libetrace_nfsdb_sq_item(self,i);
-		PYLIST_ADD_PYOBJECT(rL,entry);
-	}
-
-	return rL;
+	Py_DecRef(rL);
+	return 0;
 }
 
 PyObject* libetrace_nfsdb_getiter(PyObject* self) {
