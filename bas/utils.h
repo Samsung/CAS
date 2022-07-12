@@ -38,6 +38,13 @@
 		}	\
 	} while(0)
 
+#define ASSERT_BREAK_WITH_NFSDB_ERROR(__expr,__msg,...) {	\
+		if (!(__expr)) {	\
+			PyErr_SetString(libetrace_nfsdbError, __msg);	\
+			break;	\
+		}	\
+	}
+
 #define ASSERT_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,...) do {	\
 		if (!(__expr)) {	\
 			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
@@ -46,7 +53,15 @@
 		}	\
 	} while(0)
 
-#define ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(__expr,__msg,__retcode,...) do {	\
+#define ASSERT_BREAK_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,...) {	\
+		if (!(__expr)) {	\
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
+			PyErr_SetString(libetrace_nfsdbError, errmsg);	\
+			break;	\
+		}	\
+	}
+
+#define ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,__retcode,...) do {	\
 		if (!(__expr)) {	\
 			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
 			PyErr_SetString(libetrace_nfsdbError, errmsg);	\
@@ -69,7 +84,7 @@
 		}	\
 	} while(0)
 
-#define ASSERT_WITH_FTDB_FORMAT_ERROR_WITH_RETURN(__expr,__msg,__retcode,...) do {	\
+#define ASSERT_RETURN_WITH_FTDB_FORMAT_ERROR(__expr,__msg,__retcode,...) do {	\
 		if (!(__expr)) {	\
 			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
 			PyErr_SetString(libftdb_ftdbError, errmsg);	\

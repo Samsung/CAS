@@ -511,7 +511,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 	static char errmsg[ERRMSG_BUFFER_SIZE];
 
 	struct nfsdb_fileMap_node* fnode = fileMap_search(&self->nfsdb->filemap,fh);
-	ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,fh);
+	ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,fh);
 
 	if ((fnode->wr_entry_count<=0) && (fnode->rw_entry_count<=0)) {
 		DBG(context->fd_debug,"   missing entry in rev_wr_map\n");
@@ -756,7 +756,7 @@ static int workaround_gcc_pipe_compilation_mode(libetrace_nfsdb_object* self, st
 			size_t len = strlen(bpath);
 			if (!strncmp(bpath+len-4,"/cc1",4)) {
 				struct ulongMap_node* node = ulongMap_search(&self->nfsdb->revforkmap, pid);
-				ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(node,"Internal nfsdb error at parent search [%lu]",-1,pid);
+				ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at parent search [%lu]",-1,pid);
 				context->all_writing_process_list.insert(node->value_list[0]);
 				break;
 			}
@@ -804,7 +804,7 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
 			PyObject* writtenSet = PySet_New(oldWrittenSet);
 			for (std::vector<unsigned long>::iterator i=dep_flist.begin(); i<dep_flist.end(); ++i) {
 				struct nfsdb_fileMap_node* fnode = fileMap_search(&self->nfsdb->filemap,(*i));
-				ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,(*i));
+				ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,(*i));
 				if ((fnode->wr_entry_count>0) || (fnode->rw_entry_count>0)) {
 					PySet_Add(writtenSet,PyUnicode_FromString(self->nfsdb->string_table[(*i)]));
 				}
@@ -822,7 +822,7 @@ static int build_dep_graph_entry(libetrace_nfsdb_object* self, struct depproc_co
 			PyObject* writtenSet = PySet_New(0);
 			for (std::vector<unsigned long>::iterator i=dep_flist.begin(); i<dep_flist.end(); ++i) {
 				struct nfsdb_fileMap_node* fnode = fileMap_search(&self->nfsdb->filemap,(*i));
-				ASSERT_WITH_NFSDB_FORMAT_ERROR_WITH_RETURN(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,(*i));
+				ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(fnode,"Internal nfsdb error at binary path handle [%lu]",-1,(*i));
 				if ((fnode->wr_entry_count>0) || (fnode->rw_entry_count>0)) {
 					PySet_Add(writtenSet,PyUnicode_FromString(self->nfsdb->string_table[(*i)]));
 				}

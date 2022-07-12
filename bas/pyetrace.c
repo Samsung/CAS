@@ -3323,54 +3323,132 @@ static void libetrace_nfsdb_fill_entry_list(libetrace_nfsdb_filemap* self, PyObj
 	}
 }
 
+/* Retrieves the nfsdb entries that opened the given 'path' and fills the 'entryList' */
+static int libetrace_nfsdb_filemap_entry_retrieve(libetrace_nfsdb_filemap* self, PyObject* path, PyObject* entryList) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	const char* fpath = PyString_get_c_str(path);
+	struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+	PYASSTR_DECREF(fpath);
+	if (!srefnode) {
+		return 1;
+	}
+	unsigned long hfpath = srefnode->value;
+	struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+	libetrace_nfsdb_fill_entry_list(self,entryList,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
+	libetrace_nfsdb_fill_entry_list(self,entryList,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
+	libetrace_nfsdb_fill_entry_list(self,entryList,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
+	return 1;
+}
+
+/* Retrieves the nfsdb entries that opened the given 'path' with specified 'filter_mode' and fills the 'entryList' */
+static int libetrace_nfsdb_filemap_entry_retrieve_with_filter(libetrace_nfsdb_filemap* self, PyObject* path,
+		unsigned long filter_mode, PyObject* entryList) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	const char* fpath = PyString_get_c_str(path);
+	struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+	PYASSTR_DECREF(fpath);
+	if (!srefnode) {
+		return 1;
+	}
+	unsigned long hfpath = srefnode->value;
+	struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+	if (filter_mode==0) {
+		libetrace_nfsdb_fill_entry_list(self,entryList,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
+	}
+	else if (filter_mode==1) {
+		libetrace_nfsdb_fill_entry_list(self,entryList,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
+	}
+	else {
+		libetrace_nfsdb_fill_entry_list(self,entryList,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
+	}
+	return 1;
+}
+
 PyObject* libetrace_nfsdb_filemap_mp_subscript(PyObject* self, PyObject* slice) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
 	libetrace_nfsdb_filemap* __self = (libetrace_nfsdb_filemap*)self;
+	PyObject* rL = PyList_New(0);
 
 	if (PyUnicode_Check(slice)) {
-		const char* fpath = PyString_get_c_str(slice);
-		struct stringRefMap_node* srefnode = stringRefMap_search(&__self->nfsdb->revstringmap, fpath);
-		PYASSTR_DECREF(fpath);
-		if (!srefnode) {
-			return PyList_New(0);
+		if (libetrace_nfsdb_filemap_entry_retrieve(__self,slice,rL)) {
+			return rL;
 		}
-		unsigned long hfpath = srefnode->value;
-		struct nfsdb_fileMap_node* node = fileMap_search(&__self->nfsdb->filemap,hfpath);
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
-		PyObject* rL = PyList_New(0);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
-		libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
-		return rL;
 	}
 	else if (PyTuple_Check(slice)) {
-		ASSERT_WITH_NFSDB_ERROR(PyTuple_Size(slice)==2,"Invalid tuple argument");
-		const char* fpath = PyString_get_c_str(PyTuple_GetItem(slice,0));
-		unsigned long filter_mode = PyLong_AsLong(PyTuple_GetItem(slice,1));
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(filter_mode<=2,"Invalid file access mode: [%lu]",filter_mode);
-		struct stringRefMap_node* srefnode = stringRefMap_search(&__self->nfsdb->revstringmap, fpath);
-		PYASSTR_DECREF(fpath);
-		if (!srefnode) {
-			return PyList_New(0);
+		PyObject* path = PyTuple_GetItem(slice,0);
+		if (!PyUnicode_Check(path)) {
+			PyErr_SetString(libetrace_nfsdbError,"Invalid filemap argument: path not (str)");
+			goto filemap_err;
 		}
-		unsigned long hfpath = srefnode->value;
-		struct nfsdb_fileMap_node* node = fileMap_search(&__self->nfsdb->filemap,hfpath);
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
-		PyObject* rL = PyList_New(0);
-		if (filter_mode==0) {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->rd_entry_list,node->rd_entry_index,node->rd_entry_count);
-		}
-		else if (filter_mode==1) {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->wr_entry_list,node->wr_entry_index,node->wr_entry_count);
+		if (PyTuple_Size(slice)>1) {
+			PyObject* py_filter_mode = PyTuple_GetItem(slice,1);
+			if (!PyLong_Check(py_filter_mode)) {
+				PyErr_SetString(libetrace_nfsdbError,"Invalid filemap argument: filter_mode not (long)");
+				goto filemap_err;
+			}
+			unsigned long filter_mode = PyLong_AsLong(py_filter_mode);
+			if (filter_mode>2) {
+				snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid file access mode: [%lu]",filter_mode);
+				PyErr_SetString(libetrace_nfsdbError,errmsg);
+				goto filemap_err;
+			}
+			if (libetrace_nfsdb_filemap_entry_retrieve_with_filter(__self,path,filter_mode,rL)) {
+				return rL;
+			}
 		}
 		else {
-			libetrace_nfsdb_fill_entry_list(__self,rL,node->rw_entry_list,node->rw_entry_index,node->rw_entry_count);
+			if (libetrace_nfsdb_filemap_entry_retrieve(__self,path,rL)) {
+				return rL;
+			}
 		}
-		return rL;
+	}
+	else if (PyList_Check(slice)) {
+		Py_ssize_t i;
+		for (i=0; i<PyList_Size(slice); ++i) {
+			PyObject* item = PyList_GetItem(slice,i);
+			if (PyUnicode_Check(item)) {
+				if (!libetrace_nfsdb_filemap_entry_retrieve(__self,item,rL)) {
+					break;
+				}
+			}
+			else if (PyTuple_Check(item)) {
+				PyObject* path = PyTuple_GetItem(item,0);
+				ASSERT_BREAK_WITH_NFSDB_ERROR(PyUnicode_Check(path),"Invalid filemap argument: path not (str)");
+				if (PyTuple_Size(item)>1) {
+					PyObject* py_filter_mode = PyTuple_GetItem(item,1);
+					ASSERT_BREAK_WITH_NFSDB_ERROR(PyLong_Check(py_filter_mode),"Invalid filemap argument: filter_mode not (long)");
+					unsigned long filter_mode = PyLong_AsLong(py_filter_mode);
+					ASSERT_BREAK_WITH_NFSDB_FORMAT_ERROR(filter_mode<=2,"Invalid file access mode: [%lu]",filter_mode);
+					if (!libetrace_nfsdb_filemap_entry_retrieve_with_filter(__self,path,filter_mode,rL)) {
+						break;
+					}
+				}
+				else {
+					if (!libetrace_nfsdb_filemap_entry_retrieve(__self,path,rL)) {
+						break;
+					}
+				}
+			}
+			else {
+				PyErr_SetString(libetrace_nfsdbError, "Invalid filemap subscript type (not a string or slice)");
+				break;
+			}
+		}
+		if (i>=PyList_Size(slice)) return rL; /* The loop finished normally */
+	}
+	else {
+		PyErr_SetString(libetrace_nfsdbError, "Invalid filemap subscript type (not a string, slice or a list of [string/slice])");
 	}
 
-	PyErr_SetString(libetrace_nfsdbError, "Invalid filemap subscript type (not a string or slice)");
+filemap_err:
+	Py_DecRef(rL);
 	return 0;
 }
 
