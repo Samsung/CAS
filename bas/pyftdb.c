@@ -72,10 +72,16 @@ PyObject* libftdb_ftdb_repr(PyObject* self) {
 	const char* inited = "initialized";
 	const char* ninited = "not initialized";
 	int written = snprintf(repr,1024,"<ftdb object at %lx : %s",(uintptr_t)self,__self->init_done?inited:ninited);
-	written+=snprintf(repr+written,1024-written,"|debug:%d;verbose:%d|",__self->debug,__self->verbose);
-	written+=snprintf(repr+written,1024-written,"funcs_count:%lu;types_count:%lu;global_count:%lu;sources:%lu>",
+        if (__self->init_done) {
+            written+=snprintf(repr+written,1024-written,"|debug:%d;verbose:%d|",__self->debug,__self->verbose);
+	    written+=snprintf(repr+written,1024-written,"funcs_count:%lu;types_count:%lu;global_count:%lu;sources:%lu>",
 			__self->ftdb->funcs_count,__self->ftdb->types_count,
 			__self->ftdb->globals_count,__self->ftdb->sourceindex_table_count);
+        }
+        else {
+            written+=snprintf(repr+written,1024-written,">");
+        }
+
 
 	return PyUnicode_FromString(repr);
 }
