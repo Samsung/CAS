@@ -1953,7 +1953,28 @@ done:
 
 PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
 
-	PyObject* module_path = PyTuple_GetItem(args,0);
+	PyObject* path_args = PyList_New(0);
+	for (Py_ssize_t i=0; i<PyTuple_Size(args); ++i) {
+		PyObject* arg = PyTuple_GetItem(args,i);
+		if (PyUnicode_Check(arg)) {
+			PyList_Append(path_args,arg);
+		}
+		else if (PyList_Check(arg)) {
+			for (Py_ssize_t j=0; j<PyList_Size(arg); ++j) {
+				PyObject* __arg = PyList_GetItem(arg,j);
+				if (PyUnicode_Check(__arg)) {
+					PyList_Append(path_args,__arg);
+				}
+				else {
+					ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+				}
+			}
+		}
+		else {
+			ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+		}
+	}
+
 	PyObject* py_direct = PyUnicode_FromString("direct");
 	int direct = 0;
 
@@ -1979,34 +2000,41 @@ PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyOb
 
 	PyObject* mL = PyList_New(0);
 
-	if (PyUnicode_Check(module_path)) {
-		const char* mpath = PyString_get_c_str(module_path);
+	PyObject* path_set = PySet_New(0);
+	for (Py_ssize_t u=0; u<PyList_Size(path_args); ++u) {
+		PyObject* parg = PyList_GetItem(path_args,u);
+		const char* mpath = PyString_get_c_str(parg);
 		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, mpath);
 		PYASSTR_DECREF(mpath);
 		if (!srefnode) {
-			goto done;
+			continue;
 		}
 		unsigned long hmpath = srefnode->value;
 		struct ulongMap_node* node = ulongMap_search(dmap, hmpath);
 		if (!node) {
-			goto done;
+			continue;
 		}
 		for (unsigned long i=0; i<node->value_count; i+=2) {
 			unsigned long nfsdb_index = node->value_list[i];
 			unsigned long open_index = node->value_list[i+1];
-			const struct nfsdb_entry* entry = &self->nfsdb->nfsdb[nfsdb_index];
-			libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
-					self->nfsdb,entry,open_index,nfsdb_index);
-			PyList_Append(mL,(PyObject*)openfile);
+			PyObject* openfile_ptr = PyTuple_New(2);
+			PYTUPLE_SET_ULONG(openfile_ptr,0,nfsdb_index);
+			PYTUPLE_SET_ULONG(openfile_ptr,1,open_index);
+			PYSET_ADD_PYOBJECT(path_set,openfile_ptr);
 		}
 	}
-	else {
-		PyErr_SetString(libetrace_nfsdbError, "Invalid module path type (not a string)");
-		Py_DecRef(py_direct);
-		return 0;
+
+	while(PySet_Size(path_set)>0) {
+		PyObject* openfile_ptr = PySet_Pop(path_set);
+		unsigned long nfsdb_index = PyLong_AsUnsignedLong(PyTuple_GetItem(openfile_ptr,0));
+		unsigned long open_index = PyLong_AsUnsignedLong(PyTuple_GetItem(openfile_ptr,1));
+		Py_DecRef(openfile_ptr);
+		const struct nfsdb_entry* entry = &self->nfsdb->nfsdb[nfsdb_index];
+		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
+				self->nfsdb,entry,open_index,nfsdb_index);
+		PyList_Append(mL,(PyObject*)openfile);
 	}
 
-done:
 	Py_DecRef(py_direct);
 	return mL;
 }
