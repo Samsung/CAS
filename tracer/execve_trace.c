@@ -88,9 +88,11 @@ do {									\
 	do {  \
 		struct timespec64 ts;  \
 		ktime_get_ts64(&ts);  \
+		preempt_disable_notrace();  \
 		my_trace_printk(fmt,  \
 			UNIQUE_PID_FOR_TASK(upid, tsk), smp_processor_id(), \
 			ts.tv_sec, ts.tv_nsec, ##__VA_ARGS__);  \
+		preempt_enable_notrace();  \
 	} while (0)
 #define PRINT_TRACE_TASK(upid, tsk, fmt, ...) \
 	PRINT_TRACE_TASK_RAW(upid, tsk, "%lld,%d,%lld,%ld" fmt "\n", ##__VA_ARGS__)
@@ -100,9 +102,11 @@ do {									\
 	do {  \
 		struct timespec ts;  \
 		ktime_get_ts(&ts);  \
+		preempt_disable_notrace();  \
 		my_trace_printk(fmt,  \
 			UNIQUE_PID_FOR_TASK(upid, tsk), smp_processor_id(), \
 			ts.tv_sec, ts.tv_nsec, ##__VA_ARGS__);  \
+		preempt_enable_notrace();  \
 	} while (0)
 #define PRINT_TRACE_TASK(upid, tsk, fmt, ...) \
 	PRINT_TRACE_TASK_RAW(upid, tsk, "%lld,%d,%ld,%ld" fmt "\n", ##__VA_ARGS__)
@@ -622,7 +626,7 @@ static char* get_pathstr_from_path(struct path* p, char** tmp_buf)
 
 // ########## TRACING FUNCTIONS ##########
 
-static void tracepoint_probe_fork(void* data, struct task_struct* self,
+static void __tracepoint_probe_fork(void* data, struct task_struct* self,
 				  struct task_struct *task)
 {
 	u64 upid = INVALID_UPID;
@@ -643,7 +647,7 @@ static void tracepoint_probe_fork(void* data, struct task_struct* self,
 			UNIQUE_PID_FOR_TASK(upid, task));
 }
 
-static void tracepoint_probe_exit(void* data, struct task_struct *task)
+static void __tracepoint_probe_exit(void* data, struct task_struct *task)
 {
 	u64 upid = INVALID_UPID;
 
@@ -788,7 +792,7 @@ static void print_exec_args(u64 upid, struct task_struct* p,
 }
 
 // based on fs/proc/base.c:get_mm_cmdline()
-static void tracepoint_probe_exec(void* data, struct task_struct *p,
+static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 				  pid_t old_pid, struct linux_binprm *bprm)
 {
 	u64 upid = INVALID_UPID;
@@ -909,7 +913,7 @@ clean_cwd_path:
 	path_put(&cwd_path);
 }
 
-static void tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
+static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 				       long id)
 {
 	u64 upid = INVALID_UPID;
@@ -1028,7 +1032,7 @@ static void tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 	} // switch
 }
 
-static void tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
+static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 				      long ret)
 {
 	u64 upid = INVALID_UPID;
@@ -1509,6 +1513,40 @@ open_exit:
 	} // switch
 }
 
+static void tracepoint_probe_fork(void* data, struct task_struct* self,
+				  struct task_struct *task) {
+	preempt_enable_notrace();
+	__tracepoint_probe_fork(data, self, task);
+	preempt_disable_notrace();
+}
+
+static void tracepoint_probe_exit(void* data, struct task_struct *task) {
+	preempt_enable_notrace();
+	__tracepoint_probe_exit(data, task);
+	preempt_disable_notrace();
+}
+
+static void tracepoint_probe_exec(void* data, struct task_struct *p,
+				  pid_t old_pid, struct linux_binprm *bprm)
+{
+	preempt_enable_notrace();
+	__tracepoint_probe_exec(data, p, old_pid, bprm);
+	preempt_disable_notrace();
+}
+
+static void tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
+				       long id) {
+	preempt_enable_notrace();
+	__tracepoint_probe_sys_enter(data, regs, id);
+	preempt_disable_notrace();
+}
+
+static void tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
+				      long ret) {
+	preempt_enable_notrace();
+	__tracepoint_probe_sys_exit(data, regs, ret);
+	preempt_disable_notrace();
+}
 
 // ########## SETUP AND CLEANUP ##########
 
