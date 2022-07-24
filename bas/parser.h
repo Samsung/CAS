@@ -226,6 +226,7 @@ struct parse_context {
 	std::map<upid_t,std::pair<upid_t,unsigned>> rev_fork_map;
 	std::vector<parsed_entry> ve;
 	std::vector<syscall_raw> srvec;
+	std::set<upid_t> pset;
 };
 
 struct fdinfo {

@@ -378,6 +378,17 @@ int parser_main(int argc, char** argv) {
         free((void*)evnode);
         procs_at_exit++;
     }
+
+    /* Check if we have some child processes without any parsed entries (no syscalls called in child whatsoever)
+     * In such case add artificial empty execution
+     */
+    unsigned long empty_child_count = 0;
+    for (std::map<upid_t,std::pair<upid_t,unsigned>>::iterator i=context.rev_fork_map.begin(); i!=context.rev_fork_map.end(); ++i) {
+    	if (context.pset.find((*i).first)==context.pset.end()) {
+    		empty_child_count++;
+    	}
+    }
+
    	if (print_stats) {
    		printf("processes: %ld\n",context.process_count);
    		printf("total event count: %ld\n",context.total_event_count);
@@ -395,6 +406,7 @@ int parser_main(int argc, char** argv) {
    		printf("written rw entries: %ld\n",context.total_rw_count);
    		printf("written fork entries: %ld\n",context.total_fork_count);
    		printf("procs_at_exit: %ld\n",procs_at_exit);
+   		printf("empty child processes: %ld\n",empty_child_count);
    	}
 
    	if (context.rawoutfd) fprintf(context.rawoutfd,"]");

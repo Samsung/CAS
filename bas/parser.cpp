@@ -402,6 +402,7 @@ long parse_write_process_events(upid_t pid, vpeventTuple_t* event_list, struct p
 	uint64_t exe_start_time = start_time;
 	size_t ve_init_size = context->ve.size();
 	context->ve.push_back(parsed_entry(pid));
+	context->pset.insert(pid);
 	std::vector<syscall_raw>& srvec = context->srvec;
         size_t srvec_init_size = srvec.size();
 
