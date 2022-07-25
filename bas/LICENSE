@@ -54,3 +54,6 @@ It was used by getting an explicit written consent from the author.
 Base 64 encoding/decoding utilities were taken from the GNOME Glib library
 and therefore might be distributed under the GNU Lesser General Public License v2.1.
 Please see base64.c file for details.
+
+Generic vector implementation was taken from the klib library (https://github.com/attractivechaos/klib)
+and therefore might te distributed under the MIT license. Please see klib.h file for details.
