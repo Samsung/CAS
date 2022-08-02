@@ -25,9 +25,6 @@ if [ "$1" = "-f" ]; then
 	chmod 755 -R /sys/kernel/debug/tracing/per_cpu/
 	if [ "$?" -ne 0 ]; then exit "$?"; fi
 
-	NPROC=$(nproc)
-	NPROC=$(expr $NPROC - 1)
-
 	# set buffers size
 	echo "131072" > /sys/kernel/debug/tracing/buffer_size_kb
 	if [ "$?" -ne 0 ]; then
@@ -38,12 +35,10 @@ if [ "$1" = "-f" ]; then
         echo "nocontext-info" > /sys/kernel/debug/tracing/trace_options
 
 	# clear buffers
-	for i in `seq 0 $NPROC`; do
-		echo "dummy" > "/sys/kernel/debug/tracing/per_cpu/cpu$i/trace"
-		if [ "$?" -ne 0 ]; then
-			exit "$?"
-		fi
-	done
+	echo "dummy" > "/sys/kernel/debug/tracing/trace"
+	if [ "$?" -ne 0 ]; then
+		exit "$?"
+	fi
 
 elif [ "$1" = "-i" ]; then
 	if [ "$#" -lt 2 ]; then
