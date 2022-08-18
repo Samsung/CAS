@@ -162,8 +162,16 @@ struct last_open_t {
 struct traced_pid {
 	u64 upid;
 	pid_t pid;
-	struct last_open_t last_open;
-	struct list_head list;
+	struct list_head list;  // protected by list_mutex
+	// mutex that guards access to non-const fields in this struct, except
+	// list_head. It is locked when this object is returned from the list
+	// via should_trace() and must be released no later than when returning
+	// from trace functions. While normally there should be only one user of
+	// any given object of this type (the thread with given pid), there is
+	// a need for synchronization when someone unloads the module while
+	// there are still traced tasks.
+	struct mutex obj_mutex;
+	struct last_open_t last_open;  // protected by obj_mutex
 };
 
 static LIST_HEAD(traced_pids);
@@ -177,33 +185,36 @@ static struct tracepoint *tracepoint_sys_exit = NULL;
 
 // ########## PIDS LIST MANAGEMENT ##########
 
-static bool is_pid_on_list_locked(pid_t pid, u64* upid)
+static bool is_pid_on_list_locked(pid_t pid, struct traced_pid **tpid)
 {
 	struct traced_pid *tmp = NULL;
 	list_for_each_entry(tmp, &traced_pids, list) {
 		if (tmp->pid == pid) {
-			if (upid)
-				*upid = tmp->upid;
+			if (tpid) {
+				BUG_ON(mutex_is_locked(&tmp->obj_mutex));
+				mutex_lock(&tmp->obj_mutex);
+				*tpid = tmp;
+			}
 			return true;
 		}
 	}
 	return false;
 }
 
-// If true is returned, traced_upid will be set (if it is not null) to upid of
-// current process.
-// If false is returned, traced_upid is untouched.
-static bool should_trace(u64* traced_upid)
+// If true is returned, tpid will be set (if it is not null) to
+// struct traced_pid of current process and its obj_lock will be acquired.
+// If false is returned, tpid is untouched.
+static bool should_trace(struct traced_pid **tpid)
 {
 	bool retval = false;
-	u64 ret_traced_upid = INVALID_UPID;
+	struct traced_pid *ret_traced_pid = NULL;
 
 	mutex_lock(&list_mutex);
-	retval = is_pid_on_list_locked(current->pid, &ret_traced_upid);
+	retval = is_pid_on_list_locked(current->pid, &ret_traced_pid);
 	mutex_unlock(&list_mutex);
 
-	if (retval && traced_upid)
-		*traced_upid = ret_traced_upid;
+	if (retval && tpid)
+		*tpid = ret_traced_pid;
 
 	return retval;
 }
@@ -234,6 +245,7 @@ static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, bool force)
 	new_pid->pid = pid;
 	new_pid->upid = next_upid++;
 	INIT_LIST_HEAD(&new_pid->list);
+	mutex_init(&new_pid->obj_mutex);
 	list_add(&new_pid->list, &traced_pids);
 	return new_pid->upid;
 }
@@ -245,6 +257,12 @@ static void remove_pid_from_list_locked(pid_t pid)
 		if (el->pid == pid) {
 			pr_debug("Removing pid %d from list\n", (int) pid);
 			list_del(&el->list);
+			// we assume that the process (task) cannot be in kernel
+			// mode simultaneously on different CPUs / from
+			// different contexts, so nothing should be holding
+			// mutex_last_open and modify last_open struct
+			BUG_ON(mutex_is_locked(&el->obj_mutex));
+			mutex_destroy(&el->obj_mutex);
 			kfree(el);
 			return;
 		}
@@ -256,7 +274,13 @@ static void clear_pids_list_locked(void)
 	struct traced_pid *el, *tmp;
 	pr_info("Clearing pids list\n");
 	list_for_each_entry_safe(el, tmp, &traced_pids, list) {
+		// this method is called asynchronously on module's unload, so
+		// before removing objects from the list and destroying them,
+		// wait for their threads to release them
+		mutex_lock(&el->obj_mutex);
 		list_del(&el->list);
+		mutex_unlock(&el->obj_mutex);
+		mutex_destroy(&el->obj_mutex);
 		kfree(el);
 	}
 }
@@ -284,191 +308,168 @@ static void clear_pids_list(void)
 	mutex_unlock(&list_mutex);
 }
 
+static void release_traced_pid(struct traced_pid *tp)
+{
+	if (tp)
+		mutex_unlock(&tp->obj_mutex);
+}
 
 // ########## IGNORING REPEATING OPENS ##########
+// caller must hold tpid->obj_mutex to call any function in this section
 
-static bool is_repeating_open(char* path, unsigned long path_size, int flags,
+static bool is_repeating_open(struct traced_pid *tpid, char* path,
+			      unsigned long path_size, int flags,
 			      int mode, int fd)
 {
-	struct traced_pid *tmp = NULL;
 	bool is_repeating = false;
 
-	mutex_lock(&list_mutex);
-	list_for_each_entry(tmp, &traced_pids, list) {
-		if (tmp->pid != current->pid)
-			continue;
+	if (tpid->last_open.mode == mode
+	    && tpid->last_open.flags == flags) {
+		unsigned long str_offset = 0;
 
-		// tmp->pid == current->pid
-		if (tmp->last_open.mode == mode
-		    && tmp->last_open.flags == flags) {
-			unsigned long str_offset = 0;
+		if (path_size >= MAX_REP_OPEN_PATH_LEN) {
+			str_offset = path_size - (MAX_REP_OPEN_PATH_LEN - 1);
+		}
 
-			if (path_size >= MAX_REP_OPEN_PATH_LEN) {
-				str_offset = path_size - (MAX_REP_OPEN_PATH_LEN - 1);
+		if (!strncmp(tpid->last_open.fname,
+				path + str_offset,
+				MAX_REP_OPEN_PATH_LEN - 1)) {
+			int iter, old_fds_count;
+			is_repeating = true;
+
+			// add fd to the list of fds for this open.
+			// This fd shouldn't be already on the list,
+			// because !Close event should have removed it
+			// if it was used before
+
+			if (tpid->last_open.fds_count >= MAX_REP_OPEN_FDS) {
+				pr_warn("Exceeded number of stored fds in last_open_t!");
+				return is_repeating;
 			}
 
-			if (!strncmp(tmp->last_open.fname,
-					path + str_offset,
-					MAX_REP_OPEN_PATH_LEN - 1)) {
-				int iter, old_fds_count;
-				is_repeating = true;
+			// since we don't put an fd in the first array
+			// slot (see below and struct last_open_t docs),
+			// there may be a case where fds_count is less
+			// than MAX_REP_OPEN_FDS (more precisely: equal
+			// to MAX_REP_OPEN_FDS-1) and we still wouldn't
+			// put a new fd to the array. This can happen
+			// e.g. when a file is opened MAX_REP_OPEN_FDS
+			// times, then the first fd is closed, and then
+			// another open() of this file happens.
+			// We treat it basically as if there was no more
+			// space in fds array.
+			if (tpid->last_open.fds_count == MAX_REP_OPEN_FDS - 1
+			    && tpid->last_open.fds[0] == -1) {
+				pr_debug("Hit [open()*MAX -> close(fd[0]) -> open()] edge case");
+				return is_repeating;
+			}
 
-				// add fd to the list of fds for this open.
-				// This fd shouldn't be already on the list,
-				// because !Close event should have removed it
-				// if it was used before
-
-				if (tmp->last_open.fds_count >= MAX_REP_OPEN_FDS) {
-					pr_warn("Exceeded number of stored fds in last_open_t!");
+			old_fds_count = tpid->last_open.fds_count;
+			// put the fd in the first empty slot, starting from
+			// second array entry (first entry is special, see
+			// struct last_open_t docs)
+			for (iter = 1; iter < MAX_REP_OPEN_FDS; iter++) {
+				if (tpid->last_open.fds[iter] == -1) {
+					tpid->last_open.fds[iter] = fd;
+					tpid->last_open.fds_count++;
+					pr_debug("adding fd %d, fds_count = %d",
+						 fd,
+						 tpid->last_open.fds_count);
 					break;
 				}
-
-				// since we don't put an fd in the first array
-				// slot (see below and struct last_open_t docs),
-				// there may be a case where fds_count is less
-				// than MAX_REP_OPEN_FDS (more precisely: equal
-				// to MAX_REP_OPEN_FDS-1) and we still wouldn't
-				// put a new fd to the array. This can happen
-				// e.g. when a file is opened MAX_REP_OPEN_FDS
-				// times, then the first fd is closed, and then
-				// another open() of this file happens.
-				// We treat it basically as if there was no more
-				// space in fds array.
-				if (tmp->last_open.fds_count == MAX_REP_OPEN_FDS - 1
-				    && tmp->last_open.fds[0] == -1) {
-					pr_debug("Hit [open()*MAX -> close(fd[0]) -> open()] edge case");
-					break;
-				}
-
-				old_fds_count = tmp->last_open.fds_count;
-				// put the fd in the first empty slot, starting from second array entry
-				// (first entry is special, see struct last_open_t docs)
-				for (iter = 1; iter < MAX_REP_OPEN_FDS; iter++) {
-					if (tmp->last_open.fds[iter] == -1) {
-						tmp->last_open.fds[iter] = fd;
-						tmp->last_open.fds_count++;
-						pr_debug("adding fd %d, fds_count = %d",
-							 fd,
-							 tmp->last_open.fds_count);
-						break;
-					}
-				}
-				if (old_fds_count == tmp->last_open.fds_count) {
-					pr_err("Bug!: didn't insert fd on list with fds_count < MAX");
-				}
+			}
+			if (old_fds_count == tpid->last_open.fds_count) {
+				pr_err("Bug!: didn't insert fd on list with fds_count < MAX");
 			}
 		}
-		// TODO should use goto instead? (here and in other functions in
-		// this seciton)
-		break;
 	}
-	mutex_unlock(&list_mutex);
 	return is_repeating;
 }
 
-static void update_last_open(char* path, unsigned long path_size, int flags,
+static void update_last_open(struct traced_pid *tpid, char* path,
+			     unsigned long path_size, int flags,
 			     int mode, int fd)
 {
-	struct traced_pid *tmp = NULL;
-	mutex_lock(&list_mutex);
-	list_for_each_entry(tmp, &traced_pids, list) {
-		if (tmp->pid == current->pid) {
-			unsigned long str_offset = 0;
-			int iter;
+	unsigned long str_offset = 0;
+	int iter;
 
-			// only copy the last MAX_REP_OPEN_PATH_LEN-1 chars
-			if (path_size >= MAX_REP_OPEN_PATH_LEN) {
-				str_offset = path_size - (MAX_REP_OPEN_PATH_LEN - 1);
-			}
-
-			strscpy(tmp->last_open.fname, path + str_offset,
-			       MAX_REP_OPEN_PATH_LEN);
-			tmp->last_open.flags = flags;
-			tmp->last_open.mode = mode;
-			tmp->last_open.fds[0] = fd;
-			for (iter = 1; iter < MAX_REP_OPEN_FDS; iter++)
-				tmp->last_open.fds[iter] = -1;
-			tmp->last_open.fds_count = 1;
-			tmp->last_open.close_printed = false;
-			break;
-		}
+	// only copy the last MAX_REP_OPEN_PATH_LEN-1 chars
+	if (path_size >= MAX_REP_OPEN_PATH_LEN) {
+		str_offset = path_size - (MAX_REP_OPEN_PATH_LEN - 1);
 	}
-	mutex_unlock(&list_mutex);
+
+	strscpy(tpid->last_open.fname, path + str_offset,
+		MAX_REP_OPEN_PATH_LEN);
+	tpid->last_open.flags = flags;
+	tpid->last_open.mode = mode;
+	tpid->last_open.fds[0] = fd;
+	for (iter = 1; iter < MAX_REP_OPEN_FDS; iter++)
+		tpid->last_open.fds[iter] = -1;
+	tpid->last_open.fds_count = 1;
+	tpid->last_open.close_printed = false;
 }
 
 /*
  * Updates the last_open cache with regards to !Close event on given fd.
  * Returns true if !Close event for this file was already printed, false otherwise
  */
-static bool update_last_open_fd_on_close(int fd)
+static bool update_last_open_fd_on_close(struct traced_pid *tpid, int fd)
 {
-	struct traced_pid *tmp = NULL;
 	bool close_printed = false;
+	int idx = 0;
+	bool fd_found = false;
 
-	mutex_lock(&list_mutex);
-	list_for_each_entry(tmp, &traced_pids, list) {
-		int idx = 0;
-		bool fd_found = false;
-
-		if (tmp->pid != current->pid)
-			continue;
-
-		// tmp->pid == current->pid
-
-		if (!tmp->last_open.fds_count) {
-			break; // close_printed = false
-		}
-
-		for (; idx < MAX_REP_OPEN_FDS; idx++) {
-			if (tmp->last_open.fds[idx] != fd)
-				continue;
-
-			// tmp->last_open.fds[idx] == fd
-
-			// Allow potentially printing close event only for the
-			// first entry in array (i.e. only the "original" fd
-			// from the first open() call may have corresponding
-			// close event). This is to maintain consistence between
-			// fds printed in open and close events.
-			if (!idx) {
-				close_printed = tmp->last_open.close_printed;
-
-				// We assume that if this fuction returns false,
-				// then the caller will print the close log.
-				// Because of that, if close log was not printed
-				// yet, we return this fact to the caller (via
-				// close_printed) and already here set it as
-				// printed.
-				if (!tmp->last_open.close_printed)
-					tmp->last_open.close_printed = true;
-			} else {
-				// set true even though the event may have not
-				// been printed - but we want only the
-				// "original" fd to have its close event
-				close_printed = true;
-			}
-
-			// We also remove in advance the fd from last_open.fds
-			// list to improve performance a bit (since, again, we
-			// assume that the close event on this fd is currently
-			// happening).
-			tmp->last_open.fds[idx] = -1;
-			tmp->last_open.fds_count--;
-			pr_debug("removing fd %d, fds_count is %d",
-				 fd, tmp->last_open.fds_count);
-
-			fd_found = true;
-			break;
-
-		}
-		// if the fd was not found on the fds list, that means that it
-		// isn't related to last_open file (see comments for
-		// struct last_open_t).
-		if (!fd_found)
-			close_printed = false;
+	if (!tpid->last_open.fds_count) {
+		return close_printed; // close_printed = false
 	}
 
-	mutex_unlock(&list_mutex);
+	for (; idx < MAX_REP_OPEN_FDS; idx++) {
+		if (tpid->last_open.fds[idx] != fd)
+			continue;
+
+		// tpid->last_open.fds[idx] == fd
+
+		// Allow potentially printing close event only for the
+		// first entry in array (i.e. only the "original" fd
+		// from the first open() call may have corresponding
+		// close event). This is to maintain consistence between
+		// fds printed in open and close events.
+		if (!idx) {
+			close_printed = tpid->last_open.close_printed;
+
+			// We assume that if this fuction returns false,
+			// then the caller will print the close log.
+			// Because of that, if close log was not printed
+			// yet, we return this fact to the caller (via
+			// close_printed) and already here set it as
+			// printed.
+			if (!tpid->last_open.close_printed)
+				tpid->last_open.close_printed = true;
+		} else {
+			// set true even though the event may have not
+			// been printed - but we want only the
+			// "original" fd to have its close event
+			close_printed = true;
+		}
+
+		// We also remove in advance the fd from last_open.fds
+		// list to improve performance a bit (since, again, we
+		// assume that the close event on this fd is currently
+		// happening).
+		tpid->last_open.fds[idx] = -1;
+		tpid->last_open.fds_count--;
+		pr_debug("removing fd %d, fds_count is %d",
+			 fd, tpid->last_open.fds_count);
+
+		fd_found = true;
+		break;
+
+	}
+	// if the fd was not found on the fds list, that means that it
+	// isn't related to last_open file (see comments for
+	// struct last_open_t).
+	if (!fd_found)
+		close_printed = false;
 	return close_printed;
 }
 
@@ -630,7 +631,7 @@ static void __tracepoint_probe_fork(void* data, struct task_struct* self,
 				  struct task_struct *task)
 {
 	u64 upid = INVALID_UPID;
-	u64 pupid = INVALID_UPID;
+	struct traced_pid *tppid = NULL;
 
 	if (!task || !self) {
 		pr_warn("tracepoint_probe_fork: null task_struct\n");
@@ -640,27 +641,30 @@ static void __tracepoint_probe_fork(void* data, struct task_struct* self,
 	pr_debug("fork pid: %d, ppid: %d\n",(int) task->pid,(int) self->pid);
 	upid = maybe_add_pid_to_list(task->pid, self->pid, false);
 
-	if (!should_trace(&pupid))
+	if (!should_trace(&tppid))
 		return;
 
-	PRINT_TRACE_TASK(pupid, self, "!SchedFork|pid=%lld",
+	PRINT_TRACE_TASK(tppid->upid, self, "!SchedFork|pid=%lld",
 			UNIQUE_PID_FOR_TASK(upid, task));
+
+	release_traced_pid(tppid);
 }
 
 static void __tracepoint_probe_exit(void* data, struct task_struct *task)
 {
-	u64 upid = INVALID_UPID;
+	struct traced_pid *tpid = NULL;
 
 	if (!task) {
 		pr_warn("tracepoint_probe_exit: null task_struct\n");
 		return;
 	}
 
-	if (should_trace(&upid)) {
-		PRINT_TRACE_TASK(upid, task, "!Exit|");
+	if (should_trace(&tpid)) {
+		PRINT_TRACE_TASK(tpid->upid, task, "!Exit|");
 	}
 
 	pr_debug("exit: %d\n", (int) task->pid);
+	release_traced_pid(tpid);
 	remove_pid_from_list(task->pid);
 }
 
@@ -795,7 +799,7 @@ static void print_exec_args(u64 upid, struct task_struct* p,
 static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 				  pid_t old_pid, struct linux_binprm *bprm)
 {
-	u64 upid = INVALID_UPID;
+	struct traced_pid *tpid = NULL;
 
 	struct mm_struct *mm;
 	unsigned long arg_start, arg_end, args_size, interp_size,
@@ -808,25 +812,25 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 
 	// TODO: assuming that this tracepoint is always called from the context
 	// of newly created process, check it
-	if (!should_trace(&upid))
+	if (!should_trace(&tpid))
 		return;
 
 	pr_debug("tracepoint_probe_exec callback called\n");
 
 	if (!p) {
 		pr_err("tracepoint_probe_exec: task_struct is null\n");
-		return;
+		goto release_tpid;
 	}
 
 	if (!bprm) {
 		pr_err("tracepoint_probe_exec: bprm is null\n");
-		return;
+		goto release_tpid;
 	}
 
 	mm = p->mm; // TODO should use get_task_mm()?
 	if (!mm) {
 		pr_err("tracepoint_probe_exec: mm is null\n");
-		return;
+		goto release_tpid;
 	}
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5,8,0)
@@ -843,7 +847,7 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 #endif
 
 	if (arg_start >= arg_end)
-		return;
+		goto release_tpid;
 
 	args_size = arg_end - arg_start;
 	pr_debug("args start: %lx, end: %lx, len: %ld\n",
@@ -891,13 +895,13 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	}
 	interp_size = strlen(pi_path_buf);
 
-	PRINT_TRACE_TASK(upid, p,
+	PRINT_TRACE_TASK(tpid->upid, p,
 			 "!New_proc|argsize=%ld,prognameisize=%ld,prognamepsize=%ld,cwdsize=%ld",
 			 args_size, interp_size, filename_size, cwd_size);
-	print_long_string(upid, pi_path_buf, interp_size, "!PI", p);
-	print_long_string(upid, pp_path_buf, filename_size, "!PP", p);
-	print_long_string(upid, cwd_path_buf, cwd_size, "!CW", p);
-	print_exec_args(upid, p, arg_start, args_size);
+	print_long_string(tpid->upid, pi_path_buf, interp_size, "!PI", p);
+	print_long_string(tpid->upid, pp_path_buf, filename_size, "!PP", p);
+	print_long_string(tpid->upid, cwd_path_buf, cwd_size, "!CW", p);
+	print_exec_args(tpid->upid, p, arg_start, args_size);
 
 
 	kfree(pi_tmp_buf);
@@ -911,38 +915,40 @@ clean_cwd:
 	kfree(cwd_tmp_buf);
 clean_cwd_path:
 	path_put(&cwd_path);
+release_tpid:
+	release_traced_pid(tpid);
 }
 
 static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 				       long id)
 {
-	u64 upid = INVALID_UPID;
+	struct traced_pid *tpid = NULL;
 
 	switch(id) {
 	case __NR_clone: {
 		unsigned long clone_flags;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		// according to man clone(2) (NOTES), clone syscall takes flags
 		// in the first parameter under x86-64
 		clone_flags = regs->di;
-		PRINT_TRACE(upid, "!SysClone|flags=%ld", clone_flags);
+		PRINT_TRACE(tpid->upid, "!SysClone|flags=%ld", clone_flags);
 		break;
 	}
 	case __NR_close: {
 		bool should_print = true;
 		int fd = (int) regs->di;
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ignore_repeated_opens) {
-			should_print = !update_last_open_fd_on_close(fd);
+			should_print = !update_last_open_fd_on_close(tpid, fd);
 		}
 
 		if (should_print) {
-			PRINT_TRACE(upid, "!Close|fd=%ld", regs->di);
+			PRINT_TRACE(tpid->upid, "!Close|fd=%ld", regs->di);
 		}
 		break;
 	}
@@ -955,7 +961,7 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		int err;
 		unsigned long len;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (id == __NR_rename) {
@@ -968,23 +974,25 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		}
 		if (err) {
 			pr_warn("sys_enter_rename: user_path_at failed\n");
-			return;
+			break;
 		}
 
 		path_buf = get_pathstr_from_path(&from, &tmp_buf);
 		if (!path_buf) {
-			return;
+			break;
 		}
 		len = strlen(path_buf);
 
 		if (id == __NR_renameat2) {
 			int flags = (int) regs->r8;
-			PRINT_TRACE(upid, "!Rename2From|fnamesize=%ld,flags=%d",
+			PRINT_TRACE(tpid->upid,
+				    "!Rename2From|fnamesize=%ld,flags=%d",
 				    len, flags);
 		} else {
-			PRINT_TRACE(upid, "!RenameFrom|fnamesize=%ld", len);
+			PRINT_TRACE(tpid->upid, "!RenameFrom|fnamesize=%ld",
+				    len);
 		}
-		print_long_string(upid, path_buf, len, "!RF", current);
+		print_long_string(tpid->upid, path_buf, len, "!RF", current);
 		kfree(tmp_buf);
 		break;
 	}
@@ -996,7 +1004,7 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		int err;
 		unsigned long len;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (id == __NR_link) {
@@ -1009,33 +1017,35 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		}
 		if (err) {
 			pr_warn("sys_enter_link: user_path_at failed\n");
-			return;
+			break;
 		}
 
 		path_buf = get_pathstr_from_path(&from, &tmp_buf);
 		if (!path_buf) {
-			return;
+			break;
 		}
 		len = strlen(path_buf);
 
 		if (id == __NR_linkat) {
 			int flags = (int) regs->r8;
-			PRINT_TRACE(upid, "!LinkatFrom|fnamesize=%ld,flags=%d",
+			PRINT_TRACE(tpid->upid,
+				    "!LinkatFrom|fnamesize=%ld,flags=%d",
 				    len, flags);
 		} else {
-			PRINT_TRACE(upid, "!LinkFrom|fnamesize=%ld", len);
+			PRINT_TRACE(tpid->upid, "!LinkFrom|fnamesize=%ld", len);
 		}
-		print_long_string(upid, path_buf, len, "!LF", current);
+		print_long_string(tpid->upid, path_buf, len, "!LF", current);
 		kfree(tmp_buf);
 		break;
 	}
 	} // switch
+	release_traced_pid(tpid);
 }
 
 static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 				      long ret)
 {
-	u64 upid = INVALID_UPID;
+	struct traced_pid *tpid = NULL;
 
 	struct files_struct* fs;
 	struct file *f;
@@ -1048,12 +1058,11 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 	// TODO support creat()?
 	switch(syscall_nr) {
 	case __NR_clone: {
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			PRINT_TRACE(upid, "!SysCloneFailed|");
-			return;
+			PRINT_TRACE(tpid->upid, "!SysCloneFailed|");
 		}
 		break;
 	}
@@ -1067,11 +1076,11 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 		size_t orig_path_len, dir_path_len, final_orig_path_size;
 	   	int dir_fd;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0)
-			return;
+			break;
 
 		task_lock(current);
 		fs = current->files;
@@ -1081,7 +1090,7 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 		if (!fs) {
 			pr_warn("sys_exit_open: failed to get file_struct of task\n");
 			// todo synchronization
-			return;
+			break;
 		}
 
 		// TODO check fd boundary
@@ -1089,7 +1098,7 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 		if (!f) {
 			pr_warn("sys_exit_open: failed to get struct file for desc %ld\n", ret);
 			// todo synchronization
-			return;
+			break;
 		}
 
 		for (i = 0; i < 5; i++) {
@@ -1097,7 +1106,7 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 			if (!tmpbuf) {
 				pr_warn("sys_exit_open: unable to allocate %ld bytes for fname\n", trysize);
 				// todo synchronization
-				return;
+				goto out;
 			}
 			retbuf = d_path(&f->f_path, tmpbuf, trysize);
 			if (IS_ERR(retbuf)) {
@@ -1113,7 +1122,7 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 			pr_warn("sys_exit_open: path too long!?\n");
 			kfree(tmpbuf);
 			// todo synchronization
-			return;
+			break;
 		}
 
 		if (syscall_nr == __NR_open) {
@@ -1131,12 +1140,12 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 		pathsize = strlen(retbuf);
 
 		if (ignore_repeated_opens) {
-			if (is_repeating_open(retbuf, pathsize,
+			if (is_repeating_open(tpid, retbuf, pathsize,
 					      flags, mode, ret)) {
 				should_print = false;
 			} else {
-				update_last_open(retbuf, pathsize, flags, mode,
-						 ret);
+				update_last_open(tpid, retbuf, pathsize, flags,
+						 mode, ret);
 			}
 		}
 
@@ -1219,13 +1228,13 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 				final_orig_path[final_orig_path_size] = 0x0;
 			}
 
-			PRINT_TRACE(upid,
+			PRINT_TRACE(tpid->upid,
 				    "!Open|fnamesize=%ld,forigsize=%ld,flags=%d,mode=%d,fd=%ld",
 				    pathsize, final_orig_path_size, flags,
 				    mode, ret);
-			print_long_string(upid, retbuf, pathsize, "!FN",
+			print_long_string(tpid->upid, retbuf, pathsize, "!FN",
 					  current);
-			print_long_string(upid, final_orig_path,
+			print_long_string(tpid->upid, final_orig_path,
 					  final_orig_path_size, "!FO", current);
 		}
 
@@ -1247,22 +1256,22 @@ open_exit:
 		int __user *fd_arr;
 		int fd1, fd2, err, flags;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			return;
+			break;
 		}
 		fd_arr = (int __user*) regs->di;
 		err = get_user(fd1, fd_arr);
 		if (err) {
 			pr_warn("sys_exit_pipe: couldn't read fd1\n");
-			return;
+			break;
 		}
 		err = get_user(fd2, fd_arr + 1);
 		if (err) {
 			pr_warn("sys_exit_pipe: couldn't read fd2\n");
-			return;
+			break;
 		}
 
 		if (syscall_nr == __NR_pipe) {
@@ -1273,7 +1282,7 @@ open_exit:
 			flags = (int) regs->si;
 		}
 
-		PRINT_TRACE(upid, "!Pipe|fd1=%d,fd2=%d,flags=%d",
+		PRINT_TRACE(tpid->upid, "!Pipe|fd1=%d,fd2=%d,flags=%d",
 			    fd1, fd2, flags);
 		break;
 	}
@@ -1286,12 +1295,12 @@ open_exit:
 		int err;
 		unsigned long len;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			PRINT_TRACE(upid, "!RenameFailed|");
-			return;
+			PRINT_TRACE(tpid->upid, "!RenameFailed|");
+			break;
 		}
 
 		if (syscall_nr == __NR_rename) {
@@ -1305,17 +1314,17 @@ open_exit:
 
 		if (err) {
 			pr_warn("sys_exit_rename: user_path_at failed\n");
-			return;
+			break;
 		}
 
 		path_buf = get_pathstr_from_path(&to, &tmp_buf);
 		if (!path_buf) {
-			return;
+			break;
 		}
 		len = strlen(path_buf);
 
-		PRINT_TRACE(upid, "!RenameTo|fnamesize=%ld", len);
-		print_long_string(upid, path_buf, len, "!RT", current);
+		PRINT_TRACE(tpid->upid, "!RenameTo|fnamesize=%ld", len);
+		print_long_string(tpid->upid, path_buf, len, "!RT", current);
 		kfree(tmp_buf);
 
 		break;
@@ -1328,12 +1337,12 @@ open_exit:
 		int err;
 		unsigned long len;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			PRINT_TRACE(upid, "!LinkFailed|");
-			return;
+			PRINT_TRACE(tpid->upid, "!LinkFailed|");
+			break;
 		}
 
 		if (syscall_nr == __NR_link) {
@@ -1347,17 +1356,17 @@ open_exit:
 
 		if (err) {
 			pr_warn("sys_exit_link: user_path_at failed\n");
-			return;
+			break;
 		}
 
 		path_buf = get_pathstr_from_path(&to, &tmp_buf);
 		if (!path_buf) {
-			return;
+			break;
 		}
 		len = strlen(path_buf);
 
-		PRINT_TRACE(upid, "!LinkTo|fnamesize=%ld", len);
-		print_long_string(upid, path_buf, len, "!LT", current);
+		PRINT_TRACE(tpid->upid, "!LinkTo|fnamesize=%ld", len);
+		print_long_string(tpid->upid, path_buf, len, "!LT", current);
 		kfree(tmp_buf);
 
 		break;
@@ -1372,11 +1381,11 @@ open_exit:
 		unsigned long len, target_len, resolved_target_len;
 		bool target_resolved = false;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			return;
+			break;
 		}
 
 		if (syscall_nr == __NR_symlink) {
@@ -1390,7 +1399,7 @@ open_exit:
 
 		if (err) {
 			pr_warn("sys_exit_symlink: user_path_at(to) failed\n");
-			return;
+			break;
 		}
 
 		user_target_str = (char __user *) regs->di;
@@ -1398,20 +1407,20 @@ open_exit:
 		target_len = strnlen_user(user_target_str, 4096*32);
 		if (!target_len) {
 			pr_warn("sys_exit_symlink: strnlen_user failed\n");
-			return;
+			break;
 		}
 
 		target_str = kmalloc(target_len, GFP_KERNEL);
 		if (!target_str) {
 			pr_warn("sys_exit_symlink: kalloc for target string failed\n");
-			return;
+			break;
 		}
 
 		if (strncpy_from_user(target_str,
 				      user_target_str, target_len) < 0) {
 			pr_warn("sys_exit_symlink: strncpy_from_user failed\n");
 			kfree(target_str);
-			return;
+			break;
 		}
 
 		if (target_len)
@@ -1436,28 +1445,30 @@ open_exit:
 		if (!path_buf) {
 			if (target_resolved)
 				kfree(resolved_target_tmp_buf);
-			return;
+			break;
 		}
 		len = strlen(path_buf);
 
 		if (target_resolved) {
-			PRINT_TRACE(upid,
+			PRINT_TRACE(tpid->upid,
 				    "!Symlink|targetnamesize=%ld,resolvednamesize=%ld,linknamesize=%ld",
 				    target_len, resolved_target_len, len);
-			print_long_string(upid, target_str, target_len, "!ST",
-					  current);
-			print_long_string(upid, resolved_target_str,
+			print_long_string(tpid->upid, target_str, target_len,
+					  "!ST", current);
+			print_long_string(tpid->upid, resolved_target_str,
 					  resolved_target_len, "!SR", current);
-			print_long_string(upid, path_buf, len, "!SL", current);
+			print_long_string(tpid->upid, path_buf, len, "!SL",
+					  current);
 
 			kfree(resolved_target_tmp_buf);
 		} else {
-			PRINT_TRACE(upid,
+			PRINT_TRACE(tpid->upid,
 				    "!Symlink|targetnamesize=%ld,linknamesize=%ld",
 				    target_len, len);
-			print_long_string(upid, target_str, target_len, "!ST",
+			print_long_string(tpid->upid, target_str, target_len,
+					  "!ST", current);
+			print_long_string(tpid->upid, path_buf, len, "!SL",
 					  current);
-			print_long_string(upid, path_buf, len, "!SL", current);
 		}
 
 		kfree(tmp_buf);
@@ -1469,11 +1480,11 @@ open_exit:
 		int old_fd;
 		int flags = 0;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			return;
+			break;
 		}
 
 		if (syscall_nr == __NR_dup3) {
@@ -1481,7 +1492,7 @@ open_exit:
 		}
 
 		old_fd = (int) regs->di;
-		PRINT_TRACE(upid, "!Dup|oldfd=%d,newfd=%d,flags=%d",
+		PRINT_TRACE(tpid->upid, "!Dup|oldfd=%d,newfd=%d,flags=%d",
 			    old_fd, (int) ret, flags);
 		break;
 	}
@@ -1494,11 +1505,11 @@ open_exit:
 		if (cmd != F_DUPFD && cmd != F_DUPFD_CLOEXEC)
 			return;
 
-		if (!should_trace(&upid))
+		if (!should_trace(&tpid))
 			return;
 
 		if (ret < 0) {
-			return;
+			break;
 		}
 
 		if (cmd == F_DUPFD_CLOEXEC) {
@@ -1506,11 +1517,13 @@ open_exit:
 		}
 
 		old_fd = (int) regs->di;
-		PRINT_TRACE(upid, "!Dup|oldfd=%d,newfd=%d,flags=%d",
+		PRINT_TRACE(tpid->upid, "!Dup|oldfd=%d,newfd=%d,flags=%d",
 			    old_fd, (int) ret, flags);
 		break;
 	}
 	} // switch
+out:
+	release_traced_pid(tpid);
 }
 
 static void tracepoint_probe_fork(void* data, struct task_struct* self,
