@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/namei.h>
+#include <linux/radix-tree.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/time.h>
@@ -162,7 +163,6 @@ struct last_open_t {
 struct traced_pid {
 	u64 upid;
 	pid_t pid;
-	struct list_head list;  // protected by list_mutex
 	// mutex that guards access to non-const fields in this struct, except
 	// list_head. It is locked when this object is returned from the list
 	// via should_trace() and must be released no later than when returning
@@ -174,7 +174,7 @@ struct traced_pid {
 	struct last_open_t last_open;  // protected by obj_mutex
 };
 
-static LIST_HEAD(traced_pids);
+static RADIX_TREE(traced_pids, GFP_KERNEL);
 
 static struct tracepoint *tracepoint_sched_process_fork = NULL;
 static struct tracepoint *tracepoint_sched_process_exit = NULL;
@@ -188,15 +188,14 @@ static struct tracepoint *tracepoint_sys_exit = NULL;
 static bool is_pid_on_list_locked(pid_t pid, struct traced_pid **tpid)
 {
 	struct traced_pid *tmp = NULL;
-	list_for_each_entry(tmp, &traced_pids, list) {
-		if (tmp->pid == pid) {
-			if (tpid) {
-				BUG_ON(mutex_is_locked(&tmp->obj_mutex));
-				mutex_lock(&tmp->obj_mutex);
-				*tpid = tmp;
-			}
-			return true;
+	tmp = radix_tree_lookup(&traced_pids, pid);
+	if (tmp) {
+		if (tpid) {
+			BUG_ON(mutex_is_locked(&tmp->obj_mutex));
+			mutex_lock(&tmp->obj_mutex);
+			*tpid = tmp;
 		}
+		return true;
 	}
 	return false;
 }
@@ -223,6 +222,7 @@ static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, bool force)
 {
 	struct traced_pid *new_pid;
 	bool should_add = false;
+	int retval;
 
 	// force == true should only be used to add the root pid
 	if (force)
@@ -244,41 +244,56 @@ static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, bool force)
 
 	new_pid->pid = pid;
 	new_pid->upid = next_upid++;
-	INIT_LIST_HEAD(&new_pid->list);
 	mutex_init(&new_pid->obj_mutex);
-	list_add(&new_pid->list, &traced_pids);
+	retval = radix_tree_insert(&traced_pids, pid, new_pid);
+	if (retval == -EEXIST) {
+		struct traced_pid *existing;
+		existing = radix_tree_lookup(&traced_pids, pid);
+		if (!existing) {
+			pr_warn("Failed adding pid %d due to EEXIST, but no entry in tree\n",
+				pid);
+		} else {
+			pr_warn("Failed adding pid %d - EEXIST. Upid of duplicate: %lld\n",
+				pid, existing->upid);
+		}
+	}
+	if (retval) {
+		pr_err("Failed to insert traced_pid into the tree (%d)\n",
+		       retval);
+		return INVALID_UPID;
+	}
 	return new_pid->upid;
 }
 
 static void remove_pid_from_list_locked(pid_t pid)
 {
-	struct traced_pid *el, *tmp;
-	list_for_each_entry_safe(el, tmp, &traced_pids, list) {
-		if (el->pid == pid) {
-			pr_debug("Removing pid %d from list\n", (int) pid);
-			list_del(&el->list);
-			// we assume that the process (task) cannot be in kernel
-			// mode simultaneously on different CPUs / from
-			// different contexts, so nothing should be holding
-			// mutex_last_open and modify last_open struct
-			BUG_ON(mutex_is_locked(&el->obj_mutex));
-			mutex_destroy(&el->obj_mutex);
-			kfree(el);
-			return;
-		}
+	struct traced_pid *el;
+	el = radix_tree_delete(&traced_pids, pid);
+	if (el) {
+		pr_debug("Removing pid %d from list\n", (int) pid);
+		// we assume that the process (task) cannot be in kernel mode
+		// simultaneously on different CPUs / from different contexts,
+		// so nothing should be holding mutex_last_open and modify
+		// last_open struct
+		BUG_ON(mutex_is_locked(&el->obj_mutex));
+		mutex_destroy(&el->obj_mutex);
+		kfree(el);
 	}
 }
 
 static void clear_pids_list_locked(void)
 {
-	struct traced_pid *el, *tmp;
+	struct traced_pid *el;
+	struct radix_tree_iter iter;
+	void **slot;
 	pr_info("Clearing pids list\n");
-	list_for_each_entry_safe(el, tmp, &traced_pids, list) {
+	radix_tree_for_each_slot(slot, &traced_pids, &iter, 0) {
 		// this method is called asynchronously on module's unload, so
 		// before removing objects from the list and destroying them,
 		// wait for their threads to release them
+		el = *slot;
 		mutex_lock(&el->obj_mutex);
-		list_del(&el->list);
+		WARN_ON(!radix_tree_delete(&traced_pids, el->pid));
 		mutex_unlock(&el->obj_mutex);
 		mutex_destroy(&el->obj_mutex);
 		kfree(el);
