@@ -1820,6 +1820,7 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 	FTDB_SET_ENTRY_ULONG(json_entry,id,self->entry->id);
 	FTDB_SET_ENTRY_ULONG(json_entry,fid,self->entry->fid);
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,fids,self->entry->fids);
+	FTDB_SET_ENTRY_ULONG_ARRAY_OPTIONAL(json_entry,mids,self->entry->mids);
 	FTDB_SET_ENTRY_ULONG(json_entry,nargs,self->entry->nargs);
 	FTDB_SET_ENTRY_BOOL(json_entry,variadic,self->entry->isvariadic);
 	FTDB_SET_ENTRY_STRING(json_entry,firstNonDeclStmt,self->entry->firstNonDeclStmt);
@@ -2248,6 +2249,21 @@ PyObject* libftdb_ftdb_func_entry_get_fids(PyObject* self, void* closure) {
 		PYLIST_ADD_ULONG(fids,__self->entry->fids[i]);
 	}
 	return fids;
+}
+
+PyObject* libftdb_ftdb_func_entry_get_mids(PyObject* self, void* closure) {
+
+	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
+
+	if (!__self->entry->mids) {
+		Py_RETURN_NONE;
+	}
+
+	PyObject* mids = PyList_New(0);
+	for (unsigned long i=0; i<__self->entry->mids_count; ++i) {
+		PYLIST_ADD_ULONG(mids,__self->entry->mids[i]);
+	}
+	return mids;
 }
 
 PyObject* libftdb_ftdb_func_entry_get_nargs(PyObject* self, void* closure) {
@@ -2920,6 +2936,10 @@ PyObject* libftdb_ftdb_func_entry_mp_subscript(PyObject* self, PyObject* slice) 
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_fids(self,0);
 	}
+	else if (!strcmp(attr,"mids")) {
+		PYASSTR_DECREF(attr);
+		return libftdb_ftdb_func_entry_get_mids(self,0);
+	}
 	else if (!strcmp(attr,"nargs")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_nargs(self,0);
@@ -3152,6 +3172,10 @@ int libftdb_ftdb_func_entry_sq_contains(PyObject* self, PyObject* slice) {
 	else if (!strcmp(attr,"fids")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
+	}
+	else if (!strcmp(attr,"mids")) {
+		PYASSTR_DECREF(attr);
+		return 1;
 	}
 	else if (!strcmp(attr,"nargs")) {
 		PYASSTR_DECREF(attr);
@@ -7905,6 +7929,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,
 	AGGREGATE_FLATTEN_STRING2(name);
 	AGGREGATE_FLATTEN_STRING2(__namespace);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,fids,ATTR(fids_count));
+	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mids,ATTR(mids_count));
 	AGGREGATE_FLATTEN_STRING2(firstNonDeclStmt);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isinline,1);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,istemplate,1);
@@ -8069,6 +8094,8 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 	new_entry->fid = FTDB_ENTRY_ULONG(func_entry,fid);
 	new_entry->fids_count = FTDB_ENTRY_ARRAY_SIZE(func_entry,fids);
 	new_entry->fids = FTDB_ENTRY_ULONG_ARRAY(func_entry,fids);
+	new_entry->mids_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(func_entry,mids);
+	new_entry->mids = FTDB_ENTRY_ULONG_ARRAY_OPTIONAL(func_entry,mids);
 	new_entry->nargs = FTDB_ENTRY_ULONG(func_entry,nargs);
 	new_entry->isvariadic = FTDB_ENTRY_BOOL(func_entry,variadic);
 	new_entry->firstNonDeclStmt = FTDB_ENTRY_STRING(func_entry,firstNonDeclStmt);

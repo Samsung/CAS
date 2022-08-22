@@ -499,6 +499,8 @@ struct ftdb_func_entry {
 	unsigned long fid;
 	unsigned long* fids;
 	unsigned long fids_count;
+	unsigned long* mids;
+	unsigned long mids_count;			/* optional */
 	unsigned long nargs;
 	int isvariadic;
 	const char* firstNonDeclStmt;

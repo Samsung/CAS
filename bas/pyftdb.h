@@ -468,6 +468,7 @@ PyObject* libftdb_ftdb_func_entry_has_class(libftdb_ftdb_func_entry_object *self
 PyObject* libftdb_ftdb_func_entry_get_namespace(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_fid(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_fids(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_func_entry_get_mids(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_nargs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_variadic(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_firstNonDeclStmt(PyObject* self, void* closure);
@@ -541,6 +542,7 @@ static PyGetSetDef libftdb_ftdbFuncEntry_getset[] = {
 	{"namespace",libftdb_ftdb_func_entry_get_namespace,0,"ftdb func entry namespace value",0},
 	{"fid",libftdb_ftdb_func_entry_get_fid,0,"ftdb func entry fid value",0},
 	{"fids",libftdb_ftdb_func_entry_get_fids,0,"ftdb func entry fids value",0},
+	{"mids",libftdb_ftdb_func_entry_get_mids,0,"ftdb func entry mids value",0},
 	{"nargs",libftdb_ftdb_func_entry_get_nargs,0,"ftdb func entry nargs value",0},
 	{"variadic",libftdb_ftdb_func_entry_get_variadic,0,"ftdb func entry is variadic value",0},
 	{"firstNonDeclStmt",libftdb_ftdb_func_entry_get_firstNonDeclStmt,0,"ftdb func entry firstNonDeclStmt value",0},
