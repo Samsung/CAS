@@ -1006,6 +1006,34 @@ def create_json_db_main(args,allowed_phases):
                     ferr.write("--------------------\n\n")
         print
         print "Modified %d functions (failed %d)"%(modified,failed)
+        modified = 0
+        failed = 0
+        for i,g in enumerate(JDB["globals"]):
+            if not suppress_progress:
+                sys.stdout.write("\r%d%%"%(int((float(i+1)/len(JDB["globals"]))*100)))
+                sys.stdout.flush()
+            srcname = srcMap[g["fid"]]
+            try:
+                mLst = rcdm[srcname]
+                g["mids"] = [mMap[m] for m in mLst]
+                modified+=1
+            except Exception as e:
+                g["mids"] = []
+                failed+=1
+                with open(output_err,"a") as ferr:
+                    ferr.write("Failed to add module info to global '%s'@%d\n"%(g["name"],g["id"]))
+                    ferr.write("fid: %d\n"%(g["fid"]))
+                    ferr.write("source: %s\n",srcname)
+                    ferr.write("corresponding modules:\n")
+                    if srcname in rcdm:
+                        ferr.write("  %s\n"%(str(rcdm[srcname])))
+                    else:
+                        ferr.write("XXX\n")
+                    ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                    ferr.write(traceback.format_exc()+"\n")
+                    ferr.write("--------------------\n\n")
+        print
+        print "Modified %d globals (failed %d)"%(modified,failed)
 
     JDB["version"] = __version_string__
     JDB["release"] = args.sw_version if args.sw_version else ""

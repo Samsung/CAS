@@ -613,6 +613,8 @@ struct ftdb_global_entry {
 	unsigned long* decls;
 	unsigned long decls_count;
 	unsigned long fid;
+	unsigned long* mids;
+	unsigned long mids_count;
 	const char* file;
 	unsigned long type;
 	enum functionLinkage linkage;

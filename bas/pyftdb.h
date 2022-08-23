@@ -1373,6 +1373,7 @@ PyObject* libftdb_ftdb_global_entry_get_globalrefs(PyObject* self, void* closure
 PyObject* libftdb_ftdb_global_entry_get_refs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_funrefs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_decls(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_global_entry_get_mids(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_literals(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_integer_literals(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_character_literals(PyObject* self, void* closure);
@@ -1419,6 +1420,7 @@ static PyGetSetDef libftdb_ftdbGlobalEntry_getset[] = {
 	{"refs",libftdb_ftdb_global_entry_get_refs,0,"ftdb global entry refs values",0},
 	{"funrefs",libftdb_ftdb_global_entry_get_funrefs,0,"ftdb global entry funrefs values",0},
 	{"decls",libftdb_ftdb_global_entry_get_decls,0,"ftdb global entry decls values",0},
+	{"mids",libftdb_ftdb_global_entry_get_mids,0,"ftdb global entry mids values",0},
 	{"literals",libftdb_ftdb_global_entry_get_literals,0,"ftdb global entry literals values",0},
 	{"integer_literals",libftdb_ftdb_global_entry_get_integer_literals,0,"ftdb global entry integer_literals values",0},
 	{"character_literals",libftdb_ftdb_global_entry_get_character_literals,0,"ftdb global entry character_literals values",0},

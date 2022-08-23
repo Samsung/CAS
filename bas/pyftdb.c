@@ -5902,6 +5902,21 @@ PyObject* libftdb_ftdb_global_entry_get_decls(PyObject* self, void* closure) {
 	return decls;
 }
 
+PyObject* libftdb_ftdb_global_entry_get_mids(PyObject* self, void* closure) {
+
+	libftdb_ftdb_global_entry_object* __self = (libftdb_ftdb_global_entry_object*)self;
+
+	if (!__self->entry->mids) {
+		Py_RETURN_NONE;
+	}
+
+	PyObject* mids = PyList_New(0);
+	for (unsigned long i=0; i<__self->entry->mids_count; ++i) {
+		PYLIST_ADD_ULONG(mids,__self->entry->mids[i]);
+	}
+	return mids;
+}
+
 PyObject* libftdb_ftdb_global_entry_get_literals(PyObject* self, void* closure) {
 
 	libftdb_ftdb_global_entry_object* __self = (libftdb_ftdb_global_entry_object*)self;
@@ -6036,6 +6051,10 @@ PyObject* libftdb_ftdb_global_entry_mp_subscript(PyObject* self, PyObject* slice
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_global_entry_get_decls(self,0);
 	}
+	else if (!strcmp(attr,"mids")) {
+		PYASSTR_DECREF(attr);
+	    return libftdb_ftdb_global_entry_get_mids(self,0);
+	}
 	else if (!strcmp(attr,"literals")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_global_entry_get_literals(self,0);
@@ -6120,6 +6139,10 @@ int libftdb_ftdb_global_entry_sq_contains(PyObject* self, PyObject* key) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
+	else if (!strcmp(attr,"mids")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
 	else if (!strcmp(attr,"literals")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
@@ -6150,6 +6173,7 @@ PyObject* libftdb_ftdb_global_entry_json(libftdb_ftdb_global_entry_object *self,
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,refs,self->entry->refs);
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,funrefs,self->entry->funrefs);
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,decls,self->entry->decls);
+	FTDB_SET_ENTRY_ULONG_ARRAY_OPTIONAL(json_entry,mids,self->entry->mids);
 	FTDB_SET_ENTRY_ULONG(json_entry,fid,self->entry->fid);
 	FTDB_SET_ENTRY_STRING(json_entry,file,self->entry->file);
 	FTDB_SET_ENTRY_ULONG(json_entry,type,self->entry->type);
@@ -8008,6 +8032,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_global_entry,
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,refs,ATTR(refs_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,decls,ATTR(decls_count));
+	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mids,ATTR(mids_count));
 	AGGREGATE_FLATTEN_STRING2(file);
 	AGGREGATE_FLATTEN_STRING2(location);
 	AGGREGATE_FLATTEN_STRING2(init);
@@ -8509,6 +8534,8 @@ static void libftdb_create_ftdb_global_entry(PyObject *self, PyObject* global_en
 	new_entry->decls_count = FTDB_ENTRY_ARRAY_SIZE(global_entry,decls);
 	new_entry->decls = FTDB_ENTRY_ULONG_ARRAY(global_entry,decls);
 	new_entry->fid = FTDB_ENTRY_ULONG(global_entry,fid);
+	new_entry->mids_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(global_entry,mids);
+	new_entry->mids = FTDB_ENTRY_ULONG_ARRAY_OPTIONAL(global_entry,mids);
 	new_entry->file = FTDB_ENTRY_STRING(global_entry,file);
 	new_entry->type = FTDB_ENTRY_ULONG(global_entry,type);
 	new_entry->linkage = FTDB_ENTRY_ENUM_FROM_STRING(global_entry,linkage,functionLinkage);
