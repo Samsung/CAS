@@ -6143,7 +6143,7 @@ PyObject* libftdb_ftdb_global_entry_json(libftdb_ftdb_global_entry_object *self,
 	PyObject* json_entry = PyDict_New();
 
 	FTDB_SET_ENTRY_STRING(json_entry,name,self->entry->name);
-	FTDB_SET_ENTRY_STRING(json_entry,name,self->entry->hash);
+	FTDB_SET_ENTRY_STRING(json_entry,hash,self->entry->hash);
 	FTDB_SET_ENTRY_ULONG(json_entry,id,self->entry->id);
 	FTDB_SET_ENTRY_STRING(json_entry,def,self->entry->def);
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,globalrefs,self->entry->globalrefs);
@@ -8767,6 +8767,11 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	for (Py_ssize_t i=0; i<PyList_Size(funcs); ++i) {
 		libftdb_create_ftdb_func_entry(self,PyList_GetItem(funcs,i),&ftdb.funcs[i]);
 		ftdb.funcs[i].__index = i;
+		if (PyErr_Occurred()) {
+			printf("Exception while processing function entry at index %ld\n",i);
+			PyErr_PrintEx(0);
+			PyErr_Clear();
+		}
 	}
 
 	PyObject* key_funcdecls= PyUnicode_FromString("funcdecls");
