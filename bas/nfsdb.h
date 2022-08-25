@@ -28,6 +28,7 @@ struct pp_def {
 struct nfsdb_entry_file_index {
 	unsigned long nfsdb_index;
 	unsigned long open_index;
+	int __used;
 };
 
 struct compilation_info {

@@ -1023,7 +1023,7 @@ def create_json_db_main(args,allowed_phases):
                 with open(output_err,"a") as ferr:
                     ferr.write("Failed to add module info to global '%s'@%d\n"%(g["name"],g["id"]))
                     ferr.write("fid: %d\n"%(g["fid"]))
-                    ferr.write("source: %s\n",srcname)
+                    ferr.write("source: %s\n"%(srcname))
                     ferr.write("corresponding modules:\n")
                     if srcname in rcdm:
                         ferr.write("  %s\n"%(str(rcdm[srcname])))

@@ -14,6 +14,9 @@ void intHandler(int v) {
 	interrupt = 1;
 }
 
+static int libetrace_nfsdb_entry_has_compilations_internal(const struct nfsdb_entry * entry);
+static int libetrace_nfsdb_entry_is_linking_internal(const struct nfsdb_entry * entry);
+
 nfsdb_entry_filter_func_array_t nfsdb_entry_filter_func_array[] = {
 		{"has_comp_info",libetrace_nfsdb_entry_filter_has_comp_info},
 		{"has_linked_file",libetrace_nfsdb_entry_filter_has_linked_file},
@@ -612,6 +615,7 @@ static int scan_openfile_precompute_linked_file(struct nfsdb_entry* entry, const
 	if (match_openfile_path(openfile,*entry->linked_file)) {
 		entry->linked_index.nfsdb_index = open_entry->nfsdb_index;
 		entry->linked_index.open_index = open_index;
+		entry->linked_index.__used = 1;
 		return 1;
 	}
 
@@ -624,7 +628,8 @@ void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nf
 
 	for (unsigned long i=0; i<node->entry_count; ++i) {
 		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
-		scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_linked_file,entry,0);
+		if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_linked_file,entry,0)) {
+		}
 	}
 }
 
@@ -638,6 +643,7 @@ static int scan_openfile_precompute_compiled_file(struct nfsdb_entry* entry, con
 	if (match_openfile_path(openfile,compiled_handle)) {
 		entry->compilation_info->compiled_index[*compiled_index].nfsdb_index = open_entry->nfsdb_index;
 		entry->compilation_info->compiled_index[*compiled_index].open_index = open_index;
+		entry->compilation_info->compiled_index[*compiled_index].__used = 1;
 		return 1;
 	}
 
@@ -654,6 +660,7 @@ static int scan_openfile_precompute_header_file(struct nfsdb_entry* entry, const
 	if (match_openfile_path(openfile,header_handle)) {
 		entry->compilation_info->header_index[*compiled_index].nfsdb_index = open_entry->nfsdb_index;
 		entry->compilation_info->header_index[*compiled_index].open_index = open_index;
+		entry->compilation_info->header_index[*compiled_index].__used = 1;
 		return 1;
 	}
 
@@ -670,6 +677,7 @@ static int scan_openfile_precompute_object_file(struct nfsdb_entry* entry, const
 	if (match_openfile_path(openfile,object_handle)) {
 		entry->compilation_info->object_index[*compiled_index].nfsdb_index = open_entry->nfsdb_index;
 		entry->compilation_info->object_index[*compiled_index].open_index = open_index;
+		entry->compilation_info->object_index[*compiled_index].__used = 1;
 		return 1;
 	}
 
@@ -683,7 +691,8 @@ void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb
 	for (unsigned long i=0; i<node->entry_count; ++i) {
 		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
 		for (unsigned long u=0; u<entry->compilation_info->compiled_count; ++u) {
-			scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_compiled_file,entry,&u);
+			if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_compiled_file,entry,&u)) {
+			}
 		}
 	}
 }
@@ -695,7 +704,8 @@ void libetrace_nfsdb_entry_precompute_compilation_info_headers(struct nfsdb* nfs
 	for (unsigned long i=0; i<node->entry_count; ++i) {
 		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
 		for (unsigned long u=0; u<entry->compilation_info->header_list_count; ++u) {
-			scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_header_file,entry,&u);
+			if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_header_file,entry,&u)) {
+			}
 		}
 	}
 }
@@ -707,7 +717,8 @@ void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfs
 	for (unsigned long i=0; i<node->entry_count; ++i) {
 		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
 		for (unsigned long u=0; u<entry->compilation_info->object_list_count; ++u) {
-			scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_object_file,entry,&u);
+			if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_object_file,entry,&u)) {
+			}
 		}
 	}
 }
@@ -750,6 +761,7 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 	PyObject* pathJoinFunction = PyObject_GetAttrString(osModule,(char*)"join");
 
 	/* Fill all the nfsdb entries in the database */
+	//for (ssize_t i=0; i<PyList_Size(nfsdbJSON); ++i) {
 	for (ssize_t i=0; i<PyList_Size(nfsdbJSON); ++i) {
 		struct nfsdb_entry* new_entry = &nfsdb.nfsdb[i];
 		new_entry->nfsdb_index = i;
@@ -804,7 +816,9 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 			}
 			new_entry->open_files[u].path = string_table_add(&nfsdb, openPath, stringMap);
 			new_entry->open_files[u].mode = PyLong_AsUnsignedLong(PyDict_GetItem(openEntry, PyUnicode_FromString("m")));
-			new_entry->open_files[u].size = PyLong_AsUnsignedLong(PyDict_GetItem(openEntry, PyUnicode_FromString("s")));
+			if (PyDict_Contains(openEntry, PyUnicode_FromString("s"))) {
+				new_entry->open_files[u].size = PyLong_AsUnsignedLong(PyDict_GetItem(openEntry, PyUnicode_FromString("s")));
+			}
 			new_entry->open_files[u].original_path = 0;
 			if (originalPath) {
 				new_entry->open_files[u].original_path = malloc(sizeof(unsigned long));
@@ -844,7 +858,7 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 				new_entry->compilation_info->compiled_list[u] =
 						string_table_add(&nfsdb, PyList_GetItem(compiledEntryList,u), stringMap);
 			}
-			new_entry->compilation_info->compiled_index = malloc(new_entry->compilation_info->compiled_count*sizeof(struct nfsdb_entry_file_index));
+			new_entry->compilation_info->compiled_index = calloc(1,new_entry->compilation_info->compiled_count*sizeof(struct nfsdb_entry_file_index));
 			/* include path list */
 			PyObject* ipathEntryList = PyDict_GetItem(compilationEntry, PyUnicode_FromString("i"));
 			new_entry->compilation_info->include_paths_count = PyList_Size(ipathEntryList);
@@ -883,7 +897,7 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 				new_entry->compilation_info->header_list[u] =
 						string_table_add(&nfsdb, PyList_GetItem(headerEntryList,u), stringMap);
 			}
-			new_entry->compilation_info->header_index = malloc(new_entry->compilation_info->header_list_count*sizeof(struct nfsdb_entry_file_index));
+			new_entry->compilation_info->header_index = calloc(1,new_entry->compilation_info->header_list_count*sizeof(struct nfsdb_entry_file_index));
 			/* compilation type */
 			new_entry->compilation_info->compilation_type = PyLong_AsLong(PyDict_GetItem(compilationEntry, PyUnicode_FromString("s")));
 			/* object list */
@@ -894,7 +908,7 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 				new_entry->compilation_info->object_list[u] =
 						string_table_add(&nfsdb, PyList_GetItem(objectEntryList,u), stringMap);
 			}
-			new_entry->compilation_info->object_index = malloc(new_entry->compilation_info->object_list_count*sizeof(struct nfsdb_entry_file_index));
+			new_entry->compilation_info->object_index = calloc(1,new_entry->compilation_info->object_list_count*sizeof(struct nfsdb_entry_file_index));
 			/* integrated or not */
 			new_entry->compilation_info->integrated_compilation =
 					(PyLong_AsLong(PyDict_GetItem(compilationEntry, PyUnicode_FromString("p")))==0);
@@ -908,6 +922,11 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 		/* linked type */
 		if (PyDict_Contains(item, PyUnicode_FromString("l"))) {
 			new_entry->linked_type = PyLong_AsUnsignedLong(PyDict_GetItem(item, PyUnicode_FromString("t")));
+		}
+		if (PyErr_Occurred()) {
+			printf("Exception while processing nfsdb entry at index %ld\n",i);
+			PyErr_PrintEx(0);
+			PyErr_Clear();
 		}
 	}
 
@@ -1397,7 +1416,7 @@ PyObject* libetrace_nfsdb_iter(libetrace_nfsdb_object *self, PyObject *args) {
 
 int libetrace_nfsdb_entry_filter_has_comp_info(const struct nfsdb_entry* entry) {
 
-	if (entry->compilation_info) {
+	if (libetrace_nfsdb_entry_has_compilations_internal(entry)) {
 		return 1;
 	}
 
@@ -1406,7 +1425,7 @@ int libetrace_nfsdb_entry_filter_has_comp_info(const struct nfsdb_entry* entry) 
 
 int libetrace_nfsdb_entry_filter_has_linked_file(const struct nfsdb_entry* entry) {
 
-	if (entry->linked_file) {
+	if (libetrace_nfsdb_entry_is_linking_internal(entry)) {
 		return 1;
 	}
 
@@ -1582,7 +1601,7 @@ PyObject* libetrace_nfsdb_linked_modules(libetrace_nfsdb_object *self, PyObject 
 	while(p) {
 		struct nfsdb_entryMap_node* data = (struct nfsdb_entryMap_node*)p;
 		const struct nfsdb_entry* entry = data->entry_list[0];
-		if (entry->linked_file) {
+		if (libetrace_nfsdb_entry_is_linking_internal(entry)) {
 			libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(self->nfsdb,
 					entry, entry->linked_index.open_index, entry->linked_index.nfsdb_index);
 			PyObject* lm = PyTuple_New(2);
@@ -2236,18 +2255,43 @@ PyObject* libetrace_nfsdb_entry_is_wrapped(libetrace_nfsdb_entry_object *self, P
 	Py_RETURN_FALSE;
 }
 
+static int libetrace_nfsdb_entry_has_compilations_internal(const struct nfsdb_entry * entry) {
+
+	int __used = 0;
+
+	if (entry->compilation_info) {
+		for (unsigned long i=0; i<entry->compilation_info->compiled_count; ++i) {
+			if (entry->compilation_info->compiled_index[i].__used) {
+				__used = 1;
+				break;
+			}
+		}
+	}
+
+	return __used;
+}
+
 PyObject* libetrace_nfsdb_entry_has_compilations(libetrace_nfsdb_entry_object *self, PyObject *args) {
 
-	if (self->entry->compilation_info) {
+	if (libetrace_nfsdb_entry_has_compilations_internal(self->entry)) {
 		Py_RETURN_TRUE;
 	}
 
 	Py_RETURN_FALSE;
 }
 
+static int libetrace_nfsdb_entry_is_linking_internal(const struct nfsdb_entry * entry) {
+
+	if ((entry->linked_file)&&(entry->linked_index.__used)) {
+		return 1;
+	}
+
+	return 0;
+}
+
 PyObject* libetrace_nfsdb_entry_is_linking(libetrace_nfsdb_entry_object *self, PyObject *args) {
 
-	if (self->entry->linked_file) {
+	if (libetrace_nfsdb_entry_is_linking_internal(self->entry)) {
 		Py_RETURN_TRUE;
 	}
 
@@ -2641,7 +2685,7 @@ PyObject* libetrace_nfsdb_entry_get_linked_ptr(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 
-	if (!__self->entry->linked_file) {
+	if ((!__self->entry->linked_file)||(!__self->entry->linked_index.__used)) {
 		Py_RETURN_NONE;
 	}
 
@@ -2656,7 +2700,7 @@ PyObject* libetrace_nfsdb_entry_get_linked_file(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 
-	if (!__self->entry->linked_file) {
+	if ((!__self->entry->linked_file)||(!__self->entry->linked_index.__used)) {
 		Py_RETURN_NONE;
 	}
 
@@ -3261,9 +3305,11 @@ PyObject* libetrace_nfsdb_entry_compilation_info_get_compiled_files(PyObject* se
 	PyObject* compiled = PyList_New(0);
 	for (unsigned long i=0; i<__self->ci->compiled_count; ++i) {
 		struct nfsdb_entry_file_index* cindex = &__self->ci->compiled_index[i];
-		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
-				&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
-		PYLIST_ADD_PYOBJECT(compiled,(PyObject*)openfile);
+		if (cindex->__used) {
+			libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
+					&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
+			PYLIST_ADD_PYOBJECT(compiled,(PyObject*)openfile);
+		}
 	}
 
 	return compiled;
@@ -3289,9 +3335,11 @@ PyObject* libetrace_nfsdb_entry_compilation_info_get_object_files(PyObject* self
 	PyObject* objects = PyList_New(0);
 	for (unsigned long i=0; i<__self->ci->object_list_count; ++i) {
 		struct nfsdb_entry_file_index* cindex = &__self->ci->object_index[i];
-		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
-				&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
-		PYLIST_ADD_PYOBJECT(objects,(PyObject*)openfile);
+		if (cindex->__used) {
+			libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
+					&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
+			PYLIST_ADD_PYOBJECT(objects,(PyObject*)openfile);
+		}
 	}
 
 	return objects;
@@ -3317,9 +3365,11 @@ PyObject* libetrace_nfsdb_entry_compilation_info_get_headers(PyObject* self, voi
 	PyObject* objects = PyList_New(0);
 	for (unsigned long i=0; i<__self->ci->header_list_count; ++i) {
 		struct nfsdb_entry_file_index* cindex = &__self->ci->header_index[i];
-		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
-				&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
-		PYLIST_ADD_PYOBJECT(objects,(PyObject*)openfile);
+		if (cindex->__used) {
+			libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(__self->nfsdb,
+					&__self->nfsdb->nfsdb[cindex->nfsdb_index], cindex->open_index, cindex->nfsdb_index);
+			PYLIST_ADD_PYOBJECT(objects,(PyObject*)openfile);
+		}
 	}
 
 	return objects;
