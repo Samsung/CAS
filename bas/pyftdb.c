@@ -7233,7 +7233,7 @@ PyObject* libftdb_ftdb_type_entry_json(libftdb_ftdb_type_entry_object *self, PyO
 
 	FTDB_SET_ENTRY_ULONG(json_entry,id,self->entry->id);
 	FTDB_SET_ENTRY_ULONG(json_entry,fid,self->entry->fid);
-	FTDB_SET_ENTRY_STRING(json_entry,name,self->entry->hash);
+	FTDB_SET_ENTRY_STRING(json_entry,hash,self->entry->hash);
 	FTDB_SET_ENTRY_STRING(json_entry,class,self->entry->class_name);
 	FTDB_SET_ENTRY_STRING(json_entry,qualifiers,self->entry->qualifiers);
 	FTDB_SET_ENTRY_ULONG(json_entry,size,self->entry->size);
