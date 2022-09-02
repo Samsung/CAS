@@ -8,6 +8,22 @@ extern "C" {
 #include <map>
 #include <vector>
 
+static const char* PyString_get_c_str(PyObject* s) {
+
+	if (PyUnicode_Check(s)) {
+		PyObject* us = PyUnicode_AsASCIIString(s);
+		if (us) {
+			return PyBytes_AsString(us);
+		}
+		else {
+			return 0;
+		}
+	}
+	else {
+		return (const char*)0xdeadbeef;
+	}
+}
+
 static inline int SET_MSB_INT(int i) {
 	return i|(1<<(CHAR_BIT*sizeof(int)-1));
 }
@@ -103,6 +119,9 @@ static void depproc_context_free(struct depproc_context* context) {
 	}
 	free(context->excl_commands);
 	free(context->excl_commands_index);
+	for (auto u = context->openfile_deps.begin(); u!=context->openfile_deps.end(); ++u) {
+		Py_DecRef((PyObject*)*u);
+	}
 }
 
 static int phs_find(std::vector<std::pair<unsigned long,const char*>>& phs, unsigned long phandle) {
@@ -112,6 +131,13 @@ static int phs_find(std::vector<std::pair<unsigned long,const char*>>& phs, unsi
 	}
 
 	return 0;
+}
+
+static void phs_free(std::vector<std::pair<unsigned long,const char*>>& phs) {
+
+	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i<phs.end(); ++i) {
+		PYASSTR_DECREF((*i).second);
+	}
 }
 
 static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair<unsigned long,const char*>>& phs,
@@ -134,7 +160,7 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair
 		if (exclude_files) {
 			int u;
 			for (u=0; u<PyList_Size(exclude_files); ++u) {
-				const char* exclude_file = PyBytes_AsString(PyUnicode_AsASCIIString(PyList_GetItem(exclude_files,u)));
+				const char* exclude_file = PyString_get_c_str(PyList_GetItem(exclude_files,u));
 				struct stringRefMap_node* efnode = stringRefMap_search(&self->nfsdb->revstringmap,exclude_file);
 				if (!efnode) {
 					snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid exclude file key [%s]",exclude_file);
@@ -155,7 +181,7 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair
 			context->excl_patterns_size = PyList_Size(exclude_patterns);
 			int u;
 			for (u=0; u<PyList_Size(exclude_patterns); ++u) {
-				context->excl_patterns[u] = PyBytes_AsString(PyUnicode_AsASCIIString(PyList_GetItem(exclude_patterns,u)));
+				context->excl_patterns[u] = PyString_get_c_str(PyList_GetItem(exclude_patterns,u));
 				DBG(context->debug,"        exclude pattern: %s\n",context->excl_patterns[u]);
 			}
 		}
@@ -167,7 +193,7 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair
 			context->excl_commands_size = PyList_Size(exclude_commands);
 			int u;
 			for (u=0; u<PyList_Size(exclude_commands); ++u) {
-				context->excl_commands[u] = PyBytes_AsString(PyUnicode_AsASCIIString(PyList_GetItem(exclude_commands,u)));
+				context->excl_commands[u] = PyString_get_c_str(PyList_GetItem(exclude_commands,u));
 				DBG(context->debug,"        exclude command pattern: %s\n",context->excl_commands[u]);
 			}
 		}
@@ -237,7 +263,7 @@ static int depproc_parse_args(libetrace_nfsdb_object* self,std::vector<std::pair
 		if (all_modules) {
 			int u;
 			for (u=0; u<PyList_Size(all_modules); ++u) {
-				const char* module_name = PyBytes_AsString(PyUnicode_AsASCIIString(PyList_GetItem(all_modules,u)));
+				const char* module_name = PyString_get_c_str(PyList_GetItem(all_modules,u));
 				struct stringRefMap_node* mfnode = stringRefMap_search(&self->nfsdb->revstringmap,module_name);
 				if (!mfnode) {
 					snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid module name key [%s]",module_name);
@@ -351,6 +377,10 @@ static const char* nfsdb_entry_command_string(libetrace_nfsdb_object* self, cons
  * When it matches it returns the matching index, otherwise return -1 */
 static long depproc_commands_index_match(libetrace_nfsdb_object* self, struct depproc_context* context, upid_t pid) {
 
+	if (context->excl_commands_index_size<=0) {
+		return -1;
+	}
+
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->procmap,pid);
 	if (node) {
 		for (unsigned long u=0; u<node->entry_count; ++u) {
@@ -368,10 +398,12 @@ static long depproc_commands_index_match(libetrace_nfsdb_object* self, struct de
 					}
 				}
 				else {
-					DBG(context->fd_debug,"*** Could not find pcp entry in pid (" GENERIC_ARG_PID_FMT ") cmd (%zu)\n",pid,u);
-					const char* cmd = nfsdb_entry_command_string(self,entry);
-					DBG(context->fd_debug,"$ %s\n",cmd);
-					free((void*)cmd);
+					if (context->fd_debug) {
+						DBG(context->fd_debug,"*** Could not find pcp entry in pid (" GENERIC_ARG_PID_FMT ") cmd (%zu)\n",pid,u);
+						const char* cmd = nfsdb_entry_command_string(self,entry);
+						DBG(context->fd_debug,"$ %s\n",cmd);
+						free((void*)cmd);
+					}
 				}
 			}
 		}
@@ -384,6 +416,10 @@ static long depproc_commands_index_match(libetrace_nfsdb_object* self, struct de
  * When it matches it returns the execution index which matches, otherwise return -1 */
 static long depproc_commands_match(libetrace_nfsdb_object* self, struct depproc_context* context, upid_t pid) {
 
+	if (context->excl_commands_size<=0) {
+		return -1;
+	}
+
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->procmap,pid);
 	if (node) {
 		for (unsigned long u=0; u<node->entry_count; ++u) {
@@ -394,6 +430,7 @@ static long depproc_commands_match(libetrace_nfsdb_object* self, struct depproc_
 					free((void*)cmd);
 					return u;
 				}
+				free((void*)cmd);
 			}
 		}
 	}
@@ -412,6 +449,7 @@ static void log_write_process_commands(libetrace_nfsdb_object* self, struct depp
 				const char* cmd = nfsdb_entry_command_string(self,entry);
 				DBG(context->fd_debug,"%s$ %s\n",indent,cmd);
 				cmd_print_count++;
+				free((void*)cmd);
 			}
 		}
 		if (cmd_print_count==0) {
@@ -478,7 +516,9 @@ static long depproc_process_qpid(libetrace_nfsdb_object* self, struct depproc_co
 						if (context->writing_process_list.insert(wnpid).second) {
 							DBG(context->fd_debug,"     added process to consider: " GENERIC_ARG_PID_FMT "\n",wnpid);
 							processed++;
-							log_write_process_commands(self,context,wnpid,"       ");
+							if (context->fd_debug) {
+								log_write_process_commands(self,context,wnpid,"       ");
+							}
 						}
 						if (context->dep_graph) {
 							writing_pid_map.insert(std::pair<upid_t,std::string>(wnpid,f));
@@ -583,7 +623,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 			}
 		}
 		DBG(context->fd_debug,"\n");
-		long match;
+		long match=0;
 		if (context->excl_commands_index) {
 			/* Matching large string (which represents command) with a pattern is quite expensive and doing so
 			 *  in the main loop of dependency processing blows up the performance entirely. To solve this
@@ -605,7 +645,9 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 		if (context->writing_process_list.insert(wrapping_pid).second) {
 			DBG(context->fd_debug,"     added process to consider: " GENERIC_ARG_PID_FMT "\n",wrapping_pid);
 			processed++;
-			log_write_process_commands(self,context,wrapping_pid,"     ");
+			if (context->fd_debug) {
+				log_write_process_commands(self,context,wrapping_pid,"     ");
+			}
 		}
 		if (context->dep_graph) {
 			writing_pid_map[wrapping_pid] = self->nfsdb->string_table[fh];
@@ -613,7 +655,9 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 		context->all_writing_process_list.insert(writing_pid);
 		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
 				self->nfsdb,writing_entry,writing_open_index,writing_entry->nfsdb_index);
-		context->openfile_deps.insert(openfile);
+		if (!context->openfile_deps.insert(openfile).second) {
+			Py_DecRef((PyObject*)openfile);
+		}
 		context->qpid.push_back(wrapping_pid);
 		if (g_timer||interrupt) return -1;
 		std::string f = self->nfsdb->string_table[fh];
@@ -723,7 +767,9 @@ static long get_process_read_files(libetrace_nfsdb_object* self, struct depproc_
 					if ((context->files_set.find(rdh)==context->files_set.end()) && (context->fdone.find(rdh)==context->fdone.end())) {
 						libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
 								self->nfsdb,entry,i,entry->nfsdb_index);
-						context->openfile_deps.insert(openfile);
+						if (!context->openfile_deps.insert(openfile).second) {
+							Py_DecRef((PyObject*)openfile);
+						}
 						if ((context->excl_set.find(rdh)==context->excl_set.end()) &&
 								(pattern_match(self->nfsdb->string_table[rdh],
 										context->excl_patterns,context->excl_patterns_size)==context->negate_pattern)) {
@@ -888,7 +934,7 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 	std::vector<std::pair<unsigned long,const char*>> phs;
 	for (Py_ssize_t i=0; i<PyList_Size(path_args); ++i) {
 		PyObject* arg = PyList_GetItem(path_args,i);
-		const char* arg_cstr = PyBytes_AsString(PyUnicode_AsASCIIString(arg));
+		const char* arg_cstr = PyString_get_c_str(arg);
 		struct stringRefMap_node* pnode = stringRefMap_search(&self->nfsdb->revstringmap, arg_cstr);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(pnode,"Invalid pathname key [%s]",arg_cstr);
 		unsigned long phandle = pnode->value;
@@ -897,12 +943,15 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 		if ((node->wr_entry_count<=0) && (node->rw_entry_count<=0)) {
 			/* Do not process files that weren't open for write.
 			 * They don't depend on other files in dependency processing context */
+			PYASSTR_DECREF(arg_cstr);
 			continue;
 		}
 		phs.push_back(std::pair<unsigned long,const char*>(phandle,arg_cstr));
 	}
+	Py_DecRef(path_args);
 
 	if (!depproc_parse_args(self,phs,kwargs,&context)) {
+		phs_free(phs);
 		return 0;
 	}
 
@@ -959,11 +1008,17 @@ PyObject* libetrace_nfsdb_file_dependencies(libetrace_nfsdb_object *self, PyObje
 			timer_delete(context.timer_id);
 			g_timer = 0;
 		}
+		phs_free(phs);
 		depproc_context_free(&context);
 		return argv;
 	}
 
 	if (context.dry_run) {
+		if (context.timeout>0) {
+			timer_delete(context.timer_id);
+			g_timer = 0;
+		}
+		phs_free(phs);
 		depproc_context_free(&context);
 		return argv;
 	}
@@ -1084,6 +1139,7 @@ maybe_expired:
 		timer_delete(context.timer_id);
 		g_timer = 0;
 		depproc_context_free(&context);
+		phs_free(phs);
 		Py_DECREF(argv);
 
 		if (expired==1) {
@@ -1117,7 +1173,8 @@ maybe_expired:
 		pid_iter++;
 	}
 	while(openfile_iter!=context.openfile_deps.end()) {
-		PyList_Append(openfile_deps,(PyObject*)*openfile_iter);
+		PyObject* openfile = (PyObject*)*openfile_iter;
+		PyList_Append(openfile_deps,openfile);
 		openfile_iter++;
 	}
 
@@ -1147,9 +1204,7 @@ maybe_expired:
 		Py_DECREF(dgraph_keys);
 	}
 
-	for (std::vector<std::pair<unsigned long,const char*>>::iterator i=phs.begin(); i<phs.end(); ++i) {
-		PYASSTR_DECREF((*i).second);
-	}
+	phs_free(phs);
 
 	if (context.timeout>0) {
 		timer_delete(context.timer_id);
