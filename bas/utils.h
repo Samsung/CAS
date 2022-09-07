@@ -93,16 +93,6 @@
 		}	\
 	} while(0)
 
-#define NFSDB_ENTRYLIST_RETURN_ITEM_OR_LIST(__entryList) do {	\
-	if (PyList_Size(__entryList)==1) {	\
-		PyObject* __item = PyList_GetItem(__entryList,0);	\
-		Py_IncRef(__item);	\
-		Py_DecRef(__entryList);	\
-		return __item;	\
-	}	\
-	return __entryList;	\
-} while(0)
-
 #define DBG(n,...)		do { if (n)	printf(__VA_ARGS__); } while(0)
 #ifndef DBGC
 #define DBGC(...)

@@ -1313,7 +1313,7 @@ PyObject* libetrace_nfsdb_mp_subscript(PyObject* self, PyObject* slice) {
 	}
 	else if (PyTuple_Check(slice)) {
 		if (libetrace_nfsdb_entry_from_tuple(__self,rL,slice)) {
-			NFSDB_ENTRYLIST_RETURN_ITEM_OR_LIST(rL);
+			return rL;
 		}
 	}
 	else if (PyUnicode_Check(slice)) {
@@ -1323,7 +1323,7 @@ PyObject* libetrace_nfsdb_mp_subscript(PyObject* self, PyObject* slice) {
 	}
 	else if (PyObject_IsInstance(slice, (PyObject *)&libetrace_nfsdbEntryEidType)) {
 		if (libetrace_nfsdb_entry_from_Eid(__self,rL,(libetrace_nfsdb_entry_eid_object*)slice)) {
-			NFSDB_ENTRYLIST_RETURN_ITEM_OR_LIST(rL);
+			return rL;
 		}
 	}
 	else if (PyList_Check(slice)) {
@@ -1970,6 +1970,86 @@ done:
 	Py_RETURN_TRUE;
 }
 
+PyObject* libetrace_nfsdb_module_dependencies_count(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
+
+	PyObject* path_args = PyList_New(0);
+	for (Py_ssize_t i=0; i<PyTuple_Size(args); ++i) {
+		PyObject* arg = PyTuple_GetItem(args,i);
+		if (PyUnicode_Check(arg)) {
+			PyList_Append(path_args,arg);
+		}
+		else if (PyList_Check(arg)) {
+			for (Py_ssize_t j=0; j<PyList_Size(arg); ++j) {
+				PyObject* __arg = PyList_GetItem(arg,j);
+				if (PyUnicode_Check(__arg)) {
+					PyList_Append(path_args,__arg);
+				}
+				else {
+					ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+				}
+			}
+		}
+		else {
+			ASSERT_WITH_NFSDB_ERROR(0,"Invalid argument type: not (str) or (list)");
+		}
+	}
+
+	PyObject* py_direct = PyUnicode_FromString("direct");
+	int direct = 0;
+
+	if (kwargs) {
+		if (PyDict_Contains(kwargs,py_direct)) {
+			direct = PyLong_AsLong(PyDict_GetItem(kwargs,py_direct));
+		}
+	}
+
+	if (!self->nfsdb_deps) {
+		PyErr_SetString(libetrace_nfsdbError, "nfsdb dependency cache not initialized");
+		Py_DecRef(py_direct);
+		return 0;
+	}
+
+	const struct rb_root* dmap = 0;
+	if (direct) {
+		dmap = &self->nfsdb_deps->ddepmap;
+	}
+	else {
+		dmap = &self->nfsdb_deps->depmap;
+	}
+
+	PyObject* path_set = PySet_New(0);
+
+	for (Py_ssize_t u=0; u<PyList_Size(path_args); ++u) {
+		PyObject* parg = PyList_GetItem(path_args,u);
+		const char* mpath = PyString_get_c_str(parg);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, mpath);
+		PYASSTR_DECREF(mpath);
+		if (!srefnode) {
+			continue;
+		}
+		unsigned long hmpath = srefnode->value;
+		struct ulongMap_node* node = ulongMap_search(dmap, hmpath);
+		if (!node) {
+			continue;
+		}
+		for (unsigned long i=0; i<node->value_count; i+=2) {
+			unsigned long nfsdb_index = node->value_list[i];
+			unsigned long open_index = node->value_list[i+1];
+			PyObject* openfile_ptr = PyTuple_New(2);
+			PYTUPLE_SET_ULONG(openfile_ptr,0,nfsdb_index);
+			PYTUPLE_SET_ULONG(openfile_ptr,1,open_index);
+			PYSET_ADD_PYOBJECT(path_set,openfile_ptr);
+		}
+	}
+
+	Py_DecRef(py_direct);
+
+	unsigned long dep_count = PySet_Size(path_set);
+	Py_DecRef(path_set);
+
+	return PyLong_FromUnsignedLong(dep_count);
+}
+
 PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
 
 	PyObject* path_args = PyList_New(0);
@@ -2055,6 +2135,7 @@ PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyOb
 	}
 
 	Py_DecRef(py_direct);
+	Py_DecRef(path_set);
 	return mL;
 }
 

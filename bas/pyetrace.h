@@ -122,6 +122,7 @@ PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_module_dependencies_count(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 
 #ifdef __cplusplus
 extern "C" {
@@ -146,6 +147,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"linked_module_paths",(PyCFunction)libetrace_nfsdb_linked_module_paths,METH_VARARGS,"Returns the list of all linked module paths present in the database"},
 	{"fdeps",(PyCFunction)libetrace_nfsdb_file_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given file"},
 	{"mdeps",(PyCFunction)libetrace_nfsdb_module_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given module"},
+	{"mdeps_count",(PyCFunction)libetrace_nfsdb_module_dependencies_count,METH_VARARGS|METH_KEYWORDS,"Returns the count of file dependencies for a given module"},
 	{"path_exists",(PyCFunction)libetrace_nfsdb_path_exists,METH_VARARGS,"Returns True if a given path exists after the build"},
 	{"path_read",(PyCFunction)libetrace_nfsdb_path_read,METH_VARARGS,"Returns True if a given path was opened for read during the build"},
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
