@@ -497,6 +497,9 @@ typedef struct {
     const struct nfsdb* nfsdb;
     unsigned long parent; /* Parent nfsdb entry that contains this openfile */
     unsigned long index; /* Index of this openfile in the parent nfsdb entry */
+    unsigned long opaque; /* Index to the nfsdb entry with particular opaque type (i.e. compilation or linking)
+                             which references this openfile through its opaque type specific functionality
+                             (i.e. reference to compiled file used by the compilation nfsdb entry) */
 } libetrace_nfsdb_entry_openfile_object;
 
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self);
@@ -504,6 +507,7 @@ PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *ar
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_openfile_get_opaque(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_size(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_ptr(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_is_read(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
@@ -517,6 +521,7 @@ PyObject* libetrace_nfsdb_entry_openfile_is_fifo(libetrace_nfsdb_entry_openfile_
 PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_path_modified(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_has_opaque_entry(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 Py_hash_t libetrace_nfsdb_entry_openfile_hash(PyObject *o);
 PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *other, int op);
 libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(const struct nfsdb* nfsdb,
@@ -531,6 +536,7 @@ static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 	{"path",libetrace_nfsdb_entry_openfile_get_path,0,"nfsdb entry openfile path value",0},
 	{"original_path",libetrace_nfsdb_entry_openfile_get_original_path,0,"nfsdb entry openfile original path value (the same as path if original path doesn't differ from resolved path)",0},
 	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry that contains this openfile entry",0},
+	{"opaque",libetrace_nfsdb_entry_openfile_get_opaque,0,"opaque nfsdb entry for this openfile",0},
 	{"size",libetrace_nfsdb_entry_openfile_get_size,0,"Returns the size of the existing file (otherwise returns None)",0},
 	{"ptr",libetrace_nfsdb_entry_openfile_get_ptr,0,"low level information about this openfile entry (tuple with nfsdb index and open index in the nfsdb entry)",0},
 	{0,0,0,0,0},
@@ -548,6 +554,7 @@ static PyMethodDef libetrace_nfsdbEntryOpenfile_methods[] = {
 	{"is_socket",(PyCFunction)libetrace_nfsdb_entry_openfile_is_socket,METH_VARARGS,"Returns true if the file is a socket"},
 	{"exists",(PyCFunction)libetrace_nfsdb_entry_openfile_exists,METH_VARARGS,"Returns true if the file exists after the build"},
 	{"path_modified",(PyCFunction)libetrace_nfsdb_entry_openfile_path_modified,METH_VARARGS,"Returns true if the original and resolved paths differ"},
+	{"has_opaque_entry",(PyCFunction)libetrace_nfsdb_entry_openfile_has_opaque_entry,METH_VARARGS,"Returns true if the openfile has the opaque entry"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

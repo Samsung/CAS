@@ -18,6 +18,7 @@ struct openfile {
 	unsigned long mode;
 	unsigned long size;
 	unsigned long* original_path;
+	const struct nfsdb_entry* opaque_entry;
 };
 
 struct pp_def {
