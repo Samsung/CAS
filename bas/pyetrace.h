@@ -438,6 +438,7 @@ void libetrace_nfsdb_entry_eid_dealloc(libetrace_nfsdb_entry_eid_object* self);
 PyObject* libetrace_nfsdb_entry_eid_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 PyObject* libetrace_nfsdb_entry_eid_get_index(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_eid_repr(PyObject* self);
+PyObject* libetrace_nfsdb_entry_eid_richcompare(PyObject *self, PyObject *other, int op);
 
 static PyMemberDef libetrace_nfsdb_entry_eid_members[] = {
 	{"pid",T_ULONG,offsetof(libetrace_nfsdb_entry_eid_object,pid),READONLY},
@@ -456,6 +457,7 @@ static PyTypeObject libetrace_nfsdbEntryEidType = {
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_eid_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_eid_repr,
 	.tp_doc = "libetrace nfsdb entry extended id type",
+	.tp_richcompare = libetrace_nfsdb_entry_eid_richcompare,
 	.tp_members = libetrace_nfsdb_entry_eid_members,
 	.tp_getset = libetrace_nfsdbEntryEid_getset,
 	.tp_new = libetrace_nfsdb_entry_eid_new,

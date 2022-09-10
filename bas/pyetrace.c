@@ -3150,6 +3150,26 @@ PyObject* libetrace_nfsdb_entry_eid_repr(PyObject* self) {
 	return PyUnicode_FromString(repr);
 }
 
+PyObject* libetrace_nfsdb_entry_eid_richcompare(PyObject *self, PyObject *other, int op) {
+
+	libetrace_nfsdb_entry_eid_object* __self = (libetrace_nfsdb_entry_eid_object*)self;
+	libetrace_nfsdb_entry_eid_object* __other = (libetrace_nfsdb_entry_eid_object*)other;
+
+	int cmp = memcmp(&__self->pid,&__other->pid,2*sizeof(unsigned long));
+
+	switch (op) {
+		case Py_EQ: if (cmp==0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_NE: if (cmp!=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_LT: if (cmp<0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_GT: if (cmp>0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_LE: if (cmp<=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		case Py_GE: if (cmp>=0) Py_RETURN_TRUE; Py_RETURN_FALSE;
+		default:
+			Py_UNREACHABLE();
+	}
+
+}
+
 void libetrace_nfsdb_entry_cid_dealloc(libetrace_nfsdb_entry_cid_object* self) {
 
     PyTypeObject *tp = Py_TYPE(self);
