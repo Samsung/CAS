@@ -3261,7 +3261,6 @@ PyObject* libetrace_nfsdb_entry_openfile_get_opaque(PyObject* self, void* closur
 	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
 
 	if (__self->opaque==ULONG_MAX) {
-		PyErr_SetString(libetrace_nfsdbError, "openfile entry does not have opaque entry");
 		Py_RETURN_NONE;
 	}
 
