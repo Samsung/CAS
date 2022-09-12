@@ -4,6 +4,7 @@ import libftdb
 import json
 import sys
 import argparse
+import os
 
 parser = argparse.ArgumentParser(description="MAIN_DESCRIPTION", formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument("--skip-ftdb-create", action="store_true", help="Skip creating of ftdb cache")
@@ -17,13 +18,16 @@ args = parser.parse_args()
 with open(args.db_path,"rb") as f:
 	db = json.loads(f.read())
 
+base, ext = os.path.splitext(args.db_path)
+dbimg_path = base+".img"
+
 if not args.skip_ftdb_create:
-	libftdb.create_ftdb(db,args.db_path+".img",True)
+	libftdb.create_ftdb(db,dbimg_path,True)
 	if args.only_ftdb_create:
 		sys.exit(0)
 
 ftdb = libftdb.ftdb()
-ftdb.load(args.db_path+".img")
+ftdb.load(dbimg_path)
 
 fids = [f["id"] for f in db["funcs"]]
 assert(len(fids)==len(set(fids))),"%d vs %d"%(len(fids),len(set(fids)))

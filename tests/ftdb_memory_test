@@ -3,14 +3,18 @@
 import libftdb
 import sys
 import argparse
+import os
 
 parser = argparse.ArgumentParser(description="MAIN_DESCRIPTION", formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('db_path', action="store")
 parser.add_argument("--skip-function-tests", action="store_true", help="Skip performing function tests")
 args = parser.parse_args()
 
+base, ext = os.path.splitext(args.db_path)
+dbimg_path = base+".img"
+
 ftdb = libftdb.ftdb()
-ftdb.load(args.db_path+".img")
+ftdb.load(dbimg_path)
 
 while True:
 
