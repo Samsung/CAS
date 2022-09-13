@@ -1062,7 +1062,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		case Stmt::IntegerLiteralClass:
 		case Stmt::CharacterLiteralClass:
 		{
-			if (IgnoreLiteral) {
+			if (IgnoreLiteral && secondaryChain) {
 				lookup_cache_clear(cache);
 				break;
 			}
@@ -1113,7 +1113,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 
 		case Stmt::StringLiteralClass:
 		{
-			if (IgnoreLiteral) {
+			if (IgnoreLiteral && secondaryChain) {
 				lookup_cache_clear(cache);
 				break;
 			}
@@ -1156,7 +1156,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		}
 		case Stmt::FloatingLiteralClass:
 		{
-			if (IgnoreLiteral) {
+			if (IgnoreLiteral && secondaryChain) {
 				lookup_cache_clear(cache);
 				break;
 			}
