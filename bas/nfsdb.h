@@ -80,6 +80,8 @@ struct nfsdb_entry {
 struct nfsdb_deps {
 	struct rb_root depmap;
 	struct rb_root ddepmap;
+	struct rb_root revdepmap;
+	struct rb_root revddepmap;
 };
 
 struct nfsdb {

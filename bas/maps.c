@@ -112,12 +112,13 @@ struct ulongMap_node* ulongMap_search(const struct rb_root* ulongMap, unsigned l
 	return 0;
 }
 
-int ulongMap_insert(struct rb_root* ulongMap, unsigned long key, unsigned long* value, unsigned long count) {
+int ulongMap_insert(struct rb_root* ulongMap, unsigned long key, unsigned long* value, unsigned long count, unsigned long alloc_size) {
 
 	struct ulongMap_node* data = calloc(1,sizeof(struct ulongMap_node));
 	data->key = key;
 	data->value_list = value;
 	data->value_count = count;
+	data->value_alloc = alloc_size;
 	struct rb_node **new = &(ulongMap->rb_node), *parent = 0;
 
 	/* Figure out where to put new node */
@@ -172,6 +173,109 @@ size_t ulongMap_entry_count(const struct rb_root* ulongMap) {
 	size_t count = 0;
 	while(p) {
 		struct ulongMap_node* data = (struct ulongMap_node*)p;
+		count+=data->value_count;
+		p = rb_next(p);
+	}
+	return count;
+}
+
+/*
+ * key0|key1 == otherkey0|otherkey1 : return 0
+ * key0|key1 < otherkey0|otherkey1 : return -1
+ * key0|key1 > otherkey0|otherkey1 : return 1
+ */
+static int ulongPairCompare(unsigned long key0, unsigned long key1, unsigned long otherkey0, unsigned long otherkey1) {
+
+	if (key0>otherkey0) return 1;
+	if (key0<otherkey0) return -1;
+	if (key1>otherkey1) return 1;
+	if (key1<otherkey1) return -1;
+	return 0;
+}
+
+struct ulongPairMap_node* ulongPairMap_search(const struct rb_root* ulongPairMap, unsigned long key0, unsigned long key1) {
+
+	struct rb_node *node = ulongPairMap->rb_node;
+
+	while (node) {
+		struct ulongPairMap_node* data = container_of(node, struct ulongPairMap_node, node);
+
+		if (ulongPairCompare(key0,key1,data->key0,data->key1)<0) {
+			node = node->rb_left;
+		}
+		else if (ulongPairCompare(key0,key1,data->key0,data->key1)>0) {
+			node = node->rb_right;
+		}
+		else
+			return data;
+	}
+
+	return 0;
+}
+
+int ulongPairMap_insert(struct rb_root* ulongPairMap, unsigned long key0, unsigned long key1, unsigned long* value,
+		unsigned long count, unsigned long alloc) {
+
+	struct ulongPairMap_node* data = calloc(1,sizeof(struct ulongPairMap_node));
+	data->key0 = key0;
+	data->key1 = key0;
+	data->value_list = value;
+	data->value_count = count;
+	data->value_alloc = alloc;
+	struct rb_node **new = &(ulongPairMap->rb_node), *parent = 0;
+
+	/* Figure out where to put new node */
+	while (*new) {
+		struct ulongPairMap_node* this = container_of(*new, struct ulongPairMap_node, node);
+
+		parent = *new;
+		if (ulongPairCompare(data->key0,data->key1,this->key0,this->key1)<0)
+			new = &((*new)->rb_left);
+		else if (ulongPairCompare(data->key0,data->key1,this->key0,this->key1)>0)
+			new = &((*new)->rb_right);
+		else {
+			free(data->value_list);
+		    free(data);
+		    return 0;
+		}
+	}
+
+	/* Add new node and rebalance tree. */
+	rb_link_node(&data->node, parent, new);
+	rb_insert_color(&data->node, ulongPairMap);
+
+	return 1;
+}
+
+void ulongPairMap_destroy(struct rb_root* ulongPairMap) {
+
+    struct rb_node * p = rb_first(ulongPairMap);
+    while(p) {
+        struct ulongPairMap_node* data = (struct ulongPairMap_node*)p;
+        rb_erase(p, ulongPairMap);
+        p = rb_next(p);
+        free(data->value_list);
+        free(data);
+    }
+}
+
+size_t ulongPairMap_count(const struct rb_root* ulongPairMap) {
+
+	struct rb_node * p = rb_first(ulongPairMap);
+	size_t count = 0;
+	while(p) {
+		count++;
+		p = rb_next(p);
+	}
+	return count;
+}
+
+size_t ulongPairMap_entry_count(const struct rb_root* ulongPairMap) {
+
+	struct rb_node * p = rb_first(ulongPairMap);
+	size_t count = 0;
+	while(p) {
+		struct ulongPairMap_node* data = (struct ulongPairMap_node*)p;
 		count+=data->value_count;
 		p = rb_next(p);
 	}

@@ -13,6 +13,16 @@ struct ulongMap_node {
 	unsigned long key;
 	unsigned long* value_list;
 	unsigned long value_count;
+	unsigned long value_alloc;
+};
+
+struct ulongPairMap_node {
+	struct rb_node node;
+	unsigned long key0;
+	unsigned long key1;
+	unsigned long* value_list;
+	unsigned long value_count;
+	unsigned long value_alloc;
 };
 
 struct stringRefMap_node {
@@ -42,10 +52,16 @@ void nfsdb_entryMap_destroy(struct rb_root* nfsdb_entryMap);
 size_t nfsdb_entryMap_count(const struct rb_root* nfsdb_entryMap);
 size_t nfsdb_entryMap_entry_count(const struct rb_root* nfsdb_entryMap);
 struct ulongMap_node* ulongMap_search(const struct rb_root* ulongMap, unsigned long key);
-int ulongMap_insert(struct rb_root* ulongMap, unsigned long key, unsigned long* value, unsigned long count);
+int ulongMap_insert(struct rb_root* ulongMap, unsigned long key, unsigned long* value, unsigned long count, unsigned long alloc_size);
 void ulongMap_destroy(struct rb_root* ulongMap);
 size_t ulongMap_count(const struct rb_root* ulongMap);
 size_t ulongMap_entry_count(const struct rb_root* ulongMap);
+struct ulongPairMap_node* ulongPairMap_search(const struct rb_root* ulongPairMap, unsigned long key0, unsigned long key1);
+int ulongPairMap_insert(struct rb_root* ulongPairMap, unsigned long key0, unsigned long key1, unsigned long* value,
+		unsigned long count, unsigned long alloc);
+void ulongPairMap_destroy(struct rb_root* ulongPairMap);
+size_t ulongPairMap_count(const struct rb_root* ulongPairMap);
+size_t ulongPairMap_entry_count(const struct rb_root* ulongPairMap);
 struct stringRefMap_node* stringRefMap_search(const struct rb_root* stringMap, const char* key);
 int stringRefMap_insert(struct rb_root* stringMap, const char* key, unsigned long value);
 void stringRefMap_destroy(struct rb_root* stringMap);

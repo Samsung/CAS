@@ -107,6 +107,8 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 PyObject* libetrace_nfsdb_iter(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_filtered_iter(libetrace_nfsdb_object *self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_opens_iter(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_opens_list(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_opens_paths(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pcp_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
@@ -123,6 +125,7 @@ PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_module_dependencies_count(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_reverse_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 
 #ifdef __cplusplus
 extern "C" {
@@ -138,7 +141,9 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"load_deps",(PyCFunction)libetrace_nfsdb_load_deps,METH_VARARGS|METH_KEYWORDS,"Load the dependency database cache file"},
 	{"iter",(PyCFunction)libetrace_nfsdb_iter,METH_VARARGS,"Returns the cache iterator"},
 	{"filtered",(PyCFunction)libetrace_nfsdb_filtered_iter,METH_VARARGS|METH_KEYWORDS,"Returns the cache iterator with some predefined filter for entries"},
-	{"opens",(PyCFunction)libetrace_nfsdb_opens_iter,METH_VARARGS,"Returns the open files iterator across entire database"},
+	{"opens_iter",(PyCFunction)libetrace_nfsdb_opens_iter,METH_VARARGS,"Returns the open files iterator across entire database"},
+	{"opens",(PyCFunction)libetrace_nfsdb_opens_list,METH_VARARGS,"Returns the list of all opened files across entire database"},
+	{"opens_paths",(PyCFunction)libetrace_nfsdb_opens_paths,METH_VARARGS,"Returns the list of all unique opened paths across entire database"},
 	{"pcp_list",(PyCFunction)libetrace_nfsdb_pcp_list,METH_VARARGS,"Returns the list of command patterns to be precomputed"},
 	{"pids",(PyCFunction)libetrace_nfsdb_pid_list,METH_VARARGS,"Returns the list of all unique pids in the database"},
 	{"bpaths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
@@ -148,6 +153,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"fdeps",(PyCFunction)libetrace_nfsdb_file_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given file"},
 	{"mdeps",(PyCFunction)libetrace_nfsdb_module_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given module"},
 	{"mdeps_count",(PyCFunction)libetrace_nfsdb_module_dependencies_count,METH_VARARGS|METH_KEYWORDS,"Returns the count of file dependencies for a given module"},
+	{"rdeps",(PyCFunction)libetrace_nfsdb_reverse_module_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of reverse module dependencies for a given file"},
 	{"path_exists",(PyCFunction)libetrace_nfsdb_path_exists,METH_VARARGS,"Returns True if a given path exists after the build"},
 	{"path_read",(PyCFunction)libetrace_nfsdb_path_read,METH_VARARGS,"Returns True if a given path was opened for read during the build"},
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},

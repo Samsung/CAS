@@ -58,7 +58,7 @@ unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb) {
 			for (decltype((*i).second)::iterator j=(*i).second.begin(); j!=(*i).second.end(); ++j,++u) {	\
 				value_list[u] = (*j);	\
 			}	\
-			ulongMap_insert(&nfsdb->__member,(*i).first,value_list,(*i).second.size());	\
+			ulongMap_insert(&nfsdb->__member,(*i).first,value_list,(*i).second.size(),(*i).second.size());	\
 		}	\
 		if (show_stats) {	\
 			printf(#__name " keys: %zu:%zu\n",__name.size(),ulongMap_count(&nfsdb->__member));	\
@@ -144,6 +144,13 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
  * {
  *   <pid> : { <filepath>, ... }
  * }
+ *
+ * fileMap:
+ *  Maps a unique file path to a list of open file handles that used this path (i.e. nfsdb entry and openfile index within this entry)
+ *   per open mode (RD,WR,RW)
+ *
+ * linkedMap:
+ *  Maps a unique linked file path to a nfsdb entry that created this linked file path
  */
 
 int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
@@ -212,7 +219,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 	for (decltype(revforkMap)::iterator i=revforkMap.begin(); i!=revforkMap.end(); ++i) {
 		unsigned long* value_list = (unsigned long*)malloc(sizeof(unsigned long));
 		value_list[0] = (*i).second;
-		ulongMap_insert(&nfsdb->revforkmap,(*i).first,value_list,1);
+		ulongMap_insert(&nfsdb->revforkmap,(*i).first,value_list,1,1);
 	}
 	if (show_stats) {
 		printf("revforkMap keys: %zu:%zu\n",revforkMap.size(),ulongMap_count(&nfsdb->revforkmap));
