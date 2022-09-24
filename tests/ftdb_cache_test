@@ -7,7 +7,7 @@ import argparse
 import os
 
 parser = argparse.ArgumentParser(description="MAIN_DESCRIPTION", formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument("--skip-ftdb-create", action="store_true", help="Skip creating of ftdb cache")
+parser.add_argument("--do-ftdb-create", action="store_true", help="Do create the ftdb cache along the way")
 parser.add_argument("--skip-function-tests", action="store_true", help="Skip performing function tests")
 parser.add_argument("--skip-function-member-tests", action="store_true", help="Skip performing function member tests")
 parser.add_argument("--skip-function-mapping-tests", action="store_true", help="Skip performing function mapping tests")
@@ -21,7 +21,7 @@ with open(args.db_path,"rb") as f:
 base, ext = os.path.splitext(args.db_path)
 dbimg_path = base+".img"
 
-if not args.skip_ftdb_create:
+if args.do_ftdb_create or args.only_ftdb_create:
 	libftdb.create_ftdb(db,dbimg_path,True)
 	if args.only_ftdb_create:
 		sys.exit(0)
@@ -829,25 +829,24 @@ for i,fd in enumerate(db["funcdecls"]):
 	assert fd["linkage"]==ftdb["funcdecls"][fd["id"]]["linkage"]
 sys.stdout.write("\n")
 
-if 0: # TODO (fops tests)
-	assert db["fops"]["varn"]==db["fops"]["varn"]
-	assert db["fops"]["membern"]==db["fops"]["membern"]
-	assert db["fops"]["sourcen"]==db["fops"]["sourcen"]
-	assert db["fops"]["sources"]==db["fops"]["sources"]
-	for i,v in enumerate(db["fops"]["vars"]):
-		sys.stdout.write("\rChecking fops [member interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
-		sys.stdout.flush()
-		assert v["type"]==ftdb.fops[i].type
-		assert v["name"]==ftdb.fops[i].name
-		#assert sorted(v["members"].items())==sorted(ftdb.fops[i].members.items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i].members.items()))
-		assert v["location"]==ftdb.fops[i].location
-	sys.stdout.write("\n")
+assert db["fops"]["varn"]==ftdb.fops.varn,"%d vs %d"%(db["fops"]["varn"],ftdb["fops"].varn)
+assert db["fops"]["membern"]==ftdb.fops.membern,"%d vs %d"%(db["fops"]["membern"],ftdb["fops"].membern)
+for i,v in enumerate(db["fops"]["vars"]):
+	sys.stdout.write("\rChecking fops [member interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
+	sys.stdout.flush()
+	assert v["type"]==ftdb.fops[i].type
+	assert v["name"]==ftdb.fops[i].name
+	assert sorted(v["members"].items())==sorted(ftdb.fops[i].members.items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i].members.items()))
+	assert v["location"]==ftdb.fops[i].location
+sys.stdout.write("\n")
 
-	for i,v in enumerate(db["fops"]["vars"]):
-		sys.stdout.write("\rChecking fops [mapping interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
-		sys.stdout.flush()
-		assert v["type"]==ftdb["fops"][i]["type"]
-		assert v["name"]==ftdb["fops"][i]["name"]
-		#assert sorted(v["members"].items())==sorted(ftdb.fops[i].members.items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i].members.items()))
-		assert v["location"]==ftdb["fops"][i]["location"]
-	sys.stdout.write("\n")
+assert db["fops"]["varn"]==ftdb["fops"]["varn"],"%d vs %d"%(db["fops"]["varn"],ftdb["fops"]["varn"])
+assert db["fops"]["membern"]==ftdb["fops"]["membern"],"%d vs %d"%(db["fops"]["membern"],ftdb["fops"]["membern"])
+for i,v in enumerate(db["fops"]["vars"]):
+	sys.stdout.write("\rChecking fops [mapping interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
+	sys.stdout.flush()
+	assert v["type"]==ftdb["fops"][i]["type"]
+	assert v["name"]==ftdb["fops"][i]["name"]
+	assert sorted(v["members"].items())==sorted(ftdb.fops[i]["members"].items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i]["members"].items()))
+	assert v["location"]==ftdb["fops"][i]["location"]
+sys.stdout.write("\n")

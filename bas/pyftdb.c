@@ -756,7 +756,7 @@ PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice) {
 	}
 	else if (!strcmp(attr,"fops")) {
 		PYASSTR_DECREF(attr);
-	    return libftdb_ftdb_get_fops_as_dict(self,0);
+	    return libftdb_ftdb_get_fops(self,0);
 	}
 	else if (!strcmp(attr,"macroinfo")) {
 		PYASSTR_DECREF(attr);
@@ -7331,8 +7331,31 @@ PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice) {
 
 	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
 
-	if (!PyLong_Check(slice)) {
-		PyErr_SetString(libftdb_ftdbError, "Invalid type fops index (not an integer)");
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	if ((!PyLong_Check(slice))&&(!PyUnicode_Check(slice))) {
+		PyErr_SetString(libftdb_ftdbError, "Invalid type fops index (not an (integer) and not (str))");
+		Py_RETURN_NONE;
+	}
+
+	if (PyUnicode_Check(slice)) {
+		const char* attr = PyString_get_c_str(slice);
+		if (!strcmp(attr,"varn")) {
+			PYASSTR_DECREF(attr);
+			return libftdb_ftdb_fops_get_varn(self,0);
+		}
+		else if (!strcmp(attr,"membern")) {
+			PYASSTR_DECREF(attr);
+			return libftdb_ftdb_fops_get_membern(self,0);
+		}
+		else if (!strcmp(attr,"vars")) {
+			PYASSTR_DECREF(attr);
+			return libftdb_ftdb_fops_get_vars(self,0);
+		}
+
+		snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid attribute name: %s",attr);
+		PyErr_SetString(libftdb_ftdbError, errmsg);
+		PYASSTR_DECREF(attr);
 		Py_RETURN_NONE;
 	}
 
@@ -7353,8 +7376,46 @@ PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice) {
 }
 
 int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key) {
-	// TODO:
+
+	if (!PyUnicode_Check(key)) {
+		PyErr_SetString(libftdb_ftdbError, "Invalid type in contains check (not a str)");
+		return 0;
+	}
+
+	const char* attr = PyString_get_c_str(key);
+
+	if (!strcmp(attr,"varn")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"membern")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"vars")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+
+	PYASSTR_DECREF(attr);
 	return 0;
+}
+
+PyObject* libftdb_ftdb_fops_get_varn(PyObject* self, void* closure) {
+
+	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
+	return PyLong_FromUnsignedLong(__self->ftdb->fops.vars_count);
+}
+
+PyObject* libftdb_ftdb_fops_get_membern(PyObject* self, void* closure) {
+
+	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
+	return PyLong_FromUnsignedLong(__self->ftdb->fops.member_count);
+}
+
+PyObject* libftdb_ftdb_fops_get_vars(PyObject* self, void* closure) {
+
+	return libftdb_ftdb_fops_getiter(self);
 }
 
 void libftdb_ftdb_fops_iter_dealloc(libftdb_ftdb_fops_iter_object* self) {
@@ -7528,7 +7589,32 @@ PyObject* libftdb_ftdb_fops_entry_mp_subscript(PyObject* self, PyObject* slice) 
 }
 
 int libftdb_ftdb_fops_entry_sq_contains(PyObject* self, PyObject* key) {
-	// TODO:
+
+	if (!PyUnicode_Check(key)) {
+		PyErr_SetString(libftdb_ftdbError, "Invalid type in contains check (not a str)");
+		return 0;
+	}
+
+	const char* attr = PyString_get_c_str(key);
+
+	if (!strcmp(attr,"type")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"name")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"members")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"location")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+
+	PYASSTR_DECREF(attr);
 	return 0;
 }
 
@@ -8633,8 +8719,8 @@ static void libftdb_create_ftdb_type_entry(PyObject *self, PyObject* type_entry,
 
 static int member_info_compare (const void * a, const void * b)
 {
-  if ( ((struct fops_member_info*)a)->index <  ((struct fops_member_info*)b)->fnid ) return -1;
-  if ( ((struct fops_member_info*)a)->index >  ((struct fops_member_info*)b)->fnid ) return 1;
+  if ( ((struct fops_member_info*)a)->index <  ((struct fops_member_info*)b)->index ) return -1;
+  if ( ((struct fops_member_info*)a)->index >  ((struct fops_member_info*)b)->index ) return 1;
 
   return 0;
 }
@@ -8650,10 +8736,12 @@ static void libftdb_create_ftdb_fops_var_entry(PyObject *self, PyObject* fops_va
 	new_entry->members = malloc(new_entry->members_count*sizeof(struct fops_member_info));
 	for (Py_ssize_t i=0; i<new_entry->members_count; ++i) {
 		PyObject* member_index = PyList_GetItem(members_indexes,i);
-		PyObject* member_int_index = PyLong_FromString((char*)PyString_get_c_str(member_index),0,10);
+		const char* member_index_cstr = PyString_get_c_str(member_index);
+		PyObject* member_int_index = PyLong_FromString(member_index_cstr,0,10);
+		PYASSTR_DECREF(member_index_cstr);
 		PyObject* member_fnid = PyDict_GetItem(members, member_index);
-		new_entry->members->index = PyLong_AsUnsignedLong(member_int_index);
-		new_entry->members->fnid = PyLong_AsUnsignedLong(member_fnid);
+		new_entry->members[i].index = PyLong_AsUnsignedLong(member_int_index);
+		new_entry->members[i].fnid = PyLong_AsUnsignedLong(member_fnid);
 	}
 	Py_DecRef(members_indexes);
 	qsort(new_entry->members,new_entry->members_count,sizeof(struct fops_member_info),member_info_compare);

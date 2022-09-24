@@ -1676,6 +1676,9 @@ Py_ssize_t libftdb_ftdb_fops_sq_length(PyObject* self);
 PyObject* libftdb_ftdb_fops_getiter(PyObject* self);
 PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_fops_get_membern(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_fops_get_varn(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_fops_get_vars(PyObject* self, void* closure);
 
 static PyMethodDef libftdb_ftdbFops_methods[] = {
 	{NULL, NULL, 0, NULL}        /* Sentinel */
@@ -1691,6 +1694,9 @@ static PyMemberDef libftdb_ftdbFops_members[] = {
 };
 
 static PyGetSetDef libftdb_ftdbFops_getset[] = {
+	{"varn",libftdb_ftdb_fops_get_varn,0,"ftdb fops vars count",0},
+	{"membern",libftdb_ftdb_fops_get_membern,0,"ftdb fops members count",0},
+	{"vars",libftdb_ftdb_fops_get_vars,0,"ftdb fops vars iterator",0},
 	{0,0,0,0,0},
 };
 
