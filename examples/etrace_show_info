@@ -13,14 +13,14 @@ print ("Database version: %s"%(nfsdb.dbversion))
 L = [x for x in nfsdb if x.is_linking()]
 print ("# Linked modules")
 for x in L:
-	print ("  %s"%(x.linked_file))
+	print ("  %s"%(x.linked_path))
 print()
 
 # List compiled files
 C = [x for x in nfsdb if x.has_compilations()]
 print ("# Compiled files")
 for x in C:
-	for u in x.compilation_info.files:
+	for u in x.compilation_info.file_paths:
 		print ("  %s"%(u))
 print()
 
