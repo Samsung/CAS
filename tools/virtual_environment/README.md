@@ -1,6 +1,6 @@
 # CAS in virtual environment
 
-`CAS` kernel tracing module can be used in virtual environment. Following guide will enable to use etrace in QEMU KVM.
+`CAS` kernel tracing module can be used in virtual environment. Following guide will enable to use `etrace` in QEMU KVM.
 
 Please be aware that most of following commands will require elevated permissions to run properly. 
 
@@ -8,11 +8,39 @@ Please be aware that most of following commands will require elevated permission
 
 Check `tools/virtual_environment/img_build.sh` script. Run it in empty directory to create the QEMU image in one shot. To know exactly what happens during image creation please follow the guide.
 
-## Installing required packages on host system
+## Requirements
+
+### Installing required packages on host system
 
 ```bash
 sudo apt install libguestfs-tools qemu-utils qemu-system-x86
 ```
+
+#### User permissions for kvm and libvirt groups 
+
+During image creation process user may be prompted to add himself to `kvm` and `libvirt` group with following message.
+
+```
+libguestfs: warning: current user is not a member of the KVM group (group ID ###). This user cannot access /dev/kvm, so libguestfs may run very slowly. It is recommended that you 'chmod 0666 /dev/kvm' or add the current user to the KVM group (you might need to log out and log in again).
+```
+Run following commands to prevent this warning.
+``` bash
+sudo adduser `id -un` kvm
+sudo adduser `id -un` libvirt
+```
+
+### Kernel image (Ubuntu OS only)
+Ubuntu OS have restrict policy in case of access kernel image by users. By default user cannot read kernel images in /boot/ directory.
+To use commands in this guide without elevated privileges copy currently running kernel image to work directory.
+
+```
+cat /proc/cmdline
+BOOT_IMAGE=/vmlinuz-5.15.0-46-generic root=/dev/mapper/vg01-root ro quiet splash
+cd ${WORKDIR}
+sudo cp /boot/vmlinuz-5.15.0-46-generic .
+export SUPERMIN_KERNEL=${WORKDIR}/vmlinuz-5.15.0-46-generic
+```
+Exporting SUPERMIN_KERNEL variable will prevent virt-tools from copying kernel file from /boot/ - and crashing on Ubuntu OS. 
 
 ## Download image 
 Following guide will use `Ubuntu Cloud Image` as root filesystem.
@@ -62,7 +90,6 @@ virt-customize -a ${IMG_RESIZED} \
       --run-command "mkdir -p /mnt && mount ${EXPANDED_PARTITION} /mnt && mount --bind /dev /mnt/dev && mount --bind /proc /mnt/proc && mount --bind /sys /mnt/sys && chroot /mnt && grub-install /dev/sda"
 ```
 
-
 After that, booting should be fixed. 
 
 ## Customize image
@@ -85,20 +112,21 @@ export MEM=$(free --mega | grep "Mem:" | awk '{printf "%.0f",($2 * 0.8)}')
 export PROC=$(nproc | awk '{printf "%.0f",($1 * 0.8)}')
 ```
 
-### Set root password example
-
+### Set root password (example)
+It is required to set root user password - or create new user for using VM. Following example sets `pass` as root password.
 ```bash
 virt-customize -a ${IMG_WORK} -smp ${PROC} -m ${MEM} \
-   --root-password password:P@ss
+   --root-password password:pass
 ```
 
-### Install packages required by `CAS`
+### Install packages required by CAS
+Following packages are required for building CAS tracer, library and use scripts from examples directory.
 ```bash
 virt-customize -a ${IMG_WORK} -smp ${PROC} -m ${MEM} \
    --install "build-essential,linux-headers-generic,git,cmake,llvm,clang,clang-10,libclang-dev,python3-dev,gcc-9-plugin-dev,rsync,clang-11,flex,bison"
 ```
 
-### Build CAS 
+### Build CAS
 ```bash
 virt-customize -a ${IMG_WORK} -smp ${PROC} -m ${MEM} \
    --mkdir /opt/ \
@@ -109,7 +137,7 @@ virt-customize -a ${IMG_WORK} -smp ${PROC} -m ${MEM} \
    --firstboot-command "depmod -a"
 ```
 
-### Enable network and ssh
+### (Optional) Enable network and ssh
 
 ```bash
 virt-customize -a ${IMG_WORK} -smp ${PROC} -m ${MEM} \
@@ -160,9 +188,8 @@ mkdir /mnt/sources/
 mount /dev/sdb /mnt/sources
 ```
 
-
-# Optional: SMP configuration
-To properly passthrough CPU configuration to virtual machine provide topology in -smp parameter.
+# (Optional) SMP configuration
+To properly passthrough CPU configuration to virtual machine provide topology in `-smp` parameter.
 
 ```bash
 PROC=$(nproc)
