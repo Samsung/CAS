@@ -240,3 +240,8 @@ ${CAS_DIR}/examples/ftdb_show_info db.json.img
 ```
 
 Now the FTDB database can be used for further analysis and application development.
+
+
+### Virtual Environment
+
+For those who are cautious to load and run custom Linux kernel modules on their Linux machines there is also virtual environment (based on QEMU) provided. Please refer to the [readme](tools/virtual_environment/README.md) file.
