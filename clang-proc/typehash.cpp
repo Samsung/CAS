@@ -689,9 +689,11 @@ bool autoforward = false;
 				  }
 			  }
 			  std::string cas("CA:");
+			  cas+=qualifierString;
+			  cas+=":";
 			  buildTypeString(elT,cas);
 			  std::stringstream ss;
-			  ss << ":" << qualifierString << ":" << Width << ";";
+			  ss << ":" << Width << ";";
 			  cas.append(ss.str());
 			  typeString.append(cas);
 		  }
@@ -702,9 +704,11 @@ bool autoforward = false;
 			  const IncompleteArrayType *tp = cast<IncompleteArrayType>(T);
 			  QualType elT = tp->getElementType();
 			  std::string ias("IA:");
+			  ias+=qualifierString;
+			  ias+=":";
 			  buildTypeString(elT,ias);
 			  std::stringstream ss;
-			  ss << ":" << qualifierString << ":" << 0 << ";";
+			  ss << ":" << 0 << ";";
 			  ias.append(ss.str());
 			  typeString.append(ias);
 		  }
@@ -745,9 +749,11 @@ bool autoforward = false;
 			  else {
 				  QualType tT = D->getTypeSourceInfo()->getType();
 				  std::string tpd("TPD:");
+				  tpd+=qualifierString;
+				  tpd+=":";
 				  buildTypeString(tT,tpd);
 				  std::stringstream ss;
-				  ss << ":" << qualifierString << ":" << II->getName().str() << ";";
+				  ss << ":" << II->getName().str() << ";";
 				  tpd.append(ss.str());
 				  typeString.append(tpd);
 			  }

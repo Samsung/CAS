@@ -5334,7 +5334,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  if (owned) {
 				  llvm::outs() << Indent << "\t\t\"decls\": " << "[ 0 ]" << ",\n";
 			  }
-			  llvm::outs() << Indent << "\t\t\"str\": \"" << "typedef" << "\",\n";
+			  llvm::outs() << Indent << "\t\t\"str\": \"" << II->getName().str() << "\",\n";
 			  if (_opts.adddefs) {
 				  llvm::outs() << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }

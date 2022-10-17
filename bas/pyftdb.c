@@ -6482,7 +6482,7 @@ PyObject* libftdb_ftdb_type_entry_repr(PyObject* self) {
 
 	libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)self;
 	int written = snprintf(repr,1024,"<ftdbTypeEntry object at %lx : ",(uintptr_t)self);
-	written+=snprintf(repr+written,1024-written,"id:%lu|class:%s>",__self->entry->id,__self->entry->class_name);
+	written+=snprintf(repr+written,1024-written,"id:%lu|class:%s,str:%s>",__self->entry->id,__self->entry->class_name,__self->entry->str);
 
 	return PyUnicode_FromString(repr);
 }
@@ -6633,8 +6633,7 @@ PyObject* libftdb_ftdb_type_entry_get_attrnum(PyObject* self, void* closure) {
 	libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)self;
 
 	if (!__self->entry->attrnum) {
-		PyErr_SetString(libftdb_ftdbError, "No 'attrnum' field in type entry");
-		return 0;
+		return PyLong_FromUnsignedLong(0);
 	}
 
 	return PyLong_FromUnsignedLong(*__self->entry->attrnum);
@@ -6922,6 +6921,67 @@ PyObject* libftdb_ftdb_type_entry_has_location(libftdb_ftdb_type_entry_object *s
 	}
 
 	Py_RETURN_FALSE;
+}
+
+static int libftdb_ftdb_type_entry_is_const_internal_type(struct ftdb_type_entry* entry) {
+
+	const char* c = entry->qualifiers;
+	while(*c) {
+		if (*c++=='c') return 1;
+	}
+	return 0;
+}
+
+static int libftdb_ftdb_type_entry_is_const_internal(libftdb_ftdb_type_entry_object *self) {
+
+	const char* c = self->entry->qualifiers;
+	while(*c) {
+		if (*c++=='c') return 1;
+	}
+	return 0;
+}
+
+PyObject* libftdb_ftdb_type_entry_is_const(libftdb_ftdb_type_entry_object *self, PyObject *args) {
+
+	if (libftdb_ftdb_type_entry_is_const_internal(self)) {
+		Py_RETURN_TRUE;
+	}
+	Py_RETURN_FALSE;
+}
+
+static inline const char* __real_hash(const char* hash) {
+
+	int coln = 0;
+	while(*hash) {
+		if (*hash++==':') coln++;
+		if (coln>=2) break;
+	}
+	return hash;
+}
+
+PyObject* libftdb_ftdb_type_entry_to_non_const(libftdb_ftdb_type_entry_object *self, PyObject *args) {
+
+	if (!libftdb_ftdb_type_entry_is_const_internal(self)) {
+		Py_IncRef((PyObject*)self);
+		return (PyObject*)self;
+	}
+
+	for (unsigned long i=0; i<self->ftdb->types_count; ++i) {
+		struct ftdb_type_entry* entry = &self->ftdb->types[i];
+		if (strcmp(self->entry->str,entry->str)) continue;
+		if (entry->__class==TYPECLASS_RECORDFORWARD) continue;
+		if (strcmp(__real_hash(self->entry->hash),__real_hash(entry->hash))) continue;
+		if (libftdb_ftdb_type_entry_is_const_internal_type(entry)) continue;
+		PyObject* args = PyTuple_New(2);
+		PYTUPLE_SET_ULONG(args,0,(uintptr_t)self->ftdb);
+		PYTUPLE_SET_ULONG(args,1,entry->__index);
+		PyObject *py_entry = PyObject_CallObject((PyObject *) &libftdb_ftdbTypeEntryType, args);
+		Py_DecRef(args);
+		return py_entry;
+	}
+
+	Py_IncRef((PyObject*)self);
+	return (PyObject*)self;
 }
 
 PyObject* libftdb_ftdb_type_entry_mp_subscript(PyObject* self, PyObject* slice) {

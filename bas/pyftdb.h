@@ -1579,6 +1579,8 @@ PyObject* libftdb_ftdb_type_entry_has_decls(libftdb_ftdb_type_entry_object *self
 PyObject* libftdb_ftdb_type_entry_has_attrs(libftdb_ftdb_type_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_type_entry_has_outerfn(libftdb_ftdb_type_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_type_entry_has_location(libftdb_ftdb_type_entry_object *self, PyObject *args);
+PyObject* libftdb_ftdb_type_entry_is_const(libftdb_ftdb_type_entry_object *self, PyObject *args);
+PyObject* libftdb_ftdb_type_entry_to_non_const(libftdb_ftdb_type_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_type_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_type_entry_sq_contains(PyObject* self, PyObject* key);
 PyObject* libftdb_ftdb_type_entry_deepcopy(PyObject* self, PyObject* memo);
@@ -1596,6 +1598,8 @@ static PyMethodDef libftdb_ftdbTypeEntry_methods[] = {
 			"Returns True if type entry has outerfn field"},
 	{"has_location",(PyCFunction)libftdb_ftdb_type_entry_has_location,METH_VARARGS,
 			"Returns True if type entry has location field"},
+	{"isConst",(PyCFunction)libftdb_ftdb_type_entry_is_const,METH_VARARGS,"Check whether the type is a const type"},
+	{"toNonConst",(PyCFunction)libftdb_ftdb_type_entry_to_non_const,METH_VARARGS,"Returns the non-const counterpart of a type (if available)"},
 	{"__deepcopy__",(PyCFunction)libftdb_ftdb_type_entry_deepcopy,METH_O,"Deep copy of an object"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };

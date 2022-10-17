@@ -928,6 +928,8 @@ def create_json_db_main(args,allowed_phases):
                             sys.exit(1)
                         rv+=1
 
+    if FDB is None:
+        FDB = {"membern":0,"vars":[]}
     if "vars" in FDB and len(FDB["vars"])>0:
         fdfrefmap = {}
         frefmap = {}
