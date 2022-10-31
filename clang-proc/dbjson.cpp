@@ -5035,7 +5035,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					  llvm::outs()<<"],\n";
 				  }
 			  }
-			  if(!rD->getLexicalParent()->isTranslationUnit() || Visitor.isTypedefRecord(rD)){
+			  if(Visitor.isTypedefRecord(rD)){
 				  for(size_t i = 0; i < rIds.size();i++){
 					  rIds[i] = Ids[i].first;
 				  }

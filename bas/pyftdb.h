@@ -521,6 +521,9 @@ PyObject* libftdb_ftdb_func_entry_get_types(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_entry_sq_contains(PyObject* self, PyObject* key);
 PyObject* libftdb_ftdb_func_entry_deepcopy(PyObject* self, PyObject* memo);
+Py_hash_t libftdb_ftdb_func_entry_hash(PyObject *o);
+PyObject* libftdb_ftdb_func_entry_richcompare(PyObject *self, PyObject *other, int op);
+
 
 static PyMethodDef libftdb_ftdbFuncEntry_methods[] = {
 	{"json",(PyCFunction)libftdb_ftdb_func_entry_json,METH_VARARGS,"Returns the json representation of the ftdb func entry"},
@@ -611,7 +614,9 @@ static PyTypeObject libftdb_ftdbFuncsEntryType = {
 	.tp_repr = (reprfunc)libftdb_ftdb_func_entry_repr,
 	.tp_as_sequence = &libftdb_ftdbFuncEntry_sequence_methods,
 	.tp_as_mapping = &libftdb_ftdbFuncEntry_mapping_methods,
+	.tp_hash = (hashfunc)libftdb_ftdb_func_entry_hash,
 	.tp_doc = "libftdb ftdb func entry object",
+	.tp_richcompare = libftdb_ftdb_func_entry_richcompare,
 	.tp_methods = libftdb_ftdbFuncEntry_methods,
 	.tp_members = libftdb_ftdbFuncEntry_members,
 	.tp_getset = &libftdb_ftdbFuncEntry_getset[0],
@@ -1584,6 +1589,8 @@ PyObject* libftdb_ftdb_type_entry_to_non_const(libftdb_ftdb_type_entry_object *s
 PyObject* libftdb_ftdb_type_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_type_entry_sq_contains(PyObject* self, PyObject* key);
 PyObject* libftdb_ftdb_type_entry_deepcopy(PyObject* self, PyObject* memo);
+Py_hash_t libftdb_ftdb_type_entry_hash(PyObject *o);
+PyObject* libftdb_ftdb_type_entry_richcompare(PyObject *self, PyObject *other, int op);
 
 static PyMethodDef libftdb_ftdbTypeEntry_methods[] = {
 	{"json",(PyCFunction)libftdb_ftdb_type_entry_json,METH_VARARGS,
@@ -1661,7 +1668,9 @@ static PyTypeObject libftdb_ftdbTypeEntryType = {
 	.tp_repr = (reprfunc)libftdb_ftdb_type_entry_repr,
 	.tp_as_sequence = &libftdb_ftdbTypeEntry_sequence_methods,
 	.tp_as_mapping = &libftdb_ftdbTypeEntry_mapping_methods,
+	.tp_hash = (hashfunc)libftdb_ftdb_type_entry_hash,
 	.tp_doc = "libftdb ftdb type entry object",
+	.tp_richcompare = libftdb_ftdb_type_entry_richcompare,
 	.tp_methods = libftdb_ftdbTypeEntry_methods,
 	.tp_members = libftdb_ftdbTypeEntry_members,
 	.tp_getset = &libftdb_ftdbTypeEntry_getset[0],

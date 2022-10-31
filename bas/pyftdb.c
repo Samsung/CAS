@@ -3380,6 +3380,19 @@ PyObject* libftdb_ftdb_func_entry_deepcopy(PyObject* self, PyObject* memo) {
     return (PyObject *)self;
 }
 
+Py_hash_t libftdb_ftdb_func_entry_hash(PyObject *o) {
+
+	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)o;
+	return __self->index;
+}
+
+PyObject* libftdb_ftdb_func_entry_richcompare(PyObject *self, PyObject *other, int op) {
+
+	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
+	libftdb_ftdb_func_entry_object* __other = (libftdb_ftdb_func_entry_object*)other;
+	Py_RETURN_RICHCOMPARE(__self->index, __other->index , op);
+}
+
 void libftdb_ftdb_func_callinfo_entry_dealloc(libftdb_ftdb_func_callinfo_entry_object* self) {
 
     PyTypeObject *tp = Py_TYPE(self);
@@ -7285,6 +7298,19 @@ PyObject* libftdb_ftdb_type_entry_deepcopy(PyObject* self, PyObject* memo) {
 
     Py_INCREF(self);
     return (PyObject *)self;
+}
+
+Py_hash_t libftdb_ftdb_type_entry_hash(PyObject *o) {
+
+	libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)o;
+	return __self->index;
+}
+
+PyObject* libftdb_ftdb_type_entry_richcompare(PyObject *self, PyObject *other, int op) {
+
+	libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)self;
+	libftdb_ftdb_type_entry_object* __other = (libftdb_ftdb_type_entry_object*)other;
+	Py_RETURN_RICHCOMPARE(__self->index, __other->index , op);
 }
 
 PyObject* libftdb_ftdb_type_entry_json(libftdb_ftdb_type_entry_object *self, PyObject *args) {
