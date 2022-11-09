@@ -3478,8 +3478,12 @@ PyObject* libftdb_ftdb_func_callinfo_entry_get_expr(PyObject* self, void* closur
 PyObject* libftdb_ftdb_func_callinfo_entry_get_loc(PyObject* self, void* closure) {
 
 	libftdb_ftdb_func_callinfo_entry_object* __self = (libftdb_ftdb_func_callinfo_entry_object*)self;
-	return PyUnicode_FromString(__self->entry->loc);
-
+	if (__self->entry->loc) {
+		return PyUnicode_FromString(__self->entry->loc);
+	}
+	else {
+		Py_RETURN_NONE;
+	}
 }
 
 PyObject* libftdb_ftdb_func_callinfo_entry_get_args(PyObject* self, void* closure) {

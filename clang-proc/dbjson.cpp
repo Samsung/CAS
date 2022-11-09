@@ -3122,6 +3122,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	P.Visit(const_cast<CallExpr*>((CE)));
 	exprstream.flush();
 	ss << ",\n\t\t\t\t\t\t\"expr\": \"" << json::json_escape(Expr) << "\"";
+	ss << ",\n\t\t\t\t\t\t\"loc\": \"" << location << "\"";
 	ss << "\n\t\t\t\t\t}";
   }
 
