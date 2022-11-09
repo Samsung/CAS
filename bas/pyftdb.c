@@ -8436,7 +8436,7 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 		single_refcall_info->end = FTDB_ENTRY_STRING(py_single_refcall_info,end);
 		single_refcall_info->ord = FTDB_ENTRY_ULONG(py_single_refcall_info,ord);
 		single_refcall_info->expr = FTDB_ENTRY_STRING(py_single_refcall_info,expr);
-		//single_refcall_info->loc = FTDB_ENTRY_STRING(py_single_refcall_info,loc);
+		single_refcall_info->loc = FTDB_ENTRY_STRING(py_single_refcall_info,loc);
 		single_refcall_info->args = FTDB_ENTRY_ULONG_ARRAY(py_single_refcall_info,args);
 		single_refcall_info->args_count = FTDB_ENTRY_ARRAY_SIZE(py_single_refcall_info,args);
 	}
