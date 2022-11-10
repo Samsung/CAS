@@ -287,13 +287,11 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
         h = func["hash"]
         dh = func["declhash"]
         if h not in funcmap:
-            if dh not in dfuncmap:
-                dfuncmap[dh] = func
             # TODO: check for declhash conflicts with functions in db
             # add new function
             funcmap[h] = func
             added_funcs.append(i)
-            if dh not in fdeclmap:
+            if dh not in fdeclmap or func["linkage"] == "internal":
                 # new id
                 funcid_remap[func["id"]] = nextfuncid
                 func["id"] = nextfuncid
