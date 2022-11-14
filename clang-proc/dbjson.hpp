@@ -19,6 +19,7 @@ using namespace clang;
 #include "sha.h"
 #include "base64.h"
 #include "PPCallbacksTracker.h"
+#include "printers.h"
 
 #include <stdint.h>
 
@@ -33,12 +34,7 @@ using namespace clang;
 #include <set>
 #include <map>
 #include <unordered_set>
-
-#if CLANG_VERSION>9
-#define MAKE_UNIQUE std::make_unique
-#else
-#define MAKE_UNIQUE llvm::make_unique
-#endif
+#include <unordered_map>
 
 #define DBG(on,...)		do { if (on) { __VA_ARGS__; } } while(0)
 
@@ -1526,7 +1522,7 @@ public:
     : Visitor(Context,opts), CSVisitor(Context,opts), _sourceFile(sourceFile), _directory(directory), _opts(opts),
 	  TUId(0), Context(Context) {
 	  	  // PP takes ownership.
-	      PP.addPPCallbacks(MAKE_UNIQUE<PPCallbacksTracker>(PP,_opts,mexps));
+	      PP.addPPCallbacks(std::make_unique<PPCallbacksTracker>(PP,_opts,mexps));
   }
 
   static QualType getDeclType(Decl* D) {
@@ -1578,12 +1574,10 @@ public:
 			return "";
 		case clang::VisibleNoLinkage:
 			return "";
-#if CLANG_VERSION==7
 		case clang::ModuleInternalLinkage:
 			return "";
 		case clang::ModuleLinkage:
 			return "";
-#endif
 		case clang::ExternalLinkage:
 			return "external";
 		default:
@@ -1628,10 +1622,10 @@ public:
   void printTemplateParameters(template_default_map_t template_parms, const std::string& Indent,
 		  bool printDefaults = true);
   void printTemplateTypeDefaults(defaut_type_map_t default_type_map, std::map<int,int> type_parms_idx,const std::string& Indent, bool nextJSONitem = true);
-  void printTemplateArguments(const TemplateArgumentList&, TemplateParameterList* Params, const std::string& Indent);
-  void printTemplateArguments(ArrayRef<TemplateArgument> Args, TemplateParameterList* Params, const std::string& Indent);
-  void printTemplateArguments(template_args_t& template_args, const std::string& Indent);
-  void printTemplateArguments(template_args_t& template_args, std::vector<int> type_args_idx, const std::string& Indent, bool nextJSONitem=true);
+  void printTemplateArgs(const TemplateArgumentList&, TemplateParameterList* Params, const std::string& Indent);
+  void printTemplateArgs(ArrayRef<TemplateArgument> Args, TemplateParameterList* Params, const std::string& Indent);
+  void printTemplateArgs(template_args_t& template_args, const std::string& Indent);
+  void printTemplateArgs(template_args_t& template_args, std::vector<int> type_args_idx, const std::string& Indent, bool nextJSONitem=true);
   void getTemplateArguments(const TemplateArgumentList&, const std::string& Indent, template_args_t& template_args);
   void getTemplateArguments(ArrayRef<TemplateArgument> Args, const std::string& Indent, template_args_t& template_args);
 
@@ -1687,9 +1681,7 @@ void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig);
 void getFuncDeclSignatureNoCTA(const FunctionDecl* D, std::string& fdecl_sig, DbJSONClassVisitor& Visitor);
 int internal_declcount(const FunctionDecl *F);
 void taint_params(const clang::FunctionDecl *F, DbJSONClassVisitor::FuncData&);
-#if CLANG_VERSION>6
 bool isOwnedTagDeclType(QualType DT);
-#endif
 QualType resolve_Typedef_Integer_Type(QualType T);
 QualType resolve_Record_Type(QualType T);
 

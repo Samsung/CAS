@@ -11,10 +11,6 @@
 //
 // Modified by [2022] Samsung Electronics, co. Ltd.
 //===----------------------------------------------------------------------===//
-#include "DeclPrinter.h"
-#include "StmtPrinter.h"
-#include "TypePrinter.h"
-
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/Decl.h"
@@ -27,11 +23,111 @@
 #include "clang/AST/PrettyPrinter.h"
 #include "clang/Basic/Module.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "printers.h"
+
 using namespace clang;
+
+namespace {
+  class DeclPrinter : public DeclVisitor<DeclPrinter> {
+    raw_ostream &Out;
+    PrintingPolicy Policy;
+    const ASTContext &Context;
+    unsigned Indentation;
+    bool PrintInstantiation;
+
+    raw_ostream& Indent() { return Indent(Indentation); }
+    raw_ostream& Indent(unsigned Indentation);
+    void ProcessDeclGroup(SmallVectorImpl<Decl*>& Decls);
+
+    void Print(AccessSpecifier AS);
+    void PrintConstructorInitializers(CXXConstructorDecl *CDecl,
+                                      std::string &Proto);
+
+    /// Print an Objective-C method type in parentheses.
+    ///
+    /// \param Quals The Objective-C declaration qualifiers.
+    /// \param T The type to print.
+    void PrintObjCMethodType(ASTContext &Ctx, Decl::ObjCDeclQualifier Quals,
+                             QualType T);
+
+    void PrintObjCTypeParams(ObjCTypeParamList *Params);
+
+  public:
+    DeclPrinter(raw_ostream &Out, const PrintingPolicy &Policy,
+                const ASTContext &Context, unsigned Indentation = 0,
+                bool PrintInstantiation = false)
+        : Out(Out), Policy(Policy), Context(Context), Indentation(Indentation),
+          PrintInstantiation(PrintInstantiation) {}
+
+    void VisitDeclContext(DeclContext *DC, bool Indent = true);
+
+    void VisitTranslationUnitDecl(TranslationUnitDecl *D);
+    void VisitTypedefDecl(TypedefDecl *D);
+    void VisitTypeAliasDecl(TypeAliasDecl *D);
+    void VisitEnumDecl(EnumDecl *D);
+    void VisitRecordDecl(RecordDecl *D);
+    void VisitEnumConstantDecl(EnumConstantDecl *D);
+    void VisitEmptyDecl(EmptyDecl *D);
+    void VisitFunctionDecl(FunctionDecl *D);
+    void VisitFriendDecl(FriendDecl *D);
+    void VisitFieldDecl(FieldDecl *D);
+    void VisitVarDecl(VarDecl *D);
+    void VisitLabelDecl(LabelDecl *D);
+    void VisitParmVarDecl(ParmVarDecl *D);
+    void VisitFileScopeAsmDecl(FileScopeAsmDecl *D);
+    void VisitImportDecl(ImportDecl *D);
+    void VisitStaticAssertDecl(StaticAssertDecl *D);
+    void VisitNamespaceDecl(NamespaceDecl *D);
+    void VisitUsingDirectiveDecl(UsingDirectiveDecl *D);
+    void VisitNamespaceAliasDecl(NamespaceAliasDecl *D);
+    void VisitCXXRecordDecl(CXXRecordDecl *D);
+    void VisitLinkageSpecDecl(LinkageSpecDecl *D);
+    void VisitTemplateDecl(const TemplateDecl *D);
+    void VisitFunctionTemplateDecl(FunctionTemplateDecl *D);
+    void VisitClassTemplateDecl(ClassTemplateDecl *D);
+    void VisitClassTemplateSpecializationDecl(
+                                            ClassTemplateSpecializationDecl *D);
+    void VisitClassTemplatePartialSpecializationDecl(
+                                     ClassTemplatePartialSpecializationDecl *D);
+    void VisitObjCMethodDecl(ObjCMethodDecl *D);
+    void VisitObjCImplementationDecl(ObjCImplementationDecl *D);
+    void VisitObjCInterfaceDecl(ObjCInterfaceDecl *D);
+    void VisitObjCProtocolDecl(ObjCProtocolDecl *D);
+    void VisitObjCCategoryImplDecl(ObjCCategoryImplDecl *D);
+    void VisitObjCCategoryDecl(ObjCCategoryDecl *D);
+    void VisitObjCCompatibleAliasDecl(ObjCCompatibleAliasDecl *D);
+    void VisitObjCPropertyDecl(ObjCPropertyDecl *D);
+    void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
+    void VisitUnresolvedUsingTypenameDecl(UnresolvedUsingTypenameDecl *D);
+    void VisitUnresolvedUsingValueDecl(UnresolvedUsingValueDecl *D);
+    void VisitUsingDecl(UsingDecl *D);
+    void VisitUsingShadowDecl(UsingShadowDecl *D);
+    void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
+    void VisitOMPAllocateDecl(OMPAllocateDecl *D);
+    void VisitOMPRequiresDecl(OMPRequiresDecl *D);
+    void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
+    void VisitOMPDeclareMapperDecl(OMPDeclareMapperDecl *D);
+    void VisitOMPCapturedExprDecl(OMPCapturedExprDecl *D);
+
+    void printTemplateParameters(const TemplateParameterList *Params,
+                                 bool OmitTemplateKW = false);
+    void printTemplateArguments(llvm::ArrayRef<TemplateArgument> Args);
+    void printTemplateArguments(llvm::ArrayRef<TemplateArgumentLoc> Args);
+    void prettyPrintAttributes(Decl *D);
+    void prettyPrintPragmas(Decl *D);
+    void printDeclType(QualType T, StringRef DeclName, bool Pack = false);
+
+    void VisitUnnamedTag(TagDecl *D);
+    void VisitRecordHead(RecordDecl *D);
+  };
+}
 
 static int in_decl_group;
 static int group_unused;
 int csd = 0;
+std::set<const FunctionDecl*> *CTAList;
+
 
 void Decl::print(raw_ostream &Out, unsigned Indentation,
                  bool PrintInstantiation) const {
@@ -92,46 +188,11 @@ static QualType getDeclType(Decl* D) {
   return QualType();
 }
 
-void DeclPrinter::printDeclGroupCTA(Decl** Begin, unsigned NumDecls,
-                      raw_ostream &Out, const PrintingPolicy &Policy,
-                      unsigned Indentation, const ASTContext* Context, std::set<const FunctionDecl*>* CTAList) {
-  if (NumDecls == 1) {
-	DeclPrinter Printer(Out, Policy, *Context, Indentation, false, CTAList);
-	Printer.Visit(*Begin);
-    return;
-  }
-
-  Decl** End = Begin + NumDecls;
-  TagDecl* TD = dyn_cast<TagDecl>(*Begin);
-  if (TD)
-    ++Begin;
-
-  PrintingPolicy SubPolicy(Policy);
-
-  bool isFirst = true;
-  for ( ; Begin != End; ++Begin) {
-    if (isFirst) {
-      if(TD)
-        SubPolicy.IncludeTagDefinition = true;
-      SubPolicy.SuppressSpecifiers = false;
-      isFirst = false;
-    } else {
-      if (!isFirst) Out << ", ";
-      SubPolicy.IncludeTagDefinition = false;
-      SubPolicy.SuppressSpecifiers = true;
-    }
-
-    DeclPrinter Printer(Out, SubPolicy, *Context, Indentation, false, CTAList);
-    Printer.Visit(*Begin);
-  }
-}
-
 void Decl::printGroup(Decl** Begin, unsigned NumDecls,
                       raw_ostream &Out, const PrintingPolicy &Policy,
                       unsigned Indentation) {
   if (NumDecls == 1) {
-    // ignore not Freestanding
-    // (*Begin)->print(Out, Policy, Indentation);
+    (*Begin)->print(Out, Policy, Indentation);
     return;
   }
 
@@ -187,120 +248,6 @@ raw_ostream& DeclPrinter::Indent(unsigned Indentation) {
   return Out;
 }
 
-static void printPrettyAlignedAttr(AlignedAttr* A, raw_ostream &OS, const PrintingPolicy &Policy)  {
-
-	switch(A->getSemanticSpelling()) {
-		default:
-			llvm_unreachable("Unknown attribute spelling!");
-			break;
-		case AlignedAttr::GNU_aligned: {
-			OS << " __attribute__((aligned";
-			unsigned TrailingOmittedArgs = 0;
-			if (!A->isAlignmentExpr() || !A->getAlignmentExpr())
-			  ++TrailingOmittedArgs;
-			OS << "";
-			if (TrailingOmittedArgs < 1)
-			   OS << "(";
-			OS << "";
-			if (!(!A->isAlignmentExpr() || !A->getAlignmentExpr())) {
-			  OS << "";
-			StmtPrinter P(OS, nullptr, Policy);
-			P.Visit(A->getAlignmentExpr());
-			OS << "";
-			}
-			OS << "";
-			if (TrailingOmittedArgs < 1)
-			   OS << ")";
-			OS << "))";
-			break;
-		}
-		case AlignedAttr::CXX11_gnu_aligned: {
-		    OS << " [[gnu::aligned";
-		    unsigned TrailingOmittedArgs = 0;
-		    if (!A->isAlignmentExpr() || !A->getAlignmentExpr())
-		      ++TrailingOmittedArgs;
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << "(";
-		    OS << "";
-		    if (!(!A->isAlignmentExpr() || !A->getAlignmentExpr())) {
-		      OS << "";
-		    StmtPrinter P(OS, nullptr, Policy);
-		    P.Visit(A->getAlignmentExpr());
-		    OS << "";
-		    }
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << ")";
-		    OS << "]]";
-		    break;
-		}
-		case AlignedAttr::Declspec_align: {
-		    OS << " __declspec(align";
-		    unsigned TrailingOmittedArgs = 0;
-		    if (!A->isAlignmentExpr() || !A->getAlignmentExpr())
-		      ++TrailingOmittedArgs;
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << "(";
-		    OS << "";
-		    if (!(!A->isAlignmentExpr() || !A->getAlignmentExpr())) {
-		      OS << "";
-			StmtPrinter P(OS, nullptr, Policy);
-			P.Visit(A->getAlignmentExpr());
-		    OS << "";
-		    }
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << ")";
-		    OS << ")";
-		    break;
-		}
-		case AlignedAttr::Keyword_alignas: {
-		    OS << " alignas";
-		    unsigned TrailingOmittedArgs = 0;
-		    if (!A->isAlignmentExpr() || !A->getAlignmentExpr())
-		      ++TrailingOmittedArgs;
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << "(";
-		    OS << "";
-		    if (!(!A->isAlignmentExpr() || !A->getAlignmentExpr())) {
-		      OS << "";
-			StmtPrinter P(OS, nullptr, Policy);
-			P.Visit(A->getAlignmentExpr());
-		    OS << "";
-		    }
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << ")";
-		    OS << "";
-		    break;
-		}
-		case AlignedAttr::Keyword_Alignas: {
-		    OS << " _Alignas";
-		    unsigned TrailingOmittedArgs = 0;
-		    if (!A->isAlignmentExpr() || !A->getAlignmentExpr())
-		      ++TrailingOmittedArgs;
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << "(";
-		    OS << "";
-		    if (!(!A->isAlignmentExpr() || !A->getAlignmentExpr())) {
-		      OS << "";
-			StmtPrinter P(OS, nullptr, Policy);
-			P.Visit(A->getAlignmentExpr());
-		    OS << "";
-		    }
-		    OS << "";
-		    if (TrailingOmittedArgs < 1)
-		       OS << ")";
-		    OS << "";
-		    break;
-		}
-	}
-}
-
 static std::string quote_escape( const std::string &str ) {
         std::string output;
     for( unsigned i = 0; i < str.length(); ++i ) {
@@ -336,607 +283,11 @@ void printPrettySectionAttr(SectionAttr* A, raw_ostream &OS, const PrintingPolic
 }
 
 static void printPrettyAttr(Attr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  switch (A->getKind()) {
-  case attr::AArch64VectorPcs:
-    return cast<AArch64VectorPcsAttr>(A)->printPretty(OS, Policy);
-  case attr::AMDGPUFlatWorkGroupSize:
-    return cast<AMDGPUFlatWorkGroupSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::AMDGPUNumSGPR:
-    return cast<AMDGPUNumSGPRAttr>(A)->printPretty(OS, Policy);
-  case attr::AMDGPUNumVGPR:
-    return cast<AMDGPUNumVGPRAttr>(A)->printPretty(OS, Policy);
-  case attr::AMDGPUWavesPerEU:
-    return cast<AMDGPUWavesPerEUAttr>(A)->printPretty(OS, Policy);
-  case attr::ARMInterrupt:
-    return cast<ARMInterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::AVRInterrupt:
-    return cast<AVRInterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::AVRSignal:
-    return cast<AVRSignalAttr>(A)->printPretty(OS, Policy);
-  case attr::AbiTag:
-    return cast<AbiTagAttr>(A)->printPretty(OS, Policy);
-  case attr::AcquireCapability:
-    return cast<AcquireCapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::AcquireHandle:
-    return cast<AcquireHandleAttr>(A)->printPretty(OS, Policy);
-  case attr::AcquiredAfter:
-    return cast<AcquiredAfterAttr>(A)->printPretty(OS, Policy);
-  case attr::AcquiredBefore:
-    return cast<AcquiredBeforeAttr>(A)->printPretty(OS, Policy);
-  case attr::AddressSpace:
-    return cast<AddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::Alias:
-    return cast<AliasAttr>(A)->printPretty(OS, Policy);
-  case attr::AlignMac68k:
-    return cast<AlignMac68kAttr>(A)->printPretty(OS, Policy);
-  case attr::AlignValue:
-    return cast<AlignValueAttr>(A)->printPretty(OS, Policy);
-  case attr::Aligned:
-	return printPrettyAlignedAttr(cast<AlignedAttr>(A),OS,Policy);
-  case attr::AllocAlign:
-    return cast<AllocAlignAttr>(A)->printPretty(OS, Policy);
-  case attr::AllocSize:
-    return cast<AllocSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::AlwaysDestroy:
-    return cast<AlwaysDestroyAttr>(A)->printPretty(OS, Policy);
-  case attr::AlwaysInline:
-    return cast<AlwaysInlineAttr>(A)->printPretty(OS, Policy);
-  case attr::AnalyzerNoReturn:
-    return cast<AnalyzerNoReturnAttr>(A)->printPretty(OS, Policy);
-  case attr::Annotate:
-    return cast<AnnotateAttr>(A)->printPretty(OS, Policy);
-  case attr::AnyX86Interrupt:
-    return cast<AnyX86InterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::AnyX86NoCallerSavedRegisters:
-    return cast<AnyX86NoCallerSavedRegistersAttr>(A)->printPretty(OS, Policy);
-  case attr::AnyX86NoCfCheck:
-    return cast<AnyX86NoCfCheckAttr>(A)->printPretty(OS, Policy);
-  case attr::ArcWeakrefUnavailable:
-    return cast<ArcWeakrefUnavailableAttr>(A)->printPretty(OS, Policy);
-  case attr::ArgumentWithTypeTag:
-    return cast<ArgumentWithTypeTagAttr>(A)->printPretty(OS, Policy);
-  case attr::ArmMveAlias:
-    return cast<ArmMveAliasAttr>(A)->printPretty(OS, Policy);
-  case attr::Artificial:
-    return cast<ArtificialAttr>(A)->printPretty(OS, Policy);
-  case attr::AsmLabel:
-    return cast<AsmLabelAttr>(A)->printPretty(OS, Policy);
-  case attr::AssertCapability:
-    return cast<AssertCapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::AssertExclusiveLock:
-    return cast<AssertExclusiveLockAttr>(A)->printPretty(OS, Policy);
-  case attr::AssertSharedLock:
-    return cast<AssertSharedLockAttr>(A)->printPretty(OS, Policy);
-  case attr::AssumeAligned:
-    return cast<AssumeAlignedAttr>(A)->printPretty(OS, Policy);
-  case attr::Availability:
-    return cast<AvailabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::BPFPreserveAccessIndex:
-    return cast<BPFPreserveAccessIndexAttr>(A)->printPretty(OS, Policy);
-  case attr::Blocks:
-    return cast<BlocksAttr>(A)->printPretty(OS, Policy);
-  case attr::C11NoReturn:
-    return cast<C11NoReturnAttr>(A)->printPretty(OS, Policy);
-  case attr::CDecl:
-    return cast<CDeclAttr>(A)->printPretty(OS, Policy);
-  case attr::CFAuditedTransfer:
-    return cast<CFAuditedTransferAttr>(A)->printPretty(OS, Policy);
-  case attr::CFConsumed:
-    return cast<CFConsumedAttr>(A)->printPretty(OS, Policy);
-  case attr::CFGuard:
-    return cast<CFGuardAttr>(A)->printPretty(OS, Policy);
-  case attr::CFICanonicalJumpTable:
-    return cast<CFICanonicalJumpTableAttr>(A)->printPretty(OS, Policy);
-  case attr::CFReturnsNotRetained:
-    return cast<CFReturnsNotRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::CFReturnsRetained:
-    return cast<CFReturnsRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::CFUnknownTransfer:
-    return cast<CFUnknownTransferAttr>(A)->printPretty(OS, Policy);
-  case attr::CPUDispatch:
-    return cast<CPUDispatchAttr>(A)->printPretty(OS, Policy);
-  case attr::CPUSpecific:
-    return cast<CPUSpecificAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDAConstant:
-    return cast<CUDAConstantAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDADevice:
-    return cast<CUDADeviceAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDAGlobal:
-    return cast<CUDAGlobalAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDAHost:
-    return cast<CUDAHostAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDAInvalidTarget:
-    return cast<CUDAInvalidTargetAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDALaunchBounds:
-    return cast<CUDALaunchBoundsAttr>(A)->printPretty(OS, Policy);
-  case attr::CUDAShared:
-    return cast<CUDASharedAttr>(A)->printPretty(OS, Policy);
-  case attr::CXX11NoReturn:
-    return cast<CXX11NoReturnAttr>(A)->printPretty(OS, Policy);
-  case attr::CallableWhen:
-    return cast<CallableWhenAttr>(A)->printPretty(OS, Policy);
-  case attr::Callback:
-    return cast<CallbackAttr>(A)->printPretty(OS, Policy);
-  case attr::Capability:
-    return cast<CapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::CapturedRecord:
-    return cast<CapturedRecordAttr>(A)->printPretty(OS, Policy);
-  case attr::CarriesDependency:
-    return cast<CarriesDependencyAttr>(A)->printPretty(OS, Policy);
-  case attr::Cleanup:
-    return cast<CleanupAttr>(A)->printPretty(OS, Policy);
-  case attr::CodeSeg:
-    return cast<CodeSegAttr>(A)->printPretty(OS, Policy);
-  case attr::Cold:
-    return cast<ColdAttr>(A)->printPretty(OS, Policy);
-  case attr::Common:
-    return cast<CommonAttr>(A)->printPretty(OS, Policy);
-  case attr::Const:
-    return cast<ConstAttr>(A)->printPretty(OS, Policy);
-  case attr::ConstInit:
-    return cast<ConstInitAttr>(A)->printPretty(OS, Policy);
-  case attr::Constructor:
-    return cast<ConstructorAttr>(A)->printPretty(OS, Policy);
-  case attr::Consumable:
-    return cast<ConsumableAttr>(A)->printPretty(OS, Policy);
-  case attr::ConsumableAutoCast:
-    return cast<ConsumableAutoCastAttr>(A)->printPretty(OS, Policy);
-  case attr::ConsumableSetOnRead:
-    return cast<ConsumableSetOnReadAttr>(A)->printPretty(OS, Policy);
-  case attr::Convergent:
-    return cast<ConvergentAttr>(A)->printPretty(OS, Policy);
-  case attr::DLLExport:
-    return cast<DLLExportAttr>(A)->printPretty(OS, Policy);
-  case attr::DLLExportStaticLocal:
-    return cast<DLLExportStaticLocalAttr>(A)->printPretty(OS, Policy);
-  case attr::DLLImport:
-    return cast<DLLImportAttr>(A)->printPretty(OS, Policy);
-  case attr::DLLImportStaticLocal:
-    return cast<DLLImportStaticLocalAttr>(A)->printPretty(OS, Policy);
-  case attr::Deprecated:
-    return cast<DeprecatedAttr>(A)->printPretty(OS, Policy);
-  case attr::Destructor:
-    return cast<DestructorAttr>(A)->printPretty(OS, Policy);
-  case attr::DiagnoseIf:
-    return cast<DiagnoseIfAttr>(A)->printPretty(OS, Policy);
-  case attr::DisableTailCalls:
-    return cast<DisableTailCallsAttr>(A)->printPretty(OS, Policy);
-  case attr::EmptyBases:
-    return cast<EmptyBasesAttr>(A)->printPretty(OS, Policy);
-  case attr::EnableIf:
-    return cast<EnableIfAttr>(A)->printPretty(OS, Policy);
-  case attr::EnumExtensibility:
-    return cast<EnumExtensibilityAttr>(A)->printPretty(OS, Policy);
-  case attr::ExcludeFromExplicitInstantiation:
-    return cast<ExcludeFromExplicitInstantiationAttr>(A)->printPretty(OS, Policy);
-  case attr::ExclusiveTrylockFunction:
-    return cast<ExclusiveTrylockFunctionAttr>(A)->printPretty(OS, Policy);
-  case attr::ExternalSourceSymbol:
-    return cast<ExternalSourceSymbolAttr>(A)->printPretty(OS, Policy);
-  case attr::FallThrough:
-    return cast<FallThroughAttr>(A)->printPretty(OS, Policy);
-  case attr::FastCall:
-    return cast<FastCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Final:
-    return cast<FinalAttr>(A)->printPretty(OS, Policy);
-  case attr::FlagEnum:
-    return cast<FlagEnumAttr>(A)->printPretty(OS, Policy);
-  case attr::Flatten:
-    return cast<FlattenAttr>(A)->printPretty(OS, Policy);
-  case attr::Format:
-    return cast<FormatAttr>(A)->printPretty(OS, Policy);
-  case attr::FormatArg:
-    return cast<FormatArgAttr>(A)->printPretty(OS, Policy);
-  case attr::GNUInline:
-    return cast<GNUInlineAttr>(A)->printPretty(OS, Policy);
-  case attr::GuardedBy:
-    return cast<GuardedByAttr>(A)->printPretty(OS, Policy);
-  case attr::GuardedVar:
-    return cast<GuardedVarAttr>(A)->printPretty(OS, Policy);
-  case attr::HIPPinnedShadow:
-    return cast<HIPPinnedShadowAttr>(A)->printPretty(OS, Policy);
-  case attr::Hot:
-    return cast<HotAttr>(A)->printPretty(OS, Policy);
-  case attr::IBAction:
-    return cast<IBActionAttr>(A)->printPretty(OS, Policy);
-  case attr::IBOutlet:
-    return cast<IBOutletAttr>(A)->printPretty(OS, Policy);
-  case attr::IBOutletCollection:
-    return cast<IBOutletCollectionAttr>(A)->printPretty(OS, Policy);
-  case attr::IFunc:
-    return cast<IFuncAttr>(A)->printPretty(OS, Policy);
-  case attr::InitPriority:
-    return cast<InitPriorityAttr>(A)->printPretty(OS, Policy);
-  case attr::InitSeg:
-    return cast<InitSegAttr>(A)->printPretty(OS, Policy);
-  case attr::IntelOclBicc:
-    return cast<IntelOclBiccAttr>(A)->printPretty(OS, Policy);
-  case attr::InternalLinkage:
-    return cast<InternalLinkageAttr>(A)->printPretty(OS, Policy);
-  case attr::LTOVisibilityPublic:
-    return cast<LTOVisibilityPublicAttr>(A)->printPretty(OS, Policy);
-  case attr::LayoutVersion:
-    return cast<LayoutVersionAttr>(A)->printPretty(OS, Policy);
-  case attr::LifetimeBound:
-    return cast<LifetimeBoundAttr>(A)->printPretty(OS, Policy);
-  case attr::LockReturned:
-    return cast<LockReturnedAttr>(A)->printPretty(OS, Policy);
-  case attr::LocksExcluded:
-    return cast<LocksExcludedAttr>(A)->printPretty(OS, Policy);
-  case attr::LoopHint:
-    return cast<LoopHintAttr>(A)->printPretty(OS, Policy);
-  case attr::MIGServerRoutine:
-    return cast<MIGServerRoutineAttr>(A)->printPretty(OS, Policy);
-  case attr::MSABI:
-    return cast<MSABIAttr>(A)->printPretty(OS, Policy);
-  case attr::MSAllocator:
-    return cast<MSAllocatorAttr>(A)->printPretty(OS, Policy);
-  case attr::MSInheritance:
-    return cast<MSInheritanceAttr>(A)->printPretty(OS, Policy);
-  case attr::MSNoVTable:
-    return cast<MSNoVTableAttr>(A)->printPretty(OS, Policy);
-  case attr::MSP430Interrupt:
-    return cast<MSP430InterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::MSStruct:
-    return cast<MSStructAttr>(A)->printPretty(OS, Policy);
-  case attr::MSVtorDisp:
-    return cast<MSVtorDispAttr>(A)->printPretty(OS, Policy);
-  case attr::MaxFieldAlignment:
-    return cast<MaxFieldAlignmentAttr>(A)->printPretty(OS, Policy);
-  case attr::MayAlias:
-    return cast<MayAliasAttr>(A)->printPretty(OS, Policy);
-  case attr::MicroMips:
-    return cast<MicroMipsAttr>(A)->printPretty(OS, Policy);
-  case attr::MinSize:
-    return cast<MinSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::MinVectorWidth:
-    return cast<MinVectorWidthAttr>(A)->printPretty(OS, Policy);
-  case attr::Mips16:
-    return cast<Mips16Attr>(A)->printPretty(OS, Policy);
-  case attr::MipsInterrupt:
-    return cast<MipsInterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::MipsLongCall:
-    return cast<MipsLongCallAttr>(A)->printPretty(OS, Policy);
-  case attr::MipsShortCall:
-    return cast<MipsShortCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Mode:
-    return cast<ModeAttr>(A)->printPretty(OS, Policy);
-  case attr::NSConsumed:
-    return cast<NSConsumedAttr>(A)->printPretty(OS, Policy);
-  case attr::NSConsumesSelf:
-    return cast<NSConsumesSelfAttr>(A)->printPretty(OS, Policy);
-  case attr::NSReturnsAutoreleased:
-    return cast<NSReturnsAutoreleasedAttr>(A)->printPretty(OS, Policy);
-  case attr::NSReturnsNotRetained:
-    return cast<NSReturnsNotRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::NSReturnsRetained:
-    return cast<NSReturnsRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::Naked:
-    return cast<NakedAttr>(A)->printPretty(OS, Policy);
-  case attr::NoAlias:
-    return cast<NoAliasAttr>(A)->printPretty(OS, Policy);
-  case attr::NoBuiltin:
-    return cast<NoBuiltinAttr>(A)->printPretty(OS, Policy);
-  case attr::NoCommon:
-    return cast<NoCommonAttr>(A)->printPretty(OS, Policy);
-  case attr::NoDebug:
-    return cast<NoDebugAttr>(A)->printPretty(OS, Policy);
-  case attr::NoDeref:
-    return cast<NoDerefAttr>(A)->printPretty(OS, Policy);
-  case attr::NoDestroy:
-    return cast<NoDestroyAttr>(A)->printPretty(OS, Policy);
-  case attr::NoDuplicate:
-    return cast<NoDuplicateAttr>(A)->printPretty(OS, Policy);
-  case attr::NoEscape:
-    return cast<NoEscapeAttr>(A)->printPretty(OS, Policy);
-  case attr::NoInline:
-    return cast<NoInlineAttr>(A)->printPretty(OS, Policy);
-  case attr::NoInstrumentFunction:
-    return cast<NoInstrumentFunctionAttr>(A)->printPretty(OS, Policy);
-  case attr::NoMicroMips:
-    return cast<NoMicroMipsAttr>(A)->printPretty(OS, Policy);
-  case attr::NoMips16:
-    return cast<NoMips16Attr>(A)->printPretty(OS, Policy);
-  case attr::NoReturn:
-    return cast<NoReturnAttr>(A)->printPretty(OS, Policy);
-  case attr::NoSanitize:
-    return cast<NoSanitizeAttr>(A)->printPretty(OS, Policy);
-  case attr::NoSpeculativeLoadHardening:
-    return cast<NoSpeculativeLoadHardeningAttr>(A)->printPretty(OS, Policy);
-  case attr::NoSplitStack:
-    return cast<NoSplitStackAttr>(A)->printPretty(OS, Policy);
-  case attr::NoStackProtector:
-    return cast<NoStackProtectorAttr>(A)->printPretty(OS, Policy);
-  case attr::NoThreadSafetyAnalysis:
-    return cast<NoThreadSafetyAnalysisAttr>(A)->printPretty(OS, Policy);
-  case attr::NoThrow:
-    return cast<NoThrowAttr>(A)->printPretty(OS, Policy);
-  case attr::NoUniqueAddress:
-    return cast<NoUniqueAddressAttr>(A)->printPretty(OS, Policy);
-  case attr::NonNull:
-    return cast<NonNullAttr>(A)->printPretty(OS, Policy);
-  case attr::NotTailCalled:
-    return cast<NotTailCalledAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPAllocateDecl:
-    return cast<OMPAllocateDeclAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPCaptureKind:
-    return cast<OMPCaptureKindAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPCaptureNoInit:
-    return cast<OMPCaptureNoInitAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPDeclareSimdDecl:
-    return cast<OMPDeclareSimdDeclAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPDeclareTargetDecl:
-    return cast<OMPDeclareTargetDeclAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPDeclareVariant:
-    return cast<OMPDeclareVariantAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPReferencedVar:
-    return cast<OMPReferencedVarAttr>(A)->printPretty(OS, Policy);
-  case attr::OMPThreadPrivateDecl:
-    return cast<OMPThreadPrivateDeclAttr>(A)->printPretty(OS, Policy);
-  case attr::OSConsumed:
-    return cast<OSConsumedAttr>(A)->printPretty(OS, Policy);
-  case attr::OSConsumesThis:
-    return cast<OSConsumesThisAttr>(A)->printPretty(OS, Policy);
-  case attr::OSReturnsNotRetained:
-    return cast<OSReturnsNotRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::OSReturnsRetained:
-    return cast<OSReturnsRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::OSReturnsRetainedOnNonZero:
-    return cast<OSReturnsRetainedOnNonZeroAttr>(A)->printPretty(OS, Policy);
-  case attr::OSReturnsRetainedOnZero:
-    return cast<OSReturnsRetainedOnZeroAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCBoxable:
-    return cast<ObjCBoxableAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCBridge:
-    return cast<ObjCBridgeAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCBridgeMutable:
-    return cast<ObjCBridgeMutableAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCBridgeRelated:
-    return cast<ObjCBridgeRelatedAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCClassStub:
-    return cast<ObjCClassStubAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCDesignatedInitializer:
-    return cast<ObjCDesignatedInitializerAttr>(A)->printPretty(OS, Policy);
-case attr::ObjCDirect:
-    return cast<ObjCDirectAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCDirectMembers:
-    return cast<ObjCDirectMembersAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCException:
-    return cast<ObjCExceptionAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCExplicitProtocolImpl:
-    return cast<ObjCExplicitProtocolImplAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCExternallyRetained:
-    return cast<ObjCExternallyRetainedAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCGC:
-    return cast<ObjCGCAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCIndependentClass:
-    return cast<ObjCIndependentClassAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCInertUnsafeUnretained:
-    return cast<ObjCInertUnsafeUnretainedAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCKindOf:
-    return cast<ObjCKindOfAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCMethodFamily:
-    return cast<ObjCMethodFamilyAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCNSObject:
-    return cast<ObjCNSObjectAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCNonLazyClass:
-    return cast<ObjCNonLazyClassAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCOwnership:
-    return cast<ObjCOwnershipAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCPreciseLifetime:
-    return cast<ObjCPreciseLifetimeAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCRequiresPropertyDefs:
-    return cast<ObjCRequiresPropertyDefsAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCRequiresSuper:
-    return cast<ObjCRequiresSuperAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCReturnsInnerPointer:
-    return cast<ObjCReturnsInnerPointerAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCRootClass:
-    return cast<ObjCRootClassAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCRuntimeName:
-    return cast<ObjCRuntimeNameAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCRuntimeVisible:
-    return cast<ObjCRuntimeVisibleAttr>(A)->printPretty(OS, Policy);
-  case attr::ObjCSubclassingRestricted:
-    return cast<ObjCSubclassingRestrictedAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLAccess:
-    return cast<OpenCLAccessAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLConstantAddressSpace:
-    return cast<OpenCLConstantAddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLGenericAddressSpace:
-    return cast<OpenCLGenericAddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLGlobalAddressSpace:
-    return cast<OpenCLGlobalAddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLIntelReqdSubGroupSize:
-    return cast<OpenCLIntelReqdSubGroupSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLKernel:
-    return cast<OpenCLKernelAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLLocalAddressSpace:
-    return cast<OpenCLLocalAddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLPrivateAddressSpace:
-    return cast<OpenCLPrivateAddressSpaceAttr>(A)->printPretty(OS, Policy);
-  case attr::OpenCLUnrollHint:
-    return cast<OpenCLUnrollHintAttr>(A)->printPretty(OS, Policy);
-  case attr::OptimizeNone:
-    return cast<OptimizeNoneAttr>(A)->printPretty(OS, Policy);
-  case attr::Overloadable:
-    return cast<OverloadableAttr>(A)->printPretty(OS, Policy);
-  case attr::Override:
-    return cast<OverrideAttr>(A)->printPretty(OS, Policy);
- case attr::Owner:
-    return cast<OwnerAttr>(A)->printPretty(OS, Policy);
-  case attr::Ownership:
-    return cast<OwnershipAttr>(A)->printPretty(OS, Policy);
-  case attr::Packed:
-    return cast<PackedAttr>(A)->printPretty(OS, Policy);
-  case attr::ParamTypestate:
-    return cast<ParamTypestateAttr>(A)->printPretty(OS, Policy);
-  case attr::Pascal:
-    return cast<PascalAttr>(A)->printPretty(OS, Policy);
-  case attr::PassObjectSize:
-    return cast<PassObjectSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::PatchableFunctionEntry:
-    return cast<PatchableFunctionEntryAttr>(A)->printPretty(OS, Policy);
-  case attr::Pcs:
-    return cast<PcsAttr>(A)->printPretty(OS, Policy);
- case attr::Pointer:
-    return cast<PointerAttr>(A)->printPretty(OS, Policy);
-  case attr::PragmaClangBSSSection:
-    return cast<PragmaClangBSSSectionAttr>(A)->printPretty(OS, Policy);
-  case attr::PragmaClangDataSection:
-    return cast<PragmaClangDataSectionAttr>(A)->printPretty(OS, Policy);
- case attr::PragmaClangRelroSection:
-    return cast<PragmaClangRelroSectionAttr>(A)->printPretty(OS, Policy);
-  case attr::PragmaClangRodataSection:
-    return cast<PragmaClangRodataSectionAttr>(A)->printPretty(OS, Policy);
-  case attr::PragmaClangTextSection:
-    return cast<PragmaClangTextSectionAttr>(A)->printPretty(OS, Policy);
-  case attr::PreserveAll:
-    return cast<PreserveAllAttr>(A)->printPretty(OS, Policy);
-  case attr::PreserveMost:
-    return cast<PreserveMostAttr>(A)->printPretty(OS, Policy);
-  case attr::PtGuardedBy:
-    return cast<PtGuardedByAttr>(A)->printPretty(OS, Policy);
-  case attr::PtGuardedVar:
-    return cast<PtGuardedVarAttr>(A)->printPretty(OS, Policy);
-  case attr::Ptr32:
-    return cast<Ptr32Attr>(A)->printPretty(OS, Policy);
-  case attr::Ptr64:
-    return cast<Ptr64Attr>(A)->printPretty(OS, Policy);
-  case attr::Pure:
-    return cast<PureAttr>(A)->printPretty(OS, Policy);
-  case attr::RISCVInterrupt:
-    return cast<RISCVInterruptAttr>(A)->printPretty(OS, Policy);
-  case attr::RegCall:
-    return cast<RegCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Reinitializes:
-    return cast<ReinitializesAttr>(A)->printPretty(OS, Policy);
-  case attr::ReleaseCapability:
-    return cast<ReleaseCapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::ReleaseHandle:
-    return cast<ReleaseHandleAttr>(A)->printPretty(OS, Policy);
-  case attr::RenderScriptKernel:
-    return cast<RenderScriptKernelAttr>(A)->printPretty(OS, Policy);
-  case attr::ReqdWorkGroupSize:
-    return cast<ReqdWorkGroupSizeAttr>(A)->printPretty(OS, Policy);
-  case attr::RequiresCapability:
-    return cast<RequiresCapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::Restrict:
-    return cast<RestrictAttr>(A)->printPretty(OS, Policy);
-  case attr::ReturnTypestate:
-    return cast<ReturnTypestateAttr>(A)->printPretty(OS, Policy);
-  case attr::ReturnsNonNull:
-    return cast<ReturnsNonNullAttr>(A)->printPretty(OS, Policy);
-  case attr::ReturnsTwice:
-    return cast<ReturnsTwiceAttr>(A)->printPretty(OS, Policy);
-  case attr::SPtr:
-    return cast<SPtrAttr>(A)->printPretty(OS, Policy);
-  case attr::SYCLKernel:
-    return cast<SYCLKernelAttr>(A)->printPretty(OS, Policy);
-  case attr::ScopedLockable:
-    return cast<ScopedLockableAttr>(A)->printPretty(OS, Policy);
-  case attr::Section:
-	return printPrettySectionAttr(cast<SectionAttr>(A),OS,Policy);
-  case attr::SelectAny:
-    return cast<SelectAnyAttr>(A)->printPretty(OS, Policy);
-  case attr::Sentinel:
-    return cast<SentinelAttr>(A)->printPretty(OS, Policy);
-  case attr::SetTypestate:
-    return cast<SetTypestateAttr>(A)->printPretty(OS, Policy);
-  case attr::SharedTrylockFunction:
-    return cast<SharedTrylockFunctionAttr>(A)->printPretty(OS, Policy);
-  case attr::SpeculativeLoadHardening:
-    return cast<SpeculativeLoadHardeningAttr>(A)->printPretty(OS, Policy);
-  case attr::StdCall:
-    return cast<StdCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Suppress:
-    return cast<SuppressAttr>(A)->printPretty(OS, Policy);
-  case attr::SwiftCall:
-    return cast<SwiftCallAttr>(A)->printPretty(OS, Policy);
-  case attr::SwiftContext:
-    return cast<SwiftContextAttr>(A)->printPretty(OS, Policy);
-  case attr::SwiftErrorResult:
-    return cast<SwiftErrorResultAttr>(A)->printPretty(OS, Policy);
-  case attr::SwiftIndirectResult:
-    return cast<SwiftIndirectResultAttr>(A)->printPretty(OS, Policy);
-  case attr::SysVABI:
-    return cast<SysVABIAttr>(A)->printPretty(OS, Policy);
-  case attr::TLSModel:
-    return cast<TLSModelAttr>(A)->printPretty(OS, Policy);
-  case attr::Target:
-    return cast<TargetAttr>(A)->printPretty(OS, Policy);
-  case attr::TestTypestate:
-    return cast<TestTypestateAttr>(A)->printPretty(OS, Policy);
-  case attr::ThisCall:
-    return cast<ThisCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Thread:
-    return cast<ThreadAttr>(A)->printPretty(OS, Policy);
-  case attr::TransparentUnion:
-    return cast<TransparentUnionAttr>(A)->printPretty(OS, Policy);
-  case attr::TrivialABI:
-    return cast<TrivialABIAttr>(A)->printPretty(OS, Policy);
-  case attr::TryAcquireCapability:
-    return cast<TryAcquireCapabilityAttr>(A)->printPretty(OS, Policy);
-  case attr::TypeNonNull:
-    return cast<TypeNonNullAttr>(A)->printPretty(OS, Policy);
-  case attr::TypeNullUnspecified:
-    return cast<TypeNullUnspecifiedAttr>(A)->printPretty(OS, Policy);
-  case attr::TypeNullable:
-    return cast<TypeNullableAttr>(A)->printPretty(OS, Policy);
-  case attr::TypeTagForDatatype:
-    return cast<TypeTagForDatatypeAttr>(A)->printPretty(OS, Policy);
-  case attr::TypeVisibility:
-    return cast<TypeVisibilityAttr>(A)->printPretty(OS, Policy);
-  case attr::UPtr:
-    return cast<UPtrAttr>(A)->printPretty(OS, Policy);
-  case attr::Unavailable:
-    return cast<UnavailableAttr>(A)->printPretty(OS, Policy);
-  case attr::Uninitialized:
-    return cast<UninitializedAttr>(A)->printPretty(OS, Policy);
-  case attr::Unused:
-    return cast<UnusedAttr>(A)->printPretty(OS, Policy);
-  case attr::UseHandle:
-    return cast<UseHandleAttr>(A)->printPretty(OS, Policy);
-  case attr::Used:
-    return cast<UsedAttr>(A)->printPretty(OS, Policy);
-  case attr::Uuid:
-    return cast<UuidAttr>(A)->printPretty(OS, Policy);
-  case attr::VecReturn:
-    return cast<VecReturnAttr>(A)->printPretty(OS, Policy);
-  case attr::VecTypeHint:
-    return cast<VecTypeHintAttr>(A)->printPretty(OS, Policy);
-  case attr::VectorCall:
-    return cast<VectorCallAttr>(A)->printPretty(OS, Policy);
-  case attr::Visibility:
-    return cast<VisibilityAttr>(A)->printPretty(OS, Policy);
-  case attr::WarnUnused:
-    return cast<WarnUnusedAttr>(A)->printPretty(OS, Policy);
-  case attr::WarnUnusedResult:
-    return cast<WarnUnusedResultAttr>(A)->printPretty(OS, Policy);
-  case attr::Weak:
-    return cast<WeakAttr>(A)->printPretty(OS, Policy);
-  case attr::WeakImport:
-    return cast<WeakImportAttr>(A)->printPretty(OS, Policy);
-  case attr::WeakRef:
-    return cast<WeakRefAttr>(A)->printPretty(OS, Policy);
-  case attr::WebAssemblyExportName:
-    return cast<WebAssemblyExportNameAttr>(A)->printPretty(OS, Policy);
-  case attr::WebAssemblyImportModule:
-    return cast<WebAssemblyImportModuleAttr>(A)->printPretty(OS, Policy);
-  case attr::WebAssemblyImportName:
-    return cast<WebAssemblyImportNameAttr>(A)->printPretty(OS, Policy);
-  case attr::WorkGroupSizeHint:
-    return cast<WorkGroupSizeHintAttr>(A)->printPretty(OS, Policy);
-  case attr::X86ForceAlignArgPointer:
-    return cast<X86ForceAlignArgPointerAttr>(A)->printPretty(OS, Policy);
-  case attr::XRayInstrument:
-    return cast<XRayInstrumentAttr>(A)->printPretty(OS, Policy);
-  case attr::XRayLogArgs:
-    return cast<XRayLogArgsAttr>(A)->printPretty(OS, Policy);
-  }
-  llvm_unreachable("Unexpected attribute kind!");
+  if(A->getKind() == attr::Section)
+    return printPrettySectionAttr(cast<SectionAttr>(A), OS, Policy);
+  else
+    return A->printPretty(OS, Policy);
 }
-
 
 void DeclPrinter::prettyPrintAttributes(Decl *D) {
   if (Policy.PolishForDeclaration)
@@ -953,9 +304,7 @@ void DeclPrinter::prettyPrintAttributes(Decl *D) {
 #include "clang/Basic/AttrList.inc"
         break;
       default:
-        {
-        	printPrettyAttr(A,Out,Policy);
-        }
+        printPrettyAttr(A, Out, Policy);
         break;
       }
     }
@@ -973,10 +322,8 @@ void DeclPrinter::prettyPrintPragmas(Decl *D) {
 #define ATTR(X)
 #define PRAGMA_SPELLING_ATTR(X) case attr::X:
 #include "clang/Basic/AttrList.inc"
-        {
-        	A->printPretty(Out,Policy);
-        	Indent();
-        }
+        A->printPretty(Out, Policy);
+        Indent();
         break;
       default:
         break;
@@ -993,7 +340,7 @@ void DeclPrinter::printDeclType(QualType T, StringRef DeclName, bool Pack) {
     Pack = true;
     T = PET->getPattern();
   }
-  TypePrint(T,Out, Policy, (Pack ? "..." : "") + DeclName, Indentation,CTAList);
+  T.print(Out, Policy, (Pack ? "..." : "") + DeclName, Indentation);
 }
 
 void DeclPrinter::ProcessDeclGroup(SmallVectorImpl<Decl*>& Decls) {
@@ -1002,14 +349,6 @@ void DeclPrinter::ProcessDeclGroup(SmallVectorImpl<Decl*>& Decls) {
   Decl::printGroup(Decls.data(), Decls.size(), Out, Policy, Indentation);
   Out << ";\n";
   Decls.clear();
-  in_decl_group = 0;
-}
-
-void DeclPrinter::ProcessDeclGroupNoClear(SmallVectorImpl<Decl*>& Decls) {
-  in_decl_group = 1;
-  this->Indent();
-  Decl::printGroup(Decls.data(), Decls.size(), Out, Policy, Indentation);
-  Out << ";\n";
   in_decl_group = 0;
 }
 
@@ -1067,10 +406,8 @@ void DeclPrinter::PrintConstructorInitializers(CXXConstructorDecl *CDecl,
       } else
         SimpleInit = Init;
 
-      if (SimpleInit) {
-    	  StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-    	  P.Visit(SimpleInit);
-      }
+      if (SimpleInit)
+        SimpleInit->printPretty(Out, nullptr, Policy, Indentation);
       else {
         for (unsigned I = 0; I != NumArgs; ++I) {
           assert(Args[I] != nullptr && "Expected non-null Expr");
@@ -1079,8 +416,7 @@ void DeclPrinter::PrintConstructorInitializers(CXXConstructorDecl *CDecl,
 
           if (I)
             Out << ", ";
-          StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-          P.Visit(Args[I]);
+          Args[I]->printPretty(Out, nullptr, Policy, Indentation);
         }
       }
     }
@@ -1236,9 +572,8 @@ void DeclPrinter::VisitTypedefDecl(TypedefDecl *D) {
     if (D->isModulePrivate())
       Out << "__module_private__ ";
   }
-
   QualType Ty = D->getTypeSourceInfo()->getType();
-  TypePrint(Ty,Out, Policy, D->getName(), Indentation,CTAList);
+  Ty.print(Out, Policy, D->getName(), Indentation);
   prettyPrintAttributes(D);
 }
 
@@ -1263,38 +598,13 @@ void DeclPrinter::VisitEnumDecl(EnumDecl *D) {
 
   Out << ' ' << *D;
 
-  if (D->isFixed() && D->getASTContext().getLangOpts().CPlusPlus11) {
-    Out << " : ";
-    TypePrint(D->getIntegerType(),Out, Policy,Twine(),0,CTAList);
-  }
+  if (D->isFixed() && D->getASTContext().getLangOpts().CPlusPlus11)
+    Out << " : " << D->getIntegerType().stream(Policy);
 
   if (D->isCompleteDefinition()) {
     Out << " {\n";
     VisitDeclContext(D);
     Indent() << "}";
-  }
-}
-
-void DeclPrinter::VisitNakedTagDecl(TagDecl *D) {
-
-  prettyPrintAttributes(D);
-
-  if (D->isCompleteDefinition()) {
-    Out << " {\n";
-    VisitDeclContext(D);
-    Indent() << "}";
-  }
-}
-
-void DeclPrinter::PrintRecordHead(RecordDecl *D) {
-  if (!Policy.SuppressSpecifiers && D->isModulePrivate())
-    Out << "__module_private__ ";
-  Out << D->getKindName();
-
-  prettyPrintAttributes(D);
-
-  if (D->getIdentifier()) {
-    Out << ' ' << *D;
   }
 }
 
@@ -1305,9 +615,8 @@ void DeclPrinter::VisitRecordDecl(RecordDecl *D) {
 
   prettyPrintAttributes(D);
 
-  if (D->getIdentifier()) {
+  if (D->getIdentifier())
     Out << ' ' << *D;
-  }
 
   if (D->isCompleteDefinition()) {
     Out << " {\n";
@@ -1321,8 +630,7 @@ void DeclPrinter::VisitEnumConstantDecl(EnumConstantDecl *D) {
   prettyPrintAttributes(D);
   if (Expr *Init = D->getInitExpr()) {
     Out << " = ";
-    StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", &Context, CTAList);
-    P.Visit(Init);
+    Init->printPretty(Out, nullptr, Policy, Indentation, "\n", &Context);
   }
 }
 
@@ -1333,8 +641,7 @@ static void printExplicitSpecifier(ExplicitSpecifier ES, llvm::raw_ostream &Out,
   llvm::raw_string_ostream EOut(Proto);
   if (ES.getExpr()) {
     EOut << "(";
-    StmtPrinter P(EOut, nullptr, Policy, Indentation);
-    P.Visit(ES.getExpr());
+    ES.getExpr()->printPretty(EOut, nullptr, Policy, Indentation);
     EOut << ")";
   }
   EOut << " ";
@@ -1490,8 +797,8 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       if (isComputedNoexcept(FT->getExceptionSpecType())) {
         Proto += "(";
         llvm::raw_string_ostream EOut(Proto);
-        StmtPrinter P(EOut, nullptr, SubPolicy, Indentation, "\n", nullptr, CTAList);
-        P.Visit(FT->getNoexceptExpr());
+        FT->getNoexceptExpr()->printPretty(EOut, nullptr, SubPolicy,
+                                           Indentation);
         EOut.flush();
         Proto += EOut.str();
         Proto += ")";
@@ -1508,18 +815,17 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
         Out << Proto << " -> ";
         Proto.clear();
       }
-      TypePrint(AFT->getReturnType(),Out, Policy, Proto, 0,CTAList);
+      AFT->getReturnType().print(Out, Policy, Proto);
       Proto.clear();
     }
     Out << Proto;
 
     if (Expr *TrailingRequiresClause = D->getTrailingRequiresClause()) {
       Out << " requires ";
-      StmtPrinter P(Out, nullptr, SubPolicy, Indentation, "\n", nullptr, CTAList);
-      P.Visit(TrailingRequiresClause);
+      TrailingRequiresClause->printPretty(Out, nullptr, SubPolicy, Indentation);
     }
   } else {
-	  TypePrint(Ty, Out, Policy, Proto, 0,CTAList);
+    Ty.print(Out, Policy, Proto);
   }
 
   prettyPrintAttributes(D);
@@ -1547,10 +853,8 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       } else
         Out << ' ';
 
-      if (D->getBody()) {
-        StmtPrinter P(Out, nullptr, SubPolicy, Indentation, "\n", nullptr, CTAList);
-        P.Visit(const_cast<Stmt*>(D->getBody()));
-      }
+      if (D->getBody())
+        D->getBody()->printPretty(Out, nullptr, SubPolicy, Indentation);
     } else {
       if (!Policy.TerseOutput && isa<CXXConstructorDecl>(*D))
         Out << " {}";
@@ -1613,7 +917,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       else if(T->isPointerType()){
         if(GetBaseType(T)->isBuiltinType()){
           //use canonical type
-          TypePrint(D->getASTContext().getUnqualifiedObjCPointerType(T),Out, Policy,D->getName(),Indentation,CTAList);
+          D->getASTContext().getUnqualifiedObjCPointerType(T).print(Out,Policy,D->getName(),Indentation);
         }
         else{
           //replace with void * type
@@ -1624,7 +928,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       else if(T->isArrayType()){
         if(GetBaseType(T)->isBuiltinType()){
           //use canonical type
-          TypePrint(D->getASTContext().getUnqualifiedObjCPointerType(T),Out, Policy,D->getName(),Indentation,CTAList);
+          D->getASTContext().getUnqualifiedObjCPointerType(T).print(Out,Policy,D->getName(),Indentation);
         }
         else{
           //replace with char[] of proper size
@@ -1640,21 +944,20 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       else if(T->isEnumeralType()){
         //get corresponding integer type
         T = cast<EnumType>(T)->getDecl()->getIntegerType();
-        TypePrint(D->getASTContext().getUnqualifiedObjCPointerType(T),Out, Policy,D->getName(),Indentation,CTAList);
+        D->getASTContext().getUnqualifiedObjCPointerType(T).print(Out,Policy,D->getName(),Indentation);
         if (D->isBitField()) {
           Out << " : ";
-          StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-          P.Visit(D->getBitWidth());
+          D->getBitWidth()->printPretty(Out,nullptr,Policy,Indentation);
         }
         return;
       }
       else if(T->isBuiltinType()){
         //use canonical type
-        TypePrint(D->getASTContext().getUnqualifiedObjCPointerType(T),Out, Policy,D->getName(),Indentation,CTAList);
+        D->getASTContext().getUnqualifiedObjCPointerType(T).print(Out,Policy,D->getName(),Indentation);
         if (D->isBitField()) {
           Out << " : ";
-          StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-          P.Visit(D->getBitWidth());
+          D->getBitWidth()->printPretty(Out,nullptr,Policy,Indentation);
+
         }
         return;
       }
@@ -1669,12 +972,12 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
     }
   }
 
-  TypePrint(D->getASTContext().getUnqualifiedObjCPointerType(D->getType()),Out, Policy,D->getName(),Indentation,CTAList);
+  Out << D->getASTContext().getUnqualifiedObjCPointerType(D->getType()).
+         stream(Policy, D->getName(), Indentation);
 
   if (D->isBitField()) {
     Out << " : ";
-    StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-    P.Visit(D->getBitWidth());
+    D->getBitWidth()->printPretty(Out, nullptr, Policy, Indentation);
   }
 
   Expr *Init = D->getInClassInitializer();
@@ -1683,8 +986,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       Out << " ";
     else
       Out << " = ";
-    StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-    P.Visit(Init);
+    Init->printPretty(Out, nullptr, Policy, Indentation);
   }
   prettyPrintAttributes(D);
 }
@@ -1757,8 +1059,7 @@ void DeclPrinter::VisitVarDecl(VarDecl *D) {
       PrintingPolicy SubPolicy(Policy);
       SubPolicy.SuppressSpecifiers = false;
       SubPolicy.IncludeTagDefinition = false;
-      StmtPrinter P(Out, nullptr, SubPolicy, Indentation, "\n", nullptr, CTAList);
-      P.Visit(Init);
+      Init->printPretty(Out, nullptr, SubPolicy, Indentation);
       if ((D->getInitStyle() == VarDecl::CallInit) && !isa<ParenListExpr>(Init))
         Out << ")";
     }
@@ -1772,8 +1073,7 @@ void DeclPrinter::VisitParmVarDecl(ParmVarDecl *D) {
 
 void DeclPrinter::VisitFileScopeAsmDecl(FileScopeAsmDecl *D) {
   Out << "__asm (";
-  StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-  P.Visit(D->getAsmString());
+  D->getAsmString()->printPretty(Out, nullptr, Policy, Indentation);
   Out << ")";
 }
 
@@ -1783,15 +1083,12 @@ void DeclPrinter::VisitImportDecl(ImportDecl *D) {
 }
 
 void DeclPrinter::VisitStaticAssertDecl(StaticAssertDecl *D) {
-  extern bool enable_sa;
   if(!enable_sa) return;
   Out << "static_assert(";
-  StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-  P.Visit(D->getAssertExpr());
+  D->getAssertExpr()->printPretty(Out, nullptr, Policy, Indentation);
   if (StringLiteral *SL = D->getMessage()) {
     Out << ", ";
-    StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-    P.Visit(SL);
+    SL->printPretty(Out, nullptr, Policy, Indentation);
   }
   Out << ")";
 }
@@ -1948,8 +1245,8 @@ void DeclPrinter::printTemplateParameters(const TemplateParameterList *Params,
 
       if (NTTP->hasDefaultArgument()) {
         Out << " = ";
-        StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-        P.Visit(NTTP->getDefaultArgument());
+        NTTP->getDefaultArgument()->printPretty(Out, nullptr, Policy,
+                                                Indentation);
       }
     } else if (auto TTPD = dyn_cast<TemplateTemplateParmDecl>(Param)) {
       VisitTemplateDecl(TTPD);
@@ -1995,8 +1292,8 @@ void DeclPrinter::VisitTemplateDecl(const TemplateDecl *D) {
     Visit(TD);
   else if (const auto *Concept = dyn_cast<ConceptDecl>(D)) {
     Out << "concept " << Concept->getName() << " = " ;
-    StmtPrinter P(Out, nullptr, Policy, Indentation, "\n", nullptr, CTAList);
-    P.Visit(Concept->getConstraintExpr());
+    Concept->getConstraintExpr()->printPretty(Out, nullptr, Policy,
+                                              Indentation);
     Out << ";";
   }
 }
@@ -2156,8 +1453,7 @@ void DeclPrinter::VisitObjCMethodDecl(ObjCMethodDecl *OMD) {
 
   if (OMD->getBody() && !Policy.TerseOutput) {
     Out << ' ';
-    StmtPrinter P(Out, nullptr, Policy, 0, "\n", nullptr, CTAList);
-    P.Visit(const_cast<Stmt*>(OMD->getBody()));
+    OMD->getBody()->printPretty(Out, nullptr, Policy);
   }
   else if (Policy.PolishForDeclaration)
     Out << ';';
@@ -2528,10 +1824,9 @@ void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
       D->printName(Out);
     }
     Out << " : ";
-    TypePrint(D->getType(),Out,Policy,Twine(),0,CTAList);
+    D->getType().print(Out, Policy);
     Out << " : ";
-    StmtPrinter P(Out, nullptr, Policy, 0, "\n", nullptr, CTAList);
-    P.Visit(D->getCombiner());
+    D->getCombiner()->printPretty(Out, nullptr, Policy, 0);
     Out << ")";
     if (auto *Init = D->getInitializer()) {
       Out << " initializer(";
@@ -2545,8 +1840,7 @@ void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
       case OMPDeclareReductionDecl::CallInit:
         break;
       }
-      StmtPrinter P(Out, nullptr, Policy, 0, "\n", nullptr, CTAList);
-      P.Visit(Init);
+      Init->printPretty(Out, nullptr, Policy, 0);
       if (D->getInitializerKind() == OMPDeclareReductionDecl::DirectInit)
         Out << ")";
       Out << ")";
@@ -2559,7 +1853,7 @@ void DeclPrinter::VisitOMPDeclareMapperDecl(OMPDeclareMapperDecl *D) {
     Out << "#pragma omp declare mapper (";
     D->printName(Out);
     Out << " : ";
-    TypePrint(D->getType(),Out, Policy,Twine(),0,CTAList);
+    D->getType().print(Out, Policy);
     Out << " ";
     Out << D->getVarName();
     Out << ")";
@@ -2574,7 +1868,57 @@ void DeclPrinter::VisitOMPDeclareMapperDecl(OMPDeclareMapperDecl *D) {
 }
 
 void DeclPrinter::VisitOMPCapturedExprDecl(OMPCapturedExprDecl *D) {
-  StmtPrinter P(Out, nullptr, Policy, 0, "\n", nullptr, CTAList);
-  P.Visit(D->getInit());
+  D->getInit()->printPretty(Out, nullptr, Policy, Indentation);
 }
 
+
+
+void setCTAList(std::set<const FunctionDecl*> *List){
+  CTAList = List;
+}
+
+void DeclPrinter::VisitRecordHead(RecordDecl *D){
+  if (!Policy.SuppressSpecifiers && D->isModulePrivate())
+    Out << "__module_private__ ";
+  Out << D->getKindName();
+
+  prettyPrintAttributes(D);
+
+  if (D->getIdentifier())
+    Out << ' ' << *D;
+}
+
+void printRecordHead(RecordDecl *D, llvm::raw_ostream &Out, const PrintingPolicy &Policy){
+  DeclPrinter Printer(Out,Policy,D->getASTContext());
+  Printer.VisitRecordHead(D);
+}
+
+void DeclPrinter::VisitUnnamedTag(TagDecl *D){
+  prettyPrintAttributes(D);
+
+  if (D->getIdentifier())
+    Out << ' ' << *D;
+
+  if (D->isCompleteDefinition()) {
+    Out << " {\n";
+    VisitDeclContext(D);
+    Indent() << "}";
+  }
+}
+
+void printUnnamedTag(TagDecl *D,llvm::raw_ostream &Out, const PrintingPolicy &Policy){
+  DeclPrinter Printer(Out,Policy,D->getASTContext());
+  Printer.VisitUnnamedTag(D);
+}
+
+void setCustomStructDefs(bool _csd){
+  csd = _csd;
+}
+
+void processDeclGroupNoClear(SmallVectorImpl<Decl*>& Decls, llvm::raw_ostream &Out,
+                             const clang::PrintingPolicy &Policy) {
+  in_decl_group = 1;
+  Decl::printGroup(Decls.data(), Decls.size(), Out, Policy);
+  Out << ";\n";
+  in_decl_group = 0;
+}

@@ -20,30 +20,6 @@ std::vector<std::string> getSyntaxOnlyToolArgs(const std::vector<std::string> &e
     return args;
 }
 
-bool customRunToolOnCodeWithArgs(clang::FrontendAction *frontendAction, const llvm::Twine &code,
-                                 const std::vector<std::string> &args, const llvm::Twine &fileName,
-                                 const clang::tooling::FileContentMappings &virtualMappedFiles)
-{
-    llvm::SmallString<16> fileNameStorage;
-    llvm::StringRef fileNameRef = fileName.toNullTerminatedStringRef(fileNameStorage);
-
-    llvm::IntrusiveRefCntPtr<clang::FileManager> files(new clang::FileManager(clang::FileSystemOptions()));
-#if CLANG_VERSION>9
-    clang::tooling::ToolInvocation invocation(getSyntaxOnlyToolArgs(args, fileNameRef), std::unique_ptr<clang::FrontendAction>(frontendAction), files.get());
-#else
-    clang::tooling::ToolInvocation invocation(getSyntaxOnlyToolArgs(args, fileNameRef), frontendAction, files.get());
-#endif
-
-    llvm::SmallString<1024> codeStorage;
-    invocation.mapVirtualFile(fileNameRef, code.toNullTerminatedStringRef(codeStorage));
-
-    for (auto &filenameWithContent : virtualMappedFiles)
-        invocation.mapVirtualFile(filenameWithContent.first, filenameWithContent.second);
-
-    return invocation.run();
-}
-
-
 bool fileExists(const std::string &file)
 {
     return std::ifstream(file).good();

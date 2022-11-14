@@ -1,9 +1,6 @@
 #include "main.hpp"
 #include "json.hpp"
 #include "clang/AST/RecordLayout.h"
-#include <DeclPrinter.h>
-#include <StmtPrinter.h>
-#include <TypePrinter.h>
 #include <stdlib.h>
 #include <random>
 #include <algorithm>
@@ -156,7 +153,6 @@ void getFuncDeclSignatureNoCTA(const FunctionDecl* D, std::string& fdecl_sig, Db
   fdecl_sig += D->getType().getCanonicalType().getAsString();
 }
 
-#if CLANG_VERSION>6
 bool isOwnedTagDeclType(QualType DT) {
   if (DT->getTypeClass()==Type::Elaborated) {
 	  TagDecl *OwnedTagDecl = cast<ElaboratedType>(DT)->getOwnedTagDecl();
@@ -192,7 +188,6 @@ bool isOwnedTagDeclType(QualType DT) {
   }
   return false;
 }
-#endif
 
   bool DbJSONClassVisitor::declGroupHasNamedFields(Decl** Begin, unsigned NumDecls) {
 
@@ -432,48 +427,19 @@ int DbJSONClassVisitor::fieldIndexInGroup(Decl** Begin, unsigned NumDecls, const
 	  return -1;
 }
 
-#if CLANG_VERSION <= 9
-enum Semantics {
-  S_IEEEhalf,
-  S_IEEEsingle,
-  S_IEEEdouble,
-  S_x87DoubleExtended,
-  S_IEEEquad,
-  S_PPCDoubleDouble
-};
-
-static Semantics SemanticsToEnum(const llvm::fltSemantics &Sem) {
-  if (&Sem == &llvm::APFloat::IEEEhalf())
-    return S_IEEEhalf;
-  else if (&Sem == &llvm::APFloat::IEEEsingle())
-    return S_IEEEsingle;
-  else if (&Sem == &llvm::APFloat::IEEEdouble())
-    return S_IEEEdouble;
-  else if (&Sem == &llvm::APFloat::x87DoubleExtended())
-    return S_x87DoubleExtended;
-  else if (&Sem == &llvm::APFloat::IEEEquad())
-    return S_IEEEquad;
-  else if (&Sem == &llvm::APFloat::PPCDoubleDouble())
-    return S_PPCDoubleDouble;
-  else
-    llvm_unreachable("Unknown floating semantics");
-}
-#endif
-
 void DbJSONClassVisitor::setSwitchData(const Expr* caseExpr, int64_t* enumv,
 		std::string* enumstr, std::string* macroValue, std::string* raw_code, int64_t* exprVal) {
 
 	SourceManager& SM = Context.getSourceManager();
 	FileID FID = SM.getFileID(caseExpr->getExprLoc());
-	const llvm::MemoryBuffer *InputBuffer= SM.getBuffer(FID);
+	const auto InputBuffer= compatibility::getBuffer(SM,FID);
 	Lexer MacroLexer(FID,InputBuffer,SM,Context.getLangOpts());
 	if (caseExpr->IgnoreCasts()->getExprLoc().isMacroID()) {
 		*macroValue = MacroLexer.getSourceText(CharSourceRange(caseExpr->IgnoreCasts()->getSourceRange(),true),
 				SM,MacroLexer.getLangOpts()).str();
 	}
 	llvm::raw_string_ostream cstream(*raw_code);
-	StmtPrinter P(cstream,nullptr,Context.getPrintingPolicy());
-	P.Visit(const_cast<Expr*>(caseExpr));
+	caseExpr->printPretty(cstream,nullptr,Context.getPrintingPolicy());
 	cstream.flush();
 	const DeclRefExpr* DRE = lookForBottomDeclRef(caseExpr);
 	if (DRE && (DRE->getDecl()->getKind()==Decl::EnumConstant)) {
@@ -669,8 +635,7 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
 		exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-		StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-		P.Visit(const_cast<CallExpr*>((CE)));
+		CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
 				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
@@ -773,8 +738,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 							std::string Expr;
 							llvm::raw_string_ostream exprstream(Expr);
 							exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-							StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-							P.Visit(const_cast<CallExpr*>((CE)));
+							CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 							exprstream.flush();
 							std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
 									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
@@ -817,8 +781,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 					std::string Expr;
 					llvm::raw_string_ostream exprstream(Expr);
 					exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-					StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-					P.Visit(const_cast<CallExpr*>((CE)));
+					CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 					exprstream.flush();
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
 							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
@@ -957,8 +920,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  std::stringstream swdata;
 	  std::string condbody;
 	  llvm::raw_string_ostream cstream(condbody);
-	  StmtPrinter condPrinter(cstream, nullptr, Context.getPrintingPolicy(), 0, "\n", &Context, &Visitor.CTAList);
-	  condPrinter.Visit(const_cast<Expr*>(cond));
+	  cond->printPretty(cstream,nullptr,Context.getPrintingPolicy());
 	  cstream.flush();
 
 	  swdata << Indent << "{\n";
@@ -1068,23 +1030,19 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  std::string initstring;
 		  if(D->hasInit()){
 			  llvm::raw_string_ostream initstream(initstring);
-			  StmtPrinter P(initstream,nullptr,Context.getPrintingPolicy());
-			  P.Visit(const_cast<Expr*>(D->getInit()));
+			  D->getInit()->printPretty(initstream,nullptr,Context.getPrintingPolicy());
 			  initstream.flush();
 		  }
 		  std::string def;
 		  clang::PrintingPolicy policy = Context.getPrintingPolicy();
 		  if (_opts.adddefs) {
-#if CLANG_VERSION>6
 			  if (isOwnedTagDeclType(ST)) {
 				  policy.IncludeTagDefinition = true;
 				  var_data.g_refTypes.insert(ST);
 				  var_data.g_refTypes.insert(D->getType());
 			  }
-#endif
 			  llvm::raw_string_ostream defstream(def);
-			  DeclPrinter P(defstream,policy, Context);
-			  P.Visit(const_cast<VarDecl*>(D));
+			  D->print(defstream,policy);
 			  defstream.flush();
 		  }
 		  llvm::outs() << Indent << "\t{\n";
@@ -1110,9 +1068,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  int n=0;
 		  for (auto u = var_data.g_refTypes.begin(); u!=var_data.g_refTypes.end(); ++n) {
 			  QualType T = *u;
-#if CLANG_VERSION>6
 			  if (isOwnedTagDeclType(T)) decls.push_back(n);
-#endif
 			  /* Fix for #160
 			  if (STset.find(T)!=STset.end()) decls.push_back(n);*/
 			  refs << " " << Visitor.getTypeData(T).id;
@@ -1729,14 +1685,12 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
   		std::string nms;
   		std::string fbody;
   		llvm::raw_string_ostream bstream(fbody);
-  		DeclPrinter Printer(bstream, Context.getPrintingPolicy(), Context, 0, false, &Visitor.CTAList);
-		Printer.Visit(const_cast<FunctionDecl*>(D));
+		D->print(bstream);
 		bstream.flush();
   		if (Visitor.functionTemplateMap.find(D)!=Visitor.functionTemplateMap.end()) {
   			FT = Visitor.functionTemplateMap[D];
   			llvm::raw_string_ostream tpstream(templatePars);
-			DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-			Printer.printTemplateParameters(FT->getTemplateParameters());
+			FT->getTemplateParameters()->print(tpstream,Context);
 			tpstream.flush();
   		}
   		else if (isa<CXXMethodDecl>(D)) {
@@ -1744,29 +1698,21 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
   			if (Visitor.classTemplateMap.find(RD)!=Visitor.classTemplateMap.end()) {
   				FT = Visitor.classTemplateMap[RD];
   				llvm::raw_string_ostream tpstream(templatePars);
-				DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-				Printer.printTemplateParameters(FT->getTemplateParameters());
+				FT->getTemplateParameters()->print(tpstream,Context);
 				tpstream.flush();
   			}
   			else if (Visitor.classTemplateSpecializationMap.find(RD)!=
 						  Visitor.classTemplateSpecializationMap.end()) {
   				CTS = Visitor.classTemplateSpecializationMap[RD];
   				llvm::raw_string_ostream tpstream(templatePars);
-				DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-#if CLANG_VERSION>9
-				Printer.printTemplateArguments(CTS->getTemplateArgs().asArray());
-#else
-				Printer.printTemplateArguments(CTS->getTemplateArgs());
-#endif
+				printTemplateArgumentList(tpstream,CTS->getTemplateArgs().asArray(),Context.getPrintingPolicy());
 				tpstream.flush();
   			}
   			else if (Visitor.classTemplatePartialSpecializationMap.find(RD)!=
 						  Visitor.classTemplatePartialSpecializationMap.end()) {
   				CTS = Visitor.classTemplatePartialSpecializationMap[RD];
   				llvm::raw_string_ostream tpstream(templatePars);
-				DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-				Printer.printTemplateParameters(
-				static_cast<const ClassTemplatePartialSpecializationDecl*>(CTS)->getTemplateParameters());
+				cast<ClassTemplatePartialSpecializationDecl>(CTS)->getTemplateParameters()->print(tpstream,Context);
 				tpstream.flush();
   			}
   			nms = Visitor.parentFunctionOrMethodString(RD);
@@ -1818,8 +1764,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  if (Visitor.functionTemplateMap.find(D)!=Visitor.functionTemplateMap.end()) {
 			  FT = Visitor.functionTemplateMap[D];
 			  llvm::raw_string_ostream tpstream(templatePars);
-			  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-			  Printer.printTemplateParameters(FT->getTemplateParameters());
+			  FT->getTemplateParameters()->print(tpstream,Context);
 			  tpstream.flush();
 		  }
 		  else {
@@ -1828,29 +1773,21 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  if (Visitor.classTemplateMap.find(RD)!=Visitor.classTemplateMap.end()) {
 					  FT = Visitor.classTemplateMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-					  Printer.printTemplateParameters(FT->getTemplateParameters());
+					  FT->getTemplateParameters()->print(tpstream,Context);
 					  tpstream.flush();
 				  }
 				  else if (Visitor.classTemplateSpecializationMap.find(RD)!=
 						  Visitor.classTemplateSpecializationMap.end()) {
 					  CTS = Visitor.classTemplateSpecializationMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-#if CLANG_VERSION>9
-					  Printer.printTemplateArguments(CTS->getTemplateArgs().asArray());
-#else
-					  Printer.printTemplateArguments(CTS->getTemplateArgs());
-#endif
+					  printTemplateArgumentList(tpstream,CTS->getTemplateArgs().asArray(),Context.getPrintingPolicy());
 					  tpstream.flush();
 				  }
 				  else if (Visitor.classTemplatePartialSpecializationMap.find(RD)!=
 						  Visitor.classTemplatePartialSpecializationMap.end()) {
 					  CTS = Visitor.classTemplatePartialSpecializationMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-					  Printer.printTemplateParameters(
-						static_cast<const ClassTemplatePartialSpecializationDecl*>(CTS)->getTemplateParameters());
+					  cast<ClassTemplatePartialSpecializationDecl>(CTS)->getTemplateParameters()->print(tpstream,Context);
 					  tpstream.flush();
 				  }
 				  nms = Visitor.parentFunctionOrMethodString(RD);
@@ -1875,20 +1812,18 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  if ((fEntry)&&(!realpath.empty())) {
 			  absloc = realpath.str();
 		  }
-		  const llvm::MemoryBuffer *InputBuffer= SM.getBuffer(FID);
+		  const auto InputBuffer = compatibility::getBuffer(SM, FID);
 		  Lexer SrcLexer(FID,InputBuffer,SM,Context.getLangOpts());
 		  std::string upBody = SrcLexer.getSourceText(CharSourceRange(D->getSourceRange(),true),
 					SM,SrcLexer.getLangOpts()).str();
 		  std::string fbody;
 		  Stmt* body = D->getBody();
 		  llvm::raw_string_ostream bstream(fbody);
-          DeclPrinter Printer(bstream, Context.getPrintingPolicy(), Context, 0, false, &Visitor.CTAList);
-          Printer.Visit(const_cast<FunctionDecl*>(D));
+		  D->print(bstream);
 		  bstream.flush();
 		  std::string fcsbody;
 		  llvm::raw_string_ostream bcsstream(fcsbody);
-		  StmtPrinter csPrinter(bcsstream, nullptr, Context.getPrintingPolicy(), 0, "\n", &Context, &Visitor.CTAList);
-		  csPrinter.Visit(body);
+		  body->printPretty(bcsstream,nullptr,Context.getPrintingPolicy());
 		  bcsstream.flush();
 		  std::string fname = D->getName().str();
 		  std::string linkage = translateLinkage(D->getLinkageInternal());
@@ -2779,15 +2714,13 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 						  CE->dumpColor();
 						  std::string CExpr;
 						  llvm::raw_string_ostream exprstream(CExpr);
-						  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-						  P.Visit(const_cast<CallExpr*>((CE)));
+						  CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 						  exprstream.flush();
 						  llvm::errs() << "Expr: " << exprstream.str() << "\n";
 						  llvm::errs() << "parmIndexMap.size(): " << parmIndexMap.size() << "\n";
 						  for (auto u=parmIndexMap.begin(); u!=parmIndexMap.end(); ++u) {
 							  llvm::raw_string_ostream exprstream(CExpr);
-							  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-							  P.Visit(const_cast<Expr*>(((*u).first)));
+							  u->first->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 							  exprstream.flush();
 							  llvm::errs() << "  arg: " << exprstream.str() << "\n";
 						  }
@@ -2856,8 +2789,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 						  CE->dumpColor();
 						  std::string CExpr;
 						  llvm::raw_string_ostream exprstream(CExpr);
-						  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-						  P.Visit(const_cast<CallExpr*>((CE)));
+						  CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 						  exprstream.flush();
 						  llvm::errs() << "Expr: " << exprstream.str() << "\n";
 						  exit(2);
@@ -3091,8 +3023,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	CEv.push_back(cfi.CE);
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-	P.Visit(const_cast<CallExpr*>((cfi.CE)));
+	cfi.CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 	ss << ",\n\t\t\t\t\t\t\"expr\": \"" << json::json_escape(Expr) << "\"";
 	ss << ",\n\t\t\t\t\t\t\"loc\": \"" << location << "\"";
@@ -3118,8 +3049,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	CEv.push_back(CE);
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-	P.Visit(const_cast<CallExpr*>((CE)));
+	CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 	ss << ",\n\t\t\t\t\t\t\"expr\": \"" << json::json_escape(Expr) << "\"";
 	ss << ",\n\t\t\t\t\t\t\"loc\": \"" << location << "\"";
@@ -3138,8 +3068,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  if (Visitor.functionTemplateMap.find(D)!=Visitor.functionTemplateMap.end()) {
 			  FT = Visitor.functionTemplateMap[D];
 			  llvm::raw_string_ostream tpstream(templatePars);
-			  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-			  Printer.printTemplateParameters(FT->getTemplateParameters());
+			  FT->getTemplateParameters()->print(tpstream,Context);
 			  tpstream.flush();
 		  }
 		  else {
@@ -3148,38 +3077,28 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  if (Visitor.classTemplateMap.find(RD)!=Visitor.classTemplateMap.end()) {
 					  FT = Visitor.classTemplateMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-					  Printer.printTemplateParameters(FT->getTemplateParameters());
+					  FT->getTemplateParameters()->print(tpstream,Context);
 					  tpstream.flush();
 				  }
 				  else if (Visitor.classTemplateSpecializationMap.find(RD)!=
 						  Visitor.classTemplateSpecializationMap.end()) {
 					  CTS = Visitor.classTemplateSpecializationMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream,
-					  Context.getPrintingPolicy(), Context);
-#if CLANG_VERSION>9
-					  Printer.printTemplateArguments(CTS->getTemplateArgs().asArray());
-#else
-					  Printer.printTemplateArguments(CTS->getTemplateArgs());
-#endif
+					  printTemplateArgumentList(tpstream,CTS->getTemplateArgs().asArray(),Context.getPrintingPolicy());
 					  tpstream.flush();
 				  }
 				  else if (Visitor.classTemplatePartialSpecializationMap.find(RD)!=
 						  Visitor.classTemplatePartialSpecializationMap.end()) {
 					  CTS = Visitor.classTemplatePartialSpecializationMap[RD];
 					  llvm::raw_string_ostream tpstream(templatePars);
-					  DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-					  Printer.printTemplateParameters(
-						static_cast<const ClassTemplatePartialSpecializationDecl*>(CTS)->getTemplateParameters());
+					  cast<ClassTemplatePartialSpecializationDecl>(CTS)->getTemplateParameters()->print(tpstream,Context);
 					  tpstream.flush();
 				  }
 			  }
 		  }
   		  std::string fdeclbody;
   		  llvm::raw_string_ostream bstream(fdeclbody);
-  		  DeclPrinter Printer(bstream, Context.getPrintingPolicy(), Context, 0, false, &Visitor.CTAList);
-  		  Printer.Visit(const_cast<FunctionDecl*>(D));
+		  D->print(bstream);
   		  bstream.flush();
   		  if (fdeclbody.find("extern") == 0) {
   			std::string::size_type n = 0;
@@ -3446,8 +3365,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  SmallVector<Decl*, 2> Decls;
 	  std::string def;
 	  llvm::raw_string_ostream defstream(def);
-	  DeclPrinter Printer(defstream,Context.getPrintingPolicy(),Context);
-	  Printer.setCustomStructDefs(_opts.csd);
+	  setCustomStructDefs(_opts.csd);
 
 	  for (DeclContext::decl_iterator D = DC->decls_begin(), DEnd = DC->decls_end();
 			 D != DEnd; ++D) {
@@ -3465,7 +3383,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			}
 		  }
 		  if (!Decls.empty()) {
-			  Printer.ProcessDeclGroupNoClear(Decls);
+			  processDeclGroupNoClear(Decls,defstream,Context.getPrintingPolicy());
 			  bool first = true;
 			  TypeGroup_t nIds = getTypeGroupIds(Decls.data(), Decls.size(), Context.getPrintingPolicy());
 			  for (auto i = nIds.begin(); i!=nIds.end(); ++i) {
@@ -3525,7 +3443,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  else{	
 					  rIds.push_back(-1);
 				  }
-				  Printer.Visit(*D);
+				  D->print(defstream);
 				  defstream.flush();
 				  rDef.push_back(def+";\n");
 				  def.clear();
@@ -3533,7 +3451,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  }
 	  }
 	  if (!Decls.empty()) {
-		  Printer.ProcessDeclGroupNoClear(Decls);
+		  processDeclGroupNoClear(Decls,defstream,Context.getPrintingPolicy());
 		  bool first = true;
 		  TypeGroup_t nIds = getTypeGroupIds(Decls.data(), Decls.size(), Context.getPrintingPolicy());
 		  for (auto i = nIds.begin(); i!=nIds.end(); ++i) {
@@ -3574,7 +3492,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  }
 		  Decls.clear();
 	  }
-	  Printer.setCustomStructDefs(0);
+	  setCustomStructDefs(0);
   }
 
   void DbJSONClassConsumer::getTemplateArguments(const TemplateArgumentList& Args,
@@ -3605,8 +3523,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	    	  if (auto E = A.getAsExpr()) {
 	    		  std::string expr;
 				  llvm::raw_string_ostream exprstream(expr);
-				  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-				  P.Visit(const_cast<Expr*>((E)));
+				  E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 				  exprstream.flush();
 	    		  nontype_args.push_back(std::pair<std::string,unsigned>(expr,I));
 	    	  }
@@ -3616,7 +3533,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	      }
 	      else if (A.getKind() == TemplateArgument::Integral) {
 	    	  llvm::APSInt Iv = A.getAsIntegral();
-	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\""+Iv.toString(10)+"\"",I));
+	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
 	      }
 	      else {
 	    	  if (_opts.exit_on_error) {
@@ -3629,13 +3546,13 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 
   }
 
-  void DbJSONClassConsumer::printTemplateArguments(const TemplateArgumentList& Args, TemplateParameterList* Params,
+  void DbJSONClassConsumer::printTemplateArgs(const TemplateArgumentList& Args, TemplateParameterList* Params,
 		  const std::string& Indent) {
 
-	  printTemplateArguments(Args.asArray(),Params,Indent);
+	  printTemplateArgs(Args.asArray(),Params,Indent);
   }
 
-  void DbJSONClassConsumer::printTemplateArguments(ArrayRef<TemplateArgument> Args, TemplateParameterList* Params,
+  void DbJSONClassConsumer::printTemplateArgs(ArrayRef<TemplateArgument> Args, TemplateParameterList* Params,
 		  const std::string& Indent) {
 
 	  std::vector<std::pair<QualType,unsigned>> type_args;
@@ -3661,8 +3578,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	    	  if (auto E = A.getAsExpr()) {
 	    		  std::string expr;
 				  llvm::raw_string_ostream exprstream(expr);
-				  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-				  P.Visit(const_cast<Expr*>((E)));
+				  E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 				  exprstream.flush();
 	    		  nontype_args.push_back(std::pair<std::string,unsigned>(expr,I));
 	    	  }
@@ -3672,7 +3588,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	      }
 	      else if (A.getKind() == TemplateArgument::Integral) {
 	    	  llvm::APSInt Iv = A.getAsIntegral();
-	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\""+Iv.toString(10)+"\"",I));
+	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
 	      }
 	      else {
 	    	  if (_opts.exit_on_error) {
@@ -3710,7 +3626,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 
   }
 
-  void DbJSONClassConsumer::printTemplateArguments(template_args_t& template_args, std::vector<int> type_args_idx,
+  void DbJSONClassConsumer::printTemplateArgs(template_args_t& template_args, std::vector<int> type_args_idx,
 		  const std::string& Indent, bool nextJSONitem) {
 
 	  assert(template_args.first.size()==type_args_idx.size() && "Templare arguments array not aligned with correspnding index array");
@@ -3745,7 +3661,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  llvm::outs() << "\n";
   }
 
-  void DbJSONClassConsumer::printTemplateArguments(template_args_t& template_args, const std::string& Indent) {
+  void DbJSONClassConsumer::printTemplateArgs(template_args_t& template_args, const std::string& Indent) {
 
 	  llvm::outs() << Indent << "\t\t\"type_args\": [\n";
 	  for (auto i=template_args.first.begin(); i!=template_args.first.end();) {
@@ -3829,8 +3745,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  llvm::outs() << Indent << "\t\t\t\"" << (*i).first << "\": \"";
 			  std::string expr;
 			  llvm::raw_string_ostream exprstream(expr);
-			  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-			  P.Visit(const_cast<Expr*>(((*i).second)));
+			  i->second->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 			  exprstream.flush();
 			  llvm::outs() << json::json_escape(expr);
 			  ++i;
@@ -3909,8 +3824,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  llvm::outs() << Indent << "\t\t\t\"" << (*i).first << "\": \"";
 			  std::string expr;
 			  llvm::raw_string_ostream exprstream(expr);
-			  StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-			  P.Visit(const_cast<Expr*>(((*i).second)));
+			  i->second->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 			  exprstream.flush();
 			  llvm::outs() << json::json_escape(expr);
 			  ++i;
@@ -4252,8 +4166,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  std::string sizeExpr;
 			  if (tp->getSizeExpr()) {
 			      llvm::raw_string_ostream estream(sizeExpr);
-				  StmtPrinter P(estream, nullptr, Context.getPrintingPolicy());
-				  P.Visit(const_cast<Expr*>((tp->getSizeExpr())));
+				  tp->getSizeExpr()->printPretty(estream,nullptr,Context.getPrintingPolicy());
 			      estream.flush();
 			  }
 			  llvm::outs() << Indent << "\t\t\"str\": \"" << json::json_escape(sizeExpr) << "\",\n";
@@ -4406,7 +4319,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					  llvm::outs() << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 					  llvm::outs() << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
 					  llvm::outs() << Indent << "\t\t\"def\": \"";
-					  TypePrint(T,llvm::outs(), Context.getPrintingPolicy(),Twine(),0,&Visitor.CTAList);
+					  T.print(llvm::outs(),Context.getPrintingPolicy());
 					  llvm::outs() << "\",\n";
 					  
 					  // TODO: removed likely unnecessary code, some issues may arise
@@ -4483,7 +4396,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  llvm::outs() << "\n";
 			  }
 			  if (have_template_args) {
-				  printTemplateArguments(template_args,type_args_idx,Indent,false);
+				  printTemplateArgs(template_args,type_args_idx,Indent,false);
 			  }
 		  }
 		  break;
@@ -4512,8 +4425,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  llvm::raw_string_ostream defstream(def);
 				  if (Visitor.classTemplateMap.find(TRD)!=Visitor.classTemplateMap.end()) {
 					  const ClassTemplateDecl* CTD = Visitor.classTemplateMap[TRD];
-					  DeclPrinter Printer(defstream, Context.getPrintingPolicy(), Context);
-					  Printer.printTemplateParameters(CTD->getTemplateParameters());
+					  CTD->getTemplateParameters()->print(defstream,Context);
 					  defstream.flush();
 				  }
 				  else if (Visitor.classTemplatePartialSpecializationMap.find(TRD)
@@ -4730,7 +4642,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  llvm::outs() << Indent << "\t\t\"templateref\": " << templateref << ",\n";
 			  }
 			  if (have_template_args) {
-				  printTemplateArguments(template_args,type_args_idx,Indent);
+				  printTemplateArgs(template_args,type_args_idx,Indent);
 			  }
 			  defaut_type_map_t& default_type_map = std::get<0>(template_parms);
 			  std::vector<int>& parmIds = std::get<2>(template_parms);
@@ -4824,12 +4736,11 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  std::string head;
 			  if (_opts.adddefs) {
 				  llvm::raw_string_ostream defstream(def);
-				  DeclPrinter Printer(defstream, Context.getPrintingPolicy(), Context);
-				  Printer.PrintRecordHead(rD);
+				  printRecordHead(rD,defstream,Context.getPrintingPolicy());
 				  defstream.flush();
 				  head = def;
 				  def.clear();
-				  Printer.Visit(rD);
+				  rD->print(defstream);
 				  defstream.flush();
 			  }
 			  const IdentifierInfo *II = rD->getIdentifier();
@@ -5092,7 +5003,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  llvm::outs() << Indent << "\t\t\"templateref\": " << templateref << ",\n";
 			  }
 			  if (have_template_args) {
-				  printTemplateArguments(template_args,type_args_idx,Indent,rD->isCompleteDefinition());
+				  printTemplateArgs(template_args,type_args_idx,Indent,rD->isCompleteDefinition());
 			  }
 			  if (rD->isCompleteDefinition()) {
 				  llvm::outs() << Indent << "\t\t\"refnames\": [ ";
@@ -5278,7 +5189,6 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  llvm::raw_string_ostream defstream(def);
 				  clang::PrintingPolicy policy = Context.getPrintingPolicy();
 				  QualType tT = D->getTypeSourceInfo()->getType();
-#if CLANG_VERSION>6
 				  if (tT->getTypeClass()==Type::Elaborated) {
 					  TagDecl *OwnedTagDecl = cast<ElaboratedType>(tT)->getOwnedTagDecl();
 					  if (OwnedTagDecl) {
@@ -5298,11 +5208,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
                                                   }
 					  }
 				  }
-#else
-				  // For clang6 it just seems to work out of the box after fixing printers
-#endif
-				  DeclPrinter Printer(defstream, policy, Context);
-				  Printer.Visit(D);
+				  D->print(defstream,policy);
 				  defstream.flush();
 			  }
 			  IdentifierInfo *II = D->getIdentifier();
@@ -5406,10 +5312,9 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 						  // This is dependent EnumConstantDecl which cannot be resolved to integer value just yet
 						  std::string exprStr;
 						  llvm::raw_string_ostream estream(exprStr);
-						  StmtPrinter P(estream,nullptr,Context.getPrintingPolicy());
 						  Expr* IE = ED->getInitExpr();
 						  if (IE) {
-							  P.Visit(const_cast<Expr*>(ED->getInitExpr()));
+							  IE->printPretty(estream,nullptr,Context.getPrintingPolicy());
 							  estream.flush();
 						  }
 						  DependentValues.push_back(exprStr);
@@ -5619,7 +5524,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			assert(0);
 			  if (_opts.exit_on_error) {
 				  llvm::outs() << "\nERROR: Cannot print type specification for type:\n";
-				  T.dump(llvm::outs());
+				  T.dump();
 				  exit(EXIT_FAILURE);
 			  }
 			  break;
@@ -5666,6 +5571,9 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  if (!_opts.tudumpcont) {
 			  return;
 		  }
+	  }
+	  if(_opts.assert){
+		setCTAList(&Visitor.CTAList);
 	  }
 	  Visitor.TraverseDecl(D);
 	  if (_opts.brk) {

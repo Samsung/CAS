@@ -15,15 +15,12 @@ limitations under the License.
 
 Some files in this project was taken (and modified) from the original clang source code.
 These files are:
-- DeclPrinter.cpp
-- DeclPrinter.h
+- */DeclPrinter.cpp
+- */StmtPrinter.cpp
+- */TypePrinter.cpp
 - MacroInfoExt.h
 - PPCallbacksTracker.cpp
 - PPCallbacksTracker.h
-- StmtPrinter.cpp
-- StmtPrinter.h
-- TypePrinter.cpp
-- TypePrinter.h
 Please note the notices for the changes.
 
 Base 64 encoding/decoding utilities for C++ were taken from the library written by:

@@ -1,8 +1,5 @@
 #include "main.hpp"
 #include "clang/AST/RecordLayout.h"
-#include <DeclPrinter.h>
-#include <StmtPrinter.h>
-#include <TypePrinter.h>
 
 // Decl visitors
 bool DbJSONClassVisitor::TraverseDecl(Decl *D) {
@@ -169,8 +166,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
 		exprstream << "[" << D->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-		DeclPrinter Printer(exprstream, Context.getPrintingPolicy(), Context, 0, false, &CTAList);
-		Printer.Visit(const_cast<VarDecl*>(D));
+		D->print(exprstream);
 		exprstream.flush();
 
 		VarRef_t VR;
@@ -268,12 +264,10 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 			case 2:
 			{
 				const VarDecl *DD = D->getDefinition();
-#if CLANG_VERSION>6
 				QualType ST = DD->getTypeSourceInfo() ? DD->getTypeSourceInfo()->getType() : DD->getType();
 				if (isOwnedTagDeclType(ST)) {
 					noticeTypeClass(ST);
 				}
-#endif
 				noticeTypeClass(DD->getType());
 				VarMap.insert({name,{DD,VarNum++}});
 				revVarMap.insert({VarNum-1,DD});
@@ -283,12 +277,10 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 			case 1:
 			{
 				const VarDecl *TD = D->getActingDefinition();
-#if CLANG_VERSION>6
 				QualType ST = TD->getTypeSourceInfo() ? TD->getTypeSourceInfo()->getType() : TD->getType();
 				if (isOwnedTagDeclType(ST)) {
 					noticeTypeClass(ST);
 				}
-#endif
 				noticeTypeClass(TD->getType());
 				VarMap.insert({name,{TD,VarNum++}});
 				revVarMap.insert({VarNum-1,TD});
@@ -299,12 +291,10 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 			{
 				assert(linkage && "Static variable not defined");
 				const VarDecl *CD = D->getCanonicalDecl();
-#if CLANG_VERSION>6
 				QualType ST = CD->getTypeSourceInfo() ? CD->getTypeSourceInfo()->getType() : CD->getType();
 				if (isOwnedTagDeclType(ST)) {
 					noticeTypeClass(ST);
 				}
-#endif
 				noticeTypeClass(CD->getType());
 				VarMap.insert({name,{CD,VarNum++}});
 				revVarMap.insert({VarNum-1,CD});
@@ -332,7 +322,7 @@ bool DbJSONClassVisitor::VisitRecordDeclComplete(const RecordDecl *D) {
 
 bool DbJSONClassVisitor::VisitRecordDecl(const RecordDecl *D) {
 	QualType T = Context.getRecordType(D);
-	DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitRecordDecl(" << D << ")\n"; D->dump(llvm::outs()); T.dump(llvm::outs()) );
+	DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitRecordDecl(" << D << ")\n"; D->dump(llvm::outs()); T.dump() );
 	noticeTypeClass(T);
 	if (_opts.cstmt) {
 		if (currentWithinCS()) {
@@ -448,8 +438,7 @@ bool DbJSONClassVisitor::VisitClassTemplatePartialSpecializationDecl(const Class
 		_class = RT.getAsString();
 		std::string templatePars;
 		llvm::raw_string_ostream tpstream(templatePars);
-		DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-		Printer.printTemplateParameters(D->getTemplateParameters());
+		D->getTemplateParameters()->print(tpstream,Context);
 		tpstream.flush();
 		llvm::outs() << "notice classTemplatePartialSpecialization: [" << _class << "] "
 				<< templatePars << " " << D << "\n";
@@ -480,12 +469,7 @@ bool DbJSONClassVisitor::VisitClassTemplateSpecializationDecl(const ClassTemplat
 		_class = RT.getAsString();
 		std::string templatePars;
 		llvm::raw_string_ostream tpstream(templatePars);
-		DeclPrinter Printer(tpstream, Context.getPrintingPolicy(), Context);
-#if CLANG_VERSION>9
-		Printer.printTemplateArguments(D->getTemplateArgs().asArray());
-#else
-		Printer.printTemplateArguments(D->getTemplateArgs());
-#endif
+		printTemplateArgumentList(tpstream,D->getTemplateArgs().asArray(),Context.getPrintingPolicy());
 		tpstream.flush();
 		llvm::outs() << "notice classTemplateSpecialization: [" << _class << "] "
 				<< templatePars << " " << D << "\n";
@@ -1197,8 +1181,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					std::string Expr;
 					llvm::raw_string_ostream exprstream(Expr);
 					exprstream << "[" << argE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-					StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-					P.Visit(const_cast<class Expr*>((argE)));
+					argE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 					exprstream.flush();
 
 					std::vector<CStyleCastOrType> castVec;
@@ -1526,8 +1509,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
 		exprstream << "[" << BO->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-		StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-		P.Visit(const_cast<class BinaryOperator*>((BO)));
+		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 
 		VarRef_t VR;
@@ -1606,8 +1588,7 @@ bool DbJSONClassVisitor::VisitUnaryOperator(UnaryOperator *E) {
 				std::string Expr;
 				llvm::raw_string_ostream exprstream(Expr);
 				exprstream << "[" << E->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-				StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-				P.Visit(const_cast<class UnaryOperator*>((E)));
+				E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 				exprstream.flush();
 				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
 						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,Expr,getCurrentCSPtr(),DereferenceUnary));
@@ -1670,8 +1651,7 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 			std::string Expr;
 			llvm::raw_string_ostream exprstream(Expr);
 			exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-			StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-			P.Visit(const_cast<class ArraySubscriptExpr*>((Node)));
+			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 			exprstream.flush();
 			std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
 					lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,idx_i,base_size,vVR,Expr,getCurrentCSPtr(),DereferenceArray));
@@ -1798,8 +1778,7 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 	std::string Expr;
     llvm::raw_string_ostream exprstream(Expr);
     exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-    StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-    P.Visit(const_cast<class OffsetOfExpr*>((Node)));
+	Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
     exprstream.flush();
 
     for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
@@ -1837,8 +1816,7 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
 	exprstream << "[" << S->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-	StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-	P.Visit(const_cast<class ReturnStmt*>((S)));
+	S->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 
 	std::vector<CStyleCastOrType> castVec;
@@ -1947,8 +1925,7 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 		Node->dumpColor();
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-		P.Visit(const_cast<class MemberExpr*>((Node)));
+		Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 		llvm::outs() << "Expr: \"" << Expr << "\"\n";
 		if (lastFunctionDef) {
@@ -1983,8 +1960,7 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 		llvm::outs() << "MemberExpr index: " << maxMeIdx << "\n";
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-		P.Visit(const_cast<class MemberExpr*>((Node)));
+		Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 		llvm::outs() << "Expr: \"" << Expr << "\"\n";
 		if (lastFunctionDef) {
@@ -2038,13 +2014,11 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 		llvm::raw_string_ostream exprstream(Expr);
 		if (CE) {
 			exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-			StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-			P.Visit(const_cast<class CallExpr*>((CE)));
+			CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		}
 		else {
 			exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
-			StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-			P.Visit(const_cast<class MemberExpr*>((Node)));
+			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		}
 		exprstream.flush();
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -2072,8 +2046,7 @@ bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
 
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	StmtPrinter P(exprstream, nullptr, Context.getPrintingPolicy());
-	P.Visit(const_cast<Expr*>((ILE)));
+	ILE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 
 	return true;

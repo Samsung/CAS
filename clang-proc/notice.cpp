@@ -1,8 +1,5 @@
 #include "main.hpp"
 #include "clang/AST/RecordLayout.h"
-#include <DeclPrinter.h>
-#include <StmtPrinter.h>
-#include <TypePrinter.h>
 
 void DbJSONClassVisitor::notice_class_references(RecordDecl* rD) {
 	for(auto D : rD->decls()){

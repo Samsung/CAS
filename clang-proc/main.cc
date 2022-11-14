@@ -20,18 +20,14 @@ class DbJSONClassAction : public clang::ASTFrontendAction {
 public:
 	DbJSONClassAction(const std::string* sourceFile, const struct main_opts& opts, const std::string* directory):
 		_sourceFile(sourceFile), _opts(opts), _directory(directory) {}
-  virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
-    clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
+  virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer (
+    clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
     return std::unique_ptr<clang::ASTConsumer>(
         new DbJSONClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts,Compiler.getPreprocessor()));
   }
-#if CLANG_VERSION==7
   bool BeginSourceFileAction(CompilerInstance &CI) override {
-#else
-  bool BeginSourceFileAction(CompilerInstance &CI) {
-#endif
 	  Preprocessor &PP = CI.getPreprocessor();
-	  PP.addPPCallbacks(MAKE_UNIQUE<IndexerPPCallbacks>(CI.getSourceManager()));
+	  PP.addPPCallbacks(std::make_unique<IndexerPPCallbacks>(CI.getSourceManager()));
 	  return true;
   }
 
@@ -45,17 +41,13 @@ public:
 	FOPSClassAction(const std::string* sourceFile, const struct main_opts& opts, const std::string* directory):
 	_sourceFile(sourceFile), _opts(opts), _directory(directory) {}
 virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
-  clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
+  clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
   return std::unique_ptr<clang::ASTConsumer>(
 	  new FOPSClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts));
 }
-#if CLANG_VERSION==7
 bool BeginSourceFileAction(CompilerInstance &CI) override {
-#else
-bool BeginSourceFileAction(CompilerInstance &CI) {
-#endif
   Preprocessor &PP = CI.getPreprocessor();
-  PP.addPPCallbacks(MAKE_UNIQUE<IndexerPPCallbacks>(CI.getSourceManager()));
+  PP.addPPCallbacks(std::make_unique<IndexerPPCallbacks>(CI.getSourceManager()));
   return true;
 }
 
@@ -69,15 +61,9 @@ class DBFactory : public clang::tooling::FrontendActionFactory {
 public:
 	DBFactory(const std::string* sourceFile, const struct main_opts &opts, const std::string* directory)
 		: _sourceFile(sourceFile), _opts(opts), _directory(directory) {}
-#if CLANG_VERSION>9
 	std::unique_ptr<clang::FrontendAction> create() override {
 		return std::unique_ptr<clang::FrontendAction>( new Action(_sourceFile,_opts,_directory) );
 	}
-#else
-	clang::FrontendAction *create() override {
-		return new Action(_sourceFile,_opts,_directory);
-	}
-#endif
 private:
 	const std::string* _sourceFile;
   const struct main_opts _opts;
@@ -133,7 +119,8 @@ int main(int argc, const char **argv)
     cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
 
 
-    CommonOptionsParser optionsParser(argc, argv, ctCategory);
+    // CommonOptionsParser optionsParser(argc, argv, ctCategory);
+    auto optionsParser = std::move(CommonOptionsParser::create(argc,argv,ctCategory,cl::OneOrMore).get());
 
     if(TaintOption.getValue().size()){
       load_database(TaintOption.getValue());

@@ -90,15 +90,9 @@ public:
                    clang::PPCallbacks::FileChangeReason Reason,
                    clang::SrcMgr::CharacteristicKind FileType,
                    clang::FileID PrevFID = clang::FileID()) override;
-#if CLANG_VERSION>9
   void FileSkipped(const clang::FileEntryRef &SkippedFile,
 				 const clang::Token &FilenameTok,
 				 clang::SrcMgr::CharacteristicKind FileType) override;
-#else
-  void FileSkipped(const clang::FileEntry &SkippedFile,
-                   const clang::Token &FilenameTok,
-                   clang::SrcMgr::CharacteristicKind FileType) override;
-#endif
   bool FileNotFound(llvm::StringRef FileName,
                     llvm::SmallVectorImpl<char> &RecoveryPath) override;
   virtual void InclusionDirective(clang::SourceLocation HashLoc,
@@ -110,9 +104,7 @@ public:
 								  llvm::StringRef SearchPath,
 								  llvm::StringRef RelativePath,
                                   const clang::Module *Imported
-#if CLANG_VERSION>6
 								  ,clang::SrcMgr::CharacteristicKind FileType
-#endif
 								  ) override;
 
   void moduleImport(clang::SourceLocation ImportLoc, clang::ModuleIdPath Path,
@@ -196,11 +188,7 @@ public:
     std::string getArgument(const char *Name, clang::FileID Value);
 
     /// \brief Append a FileEntry argument to the top trace item.
-#if CLANG_VERSION>9
     std::string getArgument(const char *Name,const clang::FileEntryRef& Value);
-#else
-    std::string getArgument(const char *Name, const clang::FileEntry *Value);
-#endif
 
     /// \brief Append a SourceLocation argument to the top trace item.
     std::string getArgument(const char *Name, clang::SourceLocation Value);

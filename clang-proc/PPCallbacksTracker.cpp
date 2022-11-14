@@ -118,23 +118,12 @@ void PPCallbacksTracker::FileChanged(
 
 // Callback invoked whenever a source file is skipped as the result
 // of header guard optimization.
-#if CLANG_VERSION>9
 void
 PPCallbacksTracker::FileSkipped(const clang::FileEntryRef &SkippedFile,
 								const clang::Token &FilenameTok,
 								clang::SrcMgr::CharacteristicKind FileType) {
-#else
-void
-PPCallbacksTracker::FileSkipped(const clang::FileEntry &SkippedFile,
-                                const clang::Token &FilenameTok,
-                                clang::SrcMgr::CharacteristicKind FileType) {
-#endif
 	DBG(DEBUG_PP, llvm::outs() << "# FileSkipped: "
-#if CLANG_VERSION>9
 	<< getArgument("ParentFile", SkippedFile) << " | "
-#else
-	<< getArgument("ParentFile", &SkippedFile) << " | "
-#endif
 	<< getArgument("FilenameTok", FilenameTok) << " | "
 	<< getArgument("FileType", FileType, CharacteristicKindStrings) << "\n" );
 }
@@ -158,9 +147,7 @@ void PPCallbacksTracker::InclusionDirective(
     clang::CharSourceRange FilenameRange, const clang::FileEntry *File,
     llvm::StringRef SearchPath, llvm::StringRef RelativePath,
 	const clang::Module *Imported
-#if CLANG_VERSION>6
     ,clang::SrcMgr::CharacteristicKind FileType
-#endif
 	) {
 	DBG(DEBUG_PP, llvm::outs() << "# InclusionDirective: "
 	<< getArgument("IncludeTok", IncludeTok) << " | "
@@ -658,22 +645,11 @@ std::string PPCallbacksTracker::getArgument(const char *Name, clang::FileID Valu
   return getFilePathArgument(Name, FileEntry->getName());
 }
 
-#if CLANG_VERSION>9
 // Append a FileEntry argument to the top trace item.
 std::string PPCallbacksTracker::getArgument(const char *Name,
                                         const clang::FileEntryRef& Value) {
   return getFilePathArgument(Name, Value.getName());
 }
-#else
-// Append a FileEntry argument to the top trace item.
-std::string PPCallbacksTracker::getArgument(const char *Name,
-                                        const clang::FileEntry *Value) {
-  if (!Value) {
-    return "(null)";
-  }
-  return getFilePathArgument(Name, Value->getName());
-}
-#endif
 
 // Append a SourceLocation argument to the top trace item.
 std::string PPCallbacksTracker::getArgument(const char *Name,

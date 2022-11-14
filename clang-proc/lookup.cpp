@@ -1,8 +1,5 @@
 #include "main.hpp"
 #include "clang/AST/RecordLayout.h"
-#include <DeclPrinter.h>
-#include <StmtPrinter.h>
-#include <TypePrinter.h>
 
 void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisitor::LiteralHolder>& refs,
 		unsigned pos) {
@@ -171,11 +168,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForLiteral(MTE->getSubExpr(),refs,pos);
-#else
-			lookForLiteral(MTE->GetTemporaryExpr(),refs,pos);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -237,7 +230,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForLiteral for:\n";
-				E->dump(llvm::outs());
+				E->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -269,14 +262,12 @@ void DbJSONClassVisitor::lookForDeclRefExprsWithStmtExpr(const Expr* E, std::set
 			lookForDeclRefExprsWithStmtExpr(ICE->getSubExpr(),refs,pos);
 			break;
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* CE = static_cast<const ConstantExpr*>(E);
 			lookForDeclRefExprsWithStmtExpr(CE->getSubExpr(),refs,pos);
 			break;
 		}
-#endif
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
@@ -292,11 +283,7 @@ void DbJSONClassVisitor::lookForDeclRefExprsWithStmtExpr(const Expr* E, std::set
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForDeclRefExprsWithStmtExpr(MTE->getSubExpr(),refs,pos);
-#else
-			lookForDeclRefExprsWithStmtExpr(MTE->GetTemporaryExpr(),refs);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -461,7 +448,7 @@ void DbJSONClassVisitor::lookForDeclRefExprsWithStmtExpr(const Expr* E, std::set
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprsWithStmtExpr for:\n";
-				E->dump(llvm::outs());
+				E->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -480,14 +467,12 @@ void DbJSONClassVisitor::lookForDeclRefExprs(const Expr* E, std::set<ValueHolder
 			lookForDeclRefExprs(ICE->getSubExpr(),refs,pos);
 			break;
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* CE = static_cast<const ConstantExpr*>(E);
 			lookForDeclRefExprs(CE->getSubExpr(),refs,pos);
 			break;
 		}
-#endif
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
@@ -503,11 +488,7 @@ void DbJSONClassVisitor::lookForDeclRefExprs(const Expr* E, std::set<ValueHolder
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForDeclRefExprs(MTE->getSubExpr(),refs,pos);
-#else
-			lookForDeclRefExprs(MTE->GetTemporaryExpr(),refs,pos);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -673,7 +654,7 @@ void DbJSONClassVisitor::lookForDeclRefExprs(const Expr* E, std::set<ValueHolder
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefWithMemberExprs for:\n";
-				E->dump(llvm::outs());
+				E->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -711,7 +692,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternalFromStmt(const Stm
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs(Stmt) for:\n";
-				S->dump(llvm::outs());
+				S->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -973,7 +954,6 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					secondaryChain,IgnoreLiteral,noticeInitListExpr);
 			break;
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* ConstExpr = static_cast<const ConstantExpr*>(E);
@@ -981,7 +961,6 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					secondaryChain,IgnoreLiteral,noticeInitListExpr);
 			break;
 		}
-#endif
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
@@ -1043,13 +1022,8 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForDeclRefWithMemberExprsInternal(MTE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
 					secondaryChain,IgnoreLiteral,noticeInitListExpr);
-#else
-			lookForDeclRefWithMemberExprsInternal(MTE->GetTemporaryExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -2044,7 +2018,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs for:\n";
-				E->dump(llvm::outs());
+				E->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -2211,7 +2185,8 @@ const Expr* DbJSONClassVisitor::lookForNonParenExpr(const Expr* E) {
 }
 
 bool DbJSONClassVisitor::tryEvaluateIntegerConstantExpr(const Expr* E, Expr::EvalResult& Res) {
-	E->EvaluateAsConstantExpr(Res,Expr::EvaluateForCodeGen,Context);
+	// E->EvaluateAsConstantExpr(Res,Context);
+	compatibility::EvaluateAsConstantExpr(E,Res,Context);
 	if (Res.Val.getKind()==APValue::Int) {
 		return true;
 	}
@@ -2307,14 +2282,12 @@ void DbJSONClassVisitor::lookForExplicitCastExprs(const Expr* E, std::vector<Qua
 			lookForExplicitCastExprs(ICE->getSubExpr(),refs);
 			break;
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* CE = static_cast<const ConstantExpr*>(E);
 			lookForExplicitCastExprs(CE->getSubExpr(),refs);
 			break;
 		}
-#endif
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
@@ -2330,11 +2303,7 @@ void DbJSONClassVisitor::lookForExplicitCastExprs(const Expr* E, std::vector<Qua
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForExplicitCastExprs(MTE->getSubExpr(),refs);
-#else
-			lookForExplicitCastExprs(MTE->GetTemporaryExpr(),refs);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -2498,7 +2467,7 @@ void DbJSONClassVisitor::lookForExplicitCastExprs(const Expr* E, std::vector<Qua
 		{
 			if (_opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs for:\n";
-				E->dump(llvm::outs());
+				E->dump();
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -2612,14 +2581,12 @@ const DeclRefExpr* DbJSONClassVisitor::lookForBottomDeclRef(const Expr* E) {
 			const UnaryOperator* UO = static_cast<const UnaryOperator*>(E);
 			return lookForBottomDeclRef(UO->getSubExpr());
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* CE = static_cast<const ConstantExpr*>(E);
 			return lookForBottomDeclRef(CE->getSubExpr());
 			break;
 		}
-#endif
 	}
 
 	return 0;
@@ -2635,14 +2602,12 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 			lookForUnaryExprOrTypeTraitExpr(ICE->getSubExpr(),QV);
 			break;
 		}
-#if CLANG_VERSION>6
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* CE = static_cast<const ConstantExpr*>(E);
 			lookForUnaryExprOrTypeTraitExpr(CE->getSubExpr(),QV);
 			break;
 		}
-#endif
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
@@ -2658,11 +2623,7 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-#if CLANG_VERSION>9
 			lookForUnaryExprOrTypeTraitExpr(MTE->getSubExpr(),QV);
-#else
-			lookForUnaryExprOrTypeTraitExpr(MTE->GetTemporaryExpr(),QV);
-#endif
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
@@ -2784,7 +2745,7 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 			{
 				if (_opts.exit_on_error) {
 					llvm::outs() << "\nERROR: No implementation in lookForUnaryExprOrTypeTraitExpr for:\n";
-					E->dump(llvm::outs());
+					E->dump();
 					exit(EXIT_FAILURE);
 				}
 				else {
@@ -2798,13 +2759,11 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
   bool DbJSONClassVisitor::lookForTypeTraitExprs(const Expr* e, std::vector<const TypeTraitExpr*>& TTEV) {
 
 	  switch(e->getStmtClass()) {
-#if CLANG_VERSION>6
 		  case Stmt::ConstantExprClass:
 		  {
 			const ConstantExpr *CE = cast<ConstantExpr>(e);
 			return lookForTypeTraitExprs(CE->getSubExpr(),TTEV);
 		  }
-#endif
 		  case Stmt::TypeTraitExprClass:
 		  {
 			const TypeTraitExpr *TTE = cast<TypeTraitExpr>(e);

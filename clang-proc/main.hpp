@@ -11,6 +11,7 @@ extern int DEBUG_PP;
 
 #include "dbjson.hpp"
 #include "fops.hpp"
+#include "compat.h"
 
 struct main_opts {
 	bool fops;

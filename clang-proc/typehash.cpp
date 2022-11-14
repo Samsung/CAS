@@ -1,8 +1,5 @@
 #include "main.hpp"
 #include "clang/AST/RecordLayout.h"
-#include <DeclPrinter.h>
-#include <StmtPrinter.h>
-#include <TypePrinter.h>
 
 int short_ptr = 0;
 bool autoforward = false;
@@ -47,7 +44,7 @@ bool autoforward = false;
 			  }
 			  else if (A.getKind() == TemplateArgument::Integral) {
 				  llvm::APSInt Iv = A.getAsIntegral();
-				  template_args.push_back(std::pair<std::string,unsigned>("\""+Iv.toString(10)+"\"",I));
+				  template_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
 			  }
 			  else {
 				  if (_opts.exit_on_error) {
@@ -790,10 +787,9 @@ bool autoforward = false;
 						  // This is dependent EnumConstantDecl which cannot be resolved to integer value just yet
 						  std::string exprStr;
 						  llvm::raw_string_ostream estream(exprStr);
-						  StmtPrinter P(estream,nullptr,Context.getPrintingPolicy());
 						  Expr* IE = ED->getInitExpr();
 						  if (IE) {
-							  P.Visit(const_cast<Expr*>(ED->getInitExpr()));
+							  IE->printPretty(estream,nullptr,Context.getPrintingPolicy());
 							  estream.flush();
 						  }
 						  ConstantValues.push_back(-1);

@@ -128,6 +128,9 @@ set(LLVM_SYSTEM_LIBS ${LLVM_SYSTEM_LIBS2})
 llvm_config(LLVM_PACKAGE_VERSION "--version")
 string(REPLACE "git" "" LLVM_PACKAGE_VERSION_PLAIN "${LLVM_PACKAGE_VERSION}")
 
+string(REPLACE "." ";" CLANG_VERSION_LIST ${LLVM_PACKAGE_VERSION})
+list(GET CLANG_VERSION_LIST 0 CLANG_VERSION)
+
 # copied from: llvm/tools/clang/cmake/modules/AddClang.cmake
 macro(add_clang_tool name)
   add_executable( ${name} ${ARGN} )
@@ -147,20 +150,16 @@ add_clang_tool(clang-proc
     clang-proc/fops.cpp
     clang-proc/taint.cpp
     clang-proc/PPCallbacksTracker.cpp
-    clang-proc/DeclPrinter.cpp
-    clang-proc/StmtPrinter.cpp
-    clang-proc/TypePrinter.cpp
+    clang-proc/${CLANG_VERSION}/DeclPrinter.cpp
+    clang-proc/${CLANG_VERSION}/StmtPrinter.cpp
+    clang-proc/${CLANG_VERSION}/TypePrinter.cpp
 )
 
-target_compile_options(clang-proc PRIVATE ${LLVM_CXXFLAGS})
+target_compile_options(clang-proc PRIVATE SHELL:${LLVM_CXXFLAGS})
 target_compile_options(clang-proc PRIVATE -ggdb3)
 target_compile_options(clang-proc PRIVATE $<$<CONFIG:Debug>:-O0>)
 
-string(REPLACE "." ";" CLANG_VERSION_LIST ${LLVM_PACKAGE_VERSION})
-list(GET CLANG_VERSION_LIST 0 CLANG_VERSION)
-
 target_compile_options(clang-proc PRIVATE -std=c++14)
-target_compile_options(clang-proc PRIVATE -fno-rtti)
 target_compile_options(clang-proc PRIVATE -Wno-non-virtual-dtor)
 target_compile_options(clang-proc PRIVATE -Wno-missing-field-initializers)
 target_compile_options(clang-proc PRIVATE -Wno-comment)
