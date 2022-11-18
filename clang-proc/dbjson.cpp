@@ -136,21 +136,15 @@ static bool can_compute_type_width(QualType T) {
 	return true;
 }
 
-void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig) {
-  fdecl_sig += D->getName();
-  fdecl_sig += ' ';
-  fdecl_sig += D->getType().getCanonicalType().getAsString();
-}
-
-void getFuncDeclSignatureNoCTA(const FunctionDecl* D, std::string& fdecl_sig, DbJSONClassVisitor& Visitor) {
-  if (Visitor.CTAList.find(D)!=Visitor.CTAList.end()) {
+void DbJSONClassConsumer::getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig) {
+  if(_opts.assert && Visitor.CTAList.find(D)!=Visitor.CTAList.end()) {
 	  fdecl_sig += "__compiletime_assert";
   }
   else {
 	  fdecl_sig += D->getName();
   }
   fdecl_sig += ' ';
-  fdecl_sig += D->getType().getCanonicalType().getAsString();
+  fdecl_sig += walkTypedefType(D->getType()).getAsString();
 }
 
 bool isOwnedTagDeclType(QualType DT) {
@@ -3109,12 +3103,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
   		  SHA_init(&cd);
   		  if (FT || CTS) SHA_update(&cd, templatePars.data(), templatePars.size());
           std::string fdecl_signature;
-          if (_opts.assert) {
-        	  getFuncDeclSignatureNoCTA(D, fdecl_signature, Visitor);
-          }
-          else {
-        	  getFuncDeclSignature(D, fdecl_signature);
-          }
+       	  getFuncDeclSignature(D, fdecl_signature);
           SHA_update(&cd, fdecl_signature.data(), fdecl_signature.size());
   		  std::stringstream argss;
   		  argss << "[";

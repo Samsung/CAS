@@ -1664,6 +1664,9 @@ private:
   void printCallInfo(const DbJSONClassVisitor::callfunc_info_t&, std::stringstream& ss, clang::SourceManager& SM, std::vector<const CallExpr*>& CEv);
   void printCallInfo(const CallExpr* CE, std::stringstream& ss, clang::SourceManager& SM, size_t ord, std::vector<const CallExpr*>& CEv);
 
+
+  void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig);
+
   std::map<int,std::tuple<QualType,std::string,DbJSONClassVisitor::recordInfo_t*>> revTypeMap;
   // Mapping of types to computed type strings (to speed-up type string creation)
   std::map<QualType,std::string> TypeStringMap;
@@ -1677,8 +1680,6 @@ private:
   std::vector<MacroDefInfo> mexps;
 };
 void load_database(std::string filepath);
-void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig);
-void getFuncDeclSignatureNoCTA(const FunctionDecl* D, std::string& fdecl_sig, DbJSONClassVisitor& Visitor);
 int internal_declcount(const FunctionDecl *F);
 void taint_params(const clang::FunctionDecl *F, DbJSONClassVisitor::FuncData&);
 bool isOwnedTagDeclType(QualType DT);

@@ -209,7 +209,11 @@ void FOPSClassVisitor::noticeInitListStmt(const Stmt* initExpr, const VarDecl * 
 		++i;
 	}
 }
-
+void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig) {
+  fdecl_sig += D->getName();
+  fdecl_sig += ' ';
+  fdecl_sig += walkTypedefType(D->getType()).getAsString();
+}
 std::string FOPSClassVisitor::getFunctionDeclHash(const FunctionDecl *FD) {
 
 	// TODO: what about C++?
