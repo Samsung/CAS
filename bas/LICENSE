@@ -57,3 +57,6 @@ Please see base64.c file for details.
 
 Generic vector implementation was taken from the klib library (https://github.com/attractivechaos/klib)
 and therefore might te distributed under the MIT license. Please see klib.h file for details.
+
+C string format parsing function was taken from the Linux kernel source tree and therefore might be distributed
+under GNU General Public License v.2 or any later version. Please see utils.c file for details.

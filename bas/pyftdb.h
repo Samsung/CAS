@@ -24,10 +24,12 @@ int ftdb_maps(struct ftdb* ftdb, int show_stats);
 #endif
 
 PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args);
+PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args);
 extern PyObject *libftdb_ftdbError;
 
 static PyMethodDef libftdb_methods[] = {
     {"create_ftdb",  libftdb_create_ftdb, METH_VARARGS, "Create cached version of Function/Type database file"},
+	{"parse_c_fmt_string",  libftdb_parse_c_fmt_string, METH_VARARGS, "Parse C format string and returns a list of types of detected parameters"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

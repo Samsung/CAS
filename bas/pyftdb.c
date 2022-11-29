@@ -9212,6 +9212,29 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	Py_RETURN_NONE;
 }
 
+PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args) {
+
+	PyObject* py_fmt = PyTuple_GetItem(args,0);
+	const char* fmt =  PyString_get_c_str(py_fmt);
+	enum format_type* par_type = malloc(256*sizeof(enum format_type));
+	size_t n = vsnprintf_parse_format(&par_type,256,fmt);
+
+	if (n<0) {
+		free(par_type);
+		Py_RETURN_NONE;
+	}
+
+	PyObject* argv = PyList_New(0);
+	for (int i=0; i<n; ++i) {
+		enum format_type v = par_type[i];
+		PyList_Append(argv,PyLong_FromLong((long)v));
+	}
+
+	free(par_type);
+	PYASSTR_DECREF(fmt);
+	return argv;
+}
+
 PyMODINIT_FUNC
 PyInit_libftdb(void)
 {

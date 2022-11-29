@@ -166,6 +166,30 @@ extern "C" {
 	const char* path_join(const char* start, const char* end);
 	unsigned char* base64_decode (const char *text, size_t* out_len);
 	char * base64_encode (const unsigned char* data, size_t len);
+
+	enum format_type {
+		FORMAT_TYPE_CHAR,
+		FORMAT_TYPE_STR,
+		FORMAT_TYPE_PTR,
+		FORMAT_TYPE_LONG_LONG,
+		FORMAT_TYPE_ULONG,
+		FORMAT_TYPE_LONG,
+		FORMAT_TYPE_SIZE_T,
+		FORMAT_TYPE_PTRDIFF,
+		FORMAT_TYPE_UBYTE,
+		FORMAT_TYPE_BYTE,
+		FORMAT_TYPE_USHORT,
+		FORMAT_TYPE_SHORT,
+		FORMAT_TYPE_UINT,
+		FORMAT_TYPE_INT,
+		/* Internal */
+		FORMAT_TYPE_WIDTH,
+		FORMAT_TYPE_NONE,
+		FORMAT_TYPE_PRECISION,
+		FORMAT_TYPE_PERCENT_CHAR,
+		FORMAT_TYPE_INVALID,
+	};
+	int vsnprintf_parse_format(enum format_type** par_type, size_t count, const char *fmt);
 #if defined __cplusplus
 }
 #endif
