@@ -243,10 +243,11 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
     for (Py_ssize_t u=0; u<PyList_Size(keys); ++u) {
     	long pid = PyLong_AsLong(PyList_GetItem(keys,u));
 		PyObject* eL = PyDict_GetItem(pm, PyList_GetItem(keys,u));
+		PyObject* py_space = PyUnicode_FromString(" ");
 		for (Py_ssize_t v=0; v<PyList_Size(eL); ++v) {
 			PyObject* e = PyList_GetItem(eL,v);
 			PyObject* cmdv = PyDict_GetItem(e,vkey);
-			PyObject* cmds = PyUnicode_Join(PyUnicode_FromString(" "),cmdv);
+			PyObject* cmds = PyUnicode_Join(py_space,cmdv);
 			cmdi++;
 			if ((cmdi%1000)==0) {
 				DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/cmd_count);
@@ -258,17 +259,23 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
 			for (k=0; k<excl_commands_size; ++k) {
 				unsigned byte_index = k/8;
 				unsigned bit_index = k%8;
-				if (pattern_match_single(PyString_get_c_str(cmds),excl_commands[k])) {
+				const char* cmdstr = PyString_get_c_str(cmds);
+				if (pattern_match_single(cmdstr,excl_commands[k])) {
 					b[byte_index]|=0x01<<(7-bit_index);
 				}
+				PYASSTR_DECREF(cmdstr);
 			}
 			Py_DecRef(cmds);
 			PyObject* pidext = PyTuple_New(2);
 			PyTuple_SetItem(pidext, 0,Py_BuildValue("l",pid));
 			PyTuple_SetItem(pidext, 1,Py_BuildValue("l",v));
-			PyDict_SetItem(pcp_map, pidext, PyBytes_FromStringAndSize((const char*)b,bsize));
+			PyObject* bytes = PyBytes_FromStringAndSize((const char*)b,bsize);
+			PyDict_SetItem(pcp_map, pidext, bytes);
+			Py_DecRef(pidext);
+			Py_DecRef(bytes);
 			free(b);
 		}
+		Py_DecRef(py_space);
 		if (interrupt) {
 			goto interrupted;
 		}
@@ -276,11 +283,17 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
     DBG(1,"\n");
 	Py_DecRef(keys);
     Py_DecRef(vkey);
+    for (size_t u=0; u<excl_commands_size; ++u) {
+    	PYASSTR_DECREF(excl_commands[u]);
+    }
 	free(excl_commands);
 	return pcp_map;
 interrupted:
 	Py_DecRef(keys);
     Py_DecRef(vkey);
+    for (size_t u=0; u<excl_commands_size; ++u) {
+    	PYASSTR_DECREF(excl_commands[u]);
+    }
 	free(excl_commands);
 	Py_DecRef(pcp_map);
 	Py_RETURN_NONE;
@@ -770,7 +783,6 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 	PyObject* pathJoinFunction = PyObject_GetAttrString(osModule,(char*)"join");
 
 	/* Fill all the nfsdb entries in the database */
-	//for (ssize_t i=0; i<PyList_Size(nfsdbJSON); ++i) {
 	for (ssize_t i=0; i<PyList_Size(nfsdbJSON); ++i) {
 		struct nfsdb_entry* new_entry = &nfsdb.nfsdb[i];
 		new_entry->nfsdb_index = i;
@@ -1012,7 +1024,10 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 	PyObject* stringTable = PyDict_New();
 	for (unsigned long u=0; u<self->nfsdb->string_count; ++u) {
 		PyObject* s = PyUnicode_FromString(self->nfsdb->string_table[u]);
-		PyDict_SetItem(stringTable, s, PyLong_FromUnsignedLong(u));
+		PyObject* index = PyLong_FromUnsignedLong(u);
+		PyDict_SetItem(stringTable, s, index);
+		Py_DecRef(s);
+		Py_DecRef(index);
 	}
 
 	PyObject* depmap_keys = PyDict_Keys(depmap);
@@ -1026,8 +1041,8 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 		depmap_vals+=PyList_Size(deps);
 		for (Py_ssize_t j=0; j<PyList_Size(deps); ++j) {
 			PyObject* dtuple = PyList_GetItem(deps,j);
-			values[2*j+0] = PyLong_AsUnsignedLong(PyList_GetItem(dtuple,0));
-			values[2*j+1] = PyLong_AsUnsignedLong(PyList_GetItem(dtuple,1));
+			values[2*j+0] = PyLong_AsUnsignedLong(PyTuple_GetItem(dtuple,0));
+			values[2*j+1] = PyLong_AsUnsignedLong(PyTuple_GetItem(dtuple,1));
 		}
 		ulongMap_insert(&nfsdb_deps.depmap, PyLong_AsUnsignedLong(mpath_handle), values, 2*PyList_Size(deps), 2*PyList_Size(deps));
 	}
@@ -1078,8 +1093,8 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 		ddepmap_vals+=PyList_Size(ddeps);
 		for (Py_ssize_t j=0; j<PyList_Size(ddeps); ++j) {
 			PyObject* ddtuple = PyList_GetItem(ddeps,j);
-			values[2*j+0] = PyLong_AsUnsignedLong(PyList_GetItem(ddtuple,0));
-			values[2*j+1] = PyLong_AsUnsignedLong(PyList_GetItem(ddtuple,1));
+			values[2*j+0] = PyLong_AsUnsignedLong(PyTuple_GetItem(ddtuple,0));
+			values[2*j+1] = PyLong_AsUnsignedLong(PyTuple_GetItem(ddtuple,1));
 		}
 		ulongMap_insert(&nfsdb_deps.ddepmap, PyLong_AsUnsignedLong(mpath_handle), values, 2*PyList_Size(ddeps), 2*PyList_Size(ddeps));
 	}

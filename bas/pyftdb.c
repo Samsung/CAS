@@ -9184,12 +9184,14 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	if (ftdb.known_data) printf("known_data: OK\n");
 	if (ftdb.BAS_data) printf("BAS_data [%lu]: OK\n",ftdb.BAS_data_count);
 
-
-	FILE* out = fopen(PyString_get_c_str(dbfn), "w");
+	const char* dbfn_s =  PyString_get_c_str(dbfn);
+	FILE* out = fopen(dbfn_s, "w");
 	if (!out) {
-		printf("Couldn't create flatten image file: %s\n",PyString_get_c_str(dbfn));
+		printf("Couldn't create flatten image file: %s\n",dbfn_s);
+		PYASSTR_DECREF(dbfn_s);
 		Py_RETURN_FALSE;
 	}
+	PYASSTR_DECREF(dbfn_s);
 
 	flatten_init();
 	FOR_ROOT_POINTER(&ftdb,
