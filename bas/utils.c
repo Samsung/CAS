@@ -420,8 +420,6 @@ int vsnprintf_parse_format(enum format_type** par_type, size_t count, const char
 
 		switch (spec.type) {
 			case FORMAT_TYPE_NONE:
-			case FORMAT_TYPE_WIDTH:
-			case FORMAT_TYPE_PRECISION:
 			case FORMAT_TYPE_PERCENT_CHAR:
 				break;
 			case FORMAT_TYPE_INVALID:
@@ -439,6 +437,8 @@ int vsnprintf_parse_format(enum format_type** par_type, size_t count, const char
 			case FORMAT_TYPE_USHORT:
 			case FORMAT_TYPE_SHORT:
 			case FORMAT_TYPE_INT:
+			case FORMAT_TYPE_WIDTH:
+			case FORMAT_TYPE_PRECISION:
 			default:
 				if (alloc_count<=n) {
 					enum format_type* tmp = realloc(*par_type,((alloc_count*3)/2)*sizeof(enum format_type));
