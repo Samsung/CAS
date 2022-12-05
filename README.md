@@ -245,3 +245,7 @@ Now the FTDB database can be used for further analysis and application developme
 ### Virtual Environment
 
 For those who are cautious to load and run custom Linux kernel modules on their Linux machines there is also virtual environment (based on QEMU) provided. Please refer to the [readme](tools/virtual_environment/README.md) file.
+
+### Talks
+
+Talk about Code Aware Services from the Linux Security Summit NA 2022 can be found [here](https://youtu.be/M7gl7MFU_Bc?t=648)
