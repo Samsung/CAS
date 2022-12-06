@@ -21,6 +21,7 @@ ghrefmap:		global_hash -> global_entry
 gnrefmap:		global_name -> global_entry
 fdrefmap:		fdecl_id -> func_decl_entry
 fdhrefmap:		fdeclhash -> func_decl_entry
+fdnrefmap:		fdeclname -> [func_decl_entry, func_decl_entry...]
 */
 int ftdb_maps(struct ftdb* ftdb, int show_stats) {
 
@@ -59,10 +60,12 @@ int ftdb_maps(struct ftdb* ftdb, int show_stats) {
 
 	BUILD_STRINGREF_ENTRYLIST_MAP(ftdb,gnrefmap,gnrefmap);
 
+	std::map<std::string,std::vector<struct ftdb_funcdecl_entry*>> fdnrefmap;
 	for (unsigned long i=0; i<ftdb->funcdecls_count; ++i) {
 		struct ftdb_funcdecl_entry* funcdecl_entry = &ftdb->funcdecls[i];
 		ulong_entryMap_insert(&ftdb->fdrefmap,funcdecl_entry->id,funcdecl_entry);
 		stringRef_entryMap_insert(&ftdb->fdhrefmap, funcdecl_entry->declhash, funcdecl_entry);
+		fdnrefmap[funcdecl_entry->name].push_back(funcdecl_entry);
 	}
 	printf("fdrefmap keys: %zu\n",ulong_entryMap_count(&ftdb->fdrefmap));
 	printf("fdhrefmap keys: %zu\n",stringRef_entryMap_count(&ftdb->fdhrefmap));

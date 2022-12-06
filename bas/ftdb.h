@@ -820,6 +820,7 @@ struct ftdb {
 	struct rb_root fnrefmap;
 	struct rb_root fdrefmap;
 	struct rb_root fdhrefmap;
+	struct rb_root fdnrefmap;
 	struct rb_root grefmap;
 	struct rb_root ghrefmap;
 	struct rb_root gnrefmap;

@@ -4842,10 +4842,10 @@ PyObject* libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *se
 			return 0;
 		}
 		PYASSTR_DECREF(hash);
-		struct ftdb_funcdecl_entry* func_entry = (struct ftdb_funcdecl_entry*)node->entry;
+		struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)node->entry;
 		PyObject* args = PyTuple_New(2);
 		PYTUPLE_SET_ULONG(args,0,(uintptr_t)self->ftdb);
-		PYTUPLE_SET_ULONG(args,1,func_entry->__index);
+		PYTUPLE_SET_ULONG(args,1,funcdecl_entry->__index);
 		PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
 		Py_DecRef(args);
 		return entry;
@@ -4864,6 +4864,62 @@ PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *se
 		const char* hash = PyString_get_c_str(py_hash);
 		struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
 		PYASSTR_DECREF(hash);
+		if (node) {
+			Py_RETURN_TRUE;
+		}
+		else {
+			Py_RETURN_FALSE;
+		}
+	}
+	else {
+		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+		return 0;
+	}
+}
+
+PyObject* libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	PyObject* py_name = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(py_name)) {
+		const char* name = PyString_get_c_str(py_name);
+		struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
+		if (!node) {
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function declaration name not present in the array: %s\n",name);
+			PYASSTR_DECREF(name);
+			PyErr_SetString(libftdb_ftdbError, errmsg);
+			return 0;
+		}
+		PYASSTR_DECREF(name);
+		struct ftdb_funcdecl_entry** funcdecl_entry_list = (struct ftdb_funcdecl_entry**)node->entry_list;
+		PyObject* entry_list = PyList_New(0);
+		for (unsigned long i=0; i<node->entry_count; ++i) {
+			struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)(funcdecl_entry_list[i]);
+			PyObject* args = PyTuple_New(2);
+			PYTUPLE_SET_ULONG(args,0,(uintptr_t)self->ftdb);
+			PYTUPLE_SET_ULONG(args,1,funcdecl_entry->__index);
+			PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
+			Py_DecRef(args);
+			PyList_Append(entry_list,entry);
+			Py_DecRef(entry);
+		}
+		return entry_list;
+	}
+	else {
+		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+		return 0;
+	}
+}
+
+PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+
+	PyObject* py_name = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(py_name)) {
+		const char* name = PyString_get_c_str(py_name);
+		struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
+		PYASSTR_DECREF(name);
 		if (node) {
 			Py_RETURN_TRUE;
 		}
@@ -8104,6 +8160,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb,
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,fnrefmap.rb_node);
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap,fdrefmap.rb_node);
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap,fdhrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,fdnrefmap.rb_node);
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap,grefmap.rb_node);
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap,ghrefmap.rb_node);
 	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap,gnrefmap.rb_node);

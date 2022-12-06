@@ -1025,6 +1025,8 @@ PyObject* libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_funcdecls_object *self
 PyObject* libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self, PyObject *args);
 PyObject* libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args);
 PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args);
+PyObject* libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *self, PyObject *args);
+PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *args);
 int libftdb_ftdb_funcdecls_sq_contains(PyObject* self, PyObject* key);
 
 static PyMethodDef libftdb_ftdbFuncdecls_methods[] = {
@@ -1032,6 +1034,8 @@ static PyMethodDef libftdb_ftdbFuncdecls_methods[] = {
 	{"contains_id",(PyCFunction)libftdb_ftdb_funcdecls_contains_id,METH_VARARGS,"Check whether there is a funcdecl entry with a given id"},
 	{"entry_by_hash",(PyCFunction)libftdb_ftdb_funcdecls_entry_by_hash,METH_VARARGS,"Returns the ftdb funcdecl entry with a given hash value"},
 	{"contains_hash",(PyCFunction)libftdb_ftdb_funcdecls_contains_hash,METH_VARARGS,"Check whether there is a funcdecl entry with a given hash"},
+	{"entry_by_name",(PyCFunction)libftdb_ftdb_funcdecls_entry_by_name,METH_VARARGS,"Returns the ftdb funcdecl entry with a given name"},
+	{"contains_name",(PyCFunction)libftdb_ftdb_funcdecls_contains_name,METH_VARARGS,"Check whether there is a funcdecl entry with a given name"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
