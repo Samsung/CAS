@@ -38,6 +38,8 @@ void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb
 void libetrace_nfsdb_entry_precompute_compilation_info_headers(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
 void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
 
+const char* libetrace_nfsdb_string_handle_join(const struct nfsdb* nfsdb, unsigned long* argv, unsigned long argv_count, const char* sep);
+
 PyObject * libetrace_is_LLVM_BC_file(PyObject *self, PyObject *args);
 PyObject * libetrace_is_ELF_file(PyObject *self, PyObject *args);
 PyObject * libetrace_pytools_is_ELF_or_LLVM_BC_file(PyObject *self, PyObject *args);
@@ -120,6 +122,7 @@ PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args
 PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure);
@@ -159,6 +162,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
 	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
 	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS,""},
+	{"precompute_command_patterns", (PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -262,6 +266,7 @@ PyObject* libetrace_nfsdb_entry_is_linking(libetrace_nfsdb_entry_object *self, P
 PyObject* libetrace_nfsdb_entry_filtered_openfiles(PyObject* self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_accessed_openfiles(PyObject* self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure);
@@ -271,6 +276,7 @@ PyObject* libetrace_nfsdb_entry_get_binary(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_cwd(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_bpath(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_argv(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_command(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openpaths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openfiles_with_children(PyObject* self, void* closure);
@@ -313,6 +319,7 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"cwd",libetrace_nfsdb_entry_get_cwd,0,"nfsdb entry cwd value",0},
 	{"bpath",libetrace_nfsdb_entry_get_bpath,0,"nfsdb entry binary path value",0},
 	{"argv",libetrace_nfsdb_entry_get_argv,0,"nfsdb entry argv list",0},
+	{"cmd",libetrace_nfsdb_entry_get_command,0,"nfsdb entry command string",0},
 	{"opens",libetrace_nfsdb_entry_get_openfiles,0,"nfsdb entry open files list",0},
 	{"openpaths",libetrace_nfsdb_entry_get_openpaths,0,"nfsdb entry open file paths list",0},
 	{"opens_with_children",libetrace_nfsdb_entry_get_openfiles_with_children,0,"nfsdb entry open files list in the current process and all its children",0},
@@ -322,9 +329,10 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"pipe_eids",libetrace_nfsdb_entry_get_pipe_eids,0,"nfsdb entry pipe eid values",0},
 	{"linked_file",libetrace_nfsdb_entry_get_linked_file,0,"nfsdb entry linked file entry",0},
 	{"linked_path",libetrace_nfsdb_entry_get_linked_path,0,"nfsdb entry linked file path",0},
-	{"linked_ptr",libetrace_nfsdb_entry_get_linked_ptr,0,"nfsdb low-level pointer representation of the inked file",0},
+	{"linked_ptr",libetrace_nfsdb_entry_get_linked_ptr,0,"nfsdb low-level pointer representation of the linked file",0},
 	{"linked_type",libetrace_nfsdb_entry_get_linked_type,0,"nfsdb entry linked file type",0},
 	{"compilation_info",libetrace_nfsdb_entry_get_compilation_info,0,"nfsdb entry compilation info",0},
+	{"ptr",libetrace_nfsdb_entry_get_ptr,0,"nfsdb entry low level index value",0},
 	{0,0,0,0,0},
 };
 
@@ -512,6 +520,7 @@ typedef struct {
 
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self);
 PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+PyObject* libetrace_nfsdb_entry_openfile_json(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closure);
@@ -551,6 +560,7 @@ static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 };
 
 static PyMethodDef libetrace_nfsdbEntryOpenfile_methods[] = {
+	{"json",(PyCFunction)libetrace_nfsdb_entry_openfile_json,METH_VARARGS,"Returns the json representation of the openfile entry"},
 	{"is_read",(PyCFunction)libetrace_nfsdb_entry_openfile_is_read,METH_VARARGS,"Returns true if the file was opened for read"},
 	{"is_write",(PyCFunction)libetrace_nfsdb_entry_openfile_is_write,METH_VARARGS,"Returns true if the file was opened for write"},
 	{"is_reg",(PyCFunction)libetrace_nfsdb_entry_openfile_is_reg,METH_VARARGS,"Returns true if the file is a regular file"},

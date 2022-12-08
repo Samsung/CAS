@@ -248,6 +248,7 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
 			PyObject* e = PyList_GetItem(eL,v);
 			PyObject* cmdv = PyDict_GetItem(e,vkey);
 			PyObject* cmds = PyUnicode_Join(py_space,cmdv);
+			const char* cmdstr = PyString_get_c_str(cmds);
 			cmdi++;
 			if ((cmdi%1000)==0) {
 				DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/cmd_count);
@@ -259,12 +260,11 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
 			for (k=0; k<excl_commands_size; ++k) {
 				unsigned byte_index = k/8;
 				unsigned bit_index = k%8;
-				const char* cmdstr = PyString_get_c_str(cmds);
 				if (pattern_match_single(cmdstr,excl_commands[k])) {
 					b[byte_index]|=0x01<<(7-bit_index);
 				}
-				PYASSTR_DECREF(cmdstr);
 			}
+			PYASSTR_DECREF(cmdstr);
 			Py_DecRef(cmds);
 			PyObject* pidext = PyTuple_New(2);
 			PyTuple_SetItem(pidext, 0,Py_BuildValue("l",pid));
@@ -1161,6 +1161,99 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 
 	Py_DecRef(stringTable);
 	Py_RETURN_TRUE;
+}
+
+PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
+
+	int debug = 0;
+	PyObject* py_debug = PyUnicode_FromString("debug");
+
+	if (kwargs) {
+		if (PyDict_Contains(kwargs, py_debug)) {
+			PyObject* debugv = PyDict_GetItem(kwargs,py_debug);
+			debug = PyObject_IsTrue(debugv);
+		}
+	}
+
+	Py_DecRef(py_debug);
+
+	DBG(debug,"--- libetrace_precompute_command_patterns()\n");
+
+    struct sigaction act;
+    act.sa_handler = intHandler;
+    sigaction(SIGINT, &act, 0);
+
+    const char** excl_commands = 0;
+    size_t excl_commands_size = 0;
+    PyObject* exclude_commands = PyTuple_GetItem(args,0);
+
+    if (exclude_commands && (PyList_Size(exclude_commands)>0)) {
+		excl_commands = malloc(PyList_Size(exclude_commands)*sizeof(const char*));
+		excl_commands_size = PyList_Size(exclude_commands);
+		int u;
+		for (u=0; u<PyList_Size(exclude_commands); ++u) {
+			excl_commands[u] = PyString_get_c_str(PyList_GetItem(exclude_commands,u));
+			DBG(debug,"        exclude command pattern: %s\n",excl_commands[u]);
+		}
+	}
+
+    DBG(1,"--- Number of commands: %lu, patterns: %lu\n",self->nfsdb->nfsdb_count,excl_commands_size);
+    for (size_t i=0; i<excl_commands_size; ++i) {
+    	DBG(1,"--- PATTERN[%zu]:  %s\n",i,excl_commands[i]);
+    }
+
+    if (excl_commands_size<=0) {
+    	// Nothing to do
+    	Py_RETURN_NONE;
+    }
+
+    PyObject* pcp_map = PyDict_New();
+
+    DBG(1,"Precomputing exclude command patterns...");
+
+    for (unsigned long cmdi=0; cmdi<self->nfsdb->nfsdb_count; ++cmdi) {
+    	struct nfsdb_entry* entry = &self->nfsdb->nfsdb[cmdi];
+    	const char* cmdstr = libetrace_nfsdb_string_handle_join(self->nfsdb,entry->argv,entry->argv_count," ");
+    	if ((cmdi%1000)==0) {
+			DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/self->nfsdb->nfsdb_count);
+		}
+		size_t bsize = (excl_commands_size-1)/8+1;
+		unsigned char* b = calloc(bsize,1);
+		assert(b!=0 && "Out of memory for allocating precompute pattern map");
+		size_t k;
+		for (k=0; k<excl_commands_size; ++k) {
+			unsigned byte_index = k/8;
+			unsigned bit_index = k%8;
+			if (pattern_match_single(cmdstr,excl_commands[k])) {
+				b[byte_index]|=0x01<<(7-bit_index);
+			}
+		}
+		PyObject* pidext = PyTuple_New(2);
+		PyTuple_SetItem(pidext, 0,Py_BuildValue("l",entry->eid.pid));
+		PyTuple_SetItem(pidext, 1,Py_BuildValue("l",entry->eid.exeidx));
+		PyObject* bytes = PyBytes_FromStringAndSize((const char*)b,bsize);
+		PyDict_SetItem(pcp_map, pidext, bytes);
+		Py_DecRef(pidext);
+		Py_DecRef(bytes);
+		free(b);
+		free((void*)cmdstr);
+		if (interrupt) {
+			goto interrupted;
+		}
+    }
+    DBG(1,"\n");
+    for (size_t u=0; u<excl_commands_size; ++u) {
+    	PYASSTR_DECREF(excl_commands[u]);
+    }
+	free(excl_commands);
+	return pcp_map;
+interrupted:
+    for (size_t u=0; u<excl_commands_size; ++u) {
+    	PYASSTR_DECREF(excl_commands[u]);
+    }
+	free(excl_commands);
+	Py_DecRef(pcp_map);
+	Py_RETURN_NONE;
 }
 
 PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args) {
@@ -2578,6 +2671,12 @@ PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure) {
 	return eid;
 }
 
+PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	return PyLong_FromUnsignedLong(__self->nfsdb_index);
+}
+
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
@@ -2677,6 +2776,41 @@ PyObject* libetrace_nfsdb_entry_get_argv(PyObject* self, void* closure) {
 	}
 
 	return argv;
+}
+
+const char* libetrace_nfsdb_string_handle_join(const struct nfsdb* nfsdb, unsigned long* argv, unsigned long argv_count, const char* sep) {
+
+    size_t sep_size = strlen(sep);
+    size_t arglen = 0;
+    for (unsigned long i=0; i<argv_count; ++i) {
+        arglen+=strlen(nfsdb->string_table[argv[i]]);
+    }
+    unsigned long alloc_size = (argv_count>0)?(arglen+sep_size*(argv_count-1)+1):1;
+    char* rs = malloc(alloc_size);
+    unsigned long pi = 0;
+    if (argv_count>0) {
+        for (unsigned long i=0; i<argv_count; ++i) {
+        	const char* srgv = nfsdb->string_table[argv[i]];
+            size_t argvlen = strlen(srgv);
+            memcpy(&rs[pi],srgv,argvlen);
+            pi+=argvlen;
+            if (i+1<argv_count) {
+                memcpy(&rs[pi],sep,sep_size);
+                pi+=sep_size;
+            }
+        } 
+    }
+    rs[pi] = 0;
+    return rs;
+}
+
+PyObject* libetrace_nfsdb_entry_get_command(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	const char* cmdstr = libetrace_nfsdb_string_handle_join(__self->nfsdb,__self->entry->argv,__self->entry->argv_count," ");
+	PyObject* cmd = PyUnicode_FromString(cmdstr);
+	free((void*)cmdstr);
+	return cmd;
 }
 
 PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure) {
@@ -3403,6 +3537,20 @@ PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *ar
 	}
 
 	return (PyObject *)self;
+}
+
+PyObject* libetrace_nfsdb_entry_openfile_json(libetrace_nfsdb_entry_openfile_object *self, PyObject *args) {
+
+	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
+
+	PyObject* openEntry = PyDict_New();
+	FTDB_SET_ENTRY_STRING(openEntry,p,__self->nfsdb->string_table[__self->path]);
+	if (__self->original_path!=ULONG_MAX) {
+		FTDB_SET_ENTRY_STRING(openEntry,o,__self->nfsdb->string_table[__self->original_path]);
+	}
+	FTDB_SET_ENTRY_ULONG(openEntry,m,__self->mode);
+	FTDB_SET_ENTRY_ULONG(openEntry,s,__self->size);
+	return openEntry;
 }
 
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure) {
