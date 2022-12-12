@@ -1044,12 +1044,6 @@ def create_json_db_main(args,allowed_phases):
     JDB["source_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["sources"]]
     if "modules" in JDB:
         JDB["module_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["modules"]]
-    # Try to update absolute path in function locations where it is missing
-    for f in JDB["funcs"]:
-        floc = f["location"].split(":")
-        if os.path.isabs(floc[0]) and f["abs_location"]=="":
-            floc[0] = os.path.realpath(floc[0])
-            f["abs_location"] = ":".join(floc)
     # Re-shuffle the macro information data into list-like manner
     JDB["macroinfo"] = [ {"name":k,"occurences":JDB["macroinfo"][k]} for k in JDB["macroinfo"]]
     # Now save the final JSON

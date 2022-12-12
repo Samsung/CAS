@@ -1606,6 +1606,7 @@ public:
   typedef std::map<int,Expr*> default_nontype_map_t;
   typedef std::tuple<defaut_type_map_t,default_nontype_map_t,std::vector<int>> template_default_map_t;
   
+  std::string getAbsoluteLocation(SourceLocation L);
   void printGlobalArray(int Indentation);
   void computeTypeHashes();
   void computeFuncHashes();

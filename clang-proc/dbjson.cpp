@@ -906,6 +906,29 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  return outerFn;
   }
 
+std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
+	if(Loc.isInvalid())
+		return "<invalid loc>";
+	auto &SM = Context.getSourceManager();
+	SourceLocation ELoc = SM.getExpansionLoc(Loc);
+
+	StringRef RPath = SM.getFileEntryForID(SM.getFileID(ELoc))->tryGetRealPathName();
+	if(RPath.empty()){
+		//fallback to default
+		llvm::errs()<<"Failed to get absolute location\n";
+		llvm::errs()<<Loc.printToString(SM)<<'\n';
+		return Loc.printToString(SM);
+	}
+	PresumedLoc PLoc = SM.getPresumedLoc(ELoc);
+	if(PLoc.isInvalid())
+		return "<invalid>";
+	std::string locstr;
+	llvm::raw_string_ostream s(locstr);
+	s << RPath.str() << ':' << PLoc.getLine() << ':' << PLoc.getColumn();
+	return s.str();
+
+}
+
 
   std::string DbJSONClassConsumer::render_switch_json(const Expr* cond,
 		  std::vector<std::pair<DbJSONClassVisitor::caseinfo_t,DbJSONClassVisitor::caseinfo_t>>& caselst,
@@ -1168,7 +1191,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  llvm::outs() << Indent << "\t\t\"file\": \"" << file << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"type\": " << Visitor.getTypeData(D->getType()).id << ",\n";
 		  llvm::outs() << Indent << "\t\t\"linkage\": \"" << translateLinkage(D->getLinkageInternal()) << "\",\n";
-		  llvm::outs() << Indent << "\t\t\"location\": \"" << D->getLocation().printToString(SM) << "\",\n";
+		  llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"deftype\": " << D->hasDefinition() << ",\n";
 		  llvm::outs() << Indent << "\t\t\"hasinit\": " << D->hasInit() << ",\n";
 		  llvm::outs() << Indent << "\t\t\"init\": \"" << json::json_escape(initstring) << "\"\n";
@@ -1795,17 +1818,9 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  outerFnForClass = Visitor.parentFunctionOrMethodString(RD);
 			  }
 		  }
-
-          SourceManager& SM = Context.getSourceManager();
+		  
+		  SourceManager& SM = Context.getSourceManager();
 		  FileID FID = SM.getFileID(D->getSourceRange().getBegin());
-		  const FileEntry* fEntry = SM.getFileEntryForID(FID);
-		  StringRef realpath;
-		  std::string absloc;
-          if (fEntry) realpath = fEntry->tryGetRealPathName();
-		  std::string loc = D->getLocation().printToString(SM);
-		  if ((fEntry)&&(!realpath.empty())) {
-			  absloc = realpath.str();
-		  }
 		  const auto InputBuffer = compatibility::getBuffer(SM, FID);
 		  Lexer SrcLexer(FID,InputBuffer,SM,Context.getLangOpts());
 		  std::string upBody = SrcLexer.getSourceText(CharSourceRange(D->getSourceRange(),true),
@@ -2652,8 +2667,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  llvm::outs() << Indent << "\t\t\"signature\": \"" << fdecl_signature << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"declhash\": \"" <<
 				  base64_encode(reinterpret_cast<const unsigned char*>(cd.buf.b), 64)<< "\",\n";
-		  llvm::outs() << Indent << "\t\t\"location\": \"" << loc << "\",\n";
-		  llvm::outs() << Indent << "\t\t\"abs_location\": \"" << absloc << "\",\n";
+		  llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
 		  std::string sloc = D->getSourceRange().getBegin().printToString(SM);
 		  std::string eloc = D->getSourceRange().getEnd().printToString(SM);
 		  llvm::outs() << Indent << "\t\t\"start_loc\": \"" << sloc << "\",\n";
@@ -2924,7 +2938,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				  if (vi.VD) {
 					  llvm::outs() << Indent << "\t\t\t\t\"csid\": " << func_data.csIdMap[vi.CSPtr] << ",\n";
 				  }
-				  llvm::outs() << Indent << "\t\t\t\t\"location\": \"" << VD->getLocation().printToString(Context.getSourceManager()) << "\"\n";
+				  llvm::outs() << Indent << "\t\t\t\t\"location\": \"" << getAbsoluteLocation(VD->getLocation()) << "\"\n";
 				  llvm::outs() << Indent << "\t\t\t}";
 				  ++u;
 				  first = false;
@@ -3117,7 +3131,6 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
   			  argss << ", " << par_data.id;
    		  }
   		  argss << " ]";
-  		  std::string loc = D->getLocation().printToString(Context.getSourceManager());
   		  llvm::outs() << Indent << "\t{\n";
   		  if (Visitor.CTAList.find(D)!=Visitor.CTAList.end()) {
   			llvm::outs() << Indent << "\t\t\"name\": \"" << "__compiletime_assert" << "\",\n";
@@ -3160,7 +3173,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		  llvm::outs() << Indent << "\t\t\"signature\": \"" << fdecl_signature << "\",\n";
   		  llvm::outs() << Indent << "\t\t\"declhash\": \"" <<
   				  base64_encode(reinterpret_cast<const unsigned char*>(cd.buf.b), 64)<< "\",\n";
-  		  llvm::outs() << Indent << "\t\t\"location\": \"" << loc << "\",\n";
+  		  llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
   		  llvm::outs() << Indent << "\t\t\"refcount\": " << 1 << ",\n";
   		  llvm::outs() << Indent << "\t\t\"types\": " << argss.str() << "\n";
   		  llvm::outs() << Indent << "\t}";
@@ -4444,7 +4457,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  llvm::outs() << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  if (_opts.recordLoc) {
 				  llvm::outs() << Indent << "\t\t\"location\": \"" <<
-						  TRD->getSourceRange().getBegin().printToString(Context.getSourceManager()) << "\",\n";
+						  getAbsoluteLocation(TRD->getSourceRange().getBegin()) << "\",\n";
 			  }
 			  llvm::outs() << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
 			  if (TRD->isUnion()) {
@@ -4867,11 +4880,11 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  if (_opts.recordLoc) {
 				  if (PoI) {
 					  llvm::outs() << Indent << "\t\t\"location\": \"" <<
-							  PoILoc.printToString(Context.getSourceManager()) << "\",\n";
+							  getAbsoluteLocation(PoILoc) << "\",\n";
 				  }
 				  else {
 					  llvm::outs() << Indent << "\t\t\"location\": \"" <<
-							  rD->getSourceRange().getBegin().printToString(Context.getSourceManager()) << "\",\n";
+							  getAbsoluteLocation(rD->getSourceRange().getBegin()) << "\",\n";
 				  }
 			  }
 
@@ -5234,7 +5247,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			  if (_opts.adddefs) {
 				  llvm::outs() << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }
-                          llvm::outs() << Indent << "\t\t\"location\": \"" << D->getLocation().printToString(Context.getSourceManager()) << "\",\n";
+                          llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
 			  llvm::outs() << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  llvm::outs() << Indent << "\t\t\"refs\": [";
 			  llvm::outs() << " " << Visitor.getTypeData(tT).id;

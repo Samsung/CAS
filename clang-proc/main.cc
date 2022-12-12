@@ -133,7 +133,6 @@ int main(int argc, const char **argv)
             llvm::errs() << "File: " << sourceFile << " does not exist!\n";
             return -1;
         }
-
         ClangTool Tool(optionsParser.getCompilations(),sourceFile);
         auto directory = optionsParser.getCompilations().getCompileCommands(sourceFile).front().Directory;
 
