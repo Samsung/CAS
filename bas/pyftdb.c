@@ -1841,7 +1841,6 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 	FTDB_SET_ENTRY_STRING(json_entry,signature,self->entry->signature);
 	FTDB_SET_ENTRY_STRING(json_entry,declhash,self->entry->declhash);
 	FTDB_SET_ENTRY_STRING(json_entry,location,self->entry->location);
-	FTDB_SET_ENTRY_STRING_OPTIONAL(json_entry,abs_location,self->entry->abs_location);
 	FTDB_SET_ENTRY_STRING(json_entry,start_loc,self->entry->start_loc);
 	FTDB_SET_ENTRY_STRING(json_entry,end_loc,self->entry->end_loc);
 	FTDB_SET_ENTRY_ULONG(json_entry,refcount,self->entry->refcount);
@@ -2447,18 +2446,6 @@ PyObject* libftdb_ftdb_func_entry_get_location(PyObject* self, void* closure) {
 	return PyUnicode_FromString(__self->entry->location);
 }
 
-PyObject* libftdb_ftdb_func_entry_get_abs_location(PyObject* self, void* closure) {
-
-	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
-
-	if (!__self->entry->abs_location) {
-		PyErr_SetString(libftdb_ftdbError, "No 'abs_location' field in function entry");
-		return 0;
-	}
-
-	return PyUnicode_FromString(__self->entry->abs_location);
-}
-
 PyObject* libftdb_ftdb_func_entry_get_start_loc(PyObject* self, void* closure) {
 
 	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
@@ -3016,10 +3003,6 @@ PyObject* libftdb_ftdb_func_entry_mp_subscript(PyObject* self, PyObject* slice) 
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_location(self,0);
 	}
-	else if (!strcmp(attr,"abs_location")) {
-		PYASSTR_DECREF(attr);
-	    return libftdb_ftdb_func_entry_get_abs_location(self,0);
-	}
 	else if (!strcmp(attr,"start_loc")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_start_loc(self,0);
@@ -3252,10 +3235,6 @@ int libftdb_ftdb_func_entry_sq_contains(PyObject* self, PyObject* slice) {
 	else if (!strcmp(attr,"location")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
-	}
-	else if (!strcmp(attr,"abs_location")) {
-		PYASSTR_DECREF(attr);
-	    return !!__self->entry->abs_location;
 	}
 	else if (!strcmp(attr,"start_loc")) {
 		PYASSTR_DECREF(attr);
@@ -8207,7 +8186,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,
 	AGGREGATE_FLATTEN_STRING2(signature);
 	AGGREGATE_FLATTEN_STRING2(declhash);
 	AGGREGATE_FLATTEN_STRING2(location);
-	AGGREGATE_FLATTEN_STRING2(abs_location);
 	AGGREGATE_FLATTEN_STRING2(start_loc);
 	AGGREGATE_FLATTEN_STRING2(end_loc);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
@@ -8375,7 +8353,6 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 	new_entry->signature = FTDB_ENTRY_STRING(func_entry,signature);
 	new_entry->declhash = FTDB_ENTRY_STRING(func_entry,declhash);
 	new_entry->location = FTDB_ENTRY_STRING(func_entry,location);
-	new_entry->abs_location = FTDB_ENTRY_STRING_OPTIONAL(func_entry,abs_location);
 	new_entry->start_loc = FTDB_ENTRY_STRING(func_entry,start_loc);
 	new_entry->end_loc = FTDB_ENTRY_STRING(func_entry,end_loc);
 	new_entry->refcount = FTDB_ENTRY_ULONG(func_entry,refcount);

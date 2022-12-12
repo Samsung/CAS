@@ -522,7 +522,6 @@ struct ftdb_func_entry {
 	const char* signature;
 	const char* declhash;
 	const char* location;
-	const char* abs_location;
 	const char* start_loc;
 	const char* end_loc;
 	unsigned long refcount;

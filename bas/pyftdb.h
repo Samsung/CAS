@@ -491,7 +491,6 @@ PyObject* libftdb_ftdb_func_entry_get_declbody(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_signature(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_declhash(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_location(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_func_entry_get_abs_location(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_start_loc(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_end_loc(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_refcount(PyObject* self, void* closure);
@@ -568,7 +567,6 @@ static PyGetSetDef libftdb_ftdbFuncEntry_getset[] = {
 	{"signature",libftdb_ftdb_func_entry_get_signature,0,"ftdb func entry signature value",0},
 	{"declhash",libftdb_ftdb_func_entry_get_declhash,0,"ftdb func entry declhash value",0},
 	{"location",libftdb_ftdb_func_entry_get_location,0,"ftdb func entry location value",0},
-	{"abs_location",libftdb_ftdb_func_entry_get_abs_location,0,"ftdb func entry abs_location value",0},
 	{"start_loc",libftdb_ftdb_func_entry_get_start_loc,0,"ftdb func entry start_loc value",0},
 	{"end_loc",libftdb_ftdb_func_entry_get_end_loc,0,"ftdb func entry end_loc value",0},
 	{"refcount",libftdb_ftdb_func_entry_get_refcount,0,"ftdb func entry refcount value",0},
