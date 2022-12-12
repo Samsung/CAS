@@ -265,6 +265,7 @@ PyObject* libetrace_nfsdb_entry_has_compilations(libetrace_nfsdb_entry_object *s
 PyObject* libetrace_nfsdb_entry_is_linking(libetrace_nfsdb_entry_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_filtered_openfiles(PyObject* self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_accessed_openfiles(PyObject* self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_get_argvn(PyObject* self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure);
@@ -301,6 +302,7 @@ static PyMethodDef libetrace_nfsdbEntry_methods[] = {
 	{"is_linking",(PyCFunction)libetrace_nfsdb_entry_is_linking,METH_VARARGS,"Returns true if the given execution has linker entry"},
 	{"open_stat",(PyCFunction)libetrace_nfsdb_entry_filtered_openfiles,METH_VARARGS,"Returns the list of filtered opened files (by file type) for this execution"},
 	{"open_access",(PyCFunction)libetrace_nfsdb_entry_accessed_openfiles,METH_VARARGS,"Returns the list of filtered opened files (by access type) for this execution"},
+	{"argvn",(PyCFunction)libetrace_nfsdb_entry_get_argvn,METH_VARARGS,"nfsdb entry n'th argv"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

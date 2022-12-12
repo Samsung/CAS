@@ -2671,6 +2671,15 @@ PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure) {
 	return eid;
 }
 
+PyObject* libetrace_nfsdb_entry_get_argvn(PyObject* self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	unsigned long index = PyLong_AsUnsignedLong(PyTuple_GetItem(args,0));
+	ASSERT_WITH_NFSDB_FORMAT_ERROR(index<__self->entry->argv_count,"Invalid index value to 'argv' table [%lu]",index);
+	return PyUnicode_FromString(__self->nfsdb->string_table[__self->entry->argv[index]]);
+}
+
 PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
