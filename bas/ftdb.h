@@ -766,7 +766,6 @@ struct known_data_entry {
 	unsigned long lib_funcs_ids_count;
 	unsigned long* always_inc_funcs_ids;
 	unsigned long always_inc_funcs_ids_count;
-	const char* source_root;
 };
 
 struct BAS_item {

@@ -661,7 +661,6 @@ PyObject* libftdb_ftdb_get_known_data(PyObject* self, void* closure) {
 	FTDB_SET_ENTRY_STRING_ARRAY(py_known_data,lib_funcs,__self->ftdb->known_data->lib_funcs);
 	FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,lib_funcs_ids,__self->ftdb->known_data->lib_funcs_ids);
 	FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,always_inc_funcs_ids,__self->ftdb->known_data->always_inc_funcs_ids);
-	FTDB_SET_ENTRY_STRING(py_known_data,source_root,__self->ftdb->known_data->source_root);
     PyList_Append(py_known_data_container,py_known_data);
     Py_DecRef(py_known_data);
 
@@ -8098,7 +8097,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(known_data_entry,
 	);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,lib_funcs_ids,ATTR(lib_funcs_ids_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,always_inc_funcs_ids,ATTR(always_inc_funcs_ids_count));
-	AGGREGATE_FLATTEN_STRING2(source_root);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(BAS_item,
@@ -8953,7 +8951,6 @@ void fill_known_data_entry_entry(PyObject* known_data_entry, struct known_data_e
 	new_entry->lib_funcs_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,lib_funcs_ids);
 	new_entry->always_inc_funcs_ids_count = FTDB_ENTRY_ARRAY_SIZE(known_data_entry,always_inc_funcs_ids);
 	new_entry->always_inc_funcs_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,always_inc_funcs_ids);
-	new_entry->source_root = FTDB_ENTRY_STRING(known_data_entry,source_root);
 }
 
 void fill_BAS_item_entry(PyObject* BAS_item_entry, struct BAS_item* new_entry) {
