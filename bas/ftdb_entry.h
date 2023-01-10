@@ -764,4 +764,14 @@
 
 #define PYASSTR_DECREF(__node) do { Py_DecRef((PyObject*)container_of(__node,PyBytesObject,ob_sval)); } while(0)
 
+#define VALIDATE_FTDB_ENTRY(__db,__key)	\
+do {	\
+	PyObject* key_##__key = PyUnicode_FromString(#__key);	\
+	if (!PyDict_Contains(__db, key_##__key)) {	\
+		Py_DecRef(key_##__key);	\
+		PyErr_SetString(libftdb_ftdbError,"ERROR: Invalid FTDB database format");	\
+		Py_RETURN_FALSE;	\
+	}	\
+} while(0)
+
 #endif /* __FTDB_ENTRY_H__ */

@@ -8964,6 +8964,17 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	}
 	struct ftdb ftdb = {};
 
+	VALIDATE_FTDB_ENTRY(dbJSON,funcs);
+	VALIDATE_FTDB_ENTRY(dbJSON,funcdecls);
+	VALIDATE_FTDB_ENTRY(dbJSON,unresolvedfuncs);
+	VALIDATE_FTDB_ENTRY(dbJSON,globals);
+	VALIDATE_FTDB_ENTRY(dbJSON,types);
+	VALIDATE_FTDB_ENTRY(dbJSON,fops);
+	VALIDATE_FTDB_ENTRY(dbJSON,version);
+	VALIDATE_FTDB_ENTRY(dbJSON,module);
+	VALIDATE_FTDB_ENTRY(dbJSON,directory);
+	VALIDATE_FTDB_ENTRY(dbJSON,release);
+
 	PyObject* key_funcs = PyUnicode_FromString("funcs");
 	PyObject* funcs = PyDict_GetItem(dbJSON,key_funcs);
 	Py_DecRef(key_funcs);
