@@ -236,7 +236,7 @@ First we create some intermediate file, `fops` database. For every global variab
 The JSON database reached a few GB of size. Now it's fully justified to use the cache.
 ```bash
 ${CAS_DIR}/tests/ftdb_cache_test --only-ftdb-create db.json
-${CAS_DIR}/examples/ftdb_show_info db.json.img 
+${CAS_DIR}/examples/ftdb_show_info db.img 
 ```
 
 Now the FTDB database can be used for further analysis and application development.

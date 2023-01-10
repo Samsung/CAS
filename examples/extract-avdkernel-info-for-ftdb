@@ -44,7 +44,7 @@ def json_command(cmd):
 
 json_vals = list()
 for C in comps:
-	e = nfsdb[C]
+	e = nfsdb[C][0]
 	json_vals.append( "{\"directory\":%s,\"command\":%s,\"file\":%s}"%(json.dumps(e.cwd),json_command(e.argv),json.dumps(e.compilation_info.file_paths[0])) )
 with open("compile_commands.json","w") as f:
 	f.write(json.dumps(json.loads("[%s]"%",".join(json_vals)), indent=4, sort_keys=False))
