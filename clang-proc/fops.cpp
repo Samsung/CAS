@@ -2,6 +2,28 @@
 
 #define DEBUG_FOPS 0
 
+std::string FOPSClassConsumer::getAbsoluteLocation(SourceLocation Loc){
+	if(Loc.isInvalid())
+		return "<invalid loc>";
+	auto &SM = Context.getSourceManager();
+	SourceLocation ELoc = SM.getExpansionLoc(Loc);
+
+	StringRef RPath = SM.getFileEntryForID(SM.getFileID(ELoc))->tryGetRealPathName();
+	if(RPath.empty()){
+		//fallback to default
+		llvm::errs()<<"Failed to get absolute location\n";
+		llvm::errs()<<Loc.printToString(SM)<<'\n';
+		return Loc.printToString(SM);
+	}
+	PresumedLoc PLoc = SM.getPresumedLoc(ELoc);
+	if(PLoc.isInvalid())
+		return "<invalid>";
+	std::string locstr;
+	llvm::raw_string_ostream s(locstr);
+	s << RPath.str() << ':' << PLoc.getLine() << ':' << PLoc.getColumn();
+	return s.str();
+}
+
 std::string FOPSClassVisitor::typeMatching(QualType T) {
 
 	switch(T->getTypeClass()) {
@@ -437,8 +459,7 @@ void FOPSClassConsumer::printVarMap(FOPSClassVisitor::initMapFixedType_t& FTVM, 
 			llvm::outs() << Indent << "\t{\n";
 			const VarDecl * D = static_cast<const VarDecl*>((*i).first);
 			llvm::outs() << "\t\t\t\"name\": " << "\"" << cast<NamedDecl>(D)->getNameAsString() << "\"" << ",\n";
-			std::string locstart = D->getSourceRange().getBegin().printToString(Context.getSourceManager());
-			std::string locend = D->getSourceRange().getEnd().printToString(Context.getSourceManager());
+			std::string locstart = getAbsoluteLocation(D->getSourceRange().getBegin());
 			llvm::outs() << "\t\t\t\"type\": " << "\"" << (*i).second.first << "\"" << ",\n";
 			llvm::outs() << "\t\t\t\"location\": " << "\"" << locstart << "\"" << ",\n";
 			llvm::outs() << "\t\t\t\"members\": {\n";

@@ -628,7 +628,7 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+		exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
 		CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -731,7 +731,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 						if (lastFunctionDef) {
 							std::string Expr;
 							llvm::raw_string_ostream exprstream(Expr);
-							exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+							exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
 							CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 							exprstream.flush();
 							std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -774,7 +774,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 				if (lastFunctionDef) {
 					std::string Expr;
 					llvm::raw_string_ostream exprstream(Expr);
-					exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+					exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
 					CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 					exprstream.flush();
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -926,9 +926,28 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
 	llvm::raw_string_ostream s(locstr);
 	s << RPath.str() << ':' << PLoc.getLine() << ':' << PLoc.getColumn();
 	return s.str();
-
 }
+std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
+	if(Loc.isInvalid())
+		return "<invalid loc>";
+	auto &SM = Context.getSourceManager();
+	SourceLocation ELoc = SM.getExpansionLoc(Loc);
 
+	StringRef RPath = SM.getFileEntryForID(SM.getFileID(ELoc))->tryGetRealPathName();
+	if(RPath.empty()){
+		//fallback to default
+		llvm::errs()<<"Failed to get absolute location\n";
+		llvm::errs()<<Loc.printToString(SM)<<'\n';
+		return Loc.printToString(SM);
+	}
+	PresumedLoc PLoc = SM.getPresumedLoc(ELoc);
+	if(PLoc.isInvalid())
+		return "<invalid>";
+	std::string locstr;
+	llvm::raw_string_ostream s(locstr);
+	s << RPath.str() << ':' << PLoc.getLine() << ':' << PLoc.getColumn();
+	return s.str();
+}
 
   std::string DbJSONClassConsumer::render_switch_json(const Expr* cond,
 		  std::vector<std::pair<DbJSONClassVisitor::caseinfo_t,DbJSONClassVisitor::caseinfo_t>>& caselst,
@@ -1041,9 +1060,11 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
 				  STset.insert(ST);
 			  }
 		  }
-		  std::string file = SM.getFileEntryForID(SM.getMainFileID())->getName().str();
+		  auto file = SM.getFileEntryForID(SM.getMainFileID())->tryGetRealPathName();
+		  assert(!file.empty() && "No absolute path for file");
+
 		  std::string pseudohash = name;
-		  pseudohash.append( D->isExternallyVisible() ? "" : file);
+		  pseudohash.append( D->isExternallyVisible() ? "" : file.str());
 		  std::string initstring;
 		  if(D->hasInit()){
 			  llvm::raw_string_ostream initstream(initstring);
@@ -1188,7 +1209,6 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
 		  llvm::outs() << Indent << "\t\t\"funrefs\": " << funrefs.str() << ",\n";
 		  llvm::outs() << Indent << "\t\t\"decls\": " << declsstream.str() << ",\n";
 		  llvm::outs() << Indent << "\t\t\"fid\": " << 0 << ",\n";
-		  llvm::outs() << Indent << "\t\t\"file\": \"" << file << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"type\": " << Visitor.getTypeData(D->getType()).id << ",\n";
 		  llvm::outs() << Indent << "\t\t\"linkage\": \"" << translateLinkage(D->getLinkageInternal()) << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
@@ -2668,8 +2688,8 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
 		  llvm::outs() << Indent << "\t\t\"declhash\": \"" <<
 				  base64_encode(reinterpret_cast<const unsigned char*>(cd.buf.b), 64)<< "\",\n";
 		  llvm::outs() << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
-		  std::string sloc = D->getSourceRange().getBegin().printToString(SM);
-		  std::string eloc = D->getSourceRange().getEnd().printToString(SM);
+		  std::string sloc = getAbsoluteLocation(D->getSourceRange().getBegin());
+		  std::string eloc = getAbsoluteLocation(D->getSourceRange().getEnd());
 		  llvm::outs() << Indent << "\t\t\"start_loc\": \"" << sloc << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"end_loc\": \"" << eloc << "\",\n";
 		  llvm::outs() << Indent << "\t\t\"refcount\": " << 1 << ",\n";
@@ -3015,11 +3035,11 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
   void DbJSONClassConsumer::printCallInfo(const DbJSONClassVisitor::callfunc_info_t& cfi, std::stringstream& ss,
 		  clang::SourceManager& SM, std::vector<const CallExpr*>& CEv)
   {
-	std::string location = cfi.CE->getBeginLoc().printToString(SM);
+	std::string location = getAbsoluteLocation(cfi.CE->getBeginLoc());
 	std::string startString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
-	location = cfi.CE->getEndLoc().printToString(SM);
-	std::string endString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
-	
+	location = getAbsoluteLocation(cfi.CE->getEndLoc());
+	std::string endString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);	
+
 	ss << "\n\t\t\t\t\t{";
 	ss << "\n\t\t\t\t\t\t\"start\":\"";
 	ss << startString;
@@ -3041,9 +3061,9 @@ std::string DbJSONClassConsumer::getAbsoluteLocation(SourceLocation Loc){
   void DbJSONClassConsumer::printCallInfo(const CallExpr* CE, std::stringstream& ss, clang::SourceManager& SM, size_t ord,
 		  std::vector<const CallExpr*>& CEv)
   {
-	std::string location = CE->getBeginLoc().printToString(SM);
+	std::string location = getAbsoluteLocation(CE->getBeginLoc());
 	std::string startString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
-	location = CE->getEndLoc().printToString(SM);
+	location = getAbsoluteLocation(CE->getEndLoc());
 	std::string endString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
 
 	ss << "\n\t\t\t\t\t{";

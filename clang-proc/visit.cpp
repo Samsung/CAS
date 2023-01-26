@@ -165,7 +165,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << D->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+		exprstream << "[" << getAbsoluteLocation(D->getBeginLoc()) << "]: ";
 		D->print(exprstream);
 		exprstream.flush();
 
@@ -771,7 +771,7 @@ bool DbJSONClassVisitor::VisitStmt(Stmt *Node) {
 				if (lastFunctionDef->firstNonDeclStmtLoc=="") {
 					SourceLocation sloc = Node->getSourceRange().getBegin();
 					if (!sloc.isMacroID()) {
-						lastFunctionDef->firstNonDeclStmtLoc = sloc.printToString(Context.getSourceManager());
+						lastFunctionDef->firstNonDeclStmtLoc = getAbsoluteLocation(sloc);
 					}
 				}
 			}
@@ -818,7 +818,7 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	exprstream << "[" << Cond->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+	exprstream << "[" << getAbsoluteLocation(Cond->getBeginLoc()) << "]: ";
 	Cond->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 
@@ -1180,7 +1180,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					DbJSONClassVisitor::DREMap_t DREMap;
 					std::string Expr;
 					llvm::raw_string_ostream exprstream(Expr);
-					exprstream << "[" << argE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+					exprstream << "[" << getAbsoluteLocation(argE->getBeginLoc()) << "]: ";
 					argE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 					exprstream.flush();
 
@@ -1403,7 +1403,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << BO->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+		exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
 		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 
@@ -1508,7 +1508,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << BO->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+		exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
 		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		exprstream.flush();
 
@@ -1587,7 +1587,7 @@ bool DbJSONClassVisitor::VisitUnaryOperator(UnaryOperator *E) {
 			if (lastFunctionDef) {
 				std::string Expr;
 				llvm::raw_string_ostream exprstream(Expr);
-				exprstream << "[" << E->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+				exprstream << "[" << getAbsoluteLocation(E->getBeginLoc()) << "]: ";
 				E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 				exprstream.flush();
 				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -1650,7 +1650,7 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 		if (lastFunctionDef) {
 			std::string Expr;
 			llvm::raw_string_ostream exprstream(Expr);
-			exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+			exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
 			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 			exprstream.flush();
 			std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
@@ -1777,7 +1777,7 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 
 	std::string Expr;
     llvm::raw_string_ostream exprstream(Expr);
-    exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+    exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
 	Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
     exprstream.flush();
 
@@ -1815,7 +1815,7 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	exprstream << "[" << S->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+	exprstream << "[" << getAbsoluteLocation(S->getBeginLoc()) << "]: ";
 	S->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 
@@ -2013,11 +2013,11 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 		std::string Expr;
 		llvm::raw_string_ostream exprstream(Expr);
 		if (CE) {
-			exprstream << "[" << CE->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+			exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
 			CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		}
 		else {
-			exprstream << "[" << Node->getBeginLoc().printToString(Context.getSourceManager()) << "]: ";
+			exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
 			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 		}
 		exprstream.flush();

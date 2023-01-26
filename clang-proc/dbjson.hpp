@@ -1315,7 +1315,7 @@ public:
 
   std::vector<const CompoundStmt*>& getCSStack() { return csStack; }
   std::map<const RecordDecl *,const CompoundStmt*> getRecordCSMap() { return recordCSMap; }
-
+  std::string getAbsoluteLocation(SourceLocation L);
   bool hasNamedFields(RecordDecl* rD);
   bool emptyRecordDecl(RecordDecl* rD);
   bool isNamedField(Decl* D);

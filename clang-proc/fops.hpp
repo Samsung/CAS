@@ -89,6 +89,7 @@ public:
 
   void printVarMaps(int Indentation);
   void printVarMap(FOPSClassVisitor::initMapFixedType_t& FTVM, int Indentation);
+  std::string getAbsoluteLocation(SourceLocation Loc);
 
   virtual void HandleTranslationUnit(clang::ASTContext &Context);
 
