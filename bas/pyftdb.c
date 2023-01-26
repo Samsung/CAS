@@ -5578,9 +5578,7 @@ PyObject* libftdb_ftdb_globals_entry_by_id(libftdb_ftdb_globals_object *self, Py
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, PyObject *args) {
-
-	PyObject* py_id = PyTuple_GetItem(args,0);
+PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, PyObject *py_id) {
 
 	if (PyLong_Check(py_id)) {
 		unsigned long id = PyLong_AsUnsignedLong(py_id);
@@ -5628,9 +5626,7 @@ PyObject* libftdb_ftdb_globals_entry_by_hash(libftdb_ftdb_globals_object *self, 
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, PyObject *args) {
-
-	PyObject* py_hash = PyTuple_GetItem(args,0);
+PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, PyObject *py_hash) {
 
 	if (PyUnicode_Check(py_hash)) {
 		const char* hash = PyString_get_c_str(py_hash);
@@ -5683,9 +5679,7 @@ PyObject* libftdb_ftdb_globals_entry_by_name(libftdb_ftdb_globals_object *self, 
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, PyObject *args) {
-
-	PyObject* py_name = PyTuple_GetItem(args,0);
+PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, PyObject *py_name) {
 
 	if (PyUnicode_Check(py_name)) {
 		const char* name = PyString_get_c_str(py_name);
