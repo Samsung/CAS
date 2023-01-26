@@ -5849,12 +5849,6 @@ PyObject* libftdb_ftdb_global_entry_get_def(PyObject* self, void* closure) {
 	return PyUnicode_FromString(__self->entry->def);
 }
 
-PyObject* libftdb_ftdb_global_entry_get_file(PyObject* self, void* closure) {
-
-	libftdb_ftdb_global_entry_object* __self = (libftdb_ftdb_global_entry_object*)self;
-	return PyUnicode_FromString(__self->entry->file);
-}
-
 PyObject* libftdb_ftdb_global_entry_get_type(PyObject* self, void* closure) {
 
 	libftdb_ftdb_global_entry_object* __self = (libftdb_ftdb_global_entry_object*)self;
@@ -6044,10 +6038,6 @@ PyObject* libftdb_ftdb_global_entry_mp_subscript(PyObject* self, PyObject* slice
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_global_entry_get_def(self,0);
 	}
-	else if (!strcmp(attr,"file")) {
-		PYASSTR_DECREF(attr);
-	    return libftdb_ftdb_global_entry_get_file(self,0);
-	}
 	else if (!strcmp(attr,"type")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_global_entry_get_type(self,0);
@@ -6208,7 +6198,6 @@ PyObject* libftdb_ftdb_global_entry_json(libftdb_ftdb_global_entry_object *self,
 	FTDB_SET_ENTRY_ULONG_ARRAY(json_entry,decls,self->entry->decls);
 	FTDB_SET_ENTRY_ULONG_ARRAY_OPTIONAL(json_entry,mids,self->entry->mids);
 	FTDB_SET_ENTRY_ULONG(json_entry,fid,self->entry->fid);
-	FTDB_SET_ENTRY_STRING(json_entry,file,self->entry->file);
 	FTDB_SET_ENTRY_ULONG(json_entry,type,self->entry->type);
 	FTDB_SET_ENTRY_ENUM_TO_STRING(json_entry,linkage,self->entry->linkage,functionLinkage);
 	FTDB_SET_ENTRY_STRING(json_entry,location,self->entry->location);
@@ -8220,7 +8209,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_global_entry,
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,decls,ATTR(decls_count));
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mids,ATTR(mids_count));
-	AGGREGATE_FLATTEN_STRING2(file);
 	AGGREGATE_FLATTEN_STRING2(location);
 	AGGREGATE_FLATTEN_STRING2(init);
 	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
@@ -8722,7 +8710,6 @@ static void libftdb_create_ftdb_global_entry(PyObject *self, PyObject* global_en
 	new_entry->fid = FTDB_ENTRY_ULONG(global_entry,fid);
 	new_entry->mids_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(global_entry,mids);
 	new_entry->mids = FTDB_ENTRY_ULONG_ARRAY_OPTIONAL(global_entry,mids);
-	new_entry->file = FTDB_ENTRY_STRING(global_entry,file);
 	new_entry->type = FTDB_ENTRY_ULONG(global_entry,type);
 	new_entry->linkage = FTDB_ENTRY_ENUM_FROM_STRING(global_entry,linkage,functionLinkage);
 	new_entry->location = FTDB_ENTRY_STRING(global_entry,location);

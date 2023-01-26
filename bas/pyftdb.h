@@ -1371,7 +1371,6 @@ PyObject* libftdb_ftdb_global_entry_get_hash(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_id(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_fid(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_def(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_global_entry_get_file(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_type(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_linkage(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_global_entry_get_linkage_string(PyObject* self, void* closure);
@@ -1418,7 +1417,6 @@ static PyGetSetDef libftdb_ftdbGlobalEntry_getset[] = {
 	{"id",libftdb_ftdb_global_entry_get_id,0,"ftdb global entry id value",0},
 	{"fid",libftdb_ftdb_global_entry_get_fid,0,"ftdb global entry fid value",0},
 	{"defstring",libftdb_ftdb_global_entry_get_def,0,"ftdb global entry def value",0},
-	{"file",libftdb_ftdb_global_entry_get_file,0,"ftdb global entry file value",0},
 	{"type",libftdb_ftdb_global_entry_get_type,0,"ftdb global entry type value",0},
 	{"linkage_string",libftdb_ftdb_global_entry_get_linkage_string,0,"ftdb global entry linkage string value",0},
 	{"linkage",libftdb_ftdb_global_entry_get_linkage,0,"ftdb global entry linkage value",0},
