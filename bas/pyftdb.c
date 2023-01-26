@@ -1566,7 +1566,7 @@ PyObject* libftdb_ftdb_funcs_entry_by_id(libftdb_ftdb_funcs_object *self, PyObje
 	}
 }
 
-PyObject* libftdb_ftdb_funcs_contains_id(libftdb_ftdb_funcs_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_funcs_contains_id_internal(libftdb_ftdb_funcs_object *self, PyObject *py_id) {
 
 	if (PyLong_Check(py_id)) {
 		unsigned long id = PyLong_AsUnsignedLong(py_id);
@@ -1582,6 +1582,12 @@ PyObject* libftdb_ftdb_funcs_contains_id(libftdb_ftdb_funcs_object *self, PyObje
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_funcs_contains_id(libftdb_ftdb_funcs_object *self, PyObject *args) {
+	
+	PyObject* py_id = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcs_contains_id_internal(self,py_id);
 }
 
 PyObject* libftdb_ftdb_funcs_entry_by_hash(libftdb_ftdb_funcs_object *self, PyObject *args) {
@@ -1613,7 +1619,7 @@ PyObject* libftdb_ftdb_funcs_entry_by_hash(libftdb_ftdb_funcs_object *self, PyOb
 	}
 }
 
-PyObject* libftdb_ftdb_funcs_contains_hash(libftdb_ftdb_funcs_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_funcs_contains_hash_internal(libftdb_ftdb_funcs_object *self, PyObject *py_hash) {
 
 	if (PyUnicode_Check(py_hash)) {
 		const char* hash = PyString_get_c_str(py_hash);
@@ -1630,6 +1636,12 @@ PyObject* libftdb_ftdb_funcs_contains_hash(libftdb_ftdb_funcs_object *self, PyOb
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_funcs_contains_hash(libftdb_ftdb_funcs_object *self, PyObject *args) {
+	
+	PyObject* py_hash = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcs_contains_hash_internal(self,py_hash);
 }
 
 PyObject* libftdb_ftdb_funcs_entry_by_name(libftdb_ftdb_funcs_object *self, PyObject *args) {
@@ -1667,7 +1679,7 @@ PyObject* libftdb_ftdb_funcs_entry_by_name(libftdb_ftdb_funcs_object *self, PyOb
 	}
 }
 
-PyObject* libftdb_ftdb_funcs_contains_name(libftdb_ftdb_funcs_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_funcs_contains_name_internal(libftdb_ftdb_funcs_object *self, PyObject *py_name) {
 
 	if (PyUnicode_Check(py_name)) {
 		const char* name = PyString_get_c_str(py_name);
@@ -1686,6 +1698,12 @@ PyObject* libftdb_ftdb_funcs_contains_name(libftdb_ftdb_funcs_object *self, PyOb
 	}
 }
 
+PyObject* libftdb_ftdb_funcs_contains_name(libftdb_ftdb_funcs_object *self, PyObject *args) {
+	
+	PyObject* py_name = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcs_contains_name_internal(self,py_name);
+}
+
 int libftdb_ftdb_funcs_sq_contains(PyObject* self, PyObject* key) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
@@ -1694,14 +1712,14 @@ int libftdb_ftdb_funcs_sq_contains(PyObject* self, PyObject* key) {
 
 	if (PyUnicode_Check(key)) {
 		/* Check name */
-		PyObject* v = libftdb_ftdb_funcs_contains_name(__self,key);
+		PyObject* v = libftdb_ftdb_funcs_contains_name_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
 	}
 	else if (PyLong_Check(key)) {
 		/* Check id */
-		PyObject* v = libftdb_ftdb_funcs_contains_id(__self,key);
+		PyObject* v = libftdb_ftdb_funcs_contains_id_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
@@ -1713,7 +1731,7 @@ int libftdb_ftdb_funcs_sq_contains(PyObject* self, PyObject* key) {
 			PyErr_SetString(libftdb_ftdbError, errmsg);
 			return 0;
 		}
-		PyObject* v = libftdb_ftdb_funcs_contains_hash(__self,PyTuple_GetItem(key,0));
+		PyObject* v = libftdb_ftdb_funcs_contains_hash_internal(__self,PyTuple_GetItem(key,0));
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
@@ -4779,7 +4797,7 @@ PyObject* libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_funcdecls_object *self
 	}
 }
 
-PyObject* libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_id) {
 
 	if (PyLong_Check(py_id)) {
 		unsigned long id = PyLong_AsUnsignedLong(py_id);
@@ -4795,6 +4813,12 @@ PyObject* libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+
+	PyObject* py_id = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcdecls_contains_id_internal(self,py_id);
 }
 
 PyObject* libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
@@ -4826,7 +4850,7 @@ PyObject* libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *se
 	}
 }
 
-PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_hash) {
 
 	if (PyUnicode_Check(py_hash)) {
 		const char* hash = PyString_get_c_str(py_hash);
@@ -4843,6 +4867,12 @@ PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *se
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+
+	PyObject* py_hash = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcdecls_contains_hash_internal(self,py_hash);
 }
 
 PyObject* libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
@@ -4880,7 +4910,7 @@ PyObject* libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *se
 	}
 }
 
-PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_name) {
 
 	if (PyUnicode_Check(py_name)) {
 		const char* name = PyString_get_c_str(py_name);
@@ -4899,20 +4929,26 @@ PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *se
 	}
 }
 
+PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+
+	PyObject* py_name = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_funcdecls_contains_name_internal(self,py_name);
+}
+
 int libftdb_ftdb_funcdecls_sq_contains(PyObject* self, PyObject* key) {
 
 	libftdb_ftdb_funcdecls_object* __self = (libftdb_ftdb_funcdecls_object*)self;
 
 	if (PyUnicode_Check(key)) {
 		/* Check hash */
-		PyObject* v = libftdb_ftdb_funcdecls_contains_hash(__self,key);
+		PyObject* v = libftdb_ftdb_funcdecls_contains_hash_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
 	}
 	else if (PyLong_Check(key)) {
 		/* Check id */
-		PyObject* v = libftdb_ftdb_funcdecls_contains_id(__self,key);
+		PyObject* v = libftdb_ftdb_funcdecls_contains_id_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
@@ -5566,7 +5602,7 @@ PyObject* libftdb_ftdb_globals_entry_by_id(libftdb_ftdb_globals_object *self, Py
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_globals_contains_id_internal(libftdb_ftdb_globals_object *self, PyObject *py_id) {
 
 	if (PyLong_Check(py_id)) {
 		unsigned long id = PyLong_AsUnsignedLong(py_id);
@@ -5583,6 +5619,12 @@ PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, Py
 		return 0;
 	}
 
+}
+
+PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, PyObject *args) {
+
+	PyObject* py_id = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_globals_contains_id_internal(self,py_id);
 }
 
 PyObject* libftdb_ftdb_globals_entry_by_hash(libftdb_ftdb_globals_object *self, PyObject *args) {
@@ -5614,7 +5656,7 @@ PyObject* libftdb_ftdb_globals_entry_by_hash(libftdb_ftdb_globals_object *self, 
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_globals_contains_hash_internal(libftdb_ftdb_globals_object *self, PyObject *py_hash) {
 
 	if (PyUnicode_Check(py_hash)) {
 		const char* hash = PyString_get_c_str(py_hash);
@@ -5631,6 +5673,12 @@ PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, 
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, PyObject *args) {
+
+	PyObject* py_hash = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_globals_contains_hash_internal(self,py_hash);
 }
 
 PyObject* libftdb_ftdb_globals_entry_by_name(libftdb_ftdb_globals_object *self, PyObject *args) {
@@ -5667,7 +5715,7 @@ PyObject* libftdb_ftdb_globals_entry_by_name(libftdb_ftdb_globals_object *self, 
 	}
 }
 
-PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_globals_contains_name_internal(libftdb_ftdb_globals_object *self, PyObject *py_name) {
 
 	if (PyUnicode_Check(py_name)) {
 		const char* name = PyString_get_c_str(py_name);
@@ -5686,6 +5734,12 @@ PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, 
 	}
 }
 
+PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, PyObject *args) {
+
+	PyObject* py_name = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_globals_contains_name_internal(self,py_name);
+}
+
 int libftdb_ftdb_globals_sq_contains(PyObject* self, PyObject* key) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
@@ -5694,14 +5748,14 @@ int libftdb_ftdb_globals_sq_contains(PyObject* self, PyObject* key) {
 
 	if (PyUnicode_Check(key)) {
 		/* Check name */
-		PyObject* v = libftdb_ftdb_globals_contains_name(__self,key);
+		PyObject* v = libftdb_ftdb_globals_contains_name_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
 	}
 	else if (PyLong_Check(key)) {
 		/* Check id */
-		PyObject* v = libftdb_ftdb_globals_contains_id(__self,key);
+		PyObject* v = libftdb_ftdb_globals_contains_id_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
@@ -5713,7 +5767,7 @@ int libftdb_ftdb_globals_sq_contains(PyObject* self, PyObject* key) {
 			PyErr_SetString(libftdb_ftdbError, errmsg);
 			return 0;
 		}
-		PyObject* v = libftdb_ftdb_globals_contains_hash(__self,PyTuple_GetItem(key,0));
+		PyObject* v = libftdb_ftdb_globals_contains_hash_internal(__self,PyTuple_GetItem(key,0));
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
@@ -6308,7 +6362,7 @@ PyObject* libftdb_ftdb_types_mp_subscript(PyObject* self, PyObject* slice) {
 
 }
 
-PyObject* libftdb_ftdb_types_contains_hash(libftdb_ftdb_types_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_types_object *self, PyObject *py_hash) {
 
 	if (PyUnicode_Check(py_hash)) {
 		const char* hash = PyString_get_c_str(py_hash);
@@ -6327,7 +6381,13 @@ PyObject* libftdb_ftdb_types_contains_hash(libftdb_ftdb_types_object *self, PyOb
 	}
 }
 
-PyObject* libftdb_ftdb_types_contains_id(libftdb_ftdb_types_object *self, PyObject *py_id) {
+PyObject* libftdb_ftdb_types_contains_hash(libftdb_ftdb_types_object *self, PyObject *args) {
+
+	PyObject* py_hash = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_types_contains_hash_internal(self,py_hash);
+}
+
+static PyObject* libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_types_object *self, PyObject *py_id) {
 
 	if (PyLong_Check(py_id)) {
 		unsigned long id = PyLong_AsUnsignedLong(py_id);
@@ -6343,6 +6403,12 @@ PyObject* libftdb_ftdb_types_contains_id(libftdb_ftdb_types_object *self, PyObje
 		PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
 		return 0;
 	}
+}
+
+PyObject* libftdb_ftdb_types_contains_id(libftdb_ftdb_types_object *self, PyObject *args) {
+
+	PyObject* py_id = PyTuple_GetItem(args,0);
+	return libftdb_ftdb_types_contains_id_internal(self,py_id);
 }
 
 PyObject* libftdb_ftdb_types_entry_by_hash(libftdb_ftdb_types_object *self, PyObject *args) {
@@ -6406,14 +6472,14 @@ int libftdb_ftdb_types_sq_contains(PyObject* self, PyObject* key) {
 
 	if (PyUnicode_Check(key)) {
 		/* Check hash */
-		PyObject* v = libftdb_ftdb_types_contains_hash(__self,key);
+		PyObject* v = libftdb_ftdb_types_contains_hash_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
 	}
 	else if (PyLong_Check(key)) {
 		/* Check id */
-		PyObject* v = libftdb_ftdb_types_contains_id(__self,key);
+		PyObject* v = libftdb_ftdb_types_contains_id_internal(__self,key);
 		if (v) {
 			return PyObject_IsTrue(v);
 		}
