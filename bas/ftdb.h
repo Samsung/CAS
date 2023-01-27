@@ -418,6 +418,12 @@ struct csitem {
 	const char* cf;
 };
 
+struct mexp_info{
+	unsigned long pos;
+	unsigned long len;
+	const char* text;
+};
+
 struct local_info {
 	unsigned long id;
 	const char* name;
@@ -548,6 +554,8 @@ struct ftdb_func_entry {
 	unsigned long switches_count;
 	struct csitem* csmap;
 	unsigned long csmap_count;
+	struct mexp_info* macro_expansions;
+	unsigned long macro_expansions_count;
 	struct local_info* locals;
 	unsigned long locals_count;
 	struct deref_info* derefs;

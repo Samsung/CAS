@@ -7,7 +7,7 @@ class JSON;
 }
 
 extern int DEBUG_NOTICE;
-extern int DEBUG_PP;
+// extern int DEBUG_PP;
 
 #include "dbjson.hpp"
 #include "fops.hpp"
@@ -22,7 +22,6 @@ struct main_opts {
 	bool debug2;
 	bool debug3;
 	bool debugNotice;
-	bool debugPP;
 	bool debugDeref;
 	bool debugbuild;
 	bool debugME;
@@ -41,9 +40,9 @@ struct main_opts {
 	bool exit_on_error;
 	bool csd;
 	bool ptrMEonly;
+	bool save_expansions;
 	std::string JSONRecord;
 	std::string BreakFunPlaceholder;
 	std::set<std::string> fopsRecords;
 	std::map<std::string,std::string> macroReplacementTokens;
-	std::set<std::string> macroExpansionNames;
 };

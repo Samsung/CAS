@@ -509,6 +509,7 @@ PyObject* libftdb_ftdb_func_entry_get_refcall_info(PyObject* self, void* closure
 PyObject* libftdb_ftdb_func_entry_get_refcallrefs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_switches(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_csmap(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_func_entry_get_macro_expansions(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_locals(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_derefs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_entry_get_ifs(PyObject* self, void* closure);
@@ -585,6 +586,7 @@ static PyGetSetDef libftdb_ftdbFuncEntry_getset[] = {
 	{"refcallrefs",libftdb_ftdb_func_entry_get_refcallrefs,0,"ftdb func entry refcallrefs data",0},
 	{"switches",libftdb_ftdb_func_entry_get_switches,0,"ftdb func entry switches data",0},
 	{"csmap",libftdb_ftdb_func_entry_get_csmap,0,"ftdb func entry csmap data",0},
+	{"macro_expansions",libftdb_ftdb_func_entry_get_macro_expansions,0,"ftdb func entry macro_expansions data",0},
 	{"locals",libftdb_ftdb_func_entry_get_locals,0,"ftdb func entry locals data",0},
 	{"derefs",libftdb_ftdb_func_entry_get_derefs,0,"ftdb func entry derefs data",0},
 	{"ifs",libftdb_ftdb_func_entry_get_ifs,0,"ftdb func entry ifs data",0},

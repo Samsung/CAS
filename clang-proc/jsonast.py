@@ -606,11 +606,7 @@ def create_json_db_main(args,allowed_phases):
                 command.append("%s:%s"%(k,v))
     ME = list()
     if args.macro_expansion:
-        with open(args.macro_expansion,"r") as f:
-            ME = [x.strip() for x in f.readlines() if x.strip()!=""]
-            for v in ME:
-                command.append("-X")
-                command.append(v)
+        command.append("-X")
 
     addDefs = list()
     if args.additional_defines:

@@ -18,9 +18,6 @@ These files are:
 - */DeclPrinter.cpp
 - */StmtPrinter.cpp
 - */TypePrinter.cpp
-- MacroInfoExt.h
-- PPCallbacksTracker.cpp
-- PPCallbacksTracker.h
 Please note the notices for the changes.
 
 Base 64 encoding/decoding utilities for C++ were taken from the library written by:

@@ -12,14 +12,15 @@
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/AST/Type.h"
+#include "clang/Tooling/Syntax/Tokens.h"
 
 using namespace clang;
 
 #include "utils.h"
 #include "sha.h"
 #include "base64.h"
-#include "PPCallbacksTracker.h"
 #include "printers.h"
+#include "MacroHandler.h"
 
 #include <stdint.h>
 
@@ -1518,12 +1519,10 @@ typedef std::tuple<std::string,std::string,std::string> MacroDefInfo;
 class DbJSONClassConsumer : public clang::ASTConsumer {
 public:
   explicit DbJSONClassConsumer(ASTContext &Context, const std::string* sourceFile,
-		  const std::string* directory, const struct main_opts& opts, Preprocessor &PP)
+		  const std::string* directory, const struct main_opts& opts, Preprocessor &PP, bool save_exps)
     : Visitor(Context,opts), CSVisitor(Context,opts), _sourceFile(sourceFile), _directory(directory), _opts(opts),
-	  TUId(0), Context(Context) {
-	  	  // PP takes ownership.
-	      PP.addPPCallbacks(std::make_unique<PPCallbacksTracker>(PP,_opts,mexps));
-  }
+	  TUId(0), Context(Context), Macros(PP,save_exps) {
+    }
 
   static QualType getDeclType(Decl* D) {
     if (TypedefNameDecl* TDD = dyn_cast<TypedefNameDecl>(D))
@@ -1679,6 +1678,7 @@ private:
   uint64_t TUId;
   ASTContext &Context;
   std::vector<MacroDefInfo> mexps;
+  MacroHandler Macros;
 };
 void load_database(std::string filepath);
 int internal_declcount(const FunctionDecl *F);

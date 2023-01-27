@@ -149,7 +149,7 @@ add_clang_tool(clang-proc
     clang-proc/typehash.cpp
     clang-proc/fops.cpp
     clang-proc/taint.cpp
-    clang-proc/PPCallbacksTracker.cpp
+    clang-proc/MacroHandler.cpp
     clang-proc/${CLANG_VERSION}/DeclPrinter.cpp
     clang-proc/${CLANG_VERSION}/StmtPrinter.cpp
     clang-proc/${CLANG_VERSION}/TypePrinter.cpp
@@ -189,6 +189,7 @@ set(ADDITIONAL_LIBS
     clangLex
     clangBasic
     clangRewrite
+    clangToolingSyntax
     ${LLVM_LIBS}
     ${LLVM_SYSTEM_LIBS}
 )

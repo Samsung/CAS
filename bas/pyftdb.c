@@ -2044,6 +2044,18 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 	}
 	FTDB_SET_ENTRY_PYOBJECT(json_entry,csmap,csmap);
 
+	PyObject* macro_expansions = PyList_New(0);
+	for (unsigned long i=0; i<self->entry->macro_expansions_count; ++i) {
+		struct mexp_info* mexp_info = &self->entry->macro_expansions[i];
+		PyObject* py_mexp_info = PyDict_New();
+		FTDB_SET_ENTRY_ULONG(py_mexp_info,pos,mexp_info->pos);
+		FTDB_SET_ENTRY_ULONG(py_mexp_info,len,mexp_info->len);
+		FTDB_SET_ENTRY_STRING(py_mexp_info,text,mexp_info->text);
+		PyList_Append(macro_expansions,py_mexp_info);
+		Py_DecRef(py_mexp_info);
+	}
+	FTDB_SET_ENTRY_PYOBJECT(json_entry,macro_expansions,macro_expansions);
+
 	PyObject* locals = PyList_New(0);
 	for (unsigned long i=0; i<self->entry->locals_count; ++i) {
 		struct local_info* local_info_entry = &self->entry->locals[i];
@@ -2753,6 +2765,23 @@ PyObject* libftdb_ftdb_func_entry_get_csmap(PyObject* self, void* closure) {
 	return csmap;
 }
 
+PyObject* libftdb_ftdb_func_entry_get_macro_expansions(PyObject* self, void* closure) {
+
+	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
+
+	PyObject* macro_expansions = PyList_New(0);
+	for (unsigned long i=0; i<__self->entry->macro_expansions_count; ++i) {
+		struct mexp_info* mexp_info = &__self->entry->macro_expansions[i];
+		PyObject* py_mexp_info = PyDict_New();
+		FTDB_SET_ENTRY_INT64(py_mexp_info,pos,mexp_info->pos);
+		FTDB_SET_ENTRY_ULONG(py_mexp_info,len,mexp_info->len);
+		FTDB_SET_ENTRY_STRING(py_mexp_info,text,mexp_info->text);
+		PyList_Append(macro_expansions,py_mexp_info);
+		Py_DecRef(py_mexp_info);
+	}
+	return macro_expansions;
+}
+
 PyObject* libftdb_ftdb_func_entry_get_locals(PyObject* self, void* closure) {
 
 	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
@@ -3087,6 +3116,10 @@ PyObject* libftdb_ftdb_func_entry_mp_subscript(PyObject* self, PyObject* slice) 
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_csmap(self,0);
 	}
+	else if (!strcmp(attr,"macro_expansions")) {
+		PYASSTR_DECREF(attr);
+	    return libftdb_ftdb_func_entry_get_macro_expansions(self,0);
+	}
 	else if (!strcmp(attr,"locals")) {
 		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_func_entry_get_locals(self,0);
@@ -3317,6 +3350,10 @@ int libftdb_ftdb_func_entry_sq_contains(PyObject* self, PyObject* slice) {
 	    return 1;
 	}
 	else if (!strcmp(attr,"csmap")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"macro_expansions")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
@@ -7816,6 +7853,7 @@ FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(switch_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(case_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(case_data);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(csitem);
+FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(mexp_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(local_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(deref_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(offsetref_info);
@@ -7884,6 +7922,10 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(case_data,
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(csitem,
 		AGGREGATE_FLATTEN_STRING2(cf);
+);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(mexp_info,
+		AGGREGATE_FLATTEN_STRING2(text);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(local_info,
@@ -8236,6 +8278,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(callref_info,refcallrefs,ATTR(refcalls_count));
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(switch_info,switches,ATTR(switches_count));
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(csitem,csmap,ATTR(csmap_count));
+	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(mexp_info,macro_expansions,ATTR(macro_expansions_count));
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(local_info,locals,ATTR(locals_count));
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(deref_info,derefs,ATTR(derefs_count));
 	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(if_info,ifs,ATTR(ifs_count));
@@ -8578,6 +8621,19 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 		csitem->pid = FTDB_ENTRY_INT64(py_csitem,pid);
 		csitem->id = FTDB_ENTRY_ULONG(py_csitem,id);
 		csitem->cf = FTDB_ENTRY_STRING(py_csitem,cf);
+	}
+
+	PyObject* key_macro_expansions = PyUnicode_FromString("macro_expansions");
+	PyObject* macro_expansions = PyDict_GetItem(func_entry,key_macro_expansions);
+	Py_DecRef(key_macro_expansions);
+	new_entry->macro_expansions_count = PyList_Size(macro_expansions);
+	new_entry->macro_expansions = calloc(new_entry->macro_expansions_count,sizeof(struct mexp_info));
+	for (Py_ssize_t i=0; i<PyList_Size(macro_expansions); ++i) {
+		PyObject* py_mexp_info = PyList_GetItem(macro_expansions,i);
+		struct mexp_info* mexp_info = &new_entry->macro_expansions[i];
+		mexp_info->pos = FTDB_ENTRY_ULONG(py_mexp_info,pos);
+		mexp_info->len = FTDB_ENTRY_ULONG(py_mexp_info,len);
+		mexp_info->text = FTDB_ENTRY_STRING(py_mexp_info,text);
 	}
 
 	PyObject* key_locals = PyUnicode_FromString("locals");

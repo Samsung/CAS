@@ -3,19 +3,6 @@
 //option used in DeclPrinter
 bool enable_sa = 0;
 
-class IndexerPPCallbacks : public PPCallbacks {
-
-	SourceManager& SM;
-public:
-	explicit IndexerPPCallbacks(SourceManager& sm): SM(sm) {
-	}
-
-	void Ifdef(SourceLocation Loc, const Token &MacroNameTok,const MacroDefinition &MD) override {
-		//printf("@IndexerPPCallbacks:Ifdef()\n");
-	}
-
-};
-
 class DbJSONClassAction : public clang::ASTFrontendAction {
 public:
 	DbJSONClassAction(const std::string* sourceFile, const struct main_opts& opts, const std::string* directory):
@@ -23,13 +10,13 @@ public:
   virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer (
     clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
     return std::unique_ptr<clang::ASTConsumer>(
-        new DbJSONClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts,Compiler.getPreprocessor()));
+        new DbJSONClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts,Compiler.getPreprocessor(),_opts.save_expansions));
   }
   bool BeginSourceFileAction(CompilerInstance &CI) override {
 	  Preprocessor &PP = CI.getPreprocessor();
-	  PP.addPPCallbacks(std::make_unique<IndexerPPCallbacks>(CI.getSourceManager()));
-	  return true;
+    return true;
   }
+
 
   const std::string* _sourceFile;
   const struct main_opts& _opts;
@@ -47,7 +34,6 @@ virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
 }
 bool BeginSourceFileAction(CompilerInstance &CI) override {
   Preprocessor &PP = CI.getPreprocessor();
-  PP.addPPCallbacks(std::make_unique<IndexerPPCallbacks>(CI.getSourceManager()));
   return true;
 }
 
@@ -78,16 +64,16 @@ using namespace clang::tooling;
 #include <stdio.h>
 
 int main(int argc, const char **argv)
+
 {
 	llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
 	llvm::cl::OptionCategory ctCategory("clang-proc options");
     cl::opt<std::string> JSONRecordOption("R", cl::cat(ctCategory));
     cl::list<std::string> MacroReplaceOption("M", cl::cat(ctCategory));
     MacroReplaceOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
-    cl::list<std::string> SaveMacroExpansionOption("X", cl::cat(ctCategory));
-    SaveMacroExpansionOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
     cl::list<std::string> AdditionalDefinesOption("D", cl::cat(ctCategory));
     AdditionalDefinesOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
+    cl::opt<bool> SaveMacroExpansionOption("X", cl::cat(ctCategory));
     cl::opt<bool> FopsOption("f", cl::cat(ctCategory));
     cl::opt<bool> CallOption("c", cl::cat(ctCategory));
     cl::opt<bool> AssertOption("a", cl::cat(ctCategory));
@@ -95,7 +81,6 @@ int main(int argc, const char **argv)
     cl::opt<bool> Debug2Option("dd", cl::cat(ctCategory));
     cl::opt<bool> Debug3Option("ddd", cl::cat(ctCategory));
     cl::opt<bool> DebugNoticeOption("dn", cl::cat(ctCategory));
-    cl::opt<bool> DebugPPOption("dp", cl::cat(ctCategory));
     cl::opt<bool> DebugDereference("du", cl::cat(ctCategory));
     cl::opt<bool> DebugBuildString("db", cl::cat(ctCategory));
     cl::opt<bool> DebugME("dme", cl::cat(ctCategory));
@@ -157,8 +142,6 @@ int main(int argc, const char **argv)
         opts.debug3 = Debug3Option.getValue();
         opts.debugNotice = DebugNoticeOption.getValue();
         DEBUG_NOTICE = opts.debugNotice;
-        opts.debugPP = DebugPPOption.getValue();
-        DEBUG_PP = opts.debugPP;
         opts.debugDeref = DebugDereference.getValue();
         opts.debugbuild = DebugBuildString.getValue();
         opts.debugME = DebugME.getValue();
@@ -176,6 +159,7 @@ int main(int argc, const char **argv)
         opts.exit_on_error = ExitOnErrorOption.getValue();
         opts.csd = CustomStructDefs.getValue();
         opts.ptrMEonly = ptrMEOption.getValue();
+        opts.save_expansions = SaveMacroExpansionOption;
         if (opts.JSONRecord=="*") {
         	opts.fops_all = true;
         }
@@ -198,13 +182,9 @@ int main(int argc, const char **argv)
         	opts.macroReplacementTokens[macroReplacementName] = macroReplacementValue;
         	std::string MacroReplacementDef;
         	std::stringstream MacroReplacementDefStream(MacroReplacementDef);
-        	MacroReplacementDefStream << "-D__macro_replacement__" << macroReplacementName << "__=" << macroReplacementValue << "";
+        	MacroReplacementDefStream << "-D__macro_replacement__" << macroReplacementName << "=" << macroReplacementValue << "";
         	Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(MacroReplacementDefStream.str().c_str()));
                 Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-implicit-function-declaration"));
-        }
-
-        for (unsigned i = 0; i != SaveMacroExpansionOption.size(); ++i) {
-        	opts.macroExpansionNames.insert(SaveMacroExpansionOption[i]);
         }
 
         for (unsigned i = 0; i != AdditionalDefinesOption.size(); ++i) {
@@ -225,5 +205,9 @@ int main(int argc, const char **argv)
         }
         break;
     }
+
     return 0;
 }
+
+
+

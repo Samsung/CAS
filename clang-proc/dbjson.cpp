@@ -1843,8 +1843,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  FileID FID = SM.getFileID(D->getSourceRange().getBegin());
 		  const auto InputBuffer = compatibility::getBuffer(SM, FID);
 		  Lexer SrcLexer(FID,InputBuffer,SM,Context.getLangOpts());
-		  std::string upBody = SrcLexer.getSourceText(CharSourceRange(D->getSourceRange(),true),
-					SM,SrcLexer.getLangOpts()).str();
+		  auto Range = SM.getExpansionRange(D->getSourceRange()).getAsRange();
+		  std::string upBody = SrcLexer.getSourceText(CharSourceRange(Range, true),SM,SrcLexer.getLangOpts()).str();
 		  std::string fbody;
 		  Stmt* body = D->getBody();
 		  llvm::raw_string_ostream bstream(fbody);
@@ -1863,6 +1863,25 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  SHA_update(&c, fbody.data(), fbody.size());
 		  std::string exp_loc = SM.getExpansionLoc(D->getLocation()).printToString(SM);
 		  SHA_update(&c,exp_loc.data(),exp_loc.size());
+		  // locations
+		  auto BRange = SM.getExpansionRange(body->getSourceRange());
+		  std::string expansions;
+		  llvm::raw_string_ostream exp_os(expansions);
+		  auto ExpRanges = Macros.getRanges();
+		  bool first_exp = true;
+		  for(auto it = ExpRanges.lower_bound(BRange.getBegin()), end = ExpRanges.upper_bound(BRange.getEnd()); it!= end;it++){
+			std::string text = Macros.getExpansionText(it->first);
+			if(!text.length()) continue;
+			unsigned int pos = SM.getFileOffset(it->first) -SM.getFileOffset(Range.getBegin());
+			unsigned int len = SM.getFileOffset(it->second) - SM.getFileOffset(it->first);
+			if(!first_exp) exp_os<<",\n";
+			first_exp = false;
+			exp_os<<Indent<<"\t\t\t{\n";
+			exp_os<<Indent<<"\t\t\t\t\"pos\": "<<pos<<",\n";
+			exp_os<<Indent<<"\t\t\t\t\"len\": "<<len<<",\n";
+			exp_os<<Indent<<"\t\t\t\t\"text\": \""<<json::json_escape(Macros.getExpansionText(it->first))<<"\"\n";
+			exp_os<<Indent<<"\t\t\t}";
+		  }
 		  //Adding static variable references to hash
 		  for (auto u = func_data.refVars.begin(); u!=func_data.refVars.end();u++){
 			  const VarDecl *D = Visitor.getVarData(Visitor.getVarIndex()[*u]).Node;
@@ -2682,6 +2701,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (FT || CTS) llvm::outs() << Indent << "\t\t\"template_parameters\": \"" << json::json_escape(templatePars) << "\",\n";
 			  llvm::outs() << Indent << "\t\t\"body\": \"" << json::json_escape(fbody) << "\",\n";
 			  llvm::outs() << Indent << "\t\t\"unpreprocessed_body\": \"" << json::json_escape(upBody) << "\",\n";
+			  llvm::outs() << Indent << "\t\t\"macro_expansions\":[\n";
+			  llvm::outs() << exp_os.str()<<'\n';
+			  llvm::outs() << Indent << "\t\t],\n";
 			  llvm::outs() << Indent << "\t\t\"declbody\": \"" << json::json_escape(declbody) << "\",\n";
 		  }
 		  llvm::outs() << Indent << "\t\t\"signature\": \"" << fdecl_signature << "\",\n";
@@ -5581,6 +5603,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 
   void DbJSONClassConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
 	  TranslationUnitDecl *D = Context.getTranslationUnitDecl();
+	  auto &SM = Context.getSourceManager();
+
 	  if (_opts.onlysrc) {
 		  D->print(llvm::outs());
 		  return;
