@@ -47,8 +47,25 @@ class MacroExpCallbacks : public PPCallbacks{
     }
 };
 
+class SkippedRangesCallbacks : public PPCallbacks{
+  public:
+    SkippedRangesCallbacks(Preprocessor &PP, SkippedMap &SkippedRanges) : PP(PP), SkippedRanges(SkippedRanges) {}
+  private:
+    Preprocessor &PP;
+    SkippedMap &SkippedRanges;
+
+    // tracks source ranges skipped by preprocessor (behind ifdef)
+    void SourceRangeSkipped(SourceRange Range, SourceLocation EndifLoc) {
+      auto &SM = PP.getSourceManager();
+      auto Begin = Range.getBegin();
+      auto uniqueID = SM.getFileEntryForID(SM.getFileID(Begin))->getUniqueID().getFile();
+      SkippedRanges[uniqueID].emplace(SM.getFileOffset(Begin),SM.getFileOffset(Range.getEnd()));
+    }
+};
+
 MacroHandler::MacroHandler(Preprocessor &PP,bool save_expansions) : PP(PP) {
   PP.addPPCallbacks(std::make_unique<MacroRedefCallbacks>(PP));
+  PP.addPPCallbacks(std::make_unique<SkippedRangesCallbacks>(PP,SkippedRanges));
   if(save_expansions){
     PP.addPPCallbacks(std::make_unique<MacroExpCallbacks>(PP,ExpansionRanges));
     PP.setTokenWatcher([this](const Token &Tok){onTokenLexed(Tok);});

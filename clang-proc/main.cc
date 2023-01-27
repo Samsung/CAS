@@ -159,7 +159,7 @@ int main(int argc, const char **argv)
         opts.exit_on_error = ExitOnErrorOption.getValue();
         opts.csd = CustomStructDefs.getValue();
         opts.ptrMEonly = ptrMEOption.getValue();
-        opts.save_expansions = SaveMacroExpansionOption;
+        opts.save_expansions = opts.addbody && SaveMacroExpansionOption.getValue();
         if (opts.JSONRecord=="*") {
         	opts.fops_all = true;
         }

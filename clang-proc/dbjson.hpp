@@ -1677,7 +1677,6 @@ private:
   const struct main_opts& _opts;
   uint64_t TUId;
   ASTContext &Context;
-  std::vector<MacroDefInfo> mexps;
   MacroHandler Macros;
 };
 void load_database(std::string filepath);

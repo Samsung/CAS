@@ -2044,17 +2044,19 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 	}
 	FTDB_SET_ENTRY_PYOBJECT(json_entry,csmap,csmap);
 
-	PyObject* macro_expansions = PyList_New(0);
-	for (unsigned long i=0; i<self->entry->macro_expansions_count; ++i) {
-		struct mexp_info* mexp_info = &self->entry->macro_expansions[i];
-		PyObject* py_mexp_info = PyDict_New();
-		FTDB_SET_ENTRY_ULONG(py_mexp_info,pos,mexp_info->pos);
-		FTDB_SET_ENTRY_ULONG(py_mexp_info,len,mexp_info->len);
-		FTDB_SET_ENTRY_STRING(py_mexp_info,text,mexp_info->text);
-		PyList_Append(macro_expansions,py_mexp_info);
-		Py_DecRef(py_mexp_info);
+	if(self->entry->macro_expansions){
+		PyObject* macro_expansions = PyList_New(0);
+		for (unsigned long i=0; i<self->entry->macro_expansions_count; ++i) {
+			struct mexp_info* mexp_info = &self->entry->macro_expansions[i];
+			PyObject* py_mexp_info = PyDict_New();
+			FTDB_SET_ENTRY_ULONG(py_mexp_info,pos,mexp_info->pos);
+			FTDB_SET_ENTRY_ULONG(py_mexp_info,len,mexp_info->len);
+			FTDB_SET_ENTRY_STRING(py_mexp_info,text,mexp_info->text);
+			PyList_Append(macro_expansions,py_mexp_info);
+			Py_DecRef(py_mexp_info);
+		}
+		FTDB_SET_ENTRY_PYOBJECT(json_entry,macro_expansions,macro_expansions);
 	}
-	FTDB_SET_ENTRY_PYOBJECT(json_entry,macro_expansions,macro_expansions);
 
 	PyObject* locals = PyList_New(0);
 	for (unsigned long i=0; i<self->entry->locals_count; ++i) {
@@ -2769,6 +2771,11 @@ PyObject* libftdb_ftdb_func_entry_get_macro_expansions(PyObject* self, void* clo
 
 	libftdb_ftdb_func_entry_object* __self = (libftdb_ftdb_func_entry_object*)self;
 
+	if (!__self->entry->macro_expansions) {
+		PyErr_SetString(libftdb_ftdbError, "No 'macro_expansions' field in func entry");
+		return 0;
+	}
+
 	PyObject* macro_expansions = PyList_New(0);
 	for (unsigned long i=0; i<__self->entry->macro_expansions_count; ++i) {
 		struct mexp_info* mexp_info = &__self->entry->macro_expansions[i];
@@ -3355,7 +3362,7 @@ int libftdb_ftdb_func_entry_sq_contains(PyObject* self, PyObject* slice) {
 	}
 	else if (!strcmp(attr,"macro_expansions")) {
 		PYASSTR_DECREF(attr);
-	    return 1;
+	    return !!__self->entry->macro_expansions;
 	}
 	else if (!strcmp(attr,"locals")) {
 		PYASSTR_DECREF(attr);
@@ -8624,17 +8631,19 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 	}
 
 	PyObject* key_macro_expansions = PyUnicode_FromString("macro_expansions");
-	PyObject* macro_expansions = PyDict_GetItem(func_entry,key_macro_expansions);
-	Py_DecRef(key_macro_expansions);
-	new_entry->macro_expansions_count = PyList_Size(macro_expansions);
-	new_entry->macro_expansions = calloc(new_entry->macro_expansions_count,sizeof(struct mexp_info));
-	for (Py_ssize_t i=0; i<PyList_Size(macro_expansions); ++i) {
-		PyObject* py_mexp_info = PyList_GetItem(macro_expansions,i);
-		struct mexp_info* mexp_info = &new_entry->macro_expansions[i];
-		mexp_info->pos = FTDB_ENTRY_ULONG(py_mexp_info,pos);
-		mexp_info->len = FTDB_ENTRY_ULONG(py_mexp_info,len);
-		mexp_info->text = FTDB_ENTRY_STRING(py_mexp_info,text);
+	if (PyDict_Contains(func_entry,key_macro_expansions)){
+		PyObject* macro_expansions = PyDict_GetItem(func_entry,key_macro_expansions);
+		new_entry->macro_expansions_count = PyList_Size(macro_expansions);
+		new_entry->macro_expansions = calloc(new_entry->macro_expansions_count,sizeof(struct mexp_info));
+		for (Py_ssize_t i=0; i<PyList_Size(macro_expansions); ++i) {
+			PyObject* py_mexp_info = PyList_GetItem(macro_expansions,i);
+			struct mexp_info* mexp_info = &new_entry->macro_expansions[i];
+			mexp_info->pos = FTDB_ENTRY_ULONG(py_mexp_info,pos);
+			mexp_info->len = FTDB_ENTRY_ULONG(py_mexp_info,len);
+			mexp_info->text = FTDB_ENTRY_STRING(py_mexp_info,text);
+		}
 	}
+	Py_DecRef(key_macro_expansions);
 
 	PyObject* key_locals = PyUnicode_FromString("locals");
 	PyObject* locals = PyDict_GetItem(func_entry,key_locals);

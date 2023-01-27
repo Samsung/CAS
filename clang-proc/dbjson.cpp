@@ -1864,23 +1864,25 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  std::string exp_loc = SM.getExpansionLoc(D->getLocation()).printToString(SM);
 		  SHA_update(&c,exp_loc.data(),exp_loc.size());
 		  // locations
-		  auto BRange = SM.getExpansionRange(body->getSourceRange());
 		  std::string expansions;
 		  llvm::raw_string_ostream exp_os(expansions);
-		  auto ExpRanges = Macros.getRanges();
-		  bool first_exp = true;
-		  for(auto it = ExpRanges.lower_bound(BRange.getBegin()), end = ExpRanges.upper_bound(BRange.getEnd()); it!= end;it++){
-			std::string text = Macros.getExpansionText(it->first);
-			if(!text.length()) continue;
-			unsigned int pos = SM.getFileOffset(it->first) -SM.getFileOffset(Range.getBegin());
-			unsigned int len = SM.getFileOffset(it->second) - SM.getFileOffset(it->first);
-			if(!first_exp) exp_os<<",\n";
-			first_exp = false;
-			exp_os<<Indent<<"\t\t\t{\n";
-			exp_os<<Indent<<"\t\t\t\t\"pos\": "<<pos<<",\n";
-			exp_os<<Indent<<"\t\t\t\t\"len\": "<<len<<",\n";
-			exp_os<<Indent<<"\t\t\t\t\"text\": \""<<json::json_escape(Macros.getExpansionText(it->first))<<"\"\n";
-			exp_os<<Indent<<"\t\t\t}";
+		  if(_opts.save_expansions){
+			auto BRange = SM.getExpansionRange(body->getSourceRange());
+			auto ExpRanges = Macros.getExpansionRanges();
+			bool first_exp = true;
+			for(auto it = ExpRanges.lower_bound(BRange.getBegin()), end = ExpRanges.upper_bound(BRange.getEnd()); it!= end;it++){
+				std::string text = Macros.getExpansionText(it->first);
+				if(!text.length()) continue;
+				unsigned int pos = SM.getFileOffset(it->first) -SM.getFileOffset(Range.getBegin());
+				unsigned int len = SM.getFileOffset(it->second) - SM.getFileOffset(it->first);
+				if(!first_exp) exp_os<<",\n";
+				first_exp = false;
+				exp_os<<Indent<<"\t\t\t{\n";
+				exp_os<<Indent<<"\t\t\t\t\"pos\": "<<pos<<",\n";
+				exp_os<<Indent<<"\t\t\t\t\"len\": "<<len<<",\n";
+				exp_os<<Indent<<"\t\t\t\t\"text\": \""<<json::json_escape(Macros.getExpansionText(it->first))<<"\"\n";
+				exp_os<<Indent<<"\t\t\t}";
+			}
 		  }
 		  //Adding static variable references to hash
 		  for (auto u = func_data.refVars.begin(); u!=func_data.refVars.end();u++){
@@ -2701,9 +2703,11 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (FT || CTS) llvm::outs() << Indent << "\t\t\"template_parameters\": \"" << json::json_escape(templatePars) << "\",\n";
 			  llvm::outs() << Indent << "\t\t\"body\": \"" << json::json_escape(fbody) << "\",\n";
 			  llvm::outs() << Indent << "\t\t\"unpreprocessed_body\": \"" << json::json_escape(upBody) << "\",\n";
-			  llvm::outs() << Indent << "\t\t\"macro_expansions\":[\n";
-			  llvm::outs() << exp_os.str()<<'\n';
-			  llvm::outs() << Indent << "\t\t],\n";
+			  if(_opts.save_expansions){
+				llvm::outs() << Indent << "\t\t\"macro_expansions\":[\n";
+				llvm::outs() << exp_os.str()<<'\n';
+				llvm::outs() << Indent << "\t\t],\n";
+			  }
 			  llvm::outs() << Indent << "\t\t\"declbody\": \"" << json::json_escape(declbody) << "\",\n";
 		  }
 		  llvm::outs() << Indent << "\t\t\"signature\": \"" << fdecl_signature << "\",\n";
@@ -5654,16 +5658,25 @@ void DbJSONClassConsumer::printDatabase(){
 	llvm::outs() << ",\n";
 	llvm::outs() << "\t\"unresolvedfuncs\":" << "\n";
 	printUnresolvedFuncArray(2);
-	llvm::outs() << ",\n\t\"macroinfo\": [";
-	for (std::vector<MacroDefInfo>::iterator i=mexps.begin(); i!=mexps.end(); ++i) {
-		if (i==mexps.begin()) llvm::outs() << "\n\t\t\t"; else llvm::outs() << ",\n\t\t\t";
-		llvm::outs() << "{\n";
-		llvm::outs() << "\t\t\t\t\"name\": \"" << std::get<0>((*i)) << "\",\n";
-		llvm::outs() << "\t\t\t\t\"expanded\": \"" << json::json_escape(std::get<1>((*i))) << "\",\n";
-		llvm::outs() << "\t\t\t\t\"loc\": \"" << std::get<2>((*i)) << "\"\n";
-		llvm::outs() << "\t\t\t}";
+
+	if(/*disabled until full support implemented*/ 0){
+		llvm::outs() << ",\n\t\"skipped_ranges\": [";
+		auto &SkippedRanges = Macros.getSkippedRanges();
+		for(auto it = SkippedRanges.begin(), end = SkippedRanges.end(); it != end; it++){
+			if (it==SkippedRanges.begin()) llvm::outs() << "\n"; else llvm::outs() << ",\n";
+			llvm::outs() << "\t\t{\n";
+			llvm::outs() << "\t\t\t\"fid\": " << it->first << ",\n";
+			llvm::outs() << "\t\t\t\"ranges\": [";
+			for(auto r_it = it->second.begin(),r_end = it->second.end(); r_it != r_end; r_it++){
+				if (r_it==it->second.begin()) llvm::outs() << "\n"; else llvm::outs() << ",\n";
+				llvm::outs() << "\t\t\t\t["<<r_it->first<<", "<<r_it->second<<"]";
+			}
+			llvm::outs()<<"\n\t\t\t]\n";
+			llvm::outs() << "\t\t}";
+		}
+		llvm::outs() << "\n\t]";
 	}
-	llvm::outs() << "\n\t]";
+
 	llvm::outs() << ",\n\t\"missingcallexprn\": " << Visitor.MissingCallExpr.size() << ",\n";
 	llvm::outs() << "\n\t\"missingvardecl\": " << Visitor.MissingVarDecl.size() << ",\n";
 	llvm::outs() << "\t\"missingrefsn\": " << Visitor.missingRefsCount << ",\n";
