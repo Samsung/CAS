@@ -242,6 +242,36 @@ ${CAS_DIR}/examples/ftdb_show_info db.img
 Now the FTDB database can be used for further analysis and application development.
 
 
+### Running in docker
+
+Running in docker environment requires some extended capabilities so running with --privileged switch is recommended. Also --pid="host" is required for proper capture of tracing data from mounted `/sys/kernel/debug`. 
+
+Container should enable user to load kernel module from host so `/lib/modules/` must be mounted and `kmod` system package are required.
+
+Example of Ubuntu 22.04 usage:
+
+```
+docker run -it --pid="host" --privileged -v /lib/modules/:/lib/modules/ -v /sys/kernel/debug:/sys/kernel/debug -v ${CAS_DIR}:/cas ubuntu:22.04
+
+// Setup
+root@5f01ed8691a8:/# apt update
+root@5f01ed8691a8:/# apt install kmod
+root@5f01ed8691a8:/# cd /cas/
+root@5f01ed8691a8:/cas# ./etrace_install.sh
+// Testing
+root@5f01ed8691a8:/cas# cd /tmp/
+root@5f01ed8691a8:/tmp# /cas/etrace ls /
+// Verify
+root@5f01ed8691a8:/tmp# ll /tmp/
+total 20
+drwxrwxrwt 1 root root 4096 Jan 10 09:46 ./
+drwxr-xr-x 1 root root 4096 Jan 10 09:46 ../
+-rw-r--r-- 1 root root 8114 Jan 10 09:46 .nfsdb
+-rw-r--r-- 1 root root 1363 Jan 10 09:46 .nfsdb.stats
+```
+
+Tracing is working fine if .nfsdb contains more than one line.
+
 ### Virtual Environment
 
 For those who are cautious to load and run custom Linux kernel modules on their Linux machines there is also virtual environment (based on QEMU) provided. Please refer to the [readme](tools/virtual_environment/README.md) file.

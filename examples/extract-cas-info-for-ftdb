@@ -16,9 +16,9 @@ def json_command(cmd):
 json_vals = list()
 cfs = set()
 for e in comps:
-	if e.compilation_info.files[0] not in cfs:
-		json_vals.append( "{\"directory\":%s,\"command\":%s,\"file\":%s}"%(json.dumps(e.cwd),json_command(e.argv),json.dumps(e.compilation_info.files[0])) )
-		cfs.add(e.compilation_info.files[0])
+	if e.compilation_info.files[0].path not in cfs:
+		json_vals.append( "{\"directory\":%s,\"command\":%s,\"file\":%s}"%(json.dumps(e.cwd),json_command(e.argv),json.dumps(e.compilation_info.files[0].path)) )
+		cfs.add(e.compilation_info.files[0].path)
 with open("compile_commands.json","w") as f:
 	f.write(json.dumps(json.loads("[%s]"%",".join(json_vals)), indent=4, sort_keys=False))
 print ("created compilation database file (compile_commands.json)")

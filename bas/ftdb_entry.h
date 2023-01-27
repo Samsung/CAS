@@ -29,6 +29,19 @@
                 __key;    \
         })
 
+#ifdef DEBUG
+#define FTDB_ENTRY_STRING(__entry,__key) \
+	({	\
+		PyObject* key_##__key = PyUnicode_FromString(#__key);	\
+		PyObject* __key = PyDict_GetItem(__entry, key_##__key);	\
+		const char* __new_entry = PyString_get_c_str(__key);	\
+		if (!__new_entry) {	\
+			printf("Cannot convert Unicode to c-string at entry with key \"" #__key "\"\n");	\
+		}	\
+		Py_DecRef(key_##__key);	\
+		__new_entry;	\
+	})
+#else
 #define FTDB_ENTRY_STRING(__entry,__key) \
 	({	\
 		PyObject* key_##__key = PyUnicode_FromString(#__key);	\
@@ -37,7 +50,24 @@
 		Py_DecRef(key_##__key);	\
 		__new_entry;	\
 	})
+#endif
 
+#ifdef DEBUG
+#define FTDB_ENTRY_STRING_OPTIONAL(__entry,__key) \
+	({	\
+		const char* __new_entry = 0;	\
+		PyObject* key_##__key = PyUnicode_FromString(#__key);	\
+		if (PyDict_Contains(__entry, key_##__key)) {	\
+			PyObject* __key = PyDict_GetItem(__entry, key_##__key);	\
+			__new_entry = PyString_get_c_str(__key);	\
+			if (!__new_entry) {	\
+				printf("Cannot convert Unicode to c-string at entry with key \"" #__key "\"\n");	\
+			}	\
+		}	\
+		Py_DecRef(key_##__key);	\
+		__new_entry;	\
+	})
+#else
 #define FTDB_ENTRY_STRING_OPTIONAL(__entry,__key) \
 	({	\
 		const char* __new_entry = 0;	\
@@ -49,6 +79,7 @@
 		Py_DecRef(key_##__key);	\
 		__new_entry;	\
 	})
+#endif
 
 #define FTDB_ENTRY_ULONG(__entry,__key) \
 	({	\

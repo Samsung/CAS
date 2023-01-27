@@ -952,21 +952,6 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		PRINT_TRACE(tpid->upid, "!SysClone|flags=%ld", clone_flags);
 		break;
 	}
-	case __NR_close: {
-		bool should_print = true;
-		int fd = (int) regs->di;
-		if (!should_trace(&tpid))
-			return;
-
-		if (ignore_repeated_opens) {
-			should_print = !update_last_open_fd_on_close(tpid, fd);
-		}
-
-		if (should_print) {
-			PRINT_TRACE(tpid->upid, "!Close|fd=%ld", regs->di);
-		}
-		break;
-	}
 	case __NR_rename:
 	case __NR_renameat:
 	case __NR_renameat2: {
@@ -1078,6 +1063,24 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 
 		if (ret < 0) {
 			PRINT_TRACE(tpid->upid, "!SysCloneFailed|");
+		}
+		break;
+	}
+	case __NR_close: {
+		bool should_print = true;
+		int fd = (int) regs->di;
+		if (!should_trace(&tpid))
+			return;
+
+		if (ret < 0)
+			break;
+
+		if (ignore_repeated_opens) {
+			should_print = !update_last_open_fd_on_close(tpid, fd);
+		}
+
+		if (should_print) {
+			PRINT_TRACE(tpid->upid, "!Close|fd=%ld", regs->di);
 		}
 		break;
 	}

@@ -158,6 +158,7 @@ add_clang_tool(clang-proc
 target_compile_options(clang-proc PRIVATE SHELL:${LLVM_CXXFLAGS})
 target_compile_options(clang-proc PRIVATE -ggdb3)
 target_compile_options(clang-proc PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(clang-proc PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
 target_compile_options(clang-proc PRIVATE -std=c++14)
 target_compile_options(clang-proc PRIVATE -Wno-non-virtual-dtor)
@@ -276,12 +277,23 @@ target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14
 target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
 target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-unused-value>)
 target_compile_options(etrace_parser PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(etrace_parser PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
 add_executable(cati
     bas/etrace_cat.c
 )
 target_compile_options(cati PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(cati PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 install(TARGETS cati DESTINATION .)
+
+add_executable(worker
+    bas/worker.cpp
+)
+install(TARGETS worker DESTINATION .)
+
+target_compile_options(worker PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
+target_compile_options(worker PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(worker PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
 add_library(etrace SHARED
         bas/strnstr.c
@@ -307,6 +319,7 @@ if(IS_CLANG)
     target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
 endif()
 target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
 target_compile_options(etrace PRIVATE "-DLIBRARY_BUILD=1")
 
@@ -325,6 +338,7 @@ if(IS_CLANG)
     target_compile_options(ftdb PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
 endif()
 target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
 if (PYTHON3_CONFIG_BIN)
 set(PYTHON3_CONFIG ${PYTHON3_CONFIG_BIN} CACHE STRING "Python3 config executable to use")

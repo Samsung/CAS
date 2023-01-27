@@ -13,7 +13,7 @@ clangxx_input_execs = []
 def have_integrated_cc1(exe):
     return all([
         "-fno-integrated-cc1" not in exe[2],
-        os.path.normpath(os.path.join(exe[1], exe[0])) in integrated_clang_compilers
+        os.path.realpath(os.path.normpath(os.path.join(exe[1], exe[0]))) in integrated_clang_compilers
     ])
 
 def replace_cc1_executor(x):
@@ -28,6 +28,7 @@ def replace_cc1_executor(x):
                 "i": 0
             }
 
+        pn = None
         try:
             pn = subprocess.Popen(
                 [x["b"]] + x["v"][1:] + ["-###"], 
@@ -40,7 +41,8 @@ def replace_cc1_executor(x):
             out, err = pn.communicate("")
         except Exception:
             print("Exception while running clang -### commands:")
-            traceback.print_exc()
+            print ("[%s] %s"%(x["w"]," ".join([x["b"]] + x["v"][1:] + ["-###"])))
+            traceback.print_exc(limit=0)
 
         if pn and pn.returncode == 0:
             lns = out.decode("utf-8").split("\n")

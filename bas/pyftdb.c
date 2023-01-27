@@ -187,6 +187,7 @@ done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 	Py_DecRef(py_no_map_memory);
+	Py_DecRef(py_mp_safe);
 	PYASSTR_DECREF(cache_filename);
 	if (!err) Py_RETURN_FALSE;
 	Py_RETURN_TRUE;

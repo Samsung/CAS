@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+
+import sys
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == "bash_complete":
+        from client.argparser import get_bash_complete
+        print(get_bash_complete())
+        exit(0)
+
+    try:
+        import libetrace as _
+    except ModuleNotFoundError:
+        print("CAS libetrace not found - provide libetrace.so in directory or export directory with library to PYTHONPATH")
+        print("eg. export PYTHONPATH=/home/j.doe/CAS/:$PYTHONPATH")
+        sys.exit(2)
+
+    import os
+    from signal import signal, SIGPIPE, SIG_DFL
+    from typing import Generator,  Iterator
+    import libcas
+    from client.cmdline import process_commandline
+
+    signal(SIGPIPE, SIG_DFL)
+    cas_db = libcas.CASDatabase()
+    ret = process_commandline(cas_db)
+    if ret:
+        if isinstance(ret, Iterator):
+            print(*ret, sep=os.linesep)
+        elif isinstance(ret, Generator):
+            print(*ret, sep=os.linesep)
+        else:
+            print(ret, flush=True)
+    sys.exit(0)

@@ -54,7 +54,11 @@ NPROC=$(nproc)
 NPROC=$(expr $NPROC - 1)
 
 # -------- setting up ftrace
-sudo -n setup_etrace.sh -f
+if (( $EUID != 0 )); then
+    sudo -n setup_etrace.sh -f
+else
+    setup_etrace.sh -f
+fi
 if [ "$?" -ne 0 ]; then
     echo_err "setup_etrace.sh -f failed"
     exit 1
@@ -67,8 +71,11 @@ echo "INITCWD=$INITCWD" > "$WORK_DIR/.nfsdb"
 #${DIR}/etrace_cat "/sys/kernel/debug/tracing/trace_pipe" > "$WORK_DIR/.nfsdb" &
 ${DIR}/cati "/sys/kernel/debug/tracing/trace_pipe" >> "$WORK_DIR/.nfsdb" &
 LISTENER_PID="$!"
-sudo -n renice -n -18 -p $LISTENER_PID
-
+if (( $EUID != 0 )); then
+    sudo -n renice -n -18 -p $LISTENER_PID
+else
+    renice -n -18 -p $LISTENER_PID
+fi
 # -------- save kernel log
 if [ "$SAVE_KERNEL_LOG" = "y" ]; then
     dmesg -w > "$WORK_DIR/.nfsdb.klog" &
@@ -77,7 +84,11 @@ fi
 
 # -------- install execve_trace module
 MYPID="$$"
-sudo -n setup_etrace.sh -i $MYPID $MODULE_PARAMS
+if (( $EUID != 0 )); then
+    sudo -n setup_etrace.sh -i $MYPID $MODULE_PARAMS
+else
+    setup_etrace.sh -i $MYPID $MODULE_PARAMS
+fi
 if [ "$?" -ne 0 ]; then
     echo_err "setup_etrace.sh -i failed"
     exit 1
@@ -88,7 +99,11 @@ fi
 RV="$?"
 
 # -------- remove execve_trace module
-sudo -n setup_etrace.sh -r
+if (( $EUID != 0 )); then
+    sudo -n setup_etrace.sh -r
+else
+    setup_etrace.sh -r
+fi
 if [ "$?" -ne 0 ]; then
     echo_err "setup_etrace.sh -r failed"
     exit 1
