@@ -781,18 +781,6 @@ struct BAS_item {
 	unsigned long entries_count;
 };
 
-struct macro_occurence {
-	const char* loc;
-	const char* expanded;
-	unsigned long fid;
-};
-
-struct macroinfo_item {
-	const char* name;
-	struct macro_occurence* occurences;
-	unsigned long occurences_count;
-};
-
 struct ftdb {
 	struct ftdb_func_entry* funcs;
 	unsigned long funcs_count;
@@ -811,8 +799,6 @@ struct ftdb {
 	struct rb_root modulemap;
 	const char** moduleindex_table;
 	unsigned long moduleindex_table_count;
-	struct macroinfo_item* macroinfo;
-	unsigned long macroinfo_count;
 	struct rb_root macromap;
 	const char* version;
 	const char* module;

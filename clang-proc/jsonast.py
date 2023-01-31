@@ -1040,8 +1040,6 @@ def create_json_db_main(args,allowed_phases):
     JDB["source_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["sources"]]
     if "modules" in JDB:
         JDB["module_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["modules"]]
-    # Re-shuffle the macro information data into list-like manner
-    JDB["macroinfo"] = [ {"name":k,"occurences":JDB["macroinfo"][k]} for k in JDB["macroinfo"]]
     # Now save the final JSON
     with open(output,"w") as f:
         f.write(json.dumps(JDB,indent=4))

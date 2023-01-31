@@ -76,7 +76,6 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
         db1["sourcen"] = 0
         db1["sources"] = []
         db1["directory"] = db2["directory"]
-        db1["macroinfo"] = {}
         # TODO: add missing if necessary
     
     # file_id offset
@@ -389,21 +388,6 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
                     ref["id"] = funcid_remap[ref["id"]]
                 if "cast" in ref:
                     ref["cast"] = typeid_remap[ref["cast"]]
-
-    # Merge macro expansion information
-    if type(db2["macroinfo"]) == list:
-        for mi in db2["macroinfo"]:
-            if mi["name"] in db1["macroinfo"]:
-                db1["macroinfo"][mi["name"]].append({"fid":next_file_id,"loc":mi["loc"],"expanded":mi["expanded"]})
-            else:
-                db1["macroinfo"][mi["name"]] = [{"fid":next_file_id,"loc":mi["loc"],"expanded":mi["expanded"]}]
-    else:
-        # Merging chunks
-        for k in db2["macroinfo"]:
-            if k in db1["macroinfo"]:
-                db1["macroinfo"][k] += [{"fid":x["fid"]+next_file_id,"loc":x["loc"],"expanded":x["expanded"]} for x in db2["macroinfo"][k]]
-            else:
-                db1["macroinfo"][k] = [{"fid":x["fid"]+next_file_id,"loc":x["loc"],"expanded":x["expanded"]} for x in db2["macroinfo"][k]]
 
     # Add and remove objects
     db1["globals"] = [var for var in db1["globals"] if var not in removed_vars]
