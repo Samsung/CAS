@@ -9259,14 +9259,6 @@ PyInit_libftdb(void)
 		return 0;
 	Py_XINCREF(&libftdb_ftdbFuncOffsetrefInfoEntryType);
 
-	if (PyType_Ready(&libftdb_ftdbMacroinfoType) < 0)
-		return 0;
-	Py_XINCREF(&libftdb_ftdbMacroinfoType);
-
-	if (PyType_Ready(&libftdb_ftdbMacroinfoIterType) < 0)
-		return 0;
-	Py_XINCREF(&libftdb_ftdbMacroinfoIterType);
-
     if (PyModule_AddObject(m, "ftdb", (PyObject *)&libftdb_ftdbType)<0) {
     	Py_DECREF(m);
     	return 0;
