@@ -457,19 +457,25 @@ int parser_main(int argc, char** argv) {
      */
 
     printf("Creating pipe map...\n");
+    printf("0%%");
+    fflush(stdout);
 
     pipe_map_t pipe_map;
     std::map<upid_t,unsigned> exeIdxMap;
     std::map<upid_t,std::set<upid_t>> fork_map;
     std::map<upid_t,upid_t> rev_fork_map;
-    printf("0%%");
-    fflush(stdout);
-    std::sort(context.srvec.begin(), context.srvec.end(), syscall_raw_sort_key());
+    syscall_raw *root_sys = nullptr;
     std::map<upid_t,fdmap_node*> fdmap_process_map;
+    fdmap_node *root_fdmap_node = nullptr;
+
+    std::sort(context.srvec.begin(), context.srvec.end(), syscall_raw_sort_key());
     /* Create root file descriptor map */
-    syscall_raw& root_sys = *context.srvec.begin();
-    fdmap_node* root_fdmap_node = new fdmap_node(root_sys.pid);
-    fdmap_process_map.insert(std::pair<upid_t,fdmap_node*>(root_sys.pid,root_fdmap_node));
+    if (context.srvec.size() > 0) {
+        root_sys = context.srvec.data();
+        root_fdmap_node = new fdmap_node(root_sys->pid);
+        fdmap_process_map.insert(std::pair<upid_t,fdmap_node*>(root_sys->pid,root_fdmap_node));
+    }
+
     /* Create dummy 'init' process */
     fork_map.insert(std::pair<upid_t,std::set<upid_t>>(0,std::set<upid_t>()));
 #ifdef ENABLE_PARENT_PIPE_CHECK
