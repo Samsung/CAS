@@ -3190,7 +3190,7 @@ PyObject* libetrace_nfsdb_entry_richcompare(PyObject *self, PyObject *other, int
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 	libetrace_nfsdb_entry_object* __other = (libetrace_nfsdb_entry_object*)other;
-	Py_RETURN_RICHCOMPARE(__self->nfsdb_index, __other->nfsdb_index , op);
+	Py_RETURN_RICHCOMPARE_internal(__self->nfsdb_index, __other->nfsdb_index , op);
 }
 
 void libetrace_nfsdb_iter_dealloc(libetrace_nfsdb_iter_object* self) {

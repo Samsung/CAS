@@ -9,6 +9,21 @@
 
 #include "klib.h"
 
+/* Taken from Python 3.8 source code which is GPL compatible */
+#define Py_RETURN_RICHCOMPARE_internal(val1, val2, op)                      \
+    do {                                                                    \
+        switch (op) {                                                       \
+        case Py_EQ: if ((val1) == (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;  \
+        case Py_NE: if ((val1) != (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;  \
+        case Py_LT: if ((val1) < (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;   \
+        case Py_GT: if ((val1) > (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;   \
+        case Py_LE: if ((val1) <= (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;  \
+        case Py_GE: if ((val1) >= (val2)) Py_RETURN_TRUE; Py_RETURN_FALSE;  \
+        default:                                                            \
+            Py_UNREACHABLE();                                               \
+        }                                                                   \
+    } while (0)
+
 #define STRUCT_CREATE(tag)  ((type*)calloc(1,sizeof(struct tag)))
 #define TYPE_CREATE(type)  ((type*)calloc(1,sizeof(type)))
 

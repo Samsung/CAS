@@ -60,3 +60,6 @@ and therefore might te distributed under the MIT license. Please see klib.h file
 
 C string format parsing function was taken from the Linux kernel source tree and therefore might be distributed
 under GNU General Public License v.2 or any later version. Please see utils.c file for details.
+
+Rich compare snippet for Python objects was taken from the Python 3.8 source code which is GPL compatible
+and therefore might be distributed under the PSF License Agreement. Please see utils.h file for details.
