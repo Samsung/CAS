@@ -7,3 +7,13 @@
 *.o
 *.so
 modules.order
+
+# Folders with build results
+/build*/
+__pycache__/
+*.pyc
+*.symvers
+
+# CMD files
+*symvers.cmd
+*order.cmd
