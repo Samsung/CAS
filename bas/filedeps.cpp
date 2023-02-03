@@ -670,7 +670,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 }
 
 static void process_read_open_files_unique_with_children(libetrace_nfsdb_object* self, upid_t pid,
-		std::set<unsigned long> hfiles) {
+		std::set<unsigned long>& hfiles) {
 
 	DBG(self->debug,"--- process_read_open_files_unique_with_children_nocpy(" GENERIC_ARG_PID_FMT ")\n",pid);
 
@@ -691,7 +691,7 @@ static void process_read_open_files_unique_with_children(libetrace_nfsdb_object*
 }
 
 static void process_write_open_files_unique_with_children(libetrace_nfsdb_object* self, upid_t pid,
-		std::set<unsigned long> hfiles) {
+		std::set<unsigned long>& hfiles) {
 
 	DBG(self->debug,"--- process_write_open_files_unique_with_children_nocpy(" GENERIC_ARG_PID_FMT ")\n",pid);
 
