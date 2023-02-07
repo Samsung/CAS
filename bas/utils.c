@@ -72,45 +72,6 @@ ssize_t safe_rd (int fd, void const *buf, size_t count)
     }
 }
 
-ssize_t count_file_lines(const char* path) {
-
-	int fdr = open(path,O_RDONLY);
-	if (fdr<0) {
-		printf("Failed to open %s for reading: %d\n",path,errno);
-		return fdr;
-	}
-	/* Count number of lines */
-	void* pgbuff = malloc(RD_BUFSIZE);
-	assert(pgbuff!=0);
-	size_t total_nread = 0;
-	ssize_t nlcount = 0;
-	while(1) {
-		ssize_t n_read = safe_rd (fdr, pgbuff, RD_BUFSIZE);
-		if (n_read<0) {
-			fprintf(stderr,"ERROR[read]: %lu, %d\n",total_nread,errno);
-			close(fdr);
-			return -1;
-		}
-		if (n_read == 0) {
-			break;
-		}
-		/* n_read was read in */
-		total_nread+=n_read;
-		size_t noff = 0;
-		void* ppnewl = pgbuff;
-		void* pnewl = memchr(pgbuff,'\n',RD_BUFSIZE);
-		while(pnewl) {
-			noff+=pnewl-ppnewl+1;
-			nlcount++;
-			ppnewl = pnewl+1;
-			pnewl = memchr(pnewl+1,'\n',RD_BUFSIZE-noff);
-		}
-	}
-	nlcount++;
-	free(pgbuff);
-	close(fdr);
-	return nlcount;
-}
 
 #define COMP_MAX 50
 

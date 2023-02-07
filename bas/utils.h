@@ -176,7 +176,6 @@ static inline char* strnappend(char* s, const char* news, size_t newsize) {
 extern "C" {
 #endif
 	const char* json_escape(const char* s);
-	ssize_t count_file_lines(const char* path);
 	char *normpath(const char *in);
 	const char* path_join(const char* start, const char* end);
 	unsigned char* base64_decode (const char *text, size_t* out_len);
