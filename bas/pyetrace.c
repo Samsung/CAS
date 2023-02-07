@@ -760,9 +760,15 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 			show_stats = 1;
 		}
 	}
+
+	PyObject* osModuleString = PyUnicode_FromString((char*)"os.path");
+	PyObject* osModule = PyImport_Import(osModuleString);
+	PyObject* pathJoinFunction = PyObject_GetAttrString(osModule,(char*)"join");
+
 	struct nfsdb nfsdb = {};
 	nfsdb.source_root = PyString_get_c_str(source_root);
 	nfsdb.dbversion = PyString_get_c_str(dbversion);
+	if (PyList_Size(nfsdbJSON)<=0) goto flatten_start;
 	nfsdb.string_table_size = PyList_Size(nfsdbJSON);
 	nfsdb.string_table = malloc(nfsdb.string_table_size*sizeof(const char*));
 	nfsdb.string_size_table = malloc(nfsdb.string_table_size*sizeof(uint32_t));
@@ -777,10 +783,6 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 	}
 	nfsdb.nfsdb_count = PyList_Size(nfsdbJSON);
 	nfsdb.nfsdb = calloc(nfsdb.nfsdb_count,sizeof(struct nfsdb_entry));
-
-	PyObject* osModuleString = PyUnicode_FromString((char*)"os.path");
-	PyObject* osModule = PyImport_Import(osModuleString);
-	PyObject* pathJoinFunction = PyObject_GetAttrString(osModule,(char*)"join");
 
 	/* Fill all the nfsdb entries in the database */
 	for (ssize_t i=0; i<PyList_Size(nfsdbJSON); ++i) {
@@ -970,7 +972,9 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 		}
 	}
 
-	FILE* out = fopen(PyString_get_c_str(dbfn), "w");
+	FILE* out;
+flatten_start:
+	out = fopen(PyString_get_c_str(dbfn), "w");
 	if (!out) {
 		printf("Couldn't create flatten image file: %s\n",PyString_get_c_str(dbfn));
 		Py_RETURN_FALSE;

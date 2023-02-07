@@ -446,7 +446,8 @@ class CASDatabase:
                 print("Before load")
                 print_mem_usage()
             json_db = json.load(fil)
-            json_db[0]["r"]["p"] = 0 # fix parent process
+            if len(json_db)>0:
+                json_db[0]["r"]["p"] = 0 # fix parent process
             if debug:
                 print("After load/ before create_nfsdb")
                 print_mem_usage()
