@@ -188,7 +188,7 @@ struct syscall_raw {
         : sysname(sn), pid(pid), pv(-1), i0(i0), i1(i1), ul(ul), start_time(st) {
     }
     syscall_raw(upid_t pid, enum sysname sn, upid_t pv, unsigned long ul, uint64_t st)
-        : sysname(sn), pid(pid), pv(pv), i0(-1), i1(-1), ul(0), start_time(st) {
+        : sysname(sn), pid(pid), pv(pv), i0(-1), i1(-1), ul(ul), start_time(st) {
     }
     syscall_raw(upid_t pid, enum sysname sn, uint64_t st)
         : sysname(sn), pid(pid), pv(-1), i0(-1), i1(-1), ul(0), start_time(st) {
