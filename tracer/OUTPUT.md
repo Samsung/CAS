@@ -320,11 +320,18 @@ LinkTo|fnamesize=nn
 
 OR (2):
 
+LinkatFrom|fnamesize=nn,flags=nn
+<data_event:LF>
+LinkTo|fnamesize=nn
+<data_event:LT>
+
+OR (3):
+
 LinkFrom|fnamesize=nn
 <data_event:LF>
 LinkFailed|
 
-OR (3):
+OR (4):
 
 LinkFailed|
 
@@ -341,7 +348,7 @@ Arguments:
 |---|---|
 | fnamesize (LinkFrom) | the length of the source file path (LF) |
 | fnamesize (LinkTo) | the length of the destination file path (LT) |
-| flags | user-provided flags passed to the syscall |
+| flags (LinkatFrom) | user-provided flags passed to the syscall |
 
 Data events:
 
@@ -350,7 +357,7 @@ Data events:
 | LF | Absolute path to source file |
 | LT | Absolute path to destination file |
 
-Forms (2) and (3) are used when the syscall fails.
+Forms (3) and (4) are used when the syscall fails.
 
 -----
 #### symlink, symlinkat
