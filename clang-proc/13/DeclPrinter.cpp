@@ -199,6 +199,8 @@ void Decl::printGroup(Decl** Begin, unsigned NumDecls,
                       raw_ostream &Out, const PrintingPolicy &Policy,
                       unsigned Indentation) {
   if (NumDecls == 1) {
+    if (isa<TagDecl>(*Begin) && !cast<TagDecl>(*Begin)->isFreeStanding())
+      return;
     (*Begin)->print(Out, Policy, Indentation);
     return;
   }
