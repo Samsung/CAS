@@ -1866,7 +1866,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  // locations
 		  std::string expansions;
 		  llvm::raw_string_ostream exp_os(expansions);
-		  if(_opts.save_expansions){
+		  if(_opts.save_expansions && !D->getLocation().isMacroID()){
 			auto BRange = SM.getExpansionRange(body->getSourceRange());
 			auto ExpRanges = Macros.getExpansionRanges();
 			bool first_exp = true;
