@@ -335,6 +335,12 @@ OR (4):
 
 LinkFailed|
 
+OR (5):
+
+LinkatFrom|fnamesize=nn,flags=nn
+<data_event:LF>
+LinkFailed|
+
 e.g.:
 
 LinkFrom|fnamesize=15
@@ -357,7 +363,7 @@ Data events:
 | LF | Absolute path to source file |
 | LT | Absolute path to destination file |
 
-Forms (3) and (4) are used when the syscall fails.
+Forms (3), (4) and (5) are used when the syscall fails.
 
 -----
 #### symlink, symlinkat
