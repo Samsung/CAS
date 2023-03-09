@@ -117,6 +117,17 @@ for i in `seq 0 $NPROC`; do
 done
 
 # -------- stop event listener
+if [ -f "${WORK_DIR}/.nfsdb" ]; then
+    PREV_LINE=`tail -n 1 ${WORK_DIR}/.nfsdb`
+    sleep 2
+    CURR_LINE=`tail -n 1 ${WORK_DIR}/.nfsdb`
+    while [ "${PREV_LINE}" != "${CURR_LINE}" ]; do
+        PREV_LINE=${CURR_LINE}
+        sleep 2
+        CURR_LINE=`tail -n 1 ${WORK_DIR}/.nfsdb`
+    done
+fi
+
 kill -SIGINT "${LISTENER_PID}"
 
 # -------- stop kernel logger
