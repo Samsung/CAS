@@ -283,8 +283,45 @@ int parser_main(int argc, char **argv) {
         printf("\n");
         return 2;
     }
-
     long procs_at_exit = 0;
+
+    for (auto it = flush_cache.begin(); it != flush_cache.end(); ) {
+        struct eventlist_node *evnode = (*it).evnode;
+        qsort(evnode->event_list->a, VEC_SIZE(*evnode->event_list), sizeof(eventTuple_t *),
+            [](const void *a, const void *b) -> int {
+                eventTuple_t *lhs = *((eventTuple_t **)a);
+                eventTuple_t *rhs = *((eventTuple_t **)b);
+
+                if (lhs->timen < rhs->timen)
+                    return -1;
+                else if (lhs->timen > rhs->timen)
+                    return 1;
+                else
+                    return 0;
+        });
+        eventTuple_t *start = VEC_ACCESS(*evnode->event_list, 0);
+        eventTuple_t *last = VEC_ACCESS(*evnode->event_list, VEC_SIZE(*evnode->event_list) - 1);
+        uint64_t start_time = (uint64_t)start->timen;
+        uint64_t end_time = (uint64_t)last->timen;
+        long evcount;
+        if ((evcount =
+                    parse_write_process_events(evnode->pid, evnode->event_list, &context, start_time, end_time)) < 0) {
+            fprintf(stderr, "ERROR: Failed to parse process events for (" GENERIC_ARG_PID_FMT ")\n", evnode->pid);
+            return EXIT_FAILURE;
+        }
+        it = flush_cache.erase(it);
+        event_map.erase(evnode->pid);
+        for (unsigned long vi = 0; vi < VEC_SIZE(*evnode->event_list); ++vi) {
+            eventTuple_t *evt = VEC_ACCESS(*evnode->event_list, vi);
+            free((void *)evt->event_line);
+            free((void *)evt);
+        }
+        VEC_DESTROY(*evnode->event_list);
+        free((void *)evnode->event_list);
+        free((void *) evnode);
+        procs_at_exit++;
+    }
+
     for (auto it = event_map.cbegin(); it != event_map.cend();) {
         struct eventlist_node *evnode = (struct eventlist_node *)it->second;
         qsort(evnode->event_list->a, VEC_SIZE(*evnode->event_list), sizeof(eventTuple_t *),
