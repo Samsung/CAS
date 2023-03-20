@@ -1,5 +1,13 @@
+#ifndef FTDB_COMPAT_H
+#define FTDB_COMPAT_H
 #include "clang/AST/Expr.h"
 #include "clang/Basic/SourceManager.h"
+
+#if CLANG_VERSION==11
+#include "clang/Basic/FileManager.h"
+#elif CLANG_VERSION>=12
+#include "clang/Basic/FileEntry.h"
+#endif
 
 using namespace clang;
 
@@ -30,3 +38,5 @@ namespace compatibility{
 #endif
   }
 }
+
+#endif //FTDB_COMPAT_H

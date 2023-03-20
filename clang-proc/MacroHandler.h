@@ -1,5 +1,6 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PPCallbacks.h"
+#include "compat.h"
 
 #include <set>
 using namespace clang;
