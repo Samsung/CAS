@@ -53,7 +53,7 @@ class Postprocess(Module):
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
         g = module_parser.add_argument_group("Postprocess arguments")
         g.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
-        g.add_argument('--allow-pp-in-compilations', '--ap', type=str, default=None, help='')
+        g.add_argument('--allow-pp-in-compilations', '-ap', action="store_true", default=False, help="Compute compiler matches with '-E' as compilations")
         g.add_argument('--no-auto-detect-icc', '-na', action='store_true', default=False)
         g.add_argument('--debug-compilations', action='store_true', default=False)
         g.add_argument('--max-chunk-size', type=int, default=sys.maxsize, help='')
