@@ -189,9 +189,9 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
                 writeDebugJSON(mJDB,ufn)
             mJDB = merge_json_ast(mJDB,jdb,quiet,debug,verbose,file_logs,test,None,n,exit_on_error)
         except Exception as e:
-            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid,jdb["sources"][0].keys()[0], n, e))
+            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid, list(jdb["sources"][0].keys())[0], n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid,jdb["sources"][0].keys()[0], n, e))
+                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid, list(jdb["sources"][0].keys())[0], n, e))
                 ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
@@ -303,9 +303,9 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
             mJDB = merge_json_ast(mJDB,jdb,quiet,debug,verbose,file_logs,test,None,n,exit_on_error)
             #log_q.put("%s:Merged database\n"%(datetime.now()-task_time))
         except Exception as e:
-            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid,jdb["sources"][0].keys()[0], n, e))
+            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid, list(jdb["sources"][0].keys())[0], n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid,jdb["sources"][0].keys()[0], n, e))
+                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid, list(jdb["sources"][0].keys())[0], n, e))
                 ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
@@ -371,7 +371,7 @@ def merge_fops_db(fdba,fdbb,quiet=False,debug=False,test=False):
             return None
         membern = sum([len(x["members"]) for x in fdbb["vars"]])
         if not quiet:
-            print("Base file: [{}], vars: {}, members: {}".format(fdbb["sources"][0].keys()[0],fdbb["varn"],membern))
+            print("Base file: [{}], vars: {}, members: {}".format(list(fdbb["sources"][0].keys())[0],fdbb["varn"],membern))
         fdbb["membern"] = membern
         return fdbb
 
@@ -382,13 +382,13 @@ def merge_fops_db(fdba,fdbb,quiet=False,debug=False,test=False):
     membern = sum([len(x["members"]) for x in fdbb["vars"]])
     fdba["sourcen"] = fdba["sourcen"]+1
     fdba["membern"] = fdba["membern"]+membern
-    new_file_id = fdba["sources"][-1].values()[0]+1
-    fdba["sources"] = fdba["sources"]+[{fdbb["sources"][0].keys()[0]:new_file_id}]
+    new_file_id = list(fdba["sources"][-1].values())[0]+1
+    fdba["sources"] = fdba["sources"]+[{list(fdbb["sources"][0].keys())[0]:new_file_id}]
     fdba["vars"]+=fdbb["vars"]
     fdba["varn"] = len(fdba["vars"])
 
     if not quiet:
-        print("New variables: {}, new members: {} [{}], sources: {}, vars: {}, members: {}".format(fdbb["varn"],membern,fdbb["sources"][0].keys()[0],fdba["sourcen"],fdba["varn"],fdba["membern"]))
+        print("New variables: {}, new members: {} [{}], sources: {}, vars: {}, members: {}".format(fdbb["varn"],membern,list(fdbb["sources"][0].keys())[0],fdba["sourcen"],fdba["varn"],fdba["membern"]))
 
     return fdba
 
@@ -453,7 +453,7 @@ def make_ordered_jdb(jdb):
     return collections.OrderedDict(serialized_jdb)
 
 
-def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> int:
+def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -646,20 +646,20 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
             job_list.append(p)
             pipe_list.append(recv_conn)
             p.start()
-        
+
         rv = 0
         for x in pipe_list:
             r = x.recv()
             job_list[ r[0] ].join()
             fopsdbs,erv = r[1]
             rv+=erv
-            
+
             if len(fopsdbs)>0:
                 for fdb in fopsdbs.values():
                     try:
                         FDB = merge_fops_db(FDB,fdb,args.quiet,args.debug,args.test)
                     except Exception as e:
-                        print("Failed to merge ({})".format(fdb["sources"][0].keys()[0]))
+                        print("Failed to merge ({})".format(list(fdb["sources"][0].keys())[0]))
                         print(e)
                         traceback.print_exc()
                         rv+=1
@@ -676,7 +676,7 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
             fops_output = "fops.json"
         
         if phase=="fops" or args.save_intermediates:
-            with open(fops_output,"w") as f:
+            with open(fops_output, "w") as f:
                 f.write(json.dumps(FDB,indent=4))
             print("Done. Written {} [{:.2f}MB]".format(fops_output,float(os.stat(fops_output).st_size)/1048576))
             fops_database = fops_output
@@ -687,10 +687,10 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
     if phase!="db" and phase is not None:
         return 0
 
-    
+
     module_info_string = ""
     if args.compilation_dependency_map and len(cdm)>1:
-        module_info_string = " ({len(cdm)} modules)"
+        module_info_string = f" ({len(cdm)} modules)"
         assert os.environ["__CREATE_JSON_DB_MULTIPLE_MODULE_OPTION__"] == "true"
 
     print("Creating JSON database from {} sources {}...".format(len(fns),module_info_string))
@@ -948,9 +948,9 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
         print("Missing FOPS function ids: {}".format(len(missing_ids)))
         print("Number of FOPS functions: {}".format(len(fids)))
         print("Number of FOPS function declarations: {}".format(len(fdids)))
-    
+
     JDB["fops"] = FDB
-    
+
     if not args.quiet and JDB is not None:
         print("sources: {}, functions: {}, f. declarations: {}, unresolved functions: {}, types: {}, merging errors: %d".format(JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs+rv))
 
@@ -960,8 +960,8 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
             suppress_progress = True
         print("Adding module/source mapping information for {} modules and {} functions...".format(len(cdm.keys()),len(JDB["funcs"])))
         JDB["modules"] = [{m:i} for i,m in enumerate(cdm.keys())]
-        mMap = { mp.keys()[0]:mp.values()[0] for mp in JDB["modules"] }
-        srcMap = { mp.values()[0]:mp.keys()[0] for mp in JDB["sources"] }
+        mMap = { list(mp.keys())[0]:list(mp.values())[0] for mp in JDB["modules"] }
+        srcMap = { list(mp.values())[0]:list(mp.keys())[0] for mp in JDB["sources"] }
         if not suppress_progress:
             sys.stdout.write("0%")
             sys.stdout.flush()
@@ -1029,9 +1029,9 @@ def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> 
     JDB["release"] = args.sw_version if args.sw_version else ""
     JDB["module"] = args.module_info if args.module_info else ""
     # Remap sources and modules arrays for better search in AoT
-    JDB["source_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["sources"]]
+    JDB["source_info"] = [{"name":list(srcD.keys())[0],"id":list(srcD.values())[0]} for srcD in JDB["sources"]]
     if "modules" in JDB:
-        JDB["module_info"] = [{"name":srcD.keys()[0],"id":srcD.values()[0]} for srcD in JDB["modules"]]
+        JDB["module_info"] = [{"name":list(srcD.keys())[0],"id":list(srcD.values())[0]} for srcD in JDB["modules"]]
     # Now save the final JSON
     with open(output,"w") as f:
         f.write(json.dumps(JDB,indent=4))

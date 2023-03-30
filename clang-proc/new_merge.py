@@ -254,8 +254,8 @@ def merge_json_ast(db1, db2,
             funcid_remap[fdecl["id"]] = fdeclmap[dh]["id"]
             # update refcount
             fdeclmap[dh]["refcount"] += 1
-    
-    
+
+
     # funcs
     # add new funcs
     # replace decl defined by this func
@@ -379,8 +379,8 @@ def merge_json_ast(db1, db2,
     db1["funcdecls"].extend([db2["funcdecls"][i] for i in added_fdecls])
     db1["unresolvedfuncs"].extend([db2["unresolvedfuncs"][i] for i in added_ufuncs])
 
-    db1["sources"].extend([{s.keys()[0]:s.values()[0]+next_file_id} for s in db2["sources"]])
-    
+    db1["sources"].extend([{list(s.keys())[0]:list(s.values())[0]+next_file_id} for s in db2["sources"]])
+
     # Update sizes
     db1["typen"] = len(db1["types"])
     db1["globaln"] = len(db1["globals"])
