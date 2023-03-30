@@ -3,63 +3,57 @@ import sys
 import subprocess
 import multiprocessing
 import json
-import numpy
 import argparse
 import traceback
 import re
 import collections
 import time
-import copy
-import tempfile
 import shutil
-import concurrent.futures
-import threading
 import itertools
 import new_merge
 from datetime import datetime
-from Queue import Empty, Full
+from queue import Empty, Full
 __version_string__ = "0.90"
 
 # external use
 def mkunique_compile_commands(dbpath,debug=False,dry_run=False,ignoreDirPathEntries=set()):
 
-  with open(dbpath,"r") as f:
-    db = json.loads(f.read())
+    with open(dbpath, "r") as f:
+        db = json.loads(f.read())
 
-  fns = dict()
-  duplicates = dict()
-  for i,u in enumerate(db):
-      dirPathEntries = set(u["directory"].split(os.sep))
-      if len(dirPathEntries&ignoreDirPathEntries)>0:
-          continue
-      if u["file"] in fns:
-          duplicates[i] = fns[u["file"]]
-      else:
-          fns[u["file"]] = i
+    fns = dict()
+    duplicates = dict()
+    for i, u in enumerate(db):
+        dirPathEntries = set(u["directory"].split(os.sep))
+        if len(dirPathEntries & ignoreDirPathEntries) > 0:
+            continue
+        if u["file"] in fns:
+            duplicates[i] = fns[u["file"]]
+        else:
+            fns[u["file"]] = i
 
-  ndb = list()
-  for i,u in enumerate(db):
-      dirPathEntries = set(u["directory"].split(os.sep))
-      if len(dirPathEntries&ignoreDirPathEntries)>0:
-          continue
-      if i in duplicates:
-          if debug:
-              print "# Duplicated compilation of %s:\n%s\nOriginal: \n%s\n"%(u["file"],json.dumps(u,indent=4, separators=(',', ': ') ),
-                  json.dumps(db[duplicates[i]],indent=4, separators=(',', ': ') ))
-          print "Found duplicated compilation of %s"%(u["file"])
+    ndb = list()
+    for i, u in enumerate(db):
+        dirPathEntries = set(u["directory"].split(os.sep))
+        if len(dirPathEntries & ignoreDirPathEntries) > 0:
+            continue
+        if i in duplicates:
+            if debug:
+                print("# Duplicated compilation of {}:\n{}\nOriginal: \n{}\n".format(u["file"],json.dumps(u,indent=4, separators=(',', ': ')),json.dumps(db[duplicates[i]],indent=4, separators=(',', ': ') )))
+            print(f"Found duplicated compilation of {u['file']}")
 
-      else:
-          ndb.append(u)
+        else:
+            ndb.append(u)
 
-  if dry_run:
-      return 0
+    if dry_run:
+        return 0
 
-  os.rename(dbpath,dbpath+".bak")
+    os.rename(dbpath, dbpath+".bak")
 
-  with open(dbpath,"w") as f:
-      f.write(json.dumps(ndb,indent=4, separators=(',', ': ')))
+    with open(dbpath,"w") as f:
+        f.write(json.dumps(ndb,indent=4, separators=(',', ': ')))
 
-  return 0
+    return 0
 
 def make_unique_compile_commands(cdbfile):
 
@@ -77,9 +71,9 @@ def make_unique_compile_commands(cdbfile):
     debug = None
     for i,u in enumerate(duplicates):
         if debug:
-            print "# Duplicated compilation of %s:\n%s\nOriginal: \n%s\n"%(db[u[0]]["file"],json.dumps(db[u[0]],indent=4, separators=(',', ': ') ),
-                json.dumps(db[u[1]],indent=4, separators=(',', ': ') ))
-        print "Found duplicated compilation of %s"%(db[u[0]]["file"])
+            print("# Duplicated compilation of {}:\n{}\nOriginal: \n{}\n".format(db[u[0]]["file"], json.dumps(db[u[0]], indent=4, separators=(',', ': ')),
+                                                                                 json.dumps(db[u[1]], indent=4, separators=(',', ': '))))
+        print("Found duplicated compilation of {}".format(db[u[0]]["file"]))
         del db[u[0]-i]
 
     os.rename(cdbfile,cdbfile+".bak")
@@ -92,7 +86,7 @@ def writeDebugJSON(jdb,logf="/tmp/log"):
         f.write(json.dumps(jdb, indent=4, sort_keys=False))
 
 def debug_print(s,fd):
-    rv = fd.write("%s\n"%s)
+    rv = fd.write(f"{s}\n")
     fd.flush()
     return rv
 
@@ -105,22 +99,22 @@ def get_fdb_executor(p,fnst,start_offset,compdbf,procbin,fops_string,debug,conn,
         cwd = fnt[1]
         cmd = [procbin,"-p",compdbf,"-f","%s"%(fn),"-R",fops_string]
         if debug:
-            print "RUNNING: %s"%(" ".join(cmd).replace("(","\\(").replace(")","\\)"))
+            print("RUNNING: {}".format(" ".join(cmd).replace("(","\\(").replace(")","\\)")))
         proc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=cwd)
         out, err = proc.communicate()
         rv+=1 if proc.returncode!=0 else 0
         try:
             DB[fn] = json.loads(out)
         except Exception as e:
-            print "Failed to process (%s)"%(fn)
-            print e
-            print "----------------------------------------"
-            print out
-            print "----------------------------------------"
+            print(f"Failed to process ({fn})")
+            print(e)
+            print("----------------------------------------")
+            print(out)
+            print("----------------------------------------")
             traceback.print_exc()
             rv+=1
         if not quiet:
-            sys.stdout.write("\r%d%%"%(int(float(i+1)*100/len(fnst))))
+            sys.stdout.write("\r{}%".format(int(float(i+1)*100/len(fnst))))
             sys.stdout.flush()
     conn.send((p,(DB,rv)))
 
@@ -128,7 +122,7 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
 
     tid = ""
     if debug:
-        tid = "[Thread %d] "%(n)
+        tid = f"[Thread {n}] "
     if file_logs:
         debug_fd = open(file_logs,"a")
     else:
@@ -141,15 +135,15 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
             cwd = fnt[1]
             args = command+["%s"%(fn)]
             if debug:
-                debug_print("%sRUNNING: %s"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")),debug_fd)
+                debug_print("{}RUNNING: {}".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")),debug_fd)
             proc = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=cwd)
             out, err = proc.communicate()
             rv+=1 if proc.returncode!=0 else 0
         except Exception as e:
-            print ("%sERROR - Failed to run (%s) - [%d] - [msg: %s]" % (tid," ".join(args), n, e))
+            print("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]".format(tid," ".join(args), n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to run (%s) - [%d] - [msg: %s]\n" % (tid," ".join(args), n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]\n".format(tid," ".join(args), n, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             rv+=1
@@ -160,7 +154,7 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
             if udir:
                 ufn = os.path.join(udir,os.path.basename(fn)+".json")
                 if os.path.exists(ufn):
-                    ufns = sorted([x for x in os.listdir(udir) if re.match(os.path.splitext(os.path.basename(fn))[0]+"(_\d+)?\..*\.json",x)])
+                    ufns = sorted([x for x in os.listdir(udir) if re.match(os.path.splitext(os.path.basename(fn))[0]+"(_\d+)?\..*\.json",x)]) # check re.match
                     basefn = os.path.splitext(ufns[-1][:-5])
                     if len(ufns)>1:
                         ufn = os.path.join(udir,"_".join(basefn[0].split("_")[:-1])+"_"+str(int(basefn[0].split("_")[-1])+1)+basefn[1]+".json")
@@ -168,14 +162,14 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
                         ufn = os.path.join(udir,basefn[0]+"_1"+basefn[1]+".json")
                 writeDebugJSON(jdb,ufn)
         except Exception as e:
-            print ("%sERROR - Failed to process (%s) - [%d] - [msg: %s]" % (tid,fn, n, e))
-            print ("  %s@RUNNING: %s\n"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
+            print("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]".format(tid,fn, n, e))
+            print("  {}@RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to process (%s) - [%d] - [msg: %s]\n" % (tid,fn, n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
-                ferr.write("OUT: {%s}\n"%(out))
-                ferr.write("ERR: {%s}\n"%(err))
-                ferr.write("%sRUNNING: %s\n"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
+                ferr.write("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]\n".format(tid,fn, n, e))
+                ferr.write("-------------------- {}\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("OUT: {}\n".format(out))
+                ferr.write("ERR: {}\n".format(err))
+                ferr.write("{}RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             if verbose:
@@ -189,16 +183,16 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
             continue
         try:
             if udir:
-                if os.path.exists(os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i-1))):
-                    os.remove(os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i-1)))
-                ufn = os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i))
+                if os.path.exists(os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i-1))):
+                    os.remove(os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i-1)))
+                ufn = os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i))
                 writeDebugJSON(mJDB,ufn)
             mJDB = merge_json_ast(mJDB,jdb,quiet,debug,verbose,file_logs,test,None,n,exit_on_error)
         except Exception as e:
-            print ("%sERROR - Failed to merge (%s) [%d] - [msg: %s]" % (tid,jdb["sources"][0].keys()[0], n, e))
+            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid,jdb["sources"][0].keys()[0], n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to merge (%s) [%d] - [msg: %s]\n" % (tid,jdb["sources"][0].keys()[0], n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid,jdb["sources"][0].keys()[0], n, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             if verbose:
@@ -210,7 +204,7 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
         if not quiet:
             progress = int(float(i+1)*100/len(fnst))
             if progress % 5 == 0:
-                print("#### Thread #%d: %d%%" % (n, progress))
+                print("#### Thread #{}: {}%".format(n, progress))
     if file_logs:
         debug_fd.close()
 
@@ -222,7 +216,7 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
     #log_q.put("%s:Started thread\n"%(thread_time.strftime("%H:%M:%S.%f")))
     tid = ""
     if debug:
-        tid = "[Thread %d] "%(n)
+        tid = f"[Thread {n}] "
     if file_logs:
         debug_fd = open(file_logs,"a")
     else:
@@ -245,9 +239,9 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
             fn = fnt[0]
             cwd = fnt[1]
             total = fnt[2]
-            args=command+["%s"%(fn)]
+            args=command+[f"{fn}"]
             if debug:
-                debug_print("%sRUNNING: %s"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")),debug_fd)
+                debug_print("{}RUNNING: {}".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")),debug_fd)
             proc = subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=cwd)
             out, err = proc.communicate()
             #log_q.put("%s:Obtained database\n"%(datetime.now()-task_time))
@@ -258,10 +252,10 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
             else:
                 continue
         except Exception as e:
-            print ("%sERROR - Failed to run (%s) - [%d] - [msg: %s]" % (tid," ".join(args), n, e))
+            print ("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]".format(tid," ".join(args), n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to run (%s) - [%d] - [msg: %s]\n" % (tid," ".join(args), n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]\n".format(tid," ".join(args), n, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             rv+=1
@@ -281,14 +275,14 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
                         ufn = os.path.join(udir,basefn[0]+"_1"+basefn[1]+".json")
                 writeDebugJSON(jdb,ufn)
         except Exception as e:
-            print ("%sERROR - Failed to process (%s) - [%d] - [msg: %s]" % (tid,fn, n, e))
-            print ("  %s@RUNNING: %s\n"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
+            print("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]".format(tid,fn, n, e))
+            print("  {}@RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to process (%s) - [%d] - [msg: %s]\n" % (tid,fn, n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
-                ferr.write("OUT: {%s}\n"%(out))
-                ferr.write("ERR: {%s}\n"%(err))
-                ferr.write("%sRUNNING: %s\n"%(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
+                ferr.write("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]\n".format(tid,fn, n, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("OUT: {}\n".format(out))
+                ferr.write("ERR: {}\n".format(err))
+                ferr.write("{}RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             if verbose:
@@ -302,17 +296,17 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
             continue
         try:
             if udir:
-                if os.path.exists(os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i-1))):
-                    os.remove(os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i-1)))
-                ufn = os.path.join(udir,"__thread_%d_iter_%d_jdba.json"%(n,i))
+                if os.path.exists(os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i-1))):
+                    os.remove(os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i-1)))
+                ufn = os.path.join(udir,"__thread_{}_iter_{}_jdba.json".format(n,i))
                 writeDebugJSON(mJDB,ufn)
             mJDB = merge_json_ast(mJDB,jdb,quiet,debug,verbose,file_logs,test,None,n,exit_on_error)
             #log_q.put("%s:Merged database\n"%(datetime.now()-task_time))
         except Exception as e:
-            print ("%sERROR - Failed to merge (%s) [%d] - [msg: %s]" % (tid,jdb["sources"][0].keys()[0], n, e))
+            print("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]".format(tid,jdb["sources"][0].keys()[0], n, e))
             with open(output_err,"a") as ferr:
-                ferr.write("%sERROR - Failed to merge (%s) [%d] - [msg: %s]\n" % (tid,jdb["sources"][0].keys()[0], n, e))
-                ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("{}ERROR - Failed to merge ({}) [{}] - [msg: {}]\n".format(tid,jdb["sources"][0].keys()[0], n, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write(traceback.format_exc()+"\n")
                 ferr.write("--------------------\n\n")
             if verbose:
@@ -323,7 +317,7 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
         if exit_on_error and rv>0: break
         if not quiet:
             if (total+1) % 100 == 0:
-                print >>sys.stderr, "Processed %d files"%(total+1)
+                print("Processed {} files".format(total+1), file=sys.stderr)
         #log_q.put("%s:Finished task %s\n"%(datetime.now()-task_time,fnt[0]))
     if file_logs:
         debug_fd.close()
@@ -344,7 +338,7 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
             #log_q.put("%s:Received chunk %d\n"%(datetime.now()-task_time,chunk))
             mJDB = merge_json_ast(mJDB,jdb,quiet,debug,verbose,file_logs,test,None,n,exit_on_error)
             #log_q.put("%s:Merged chunk %d\n"%(datetime.now()-task_time,chunk))
-            print >>sys.stderr, "Thread #%d merged chunk #%d"%(n,chunk)
+            print("Thread #{} merged chunk #{}".format(n,chunk))
             this_task.extend(read_task)
             continue
         except Empty:
@@ -359,10 +353,10 @@ def get_cdb_executor_fast_merge(n,task_q,command,conn,quiet,debug,test,verbose,u
                 continue
             sync_q.put_nowait(this_task)
             #log_q.put("%s:Send chunk %d\n"%(task_time.strftime("%H:%M:%S.%f"),n))
-            print >>sys.stderr, "Thread #%d send chunk"%(n)
+            print(f"Thread #{n} send chunk", file=sys.stderr)
             send_conn.send(mJDB)
             #log_q.put("%s:Sent chunk %d\n"%(datetime.now()-task_time,n))
-            print >>sys.stderr, "Thread #%d sent chunk"%(n)
+            print(f"Thread #{n} sent chunk", file=sys.stderr)
             send_conn.close()
             #log_q.put("%s:Finished second phase\n"%(datetime.now()-second_time))
             #log_q.put("%s:Finished thread\n"%(datetime.now()-thread_time))
@@ -377,7 +371,7 @@ def merge_fops_db(fdba,fdbb,quiet=False,debug=False,test=False):
             return None
         membern = sum([len(x["members"]) for x in fdbb["vars"]])
         if not quiet:
-            print "Base file: [%s], vars: %d, members: %d"%(fdbb["sources"][0].keys()[0],fdbb["varn"],membern)
+            print("Base file: [{}], vars: {}, members: {}".format(fdbb["sources"][0].keys()[0],fdbb["varn"],membern))
         fdbb["membern"] = membern
         return fdbb
 
@@ -394,7 +388,7 @@ def merge_fops_db(fdba,fdbb,quiet=False,debug=False,test=False):
     fdba["varn"] = len(fdba["vars"])
 
     if not quiet:
-        print "New variables: %d, new members: %d [%s], sources: %d, vars: %d, members: %d"%(fdbb["varn"],membern,fdbb["sources"][0].keys()[0],fdba["sourcen"],fdba["varn"],fdba["membern"])
+        print("New variables: {}, new members: {} [{}], sources: {}, vars: {}, members: {}".format(fdbb["varn"],membern,fdbb["sources"][0].keys()[0],fdba["sourcen"],fdba["varn"],fdba["membern"]))
 
     return fdba
 
@@ -427,12 +421,12 @@ def merge_multiple_json_ast(databases, quiet=False,debug=False,verbose=False,fil
             data = next_step_databases
         except Exception as ex:
             retries += 1
-            print ex
+            print(ex)
             if retries < 5:
-                print "Merging failed %d times. Retrying."%(retries)
+                print("Merging failed %d times. Retrying."%(retries))
                 continue
             else:
-                print "Merging failed %d times. The program will be aborted."%(retries)
+                print("Merging failed %d times. The program will be aborted."%(retries))
                 return None
     return data[0]
 
@@ -451,7 +445,7 @@ def merge_json_ast(jdba,jdbb,quiet=False,debug=False,verbose=False,file_logs=Non
 
 def make_ordered_jdb(jdb):
     serialized_jdb = list()
-    for k,v in jdb.iteritems():
+    for k,v in jdb.items():
         if k=="funcs" or k=="types":
             serialized_jdb.append((k,sorted(v,key = lambda x: x["id"])))
         else:
@@ -459,12 +453,12 @@ def make_ordered_jdb(jdb):
     return collections.OrderedDict(serialized_jdb)
 
 
-def create_json_db_main(args,allowed_phases):
-    
-    script_dir = os.path.dirname(os.path.abspath( __file__ ))
+def create_json_db_main(args: argparse.ArgumentParser, allowed_phases: dict) -> int:
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
     if not os.path.isabs(args.proc_binary):
-        print ("Please provide full path to the clang processor binary (not %s)"%(args.proc_binary))
+        print("Please provide full path to the clang processor binary (not {})".format(args.proc_binary))
         return 1
 
     if not args.field_usage:
@@ -534,7 +528,7 @@ def create_json_db_main(args,allowed_phases):
                 cdbd[fn] = u["directory"].encode("ascii")
 
     for u in duplicates:
-        print "Ignoring duplicated compilation of %s"%(u[1])
+        print("Ignoring duplicated compilation of {}".format(u[1]))
     
     if args.unique_cdb:
         make_unique_compile_commands(compdbf)
@@ -551,7 +545,7 @@ def create_json_db_main(args,allowed_phases):
     if len(fns)<=0:
         with open(output,"w") as f:
             f.write(json.dumps({}))
-        print "Created empty JSON database"
+        print("Created empty JSON database")
         return 0
 
     fns = [(x,cdbd[x],i) for i, x in enumerate(fns)]
@@ -561,7 +555,7 @@ def create_json_db_main(args,allowed_phases):
         with open(args.compilation_dependency_map,"rb") as f:
             cdm = json.loads(f.read())
         rcdm = {}
-        for m,srcLst in cdm.iteritems():
+        for m,srcLst in cdm.items():
             for src in srcLst:
                 if src in rcdm:
                     rcdm[src].append(m)
@@ -601,9 +595,9 @@ def create_json_db_main(args,allowed_phases):
     if args.macro_replacement:
         with open(args.macro_replacement,"rb") as f:
             MR = json.loads(f.read())
-            for k,v in MR.iteritems():
+            for k,v in MR.items():
                 command.append("-M")
-                command.append("%s:%s"%(k,v))
+                command.append(f"{k}:{v}")
     ME = list()
     if args.macro_expansion:
         command.append("-X")
@@ -614,12 +608,12 @@ def create_json_db_main(args,allowed_phases):
             addDefs = json.loads(f.read())
             for df in addDefs:
                 command.append("-D")
-                command.append("%s"%(df))
+                command.append(f"{df}")
     
     if args.additional_include_paths:
         for ipath in args.additional_include_paths:
             command.append("-A")
-            command.append("%s"%(ipath))
+            command.append(f"{ipath}")
 
     command+=["-c","-t","-L","-p",compdbf]
 
@@ -634,7 +628,7 @@ def create_json_db_main(args,allowed_phases):
 
     if phase=="fops" or phase is None:
 
-        print "Creating fops database from %d sources..."%(len(fns))
+        print(f"Creating fops database from {len(fns)} sources...")
 
         if args.fops_record:
             fops_string = ":".join(args.fops_record)
@@ -644,7 +638,7 @@ def create_json_db_main(args,allowed_phases):
         m = float(len(fns))/jobs
         job_list = []
         pipe_list = []
-        for i in xrange(jobs):
+        for i in range(jobs):
             x = fns[int(m*i):int(m*(i+1))]
             recv_conn, send_conn = multiprocessing.Pipe(False)
             dr = os.path.dirname(compdbf)
@@ -665,16 +659,16 @@ def create_json_db_main(args,allowed_phases):
                     try:
                         FDB = merge_fops_db(FDB,fdb,args.quiet,args.debug,args.test)
                     except Exception as e:
-                        print "Failed to merge (%s)"%(fdb["sources"][0].keys()[0])
-                        print e
+                        print("Failed to merge ({})".format(fdb["sources"][0].keys()[0]))
+                        print(e)
                         traceback.print_exc()
                         rv+=1
             else:
                 pass
 
-        print
+        print()
         if not args.quiet and FDB is not None:
-            print "sources: %d, vars: %d, members: %d"%(FDB["sourcen"],FDB["varn"],FDB["membern"])
+            print("sources: {}, vars: {}, members: {}".format(FDB["sourcen"],FDB["varn"],FDB["membern"]))
 
         if phase=="fops":
             fops_output = output
@@ -684,7 +678,7 @@ def create_json_db_main(args,allowed_phases):
         if phase=="fops" or args.save_intermediates:
             with open(fops_output,"w") as f:
                 f.write(json.dumps(FDB,indent=4))
-            print "Done. Written %s [%.2fMB]"%(fops_output,float(os.stat(fops_output).st_size)/1048576)
+            print("Done. Written {} [{:.2f}MB]".format(fops_output,float(os.stat(fops_output).st_size)/1048576))
             fops_database = fops_output
 
         if phase=="fops":
@@ -696,10 +690,10 @@ def create_json_db_main(args,allowed_phases):
     
     module_info_string = ""
     if args.compilation_dependency_map and len(cdm)>1:
-        module_info_string = " (%d modules)"%(len(cdm))
+        module_info_string = " ({len(cdm)} modules)"
         assert os.environ["__CREATE_JSON_DB_MULTIPLE_MODULE_OPTION__"] == "true"
 
-    print "Creating JSON database from %d sources%s..."%(len(fns),module_info_string)
+    print("Creating JSON database from {} sources {}...".format(len(fns),module_info_string))
 
     if FDB is None:
         if fops_database:
@@ -718,7 +712,7 @@ def create_json_db_main(args,allowed_phases):
                 os.makedirs(args.unmerged_temp)
                 udir = args.unmerged_temp
             except Exception as e:
-                print "Failed to create director for unmerged temporary files (%s) Ignoring..."%(args.unmerged_temp)
+                print("Failed to create director for unmerged temporary files ({}) Ignoring...".format(args.unmerged_temp))
         else:
             udir = args.unmerged_temp
 
@@ -730,7 +724,7 @@ def create_json_db_main(args,allowed_phases):
     mrrs = 0
     if args.only_merge:
         if os.path.exists(args.only_merge):
-            chunk_list = sorted([os.path.join(args.only_merge,x) for x in os.listdir(args.only_merge) if re.match("chunk_\d+\.json",x)],key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1]))
+            chunk_list = sorted([os.path.join(args.only_merge,x) for x in os.listdir(args.only_merge) if re.match("chunk_\d+\.json",x)],key=lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])) # check re.match
             JDB = None
             for i,fn in enumerate(chunk_list):
                 with open(fn,"r") as f:
@@ -741,10 +735,10 @@ def create_json_db_main(args,allowed_phases):
                         with open(os.path.join(args.only_merge,"__chunk_merged.json"),"w") as f:
                             f.write(json.dumps(JDB))
                 except Exception as e:
-                    print "ERROR - Failed to merge chunk %d (%s) - [msg: %s]" % (i, fn, e)
+                    print("ERROR - Failed to merge chunk {} ({}) - [msg: {}]".format(i, fn, e))
                     with open(output_err,"a") as ferr:
-                        ferr.write("ERROR - Failed to merge chunk %d (%s) - [msg: %s]\n" % (i, fn, e))
-                        ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                        ferr.write("ERROR - Failed to merge chunk {} ({}) - [msg: {}]\n".format(i, fn, e))
+                        ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                         ferr.write(traceback.format_exc()+"\n")
                         ferr.write("--------------------\n\n")
                     if args.verbose:
@@ -753,11 +747,10 @@ def create_json_db_main(args,allowed_phases):
                         sys.exit(1)
                     mrrs+=1
         else:
-            print "Cannot find directory that contains chunks to merge: %s"%(args.only_merge)
+            print("Cannot find directory that contains chunks to merge: {}".format(args.only_merge))
             return 1
         if not args.quiet and JDB is not None:
-            print "sources: %d, functions: %d, f. declarations: %d, unresolved functions: %d, types: %d, merging errors: %d" \
-                  % (JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs)
+            print("sources: {}, functions: {}, f. declarations: {}, unresolved functions: {}, types: {}, merging errors: {}".format(JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs))
         wfn = os.path.join(args.only_merge,"merged.json")
         writeDebugJSON(make_ordered_jdb(JDB),wfn)
         return mrrs
@@ -781,13 +774,13 @@ def create_json_db_main(args,allowed_phases):
         recv_list = []
         send_list = []
         #log_list = []
-        for i in xrange(jobs):
+        for i in range(jobs):
             recv_conn, send_conn = multiprocessing.Pipe(False)
             # log_q = multiprocessing.Queue()
             recv_list.append(recv_conn)
             send_list.append(send_conn)
             #log_list.append(log_q)
-        for i in xrange(jobs):
+        for i in range(jobs):
             dr = os.path.dirname(compdbf)
             conn = (send_list[i],recv_list,sync_q)
             #log_q = log_list[i]
@@ -801,12 +794,12 @@ def create_json_db_main(args,allowed_phases):
         # logger.start()
         finished_all = sync_q.get()
         JDB = recv_list[finished_all[0]].recv()
-        print >>sys.stderr, "Merged chunk %d"%(finished_all[0])
+        print("Merged chunk {}".format(finished_all[0]), file=sys.stderr)
         while True:
             finished_chunk = sync_q.get()
             jdb = recv_list[finished_chunk[0]].recv()
             JDB = merge_json_ast(JDB,jdb,args.quiet,args.debug,args.verbose,args.file_logs,args.test)
-            print >>sys.stderr, "Merged chunk %d"%(finished_chunk[0])
+            print("Merged chunk {}".format(finished_chunk[0]), file=sys.stderr)
             finished_all.extend(finished_chunk)
             if len(finished_all) == jobs:
                 break
@@ -821,9 +814,9 @@ def create_json_db_main(args,allowed_phases):
         job_list = []
         pipe_list = []
         # status: [0: ERROR (repeat) / 1: OK / 2: FAIL (give up), TRY_COUNT]
-        status_list = [[0,0] for i in xrange(jobs)]
+        status_list = [[0,0] for i in range(jobs)]
         json_list = []
-        for i in xrange(jobs):
+        for i in range(jobs):
             if args.job_number is not None:
                 if i!=args.job_number:
                     continue
@@ -846,23 +839,23 @@ def create_json_db_main(args,allowed_phases):
                     try:
                         r = x.recv()
                     except EOFError as e:
-                        print "WARNING - EOF while reading from chunk %d - [msg: %s]" % (i, e)
+                        print("WARNING - EOF while reading from chunk {} - [msg: {}]".format(i, e))
                         p = job_list[i]
                         p.join()
                         with open(output_err,"a") as ferr:
-                            ferr.write("WARNING - EOF while reading from chunk %d - [msg: %s]\n" % (i, e))
-                            ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
-                            ferr.write("returncode: %d"%(p.exitcode))
+                            ferr.write("WARNING - EOF while reading from chunk {} - [msg: {}]\n".format(i, e))
+                            ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
+                            ferr.write("returncode: {}".format(p.exitcode))
                             ferr.write(traceback.format_exc()+"\n")
                             ferr.write("--------------------\n\n")
                         # It failed for some unknown reason while reading from the pipe
                         # Reschedule and try to compute the chunk again (until max_tries reached)
                         if status_list[i][1]>=max_tries:
-                            print "ERROR - giving up on reading from chunk %d after %d tries"%(i,max_tries)
+                            print("ERROR - giving up on reading from chunk {} after {} tries".format(i,max_tries))
                             rv+=1
                             status_list[i][0] = 2
                         else:
-                            print "INFO - rescheduling computation on chunk %d"%(i)
+                            print(f"INFO - rescheduling computation on chunk {i}")
                             x = fns[int(m*i):int(m*(i+1))]
                             recv_conn, send_conn = multiprocessing.Pipe(False)
                             dr = os.path.dirname(compdbf)
@@ -882,7 +875,7 @@ def create_json_db_main(args,allowed_phases):
                     mrrs+=erv
         
 
-        print "INFO - Errors reported in first phase of merging: %d" % (mrrs)
+        print(f"INFO - Errors reported in first phase of merging: {mrrs}")
         json_list_sanitized = []
         if args.parallel_merge != None:
             for i,s in enumerate(status_list):
@@ -905,17 +898,17 @@ def create_json_db_main(args,allowed_phases):
 
                     try:
                         if args.unmerged_temp:
-                            ufn = os.path.join(args.unmerged_temp,"chunk_%d.json"%(i))
+                            ufn = os.path.join(args.unmerged_temp,f"chunk_{i}.json")
                             writeDebugJSON(make_ordered_jdb(jsondbr),ufn)
                         JDB = merge_json_ast(JDB,jsondbr,args.quiet,args.debug,args.verbose,args.file_logs,args.test,i,None,args.exit_on_error,jobs)
                         if args.unmerged_temp:
-                            ufn = os.path.join(udir,"__finalthread_iter_%d_jdba.json"%(i))
+                            ufn = os.path.join(udir,f"__finalthread_iter_{i}_jdba.json")
                             writeDebugJSON(JDB,ufn)
                     except Exception as e:
-                        print "ERROR - Failed to merge chunk %d - [msg: %s]" % (i, e)
+                        print(f"ERROR - Failed to merge chunk {i} - [msg: {e}]")
                         with open(output_err,"a") as ferr:
-                            ferr.write("ERROR - Failed to merge chunk %d - [msg: %s]\n" % (i, e))
-                            ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                            ferr.write("ERROR - Failed to merge chunk {} - [msg: {}]\n".format(i, e))
+                            ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                             ferr.write(traceback.format_exc()+"\n")
                             ferr.write("--------------------\n\n")
                         if args.verbose:
@@ -942,7 +935,7 @@ def create_json_db_main(args,allowed_phases):
         fdids = list()
         for v in FDB["vars"]:
             nm = dict()
-            for k,vv in v["members"].iteritems():
+            for k,vv in v["members"].items():
                 if vv not in fdfrefmap:
                     missing_ids.append(vv)
                 else:
@@ -952,32 +945,31 @@ def create_json_db_main(args,allowed_phases):
                     elif nm[k] in fdrefmap:
                         fdids.append(nm[k])
             v["members"] = nm
-        print "Missing FOPS function ids: %d"%(len(missing_ids))
-        print "Number of FOPS functions: %d"%(len(fids))
-        print "Number of FOPS function declarations: %d"%(len(fdids))
+        print("Missing FOPS function ids: {}".format(len(missing_ids)))
+        print("Number of FOPS functions: {}".format(len(fids)))
+        print("Number of FOPS function declarations: {}".format(len(fdids)))
     
     JDB["fops"] = FDB
     
     if not args.quiet and JDB is not None:
-        print "sources: %d, functions: %d, f. declarations: %d, unresolved functions: %d, types: %d, merging errors: %d" \
-              % (JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs+rv)
+        print("sources: {}, functions: {}, f. declarations: {}, unresolved functions: {}, types: {}, merging errors: %d".format(JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs+rv))
 
     if args.compilation_dependency_map:
         suppress_progress = False
         if "JENKINS_HOME" in os.environ and os.environ["JENKINS_HOME"]!="":
             suppress_progress = True
-        print "Adding module/source mapping information for %d modules and %d functions..."%(len(cdm.keys()),len(JDB["funcs"]))
+        print("Adding module/source mapping information for {} modules and {} functions...".format(len(cdm.keys()),len(JDB["funcs"])))
         JDB["modules"] = [{m:i} for i,m in enumerate(cdm.keys())]
         mMap = { mp.keys()[0]:mp.values()[0] for mp in JDB["modules"] }
         srcMap = { mp.values()[0]:mp.keys()[0] for mp in JDB["sources"] }
         if not suppress_progress:
-            sys.stdout.write("0%%")
+            sys.stdout.write("0%")
             sys.stdout.flush()
         modified = 0
         failed = 0
         for i,f in enumerate(JDB["funcs"]):
             if not suppress_progress:
-                sys.stdout.write("\r%d%%"%(int((float(i+1)/len(JDB["funcs"]))*100)))
+                sys.stdout.write("\r{}%".format(int((float(i+1)/len(JDB["funcs"]))*100)))
                 sys.stdout.flush()
             srcLst = [srcMap[x] for x in f["fids"]]
             try:
@@ -988,27 +980,27 @@ def create_json_db_main(args,allowed_phases):
                 f["mids"] = []
                 failed+=1
                 with open(output_err,"a") as ferr:
-                    ferr.write("Failed to add module info to function '%s'@%d\n"%(f["name"],f["id"]))
-                    ferr.write("fids: %s\n"%(str(f["fids"])))
+                    ferr.write("Failed to add module info to function '{}'@{}\n".format(f["name"],f["id"]))
+                    ferr.write("fids: {}\n".format(str(f["fids"])))
                     ferr.write("sources:\n")
                     for src in srcLst:
-                        ferr.write("  %s\n"%(src))
+                        ferr.write("  {}\n".format(src))
                     ferr.write("corresponding modules:\n")
                     for src in srcLst:
                         if src in rcdm:
-                            ferr.write("  %s\n"%(str(rcdm[src])))
+                            ferr.write("  {}\n".format(str(rcdm[src])))
                         else:
                             ferr.write("XXX\n")
-                    ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                    ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                     ferr.write(traceback.format_exc()+"\n")
                     ferr.write("--------------------\n\n")
-        print
-        print "Modified %d functions (failed %d)"%(modified,failed)
+        print()
+        print("Modified {} functions (failed {})".format(modified,failed))
         modified = 0
         failed = 0
         for i,g in enumerate(JDB["globals"]):
             if not suppress_progress:
-                sys.stdout.write("\r%d%%"%(int((float(i+1)/len(JDB["globals"]))*100)))
+                sys.stdout.write("\r{}%".format(int((float(i+1)/len(JDB["globals"]))*100)))
                 sys.stdout.flush()
             srcname = srcMap[g["fid"]]
             try:
@@ -1019,19 +1011,19 @@ def create_json_db_main(args,allowed_phases):
                 g["mids"] = []
                 failed+=1
                 with open(output_err,"a") as ferr:
-                    ferr.write("Failed to add module info to global '%s'@%d\n"%(g["name"],g["id"]))
-                    ferr.write("fid: %d\n"%(g["fid"]))
-                    ferr.write("source: %s\n"%(srcname))
+                    ferr.write("Failed to add module info to global '{}'@{}\n".format(g["name"],g["id"]))
+                    ferr.write("fid: {}\n".format(g["fid"]))
+                    ferr.write("source: {}\n".format(srcname))
                     ferr.write("corresponding modules:\n")
                     if srcname in rcdm:
-                        ferr.write("  %s\n"%(str(rcdm[srcname])))
+                        ferr.write("  {}\n".format(str(rcdm[srcname])))
                     else:
                         ferr.write("XXX\n")
-                    ferr.write("-------------------- %s\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                    ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                     ferr.write(traceback.format_exc()+"\n")
                     ferr.write("--------------------\n\n")
-        print
-        print "Modified %d globals (failed %d)"%(modified,failed)
+        print()
+        print("Modified {} globals (failed {})".format(modified,failed))
 
     JDB["version"] = __version_string__
     JDB["release"] = args.sw_version if args.sw_version else ""
@@ -1043,9 +1035,9 @@ def create_json_db_main(args,allowed_phases):
     # Now save the final JSON
     with open(output,"w") as f:
         f.write(json.dumps(JDB,indent=4))
-    print "Done. Written %s [%.2fMB]"%(output,float(os.stat(output).st_size)/1048576)
+    print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
     if mrrs+rv > 0:
-        print "WARNING: Encountered some ERRORS!"
+        print("WARNING: Encountered some ERRORS!")
     
     if args.forward_output:
         sys.stdout = orig_stdout

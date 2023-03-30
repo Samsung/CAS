@@ -1,17 +1,5 @@
 #!/usr/bin/env python
 
-import os
-import sys
-import json
-import argparse
-import traceback
-import re
-import collections
-import time
-import copy
-import tempfile
-import shutil
-import itertools
 import multiprocessing
 
 # Following is assumed about provided databases
@@ -59,25 +47,36 @@ import multiprocessing
 
 # TODO: maybe optimize file indexing (only update necessary objects)
 # TODO: handle  various missing* fields in main db
-def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,test=False,chunk=None,threadid=None,exit_on_error=False,job_count=multiprocessing.cpu_count(),copy_jdba=True):
+def merge_json_ast(db1, db2,
+                   quiet=False,
+                   debug=False,
+                   verbose=False,
+                   file_logs=None,
+                   test=False,
+                   chunk=None,
+                   threadid=None,
+                   exit_on_error=False,
+                   job_count=multiprocessing.cpu_count(),
+                   copy_jdba=True):
     if db1 is None:
-        # create empty database 
-        db1 = {}
-        db1["types"] = []
-        db1["globals"] = []
-        db1["funcs"] = []
-        db1["funcdecls"] = []
-        db1["unresolvedfuncs"] = []
-        db1["typen"] = 0
-        db1["globaln"] = 0
-        db1["funcn"] = 0
-        db1["funcdecln"] = 0
-        db1["unresolvedfuncn"] = 0
-        db1["sourcen"] = 0
-        db1["sources"] = []
-        db1["directory"] = db2["directory"]
+        # create empty database
+        db1 = {
+            "types": [],
+            "globals": [],
+            "funcs": [],
+            "funcdecls": [],
+            "unresolvedfuncs": [],
+            "typen": 0,
+            "globaln": 0,
+            "funcn": 0,
+            "funcdecln": 0,
+            "unresolvedfuncn": 0,
+            "sourcen": 0,
+            "sources": [],
+            "directory": db2["directory"],
+        }
         # TODO: add missing if necessary
-    
+
     # file_id offset
     next_file_id = db1["sourcen"]
 
@@ -85,10 +84,10 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
     nexttypeid = db1["typen"]
     nextvarid = db1["globaln"]
     nextfuncid = db1["funcn"]+db1["funcdecln"]+db1["unresolvedfuncn"]
-    
+
     # only for ids in db2
     # we will iterate through db2 and replace all ids in those maps
-    typeid_remap = {} 
+    typeid_remap = {}
     varid_remap = {}
     funcid_remap = {}
 
@@ -106,40 +105,21 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
 # [REFACTOR] this section may be removed for single merging thread version
 # idea is that structures defined below will persist thoughout the generation process
     # generate hashmaps for db1
-    typemap = {}
-    for tp in db1["types"]:
-        h = tp["hash"]
-        if h not in typemap:
-            typemap[h] = tp
-        else:
-            assert False, "Duplicate type hash in database: %s"%(h)
-    
+    def get_hashmap(db_key, db_val_key, err_msg):
+        ret_map = {}
+        for item in db1[db_key]:
+            h = item[db_val_key]
+            if h not in ret_map:
+                ret_map[h] = item
+            else:
+                assert False, f"{err_msg}: {h}"
+        return ret_map
 
-    varmap = {}
-    for var in db1["globals"]:
-        h = var["hash"]
-        if h not in varmap:
-            varmap[h] = var
-        else:
-            assert False, "Duplicate global hash in database %s"%(h)
+    typemap = get_hashmap('types', 'hash', 'Duplicate type hash in database')
+    varmap = get_hashmap('globals', 'hash', 'Duplicate global hash in database')
+    ufuncmap = get_hashmap('unresolvedfuncs', 'name', 'Duplicate unused function name in database')
+    fdeclmap = get_hashmap('funcdecls', 'declhash', 'Duplicate function declaration hash in database')
 
-    ufuncmap = {}
-    for ufunc in db1["unresolvedfuncs"]:
-        n = ufunc["name"]
-        if n not in ufuncmap:
-            ufuncmap[n] = ufunc
-        else:
-            assert False, "Duplicate unused function name in database %s"%(h)
-  
-    fdeclmap = {}
-    for fdecl in db1["funcdecls"]:
-        dh = fdecl["declhash"]
-        if dh not in fdeclmap:
-            fdeclmap[dh] = fdecl
-        else:
-            # TODO: implement check for allowed cases
-            assert False, "Duplicate function declaration hash in database %s"%(h)
-  
     funcmap = {}
     dfuncmap = {}
     for func in db1["funcs"]:
@@ -148,7 +128,7 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
             funcmap[h] = func
         else:
             # TODO: implement check for allowed cases
-            assert False, "Duplicate function hash in database %s"%(h)
+            assert False, f"Duplicate function hash in database {h}"
         if func["linkage"] != "internal":
             dh = func["declhash"]
             if dh not in dfuncmap:
@@ -162,7 +142,7 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
                     dfuncmap[h] = func
                 else:
                     pass
-                    # TODO: implement check for disallowed cases
+                        # TODO: implement check for disallowed cases
 # [REFACTOR] ends here
 
 # TODO: maybe verify assumptions about db2 data before merging
@@ -408,7 +388,7 @@ def merge_json_ast(db1,db2,quiet=False,debug=False,verbose=False,file_logs=None,
     db1["funcdecln"] = len(db1["funcdecls"])
     db1["unresolvedfuncn"] = len(db1["unresolvedfuncs"])
     db1["sourcen"] = len(db1["sources"])
-    print("Summary: types: %d, globals: %d, funcs: %d, funcdecls: %d, unresolvedfuncs %d") %(db1["typen"],db1["globaln"],db1["funcn"],db1["funcdecln"],db1["unresolvedfuncn"])
-    
+    print(f"Summary: types: {db1['typen']}, globals: {db1['globaln']}, funcs: {db1['funcn']}, funcdecls: {db1['funcdecln']}, unresolvedfuncs {db1['unresolvedfuncn']}")
+
     # Finished merging
     return db1

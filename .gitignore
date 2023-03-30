@@ -17,3 +17,9 @@ __pycache__/
 # CMD files
 *symvers.cmd
 *order.cmd
+
+# vscode dir
+.vscode
+
+.pytest_cache
+llvm.sh
