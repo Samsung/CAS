@@ -166,7 +166,7 @@ def get_cdb_executor_auto_merge(n,fnst,command,conn,quiet,debug,test,verbose,udi
             print("  {}@RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
             with open(output_err,"a") as ferr:
                 ferr.write("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]\n".format(tid,fn, n, e))
-                ferr.write("-------------------- {}\n"%(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
                 ferr.write("OUT: {}\n".format(out))
                 ferr.write("ERR: {}\n".format(err))
                 ferr.write("{}RUNNING: {}\n".format(tid," ".join(args).replace("(","\\(").replace(")","\\)")))
@@ -423,10 +423,10 @@ def merge_multiple_json_ast(databases, quiet=False,debug=False,verbose=False,fil
             retries += 1
             print(ex)
             if retries < 5:
-                print("Merging failed %d times. Retrying."%(retries))
+                print("Merging failed {} times. Retrying.".format(retries))
                 continue
             else:
-                print("Merging failed %d times. The program will be aborted."%(retries))
+                print("Merging failed {} times. The program will be aborted.".format(retries))
                 return None
     return data[0]
 
@@ -952,7 +952,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
     JDB["fops"] = FDB
 
     if not args.quiet and JDB is not None:
-        print("sources: {}, functions: {}, f. declarations: {}, unresolved functions: {}, types: {}, merging errors: %d".format(JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs+rv))
+        print("sources: {}, functions: {}, f. declarations: {}, unresolved functions: {}, types: {}, merging errors: {}".format(JDB["sourcen"], JDB["funcn"], JDB["funcdecln"], JDB["unresolvedfuncn"], JDB["typen"], mrrs+rv))
 
     if args.compilation_dependency_map:
         suppress_progress = False
