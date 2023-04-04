@@ -1871,8 +1871,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			auto ExpRanges = Macros.getExpansionRanges();
 			bool first_exp = true;
 			for(auto it = ExpRanges.lower_bound(BRange.getBegin()), end = ExpRanges.upper_bound(BRange.getEnd()); it!= end;it++){
-				std::string text = Macros.getExpansionText(it->first);
-				if(!text.length()) continue;
+				const char *text = Macros.getExpansionText(it->first);
+				if(!text) continue;
 				unsigned int pos = SM.getFileOffset(it->first) -SM.getFileOffset(Range.getBegin());
 				unsigned int len = SM.getFileOffset(it->second) - SM.getFileOffset(it->first);
 				if(!first_exp) exp_os<<",\n";
@@ -1880,7 +1880,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				exp_os<<Indent<<"\t\t\t{\n";
 				exp_os<<Indent<<"\t\t\t\t\"pos\": "<<pos<<",\n";
 				exp_os<<Indent<<"\t\t\t\t\"len\": "<<len<<",\n";
-				exp_os<<Indent<<"\t\t\t\t\"text\": \""<<json::json_escape(Macros.getExpansionText(it->first))<<"\"\n";
+				exp_os<<Indent<<"\t\t\t\t\"text\": \""<<json::json_escape(text)<<"\"\n";
 				exp_os<<Indent<<"\t\t\t}";
 			}
 		  }

@@ -11,7 +11,7 @@ using SkippedMap = std::map<uint64_t, std::set<std::pair<unsigned int, unsigned 
 class MacroHandler{
   public:
     MacroHandler(Preprocessor &PP, bool save_expansions);
-    std::string getExpansionText(SourceLocation MacroExpLoc) const;
+    const char *getExpansionText(SourceLocation MacroExpLoc) const;
     auto& getExpansionRanges(){return ExpansionRanges;}
     auto& getSkippedRanges(){return SkippedRanges;}
 
