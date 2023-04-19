@@ -57,6 +57,9 @@ class Renderer(OutputRenderer):
         o.add_argument('--entry-detail-fmt',  type=str, default=None, help='Override detailed entry rendering schema')
         o.add_argument('--separator', '--sep', type=str, default=",", help="Specify separator")
 
+    def count_renderer(self):
+        return self.num_entries
+
     def formatter(self, fmt, entry_fmt):
         if len(self.data) > 0:
             if isinstance(self.data[0], str):

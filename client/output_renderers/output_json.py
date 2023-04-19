@@ -20,6 +20,9 @@ class Renderer(OutputRenderer):
     def append_args(parser):
         pass
 
+    def count_renderer(self):
+        return json.dumps({ "count": self.num_entries })
+
     def formatter(self, format_func=None):
         if len(self.data) > 0:
             if format_func is not None:

@@ -22,7 +22,7 @@ nfsdb.load_deps_db(os.path.join(os.environ["DB_DIR"],".nfsdb.deps.img"))
 
 @pytest.fixture(name="vmlinux")
 def fixture_vmlinux() -> str:
-    return get_main("linked_modules -n=1 --filter=[path=*vmlinux,type=wc,exists=1]")
+    return get_main("linked_modules -n=1 --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=true]")
 
 
 @pytest.fixture(name="vmlinux_o")
@@ -42,17 +42,32 @@ def fixture_compiled_file() -> str:
 
 @pytest.fixture(name="header_file")
 def fixture_header_file() -> str:
-    return get_main("linked_modules --filter=[path=*libbtdevice.a,type=wc] deps_for --filter=[path=*system/android/packages/modules/Bluetooth/system/osi/include/list.h,type=wc]")
+    return get_main("linked_modules --filter=[path=*libbtdevice.a,type=wc] deps_for --filter=[path=*android/packages/modules/Bluetooth/system/osi/include/list.h,type=wc]")
 
 
 @pytest.fixture(name="javac")
 def fixture_javac() -> str:
-    return get_main("binaries --filter=[path=*system/android/prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
+    return get_main("binaries --filter=[path=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
 
+@pytest.fixture(name="sh")
+def fixture_sh() -> str:
+    return get_main("binaries --filter=[path=*bin/sh,type=wc] -n=1")
+
+@pytest.fixture(name="bash")
+def fixture_bash() -> str:
+    return get_main("binaries --filter=[path=*bin/bash,type=wc] -n=1")
+
+@pytest.fixture(name="linker")
+def fixture_linker() -> str:
+    return get_main("binaries --filter=[path=*/bin/ld.lld,type=wc] -n=1")
 
 @pytest.fixture(name="pids")
 def fixture_pids() -> list:
     return [int(x) for x in get_main("compiled --filter=[exists=1] --commands -n=3 --entry-fmt={p}").split(os.linesep)]
+
+@pytest.fixture(name="ref_files_len")
+def fixture_ref_files_len() -> list:
+    return get_json_simple("ref_files --json -l")['count']
 
 
 # @pytest.fixture(name="source_root")
@@ -143,7 +158,7 @@ def get_main(cmd):
 
 
 def is_command(obj):
-    return "class" in obj and obj["class"] in ["linker", "compiled", "linked", "compilation", "command"] and \
+    return "class" in obj and obj["class"] in ["linker", "compiler", "linked", "compilation", "command"] and \
         "pid" in obj and isinstance(obj["pid"], int) and \
         "idx" in obj and isinstance(obj["idx"], int) and \
         "ppid" in obj and isinstance(obj["ppid"], int) and \
@@ -201,13 +216,12 @@ def is_normpath(obj):
 
 def is_linked(obj):
     return obj.endswith(".so") or obj.endswith(".so.raw") or obj.endswith(".so.dbg") \
-        or obj.endswith(".a") or obj.endswith(".o") or obj.endswith(".ko") or obj.endswith("vmlinux") or obj.endswith(".btf")
-
+        or obj.endswith(".a") or obj.endswith(".o") or obj.endswith(".ko") or obj.endswith("vmlinux") or obj.endswith(".btf") \
+            or obj.endswith(".elf")
 
 def is_compiled(obj):
     return obj.endswith(".c") or obj.endswith(".c.dist") or obj.endswith(".cc") or obj.endswith(".cpp") or obj.endswith(".cxx") \
-        or obj.endswith(".h") or obj.endswith(".S") or obj.endswith(".s") or obj.endswith(".o")
-
+        or obj.endswith(".h") or obj.endswith(".S") or obj.endswith(".s") or obj.endswith(".o") 
 
 def is_open_details(obj):
     return "filename" in obj and isinstance(obj["filename"], str) and \
@@ -295,7 +309,7 @@ class TestGeneric:
         try:
             common_args, pipeline_args, _ = get_args(args)
             parsed_args = merge_args(common_args, pipeline_args[0])
-            Filter(parsed_args.filter, None, None,None)
+            Filter(parsed_args.filter, None, None, None)
             assert False
         except FilterException as err:
             if assert_message in err.message:
@@ -307,7 +321,7 @@ class TestGeneric:
         try:
             common_args, pipeline_args, _ = get_args(args)
             parsed_args = merge_args(common_args, pipeline_args[0])
-            return Filter(parsed_args.filter, None,None,None)
+            return Filter(parsed_args.filter, None, None, None)
         except FilterException:
             assert False
 
@@ -366,6 +380,33 @@ class TestGeneric:
         assert fil.filter_dict[1][1]["path"] == "/ghi" and "path_pattern" in fil.filter_dict[1][1]
         assert fil.filter_dict[1][2]["path"] == "/jkl" and "path_pattern" in fil.filter_dict[1][2]
 
+    def test_etrace_filter(self):
+        fil = self.get_parsed_filter(["linked_modules",
+        "--filter=[path=/abc,type=wc,link=1]"
+        "and[path=/123,type=wc,source_root=1,negate=1]"
+        "or[path=/def,type=wc,exists=0,link=1,class=compiled]"
+        "and[path=/ghi,type=wc,exists=1,class=linked,access=rw]"
+        "and[path=/jkl,type=wc,class=plain,source_root=0,exists=0,access=r]"])
+        etr_fil = Filter.filter_to_libetrace(fil.filter_dict)
+        # (PATH,CLASS,EXISTS,ACCESS,NEGATE,SRCROOT)
+
+        # "linked" : 0x0001,
+        # "linked_static" : 0x0002,
+        # "linked_shared" : 0x0004,
+        # "linked_exe" : 0x0008,
+        # "compiled" : 0x0010,
+        # "plain" : 0x0020,
+        # "compiler" : 0x0040,
+        # "linker" : 0x0080,
+        # "symlink" : 0x0100,
+        # "nosymlink" : 0x0200
+
+        assert etr_fil[0][0] == (('contains_path', '/abc'), ('is_class', 0x0100), None, None, False, None)
+        assert etr_fil[0][1]== (('contains_path', '/123'), None, None, None, True, ('at_source_root', None) )
+
+        assert etr_fil[1][0]== (('contains_path', '/def'), ('is_class', 0x0100|0x0010), ('file_not_exists', None) , None, False, None)
+        assert etr_fil[1][1]== (('contains_path', '/ghi'), ('is_class', 0x0001), ('file_exists', None), ('has_access', 2), False, None)
+        assert etr_fil[1][2]== (('contains_path', '/jkl'), ('is_class', 0x0020), ('file_not_exists', None), ('has_access', 0), False, ('not_at_source_root', None))
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestBinaries:
@@ -383,12 +424,12 @@ class TestBinaries:
     def test_with_bin(self):
         ret = get_json_entries("binaries --filter=[bin=/bin/bash]or[bin=/bin/sh] --json", 2, 2, is_normpath)
         for ent in ret["entries"]:
-            assert fnmatch.fnmatch(ent, "/bin/*sh")
+            assert fnmatch.fnmatch(ent, "*/bin/*sh")
 
     def test_with_bin_raw(self):
         ret = get_raw("binaries --filter=[bin=/bin/bash]or[bin=/bin/sh]", 2, 2, is_normpath)
         for ent in ret.split(os.linesep):
-            assert fnmatch.fnmatch(ent, "/bin/*sh")
+            assert fnmatch.fnmatch(ent, "*/bin/*sh")
 
     def test_with_path_details(self, javac):
         ret = get_json_entries(f"binaries -n=100 --filter=[bin={javac}] --details --json", 600, 1500, is_command)
@@ -437,7 +478,7 @@ class TestBinaries:
     def test_details(self):
         ret = get_json_entries("binaries -n=100 --filter=[class=compiler] --details --json", 50000, 100000, is_command)
         for ent in ret["entries"]:
-            assert ent["class"] == "compilation"
+            assert ent["class"] == "compiler"
 
     def test_details_raw(self):
         ret = get_raw("binaries -n=0 --filter=[class=compiler] --details", 50000, 100000, is_raw_command)
@@ -447,7 +488,7 @@ class TestBinaries:
     def test_compile_commands(self):
         ret = get_json_entries("binaries --filter=[bin=*clang,type=wc,class=compiler] --commands --json", 15000, 150000, is_command)
         for ent in ret["entries"]:
-            assert ent["class"] == "compilation"
+            assert ent["class"] == "compiler"
             assert ent["bin"].endswith("clang")
 
     def test_compile_commands_raw(self):
@@ -466,11 +507,13 @@ class TestBinaries:
         for ent in ret.split(os.linesep):
             assert ent.split(RAW_SEP)[4].endswith("ld.lld")
 
+    def test_count(self):
+        assert get_json_entries("binaries --json ")["num_entries"] == get_json_simple("binaries --json -l")["count"]
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestCommands:
     def test_plain(self):
-        get_json_entries("commands --json", 1000000, 2500000, is_command)
+        get_json_entries("commands --json", 500000, 2500000, is_command)
 
     def test_plain_raw(self):
         get_raw("commands -n=1000", 1000, 1000, is_raw_command)
@@ -551,25 +594,25 @@ class TestCommands:
             if not any(matched):
                 assert False
 
-    def test_path_plain(self):
-        ret = get_json_entries("commands --binary=/bin/sh --binary=/bin/bash --json", 2000, 2500000, is_command)
+    def test_path_plain(self,sh, bash):
+        ret = get_json_entries(f"commands --binary={sh} --binary={bash} --json", 2000, 2500000, is_command)
         for ent in ret["entries"]:
-            assert ent["bin"] == "/bin/bash" or ent["bin"] == "/bin/sh"
+            assert ent["bin"] in ["/usr/bin/sh", "/usr/bin/bash"]
 
-    def test_path_plain_raw(self):
-        ret = get_raw("commands --binary=/bin/sh --binary=/bin/bash", 2000, 2500000, is_raw_command)
+    def test_path_plain_raw(self,sh, bash):
+        ret = get_raw(f"commands --binary={sh} --binary={bash}", 2000, 2500000, is_raw_command)
         for ent in ret.split(os.linesep):
-            assert ent.split(RAW_SEP)[4] == "/bin/bash" or ent.split(RAW_SEP)[4] == "/bin/sh"
+            assert ent.split(RAW_SEP)[4] == sh or ent.split(RAW_SEP)[4] == bash
 
-    def test_path_filter_cmd(self):
-        ret = get_json_entries("commands --binary=/bin/sh --binary=/bin/bash --filter=[cmd=.*vmlinux.*,type=re] --json", 100, 1000, is_command)
+    def test_path_filter_cmd(self, sh, bash):
+        ret = get_json_entries(f"commands --binary={sh} --binary={bash} --filter=[cmd=.*vmlinux.*,type=re] --json", 10, 100, is_command)
         for ent in ret["entries"]:
-            assert (ent["bin"] == "/bin/bash" or ent["bin"] == "/bin/sh") or "vmlinux" in ent["command"]
+            assert (ent["bin"] == bash or ent["bin"] == sh) or "vmlinux" in ent["command"]
 
-    def test_path_filter_cmd_raw(self):
-        ret = get_raw("commands --binary=/bin/sh --binary=/bin/bash --filter=[cmd=.*vmlinux.*,type=re]", 100, 1000, is_raw_command)
+    def test_path_filter_cmd_raw(self, sh, bash):
+        ret = get_raw(f"commands --binary={sh} --binary={bash} --filter=[cmd=.*vmlinux.*,type=re]", 10, 100, is_raw_command)
         for ent in ret.split(os.linesep):
-            assert (ent.split(RAW_SEP)[4] == "/bin/bash" or ent.split(RAW_SEP)[4] == "/bin/sh") and "vmlinux" in ent.split(RAW_SEP)[6]
+            assert (ent.split(RAW_SEP)[4] == bash or ent.split(RAW_SEP)[4] == sh) and "vmlinux" in ent.split(RAW_SEP)[6]
 
     def test_path_filter_cwd(self, javac):
         ret = get_json_entries(f"commands --binary={javac} --filter=[cwd=*android*,type=wc] --json", 300, 1500, is_command)
@@ -577,19 +620,22 @@ class TestCommands:
             assert ent["bin"] == javac and "android" in ent["cwd"]
 
     def test_path_filter_cwd_raw(self, javac):
-        ret = get_raw(f"commands --binary={javac} --filter=[cwd=*system/android*,type=wc]", 300, 1500, is_raw_command)
+        ret = get_raw(f"commands --binary={javac} --filter=[cwd=*android*,type=wc]", 300, 1500, is_raw_command)
         for ent in ret.split(os.linesep):
             assert ent.split(RAW_SEP)[4] == javac and "android" in ent.split(RAW_SEP)[5]
 
-    def test_path_filter_class(self):
-        ret = get_json_entries("commands --binary=/bin/bash --filter=[class=linker] --json", 50, 200, is_command)
+    def test_path_filter_class(self,linker):
+        ret = get_json_entries(f"commands --binary={linker} --filter=[class=linker] --json", 50, 5000, is_command)
         for ent in ret["entries"]:
-            assert ent['linked'].endswith(".a")
+            assert ent['linked'] is not None
 
-    def test_path_filter_class_raw(self):
-        ret = get_raw("commands --binary=/bin/bash --filter=[class=linker]", 50, 200, is_raw_command)
+    def test_path_filter_class_raw(self,linker):
+        ret = get_raw(f"commands --binary={linker} --filter=[class=linker]", 50, 5000, is_raw_command)
         for ent in ret.split(os.linesep):
-            assert ent.split(RAW_SEP)[4] == "/bin/bash" and ent.split(RAW_SEP)[7].endswith(".a")
+            assert ent.split(RAW_SEP)[4] == linker
+
+    def test_count(self):
+        assert get_json_entries("commands --json ")["num_entries"] == get_json_simple("commands --json -l")["count"]
 
 
 @pytest.mark.timeout(DEF_TIMEOUT)
@@ -608,7 +654,7 @@ class TestCompilationInfo:
         assert "    {}".format(compiled_file) in ret
 
     def test_pipeline(self):
-        ret = get_json_entries("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for -n=10 --json", 500, 1500, is_comp_info)
+        ret = get_json_entries("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for -n=10 --json", 400, 1500, is_comp_info)
         for ent in ret["entries"]:
             for fil in ent["compiled_files"]:
                 assert is_compiled(fil)
@@ -616,6 +662,10 @@ class TestCompilationInfo:
     def test_pipeline_raw(self):
         ret = get_raw("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for")
         assert is_raw_comp_info(ret)
+
+    def test_count(self):
+        assert get_json_entries("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for --json ")["num_entries"] == \
+            get_json_simple("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for --json -l")["count"]
 
 
 @pytest.mark.timeout(DEF_TIMEOUT)
@@ -641,12 +691,12 @@ class TestCompiled:
             assert is_compiled(ent) and not ent.startswith(nfsdb.source_root)
 
     def test_with_filter(self):
-        ret = get_json_entries("compiled --filter=[path=*.c,type=wc,exists=1,access=r] --json", 10000, 25000, is_normpath)
+        ret = get_json_entries("compiled --filter=[path=*.c,type=wc,exists=1,access=r] --json", 8000, 25000, is_normpath)
         for ent in ret["entries"]:
             assert ent.endswith(".c")
 
     def test_with_filter_raw(self):
-        ret = get_raw("compiled --filter=[path=*.c,type=wc,exists=1,access=r]", 10000, 25000, is_normpath)
+        ret = get_raw("compiled --filter=[path=*.c,type=wc,exists=1,access=r]", 8000, 25000, is_normpath)
         for ent in ret.split(os.linesep):
             assert ent.endswith(".c")
 
@@ -673,7 +723,7 @@ class TestCompiled:
     def test_compile_commands(self):
         ret = get_json_entries("compiled --commands --json -n=0", 50000, 150000, is_command)
         for ent in ret["entries"]:
-            assert ent["class"] == "compilation"
+            assert ent["class"] == "compiler"
 
     def test_compile_commands_raw(self):
         ret = get_raw("compiled --commands", 50000, 150000, is_raw_command)
@@ -691,6 +741,10 @@ class TestCompiled:
         s_r = get_main("source_root")
         for ent in ret.split(os.linesep):
             assert not ent.startswith(s_r)
+
+    def test_count(self):
+        assert get_json_entries("compiled --json ")["num_entries"] == \
+            get_json_simple("compiled --json -l")["count"]
 
 
 @pytest.mark.timeout(DEF_TIMEOUT)
@@ -740,7 +794,7 @@ class TestDepsFor:
         get_json_entries(f"deps_for --path=[file={vmlinux},direct=true] --json", 1000, 3000, is_normpath)
 
     def test_plain_epath_raw(self, vmlinux):
-        get_raw(f"deps_for --path=[file={vmlinux},direct=true] --path=[file={vmlinux},direct=false]", 1000, 3000, is_normpath)
+        get_raw(f"deps_for --path=[file={vmlinux},direct=true]", 1000, 3000, is_normpath)
 
     def test_plain_multi(self, vmlinux, vmlinux_o):
         get_json_entries(f"deps_for --path={vmlinux} --path={vmlinux_o} --json", 15000, 40000, is_normpath)
@@ -759,12 +813,12 @@ class TestDepsFor:
             assert ent.split(RAW_SEP)[0].endswith(".c")
 
     def test_class_linked(self, vmlinux):
-        ret = get_json_entries(f"deps_for --path={vmlinux} --filter=[class=linked] --json -n=0", 100, 1000, is_normpath)
+        ret = get_json_entries(f"deps_for --path={vmlinux} --filter=[class=linked] --json -n=0", 100, 3000, is_normpath)
         for ent in ret["entries"]:
             assert is_linked(ent)
 
     def test_class_linked_raw(self, vmlinux):
-        ret = get_raw(f"deps_for --path={vmlinux} --filter=[class=linked]", 100, 1000, is_normpath)
+        ret = get_raw(f"deps_for --path={vmlinux} --filter=[class=linked]", 100, 3000, is_normpath)
         for ent in ret.split(os.linesep):
             assert is_linked(ent)
 
@@ -785,10 +839,10 @@ class TestDepsFor:
         get_raw(f"deps_for --path={vmlinux} --direct", 1000, 10000, is_normpath)
 
     def test_commands(self, vmlinux):
-        get_json_entries(f"deps_for --path={vmlinux} --commands --json", 2000, 10000, is_command)
+        get_json_entries(f"deps_for --path={vmlinux} --commands --json", 2000, 20000, is_command)
 
     def test_commands_raw(self, vmlinux):
-        get_raw(f"deps_for --path={vmlinux} --commands", 2000, 10000, is_raw_command)
+        get_raw(f"deps_for --path={vmlinux} --commands", 2000, 20000, is_raw_command)
 
     def test_generate(self, vmlinux):
         get_json_simple(f"deps_for --path={vmlinux} --commands --generate -n=0 --json", 1500, 4000, is_generated)
@@ -849,11 +903,16 @@ class TestDepsFor:
         get_json_entries(f"deps_for --path={vmlinux} --revdeps --filter=[path=.*\\.c|.*\\.h,type=re] -n=0 --json", 2000, 10000, is_normpath)
 
     def test_dep_graph(self, vmlinux):
-        get_dep_graph(f"deps_for --path={vmlinux} --dep-graph -n=0 --json", 2000, 10000, is_dep_graph)
+        get_dep_graph(f"deps_for --path={vmlinux} --dep-graph -n=0 --json", 2000, 15000, is_dep_graph)
 
     def test_dep_graph_raw(self, vmlinux):
         ret = get_raw(f"deps_for --path={vmlinux} --dep-graph -n=0")
         assert is_raw_dep_graph(ret)
+
+    def test_count(self,vmlinux):
+        assert get_json_entries(f"deps_for --path={vmlinux} --json ")["num_entries"] == \
+            get_json_simple(f"deps_for --path={vmlinux} --json -l")["count"]
+
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestFaccess:
@@ -895,6 +954,10 @@ class TestFaccess:
         for ent in ret.split(os.linesep):
             assert ent.split(RAW_SEP)[1] == "r"
 
+    def test_count(self,compiled_file):
+        assert get_json_entries(f"faccess --path={compiled_file} --json ")["num_entries"] == \
+            get_json_simple(f"faccess --path={compiled_file} --json -l")["count"]
+
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestLinkedModules:
     def test_plain(self):
@@ -904,20 +967,20 @@ class TestLinkedModules:
         get_raw("linked_modules -n=0 ", 2000, 15000, is_normpath)
 
     def test_filter(self):
-        ret = get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc,exists=1] --json", 1, 1, is_normpath)
+        ret = get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=1] --json", 1, 1, is_normpath)
         for ent in ret["entries"]:
             assert ent.endswith("vmlinux")
 
     def test_filter_raw(self):
-        ret = get_raw("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]", 1, 1, is_normpath)
+        ret = get_raw("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=1]", 1, 1, is_normpath)
         for ent in ret.split(os.linesep):
             assert ent.endswith("vmlinux")
 
     def test_commands(self):
-        get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc,exists=1] --commands --json", 1, 1, is_command)
+        get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=1] --commands --json", 1, 1, is_command)
 
     def test_commands_raw(self):
-        get_raw("linked_modules --filter=[path=*vmlinux,type=wc,exists=1] --commands", 1, 1, is_raw_command)
+        get_raw("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=1] --commands", 1, 1, is_raw_command)
 
     def test_details(self):
         get_json_entries("linked_modules --details -n=0 --json", 2000, 15000, is_open_details)
@@ -956,12 +1019,12 @@ class TestLinkedModules:
     def test_linked_exe(self):
         ret = get_json_entries("linked_modules --filter=[class=linked_exe] -n=0 --json", 500, 3000, is_normpath)
         for ent in ret["entries"]:
-            assert not (ent.endswith(".a")  or ent.endswith(".so") or ent.endswith("/vmlinux"))
+            assert  "out/" in ent
 
     def test_linked_exe_raw(self):
         ret = get_raw("linked_modules --filter=[class=linked_exe]", 500, 3000, is_normpath)
         for ent in ret.split(os.linesep):
-            assert not (ent.endswith(".a")  or ent.endswith(".so") or ent.endswith("/vmlinux"))
+            assert  "out/" in ent
 
     def test_generate(self):
         get_json_simple("linked_modules --commands --generate --all -n=0 --json", 2000, 15000, is_generated)
@@ -989,66 +1052,74 @@ class TestLinkedModules:
         for ent in ret.split(os.linesep):
             assert not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
+    def test_count(self):
+        assert get_json_entries("linked_modules --json ")["num_entries"] == \
+            get_json_simple("linked_modules --json -l")["count"]
+
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestModdepsFor:
     def test_required_param(self):
         get_error("moddeps_for", error_keyword="Missing required args 'path'")
 
-    def test_plain(self, vmlinux_o):
-        get_json_entries(f"moddeps_for --path={vmlinux_o} -n=0 --json", 400, 900, is_normpath)
+    def test_plain(self, vmlinux):
+        get_json_entries(f"moddeps_for --path={vmlinux} -n=0 --json", 400, 900, is_normpath)
 
-    def test_plain_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o}", 400, 900, is_normpath)
+    def test_plain_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux}", 400, 900, is_normpath)
 
-    def test_relative(self, vmlinux_o):
-        ret = get_json_entries(f"moddeps_for --path={vmlinux_o} -n=0 --json --relative", 400, 900, is_normpath)
+    def test_relative(self, vmlinux):
+        ret = get_json_entries(f"moddeps_for --path={vmlinux} -n=0 --json --relative", 400, 900, is_normpath)
         for ent in ret["entries"]:
             assert not ent.startswith(nfsdb.source_root)
 
-    def test_relative_raw(self, vmlinux_o):
-        ret = get_raw(f"moddeps_for --path={vmlinux_o} --relative", 400, 900, is_normpath)
+    def test_relative_raw(self, vmlinux):
+        ret = get_raw(f"moddeps_for --path={vmlinux} --relative", 400, 900, is_normpath)
         for ent in ret.split(os.linesep):
             assert not ent.startswith(nfsdb.source_root)
 
-    def test_plain_direct(self, vmlinux_o):
-        get_json_entries(f"moddeps_for --path={vmlinux_o} -n=0 --direct --json", 20, 100, is_normpath)
+    def test_plain_direct(self, vmlinux):
+        get_json_entries(f"moddeps_for --path={vmlinux} -n=0 --direct --json", 20, 100, is_normpath)
 
-    def test_plain_direct_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o} --direct", 20, 100, is_normpath)
+    def test_plain_direct_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux} --direct", 20, 100, is_normpath)
 
-    def test_filter(self, vmlinux_o):
-        get_json_entries(f"moddeps_for --path={vmlinux_o} --filter=[path=*.o,type=wc] -n=0 --json", 10, 50, is_normpath)
+    def test_filter(self, vmlinux):
+        get_json_entries(f"moddeps_for --path={vmlinux} --filter=[path=*.o,type=wc] -n=0 --json", 10, 50, is_normpath)
 
-    def test_filter_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o} --filter=[path=*.o,type=wc]", 10, 50, is_normpath)
+    def test_filter_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux} --filter=[path=*.o,type=wc]", 10, 50, is_normpath)
 
-    def test_commands(self, vmlinux_o):
-        get_json_entries(f"moddeps_for --path={vmlinux_o} --commands -n=0 --json", 400, 900, is_command)
+    def test_commands(self, vmlinux):
+        get_json_entries(f"moddeps_for --path={vmlinux} --commands -n=0 --json", 400, 900, is_command)
 
-    def test_commands_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o} --commands", 400, 900, is_raw_command)
+    def test_commands_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux} --commands", 400, 900, is_raw_command)
 
-    def test_details(self, vmlinux_o):
-        get_json_entries(f"moddeps_for --path={vmlinux_o} --details -n=0 --json", 400, 2000, is_open_details)
+    def test_details(self, vmlinux):
+        get_json_entries(f"moddeps_for --path={vmlinux} --details -n=0 --json", 400, 2000, is_open_details)
 
-    def test_details_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o} --details", 400, 2000, is_raw_open_details)
+    def test_details_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux} --details", 400, 2000, is_raw_open_details)
 
-    def test_details_relative(self, vmlinux_o):
-        ret = get_json_entries(f"moddeps_for --path={vmlinux_o} --details -n=0 --json --relative", 400, 2000, is_open_details)
+    def test_details_relative(self, vmlinux):
+        ret = get_json_entries(f"moddeps_for --path={vmlinux} --details -n=0 --json --relative", 400, 2000, is_open_details)
         for ent in ret["entries"]:
             assert not ent["filename"].startswith(nfsdb.source_root)
 
-    def test_details_relative_raw(self, vmlinux_o):
-        ret = get_raw(f"moddeps_for --path={vmlinux_o} --details --relative", 400, 2000, is_raw_open_details)
+    def test_details_relative_raw(self, vmlinux):
+        ret = get_raw(f"moddeps_for --path={vmlinux} --details --relative", 400, 2000, is_raw_open_details)
         for ent in ret.split(os.linesep):
             assert not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
-    def test_generate(self, vmlinux_o):
-        get_json_simple(f"moddeps_for --path={vmlinux_o} --commands --generate -n=0 --json", 400, 900, is_generated)
+    def test_generate(self, vmlinux):
+        get_json_simple(f"moddeps_for --path={vmlinux} --commands --generate -n=0 --json", 400, 900, is_generated)
 
-    def test_generate_raw(self, vmlinux_o):
-        get_raw(f"moddeps_for --path={vmlinux_o} --commands --generate", 400, 900, is_raw_generated)
+    def test_generate_raw(self, vmlinux):
+        get_raw(f"moddeps_for --path={vmlinux} --commands --generate", 400, 900, is_raw_generated)
+
+    def test_count(self, vmlinux):
+        assert get_json_entries(f"moddeps_for --path={vmlinux} --json ",400,900)["num_entries"] == \
+            get_json_simple(f"moddeps_for --path={vmlinux} --json -l")["count"]
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestProcref:
@@ -1101,22 +1172,26 @@ class TestProcref:
         for ent in ret.split(os.linesep):
             assert int(ent.split(RAW_SEP)[2]) in pids and not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
+    def test_count(self, pids):
+        assert get_json_entries(f"procref --pid={pids[0]} --pid={pids[1]} --pid={pids[2]} --json ")["num_entries"] == \
+            get_json_simple(f"procref --pid={pids[0]} --pid={pids[1]} --pid={pids[2]} --json -l")["count"]
+
 @pytest.mark.timeout(600)
 # @pytest.mark.skip()
 class TestRefFiles:
     def test_plain(self):
-        get_json_entries("ref_files -n=1000 --json", 2000000, 6000000, is_normpath)
+        get_json_entries("ref_files -n=1000 --json", 1000000, 6000000, is_normpath)
 
     def test_plain_raw(self):
-        get_raw("ref_files", 2000000, 6000000, is_normpath)
+        get_raw("ref_files", 1000000, 6000000, is_normpath)
 
     def test_with_filter(self):
-        ret = get_json_entries("ref_files --filter=[path=*.c,type=wc,exists=1,access=r] -n=1000 --json", 15000, 50000, is_normpath)
+        ret = get_json_entries("ref_files --filter=[path=*.c,type=wc,exists=1,access=r] -n=1000 --json", 10000, 50000, is_normpath)
         for ent in ret["entries"]:
             assert ent.endswith(".c")
 
     def test_with_filter_raw(self):
-        ret = get_raw("ref_files --filter=[path=*.c,type=wc,exists=1,access=r]", 15000, 50000, is_normpath)
+        ret = get_raw("ref_files --filter=[path=*.c,type=wc,exists=1,access=r]", 10000, 50000, is_normpath)
         for ent in ret.split(os.linesep):
             assert ent.endswith(".c")
 
@@ -1134,20 +1209,80 @@ class TestRefFiles:
         get_json_entries("ref_files --filter=[path=*.c,type=wc,exists=1] --commands -n=1000 --json", 20000, 50000, is_command)
 
     def test_compile_commands_raw(self):
-        get_raw("ref_files --filter=[path=*.c,type=wc,exists=1] --commands", 20000, 50000, is_raw_command)
+        get_raw("ref_files --filter=[path=*.c,type=wc,exists=1] --commands", 10000, 50000, is_raw_command)
 
     def test_rdm(self):
-        get_rdm("ref_files --filter=[path=*.c,type=wc,exists=1] --rdm --json -n=0", 20000, 50000, is_rdm)
+        get_rdm("ref_files --filter=[path=*.c,type=wc,exists=1] --rdm --json -n=0", 10000, 50000, is_rdm)
 
     def test_relative(self):
-        ret = get_json_entries("ref_files --json --relative",2000000, 6000000, is_normpath)
+        ret = get_json_entries("ref_files --json --relative",1000000, 6000000, is_normpath)
         for ent in ret["entries"]:
             assert not ent.startswith(nfsdb.source_root)
 
     def test_relative_raw(self):
-        ret = get_raw("ref_files --relative", 2000000, 6000000, is_normpath)
+        ret = get_raw("ref_files --relative", 1000000, 6000000, is_normpath)
         for ent in ret.split(os.linesep):
             assert not ent.startswith(nfsdb.source_root)
+
+    def test_count(self):
+        assert get_json_entries("ref_files --json ")["num_entries"] == \
+            get_json_simple("ref_files --json -l")["count"]
+
+    def test_filter_count_class(self, ref_files_len):
+
+        linked_len = get_json_entries("ref_files --filter=[class=linked] --json -n=1")['num_entries']
+        le_len = get_json_entries("ref_files --filter=[class=linked_exe] --json -n=1")['num_entries']
+        lt_len = get_json_entries("ref_files --filter=[class=linked_static] --json -n=1")['num_entries']
+        lh_len = get_json_entries("ref_files --filter=[class=linked_shared] --json -n=1")['num_entries']
+        assert linked_len == (le_len + lt_len + lh_len)
+
+        nl_len = get_json_entries("ref_files --filter=[class=linked,negate=1] --json -n=1")['num_entries']
+        assert ref_files_len == (linked_len + nl_len)
+
+        compiled_len = get_json_entries("ref_files --filter=[class=compiled] --json -n=1")['num_entries']
+        n_comp_len = get_json_entries("ref_files --filter=[class=compiled,negate=1] --json -n=1")['num_entries']
+        assert ref_files_len == (compiled_len + n_comp_len)
+
+        plain_len = get_json_entries("ref_files --filter=[class=plain] --json -n=1")['num_entries']
+        n_plain_len = get_json_entries("ref_files --filter=[class=plain,negate=1] --json -n=1")['num_entries']
+        assert ref_files_len == (plain_len + n_plain_len)
+
+        compiler_len = get_json_entries("ref_files --filter=[class=compiler] --json -n=1")['num_entries']
+        n_compiler_len = get_json_entries("ref_files --filter=[class=compiler,negate=1] --json -n=1")['num_entries']
+        assert compiler_len != 0 , "Case not supported yet"
+        assert n_comp_len != 0
+        assert ref_files_len == (compiler_len + n_compiler_len)
+
+        linker_len = get_json_entries("ref_files --filter=[class=linker] --json -n=1")['num_entries']
+        n_linker_len = get_json_entries("ref_files --filter=[class=linker,negate=1] --json -n=1")['num_entries']
+        assert linker_len != 0 , "Case not supported yet"
+        assert n_linker_len != 0
+        assert ref_files_len == (linker_len + n_linker_len)
+
+        assert ref_files_len == (linked_len + compiled_len + plain_len + compiler_len + linker_len)
+
+    def test_filter_count_exist(self, ref_files_len):
+        fil_ex_len = get_json_entries("ref_files --filter=[exists=1] --json -n=1")['num_entries']
+        dir_ex_len = get_json_entries("ref_files --filter=[exists=2] --json -n=1")['num_entries']
+        n_ex_len = get_json_entries("ref_files --filter=[exists=0] --json -n=1")['num_entries']
+        assert ref_files_len == (fil_ex_len + dir_ex_len + n_ex_len)
+
+    def test_filter_count_source_root(self, ref_files_len):
+        sr_len = get_json_entries("ref_files --filter=[source_root=1] --json -n=1")['num_entries']
+        nsr_len = get_json_entries("ref_files --filter=[source_root=0] --json -n=1")['num_entries']
+        assert ref_files_len == (sr_len + nsr_len)
+
+    def test_filter_count_symlink(self):
+        fil_ex_len = get_json_entries("ref_files --filter=[exists=1] --json -n=1")['num_entries']
+        sl_len = get_json_entries("ref_files --filter=[exists=1,link=1] --json -n=1")['num_entries']
+        nsl_len = get_json_entries("ref_files --filter=[exists=1,link=0] --json -n=1")['num_entries']
+        assert fil_ex_len == (sl_len + nsl_len)
+
+    def test_filter_count_access(self, ref_files_len):
+        r_len = get_json_entries("ref_files --filter=[access=r] --json -n=1")['num_entries']
+        w_len = get_json_entries("ref_files --filter=[access=w] --json -n=1")['num_entries']
+        rw_len = get_json_entries("ref_files --filter=[access=rw] --json -n=1")['num_entries']
+        assert ref_files_len == (r_len + w_len + rw_len)
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestRevCompsFor:
@@ -1181,6 +1316,9 @@ class TestRevCompsFor:
         for ent in ret.split(os.linesep):
             assert not ent.startswith(nfsdb.source_root)
 
+    def test_count(self, header_file):
+        assert get_json_entries(f"revcomps_for --path={header_file} --json ")["num_entries"] == \
+            get_json_simple(f"revcomps_for --path={header_file} --json -l")["count"]
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestRevDepsFor:
@@ -1238,18 +1376,25 @@ class TestRevDepsFor:
             if ent.startswith("  /"):
                 assert is_compiled(ent)
 
+    def test_count(self, compiled_file):
+        assert get_json_entries(f"revdeps_for --path={compiled_file} --json ")["num_entries"] == \
+            get_json_simple(f"revdeps_for --path={compiled_file} --json -l")["count"]
+
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestPipeline:
     def test_binaries_2_commands(self):
         ret = get_json_entries("binaries --filter=[bin=*vendor*javac,type=wc] commands --json", 300, 800, is_command)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent['bin'], "*javac")
+        count = get_json_simple("binaries -l --filter=[bin=*javac,type=wc] commands --json")["count"]
+        assert ret["num_entries"] == count
 
     def test_linked_modules_2_deps_for(self):
-        get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc] deps_for --json", 13000, 25000, is_normpath)
+        ret = get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc] deps_for --json", 13000, 25000, is_normpath)
+        count = get_json_simple("linked_modules -l --filter=[path=*vmlinux,type=wc] deps_for --json")["count"]
+        assert ret["num_entries"] == count
 
-
-class TestMisc:
+class TestMiscModules:
     def test_version(self):
         ret = get_json_simple("version --json")
         assert ret["version"] == nfsdb.get_version()

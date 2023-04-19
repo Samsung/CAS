@@ -1,14 +1,6 @@
 CAS client
 ==========
 
-client.argmap module
---------------------
-
-.. automodule:: client.argmap
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 client.argparser module
 -----------------------
 
@@ -89,10 +81,10 @@ client.mod\_executables module
    :undoc-members:
    :show-inheritance:
 
-client.mod\_linked\_modules module
+client.mod\_modules module
 ----------------------------------
 
-.. automodule:: client.mod_linked_modules
+.. automodule:: client.mod_modules
    :members:
    :undoc-members:
    :show-inheritance:

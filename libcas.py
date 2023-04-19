@@ -1,7 +1,7 @@
 """
 Module contains set of useful libetrace binding functions.
 """
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Dict, Set, Tuple, Optional, Iterator
 import fnmatch
 import multiprocessing
 import json
@@ -30,7 +30,7 @@ except ModuleNotFoundError:
         def __init__(self, x=None, total=0, disable=None):
             self.x = x
             self.total = total
-            if disable == None:
+            if disable is None:
                 self.disable = not sys.stdout.isatty()
 
         def refresh(self):
@@ -42,16 +42,21 @@ except ModuleNotFoundError:
 
 class DepsParam:
     """
-    Extended parameter used in deps generation. Enables use per-path excludes.
+    Extended parameter used in deps generation. Enables use per-path excludes and direct switch.
 
     :param file: path to process
+    :type config_file: str
     :param direct: return only direct dependencies of this file
+    :type direct: bool
     :param exclude_cmd: list of commands to exclude while generating dependencies of this file
+    :type exclude_cmd: List[str]
     :param exclude_pattern: list of file patterns to exclude while generating dependencies of this file
+    :type exclude_pattern: List[str]
     :param negate_pattern: reversed pattern - exclude is included
+    :type negate_pattern: bool
     """
 
-    def __init__(self, file, direct=None, exclude_cmd=None, exclude_pattern=None, negate_pattern=False):
+    def __init__(self, file:str, direct:bool=None, exclude_cmd:List[str]=None, exclude_pattern:List[str]=None, negate_pattern:bool=False):
         self.file = file
         self.direct = direct
         self.negate_pattern = negate_pattern
@@ -71,6 +76,14 @@ class DepsParam:
 
 
 class CASConfig:
+    """
+    CAS configuration handler. Loads config from filesystem, and generates excludes.
+    Specifies compilers and linkers matching patterns, dependency excludes patterns and more. 
+
+    :param config_file: config file path
+    :type config_file: str
+
+    """
     def __init__(self, config_file):
         self.config_info = {}
         self.config_file = config_file
@@ -115,6 +128,20 @@ class CASConfig:
             if not os.path.isabs(icc_path):
                 self.integrated_clang_compilers[i] = os.path.realpath(os.path.join(source_root, self.integrated_clang_compilers[i]))
 
+    def gen_excludes_for_path(self, path) -> Tuple[List, List, List]:
+        excl_patterns = [x for x in self.dependency_exclude_patterns]
+        excl_commands = []
+        excl_commands_index = []
+
+        for pattern_variant, pattern_val in self.additional_module_exclude_pattern_variants.items():
+            if fnmatch.fnmatch(path, pattern_variant):
+                excl_patterns += pattern_val
+
+        for command_variant, command_val in self.exclude_command_variants_index.items():
+            if fnmatch.fnmatch(path, command_variant):
+                excl_commands_index += command_val
+
+        return excl_patterns, excl_commands, excl_commands_index
 
 def print_mem_usage():
     # Check psutil._pslinux.Process.memory_info() for details
@@ -217,57 +244,73 @@ class CASDatabase:
         ret = []
         try:
             ret = self.db[binary]
-        except:
+        except Exception:
             pass
         return ret
 
-    def get_execs_filtered(self, **kwargs):
+    def get_execs_filtered(self, **kwargs) -> Iterator[libetrace.nfsdbEntry]:
         return self.db.filtered(**kwargs)
 
-    def get_compilations(self):
+    def get_compilations(self) -> Set[libetrace.nfsdbEntry]:
         return set(self.db.filtered(has_comp_info=True))
 
     def get_compilations_map(self) -> Dict[str, List[libetrace.nfsdbEntry]]:
-        ret = {}
+        ret:Dict[str, List[libetrace.nfsdbEntry]] = {}
         for ent in self.db.filtered(has_comp_info=True):
             if ent.compilation_info.file_paths[0] not in ret:
                 ret[ent.compilation_info.file_paths[0]] = []
             ret[ent.compilation_info.file_paths[0]].append(ent)
         return ret
 
-    def get_linked_files(self):
+    def get_linked_files(self) -> Set[str]:
         return {ent.linked_path for ent in self.db.filtered(has_linked_file=True)}
 
-    def get_reverse_dependencies(self, file_paths: "str|list[str]", recursive=False):
+    def get_reverse_dependencies(self, file_paths: "str | List[str]", recursive=False) -> List[str]:
         return list(self.db.rdeps(file_paths, recursive=recursive))
 
-    def get_module_dependencies(self, module_path, direct=False):
+    def get_module_dependencies(self, module_path, direct=False) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function gets precomputed module dependencies for given module path.
+
+        :param module_path: extended path or simple string path
+        :type module_path: DepsParam | str
+        :param direct: direct flag
+        :type direct: bool
+        """
+
         if isinstance(module_path, DepsParam):
             module_path = module_path.file
         return self.db.mdeps(module_path, direct=direct)
 
-    def gen_excludes_for_path(self, path) -> tuple:
-        excl_patterns = [x for x in self.config.dependency_exclude_patterns]
-        excl_commands = []
-        excl_commands_index = []
+    def get_deps(self, epath:"DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
+        wrap_deps=False, all_modules:Optional[List[str]]=None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
+        """
+        Function calculates dependencies of given file.
 
-        for pattern_variant in self.config.additional_module_exclude_pattern_variants.keys():
-            if fnmatch.fnmatch(path, pattern_variant):
-                excl_patterns += self.config.additional_module_exclude_pattern_variants[pattern_variant]
-
-        for command_variant in self.config.exclude_command_variants_index.keys():
-            if fnmatch.fnmatch(path, command_variant):
-                excl_commands_index += self.config.exclude_command_variants_index[command_variant]
-
-        return excl_patterns, excl_commands, excl_commands_index
-
-    def get_deps(self, epath, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
-        wrap_deps=False, all_modules=None):
+        :param epath: extended path or simple string path
+        :type epath: DepsParam | str
+        :param direct_global: global direct flag
+        :type direct_global: bool
+        :param dep_graph: generate dependency graph
+        :type dep_graph: bool
+        :param debug: enable debug info about dependency generation arguments
+        :type debug: bool
+        :param debug_fd: enable debug info about process of dependency generation
+        :type debug_fd: bool
+        :param use_pipes: relation between process pipe will be respected
+        :type use_pipes: bool
+        :param wrap_deps: process wrappers (like bash) will be respected
+        :type wrap_deps: bool
+        :param all_modules: list of all modules - needed in direct deps generation
+        :type all_modules: List[str]        
+        """
 
         direct = direct_global
+        if direct and all_modules is None:
+            assert False, "Pass all_modules if direct is set!"
 
         if isinstance(epath, str):  # simple path - no excludes
-            excl_patterns, excl_commands, excl_commands_index = self.gen_excludes_for_path(epath)
+            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath)
             if all_modules is not None:
                 return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
                                      wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
@@ -280,13 +323,17 @@ class CASDatabase:
             if epath.direct is not None:  # If extended path has direct it will overwrite global direct args
                 direct = epath.direct
 
-            excl_patterns, excl_commands, excl_commands_index = self.gen_excludes_for_path(epath.file)
+            if direct and all_modules is None:
+                assert False, "Pass all_modules if direct is set!"
+
+            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath.file)
 
             for e_c in epath.exclude_cmd:
                 excl_commands.append(e_c)
 
             for e_p in epath.exclude_pattern:
                 excl_patterns.append(e_p)
+
             if all_modules is not None:
                 return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
@@ -298,13 +345,19 @@ class CASDatabase:
                                      exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
                                      exclude_commands_index=excl_commands_index)
 
-    def get_multi_deps_cached(self, epaths: list, direct_global=False):
+    def get_multi_deps_cached(self, epaths: list, direct_global=False) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns cached list of open files that are dependencies of given file(s).
+        """        
         ret = []
         for epath in epaths:
             ret += [self.get_module_dependencies(epath, direct=direct_global)]
         return ret
 
-    def get_multi_deps(self, epaths: list, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False):
+    def get_multi_deps(self, epaths: list, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns list of open files that are dependencies of given file(s).
+        """    
         ret = []
         for epath in epaths:
             ret += [self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]]
@@ -366,7 +419,7 @@ class CASDatabase:
 
         ret = []
         for dep_path in file_paths:
-            excl_patterns, excl_commands, excl_commands_index = self.gen_excludes_for_path(dep_path)
+            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(dep_path)
 
             if cdm_exclude_patterns is not None and isinstance(cdm_exclude_patterns, list):
                 for ex in cdm_exclude_patterns:
@@ -533,7 +586,7 @@ class CASDatabase:
         full_depmap = {}
         print("")
         print("Computing full dependency list for all modules...")
-        
+
         pbar = progressbar(total = len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 1)
         processed.value = 0
@@ -572,25 +625,25 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def is_integrated_clang_compiler(compiler_path, test_file):
+    def is_integrated_clang_compiler(compiler_path:str, test_file:str) -> bool:
         pn = subprocess.Popen(["%s" % compiler_path, "-c", "-Wall", "-o", "/dev/null", test_file, "-###"], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, err = pn.communicate()
         return " (in-process)" in out.decode("utf-8")
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def have_integrated_cc1(compiler_path, is_integrated, test_file) -> bool:
+    def have_integrated_cc1(compiler_path:str, is_integrated:bool, test_file:str) -> bool:
         return CASDatabase.is_integrated_clang_compiler(compiler_path, test_file) and is_integrated
 
     @staticmethod
-    def clang_ir_generation(cmds):
+    def clang_ir_generation(cmds:List[str]) -> bool:
         if "-x" in cmds:
             if cmds[cmds.index("-x")+1] == "ir":
                 return True
         return False
 
     @staticmethod
-    def clang_pp_input(cmds):
+    def clang_pp_input(cmds:List[str]) -> bool:
         if "-x" in cmds:
             if cmds[cmds.index("-x")+1] == "cpp-output":
                 return True
@@ -598,7 +651,7 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def maybe_compiler_binary(binary_path_or_link):
+    def maybe_compiler_binary(binary_path_or_link:str) -> str:
         if binary_path_or_link.endswith("/cc") or binary_path_or_link.endswith("/c++"):
             return os.path.realpath(binary_path_or_link)
         else:
@@ -606,7 +659,7 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def is_elf_executable(path):
+    def is_elf_executable(path:str) -> bool:
         if os.path.exists(path):
             path = os.path.realpath(path)
             pn = subprocess.Popen(["file", path], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -618,7 +671,7 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def is_elf_interpreter(path):
+    def is_elf_interpreter(path:str) -> bool:
         if os.path.exists(path):
             path = os.path.realpath(path)
             pn = subprocess.Popen(["file", path], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -743,8 +796,8 @@ class CASDatabase:
                 os.system('setterm -cursor on')
                 if pcp_map:
                     for k, v in pcp_map.items():
-                        l = self.get_eid((k[0],k[1]))
-                        assert len(l) == 1
+                        eid_lst = self.get_eid((k[0],k[1]))
+                        assert len(eid_lst) == 1
                     out_pcp_map = {str(self.get_exec(k[0], k[1]).ptr): base64.b64encode(v).decode("utf-8") for k, v in pcp_map.items()} # Can we use only other than "AA=="
                     del pcp_map
                 else:
@@ -930,7 +983,7 @@ class CASDatabase:
                                     of.write(f'"{ptr}": {json.dumps(rec[ptr])}')
                                 else:
                                     of.write(",\n" + f'"{ptr}": {json.dumps(rec[ptr])}')
-                            except:
+                            except Exception:
                                 if computation_finished.value:
                                     break
                         of.write("}")
@@ -988,7 +1041,7 @@ class CASDatabase:
                             while not clang_work_queue.empty():
                                 try:
                                     pos = clang_work_queue.get(timeout=3)
-                                except:
+                                except Exception:
                                     continue
                                 with processed.get_lock():
                                     processed.value += 1
@@ -1004,7 +1057,7 @@ class CASDatabase:
 
                                 try:
                                     out, ret_code = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
-                                except exec_worker.ExecWorkerException as e:
+                                except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running -###")
                                     print ("[%s] %s"%(cwd," ".join(argv[1:] + ["-###"])))
@@ -1019,7 +1072,7 @@ class CASDatabase:
                                                     for u in libetrace.parse_compiler_triple_hash(ncmd)
                                                 ]
                                         have_int_cc1 = 1
-                                    except Exception as e:
+                                    except Exception:
                                         print (exe.json(), flush=True)
                                         print (lns, flush=True)
                                         print (ncmd, flush=True)
@@ -1126,7 +1179,8 @@ class CASDatabase:
                                     }})
                                 found_comps.value += 1
 
-                            if debug: print ("Worker {} finished! ok={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(worker_idx,processed.value,no_o_args,not_exist,empty_output,not_allow_pp,parsing_fail,cc1as_skipped), flush=True)
+                            if debug: print ("Worker {} finished! ok={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
+                                worker_idx,processed.value,no_o_args,not_exist,empty_output,not_allow_pp,parsing_fail,cc1as_skipped), flush=True)
 
                         print("Searching for clang compilations ... (%d candidates; %d jobs)" % (len(clangxx_input_execs), jobs))
                         if debug: print_mem_usage()
@@ -1198,7 +1252,7 @@ class CASDatabase:
                             while not gcc_work_queue.empty():
                                 try:
                                     pos = gcc_work_queue.get(timeout=3)
-                                except:
+                                except Exception:
                                     continue
                                 with processed.get_lock():
                                     processed.value += 1
@@ -1263,7 +1317,7 @@ class CASDatabase:
 
                                 try:
                                     out, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
-                                except exec_worker.ExecWorkerException as e:
+                                except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running gcc -fplugin command:")
                                     print ("[%s] %s"%(cwd," ".join(nargv)))  
@@ -1307,7 +1361,7 @@ class CASDatabase:
                                 nargv.append('-')
                                 try:
                                     out, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
-                                except exec_worker.ExecWorkerException as e:
+                                except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception")
                                     print ("[%s] %s"%(cwd," ".join(nargv)))

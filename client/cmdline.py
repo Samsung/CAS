@@ -8,7 +8,7 @@ from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
 
-def process_commandline(cas_db: libcas.CASDatabase, commandline=None):
+def process_commandline(cas_db: libcas.CASDatabase, commandline:"str | List[str] | None" = None):
     """
     Main function used to process commandline execution.
     By default it feeds arguments from sys.argv but can be overwritten by optional commandline value
@@ -76,8 +76,8 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline=None):
                 else:
                     zip_file.writestr(out_file_name, ret)
 
-            with open(os.path.abspath(os.path.expanduser(common_args.generate_zip)), 'wb') as f:
-                f.write(zip_buffer.getvalue())
+            with open(os.path.abspath(os.path.expanduser(common_args.generate_zip)), 'wb') as out_file:
+                out_file.write(zip_buffer.getvalue())
                 print("Output zipped to {}".format(os.path.abspath(os.path.expanduser(common_args.generate_zip))))
         else:
             return module_pipeline.render()

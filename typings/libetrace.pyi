@@ -76,7 +76,7 @@ class nfsdb:
 
     def __init__(self) -> None: ...
 
-    def load(self, cache_filename: str, debug: bool, quiet: bool, mp_safe: bool, no_map_memory: bool = False) -> bool:
+    def load(self, cache_filename: str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
         """
         Loads database from given filename
 
@@ -93,7 +93,7 @@ class nfsdb:
         :return: True if load succeed otherwise False
         """
 
-    def load_deps(self, cache_filename: str, debug: bool, quiet: bool, mp_safe: bool, no_map_memory: bool = False) -> bool:
+    def load_deps(self, cache_filename: str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
         """
         Loads dependencies database from given filename
 

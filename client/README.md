@@ -6,13 +6,85 @@ This is client application CAS database.
 
 ## CAS libetrace library
 
-  When built locally access can be provided by adding build directory path to PYTHONPATH
-eg.
+CAS Client requires built libetrace.so file. Please check "Building CAS libraries" in main [README.md](../README.md).
 
-  ```
-  export PYTHONPATH=/home/j.doe/DEV/CAS/:$PYTHONPATH 
-  ./cli.py
-  ```
+# Usage
+
+CAS Client can be run from commandline using `cas` command located in main repo directory.
+
+Running `cas` without any arguments will print command help.
+
+Bash completeion may be a great help when using cas - check [Bash completion](#bash-completion).
+
+CAS Client requires database processed from CAS Tracer.
+CAS Database contains information about opened files and process executed during tracing.
+
+# Modules
+
+There are several `modules` that can be used to get CAS Database information.
+
+### Database creation commands
+| module | command(s) | Used for  |
+| ------------- | ------------- | ------------- |
+| Parse | `parse` | Parse trace file `.nfsdb` to intermediate format |
+| Post process | `postprocess` , `pp` | Create information about compilations,  |
+| Create cache | `cache` | Stores post-process information to output image `.nfsdb.img` |
+
+### Query commands
+| module | command(s) | Returns |
+| ------------- | ------------- | ------------- |
+| Linked modules | `linked_modules` , `lm` , `m` | Files created by linker process |
+| Binaries | `binaries` , `bins` , `b` | Executed binaries paths |
+| Commands | `commands` , `cmds` | Executed commands |
+| Compiled | `compiled` , `cc` | Compiled files |
+| Reverse compilation dependencies  | `revcomps_for`, `rcomps` |  |
+| Compilation info | `compilation_info_for` , `ci` | Compilation info of given file path |
+| Referenced files | `ref_files` , `refs` | Files referenced during build|
+| Process referencing file  | `procref` , `pr` | Files referenced by specific process |
+| File access  | `faccess` , `fa`| Process referencing given file |
+| File dependencies  | `deps_for` , `deps` | Dependencies of given file |
+| Modules dependencies  | `moddeps_for` | Dependencies of given linked module |
+| Reverse modules dependencies  | `revmoddeps_for` | Given module reverse dependencies |
+
+### Database information commands
+| module | command(s) | Returns |
+| ------------- | ------------- | ------------- |
+| Compiler patterns  | `compiler_pattern` | Patterns used to categorize executables as compilers |
+| Linker patterns  | `linker_pattern` | Patterns used to categorize executables as linkers |
+| Root process pid  | `root_pid` , `rpid` | Process id of main tracing process |
+| Database version  | `version` , `ver` , `dbversion` | Database version (set in `cache` creation) |
+| Source root  | `source_root` , `sroot` | Starting directory - used to calculate relative location |
+| Config  | `config` , `cfg` | Config file (`.bas_config`) used in database generation |
+| Stats  | `stat` | Database statistics |
+
+# CAS Database creation 
+
+Before using [query commands](#query-commands) user must parse and process `.nfsdb` trace file using [database creation commands](#database-creation-commands).
+
+Typical case of building database looks like this:
+
+```
+cd /directory/with/tracefile/
+
+cas parse
+```
+This step uses `.nfsdb` file and produce intermediate `.nfsdb.img.tmp` file. 
+
+```
+cas post-process
+```
+This step uses `.nfsdb.img.tmp` and produce a lot of information:
+- compilations info - `.nfsdb.comps.json`
+- reversed binary mapping - `.nfsdb.rbm.json`
+- precompiled command patterns - `.nfsdb.pcp.json`
+- linked files info - `.nfsdb.link.json`
+
+At the end of post processing information from `.nfsdb.img.tmp` are merged with the above files and written to `.nfsdb.json`.
+
+```
+cas cache --set-version dbver_1.0
+```
+This step uses 
 
 
 # Extended path argument

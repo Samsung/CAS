@@ -1,8 +1,8 @@
 import argparse
-from client.mod_base import Module
+from client.mod_base import Module, PipedModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argmap import add_args as add_args
+from client.argparser import add_args
 
 class Binaries(Module):
     """
@@ -10,13 +10,19 @@ class Binaries(Module):
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Dependency generation arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("Dependency generation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands"]
-            , g)
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return ent.bpath
+
+    def exclude_subject(self, ent) -> str:
+        return ent.bpath
 
     def subject(self, ent) -> str:
         if isinstance(ent, str):
@@ -37,19 +43,19 @@ class Binaries(Module):
                 ex.bpath
                 for ex in self.nfsdb.get_execs_filtered(has_command=True)
                 if self.filter_exec(ex)}
-            )
+            ) if self.needs_open_filtering() else [x for x in self.nfsdb.db.bpaths() if len(x) >0 ]
 
             return data, DataTypes.binary_data, None
 
 
-class Commands(Module):
+class Commands(Module, PipedModule):
     """
     Module used to get list of commands invoked during tracing.
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Dependency generation arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("Dependency generation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
@@ -57,9 +63,15 @@ class Commands(Module):
             "extended",
             "raw-command",
             "parent",
-            "filerefs"]
-            , g)
+            "filerefs", "cdb"]
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return " ".join(ent.argv)
+
+    def exclude_subject(self, ent) -> str:
+        return " ".join(ent.argv)
 
     def subject(self, ent) -> str:
         return " ".join(ent.argv) if not self.args.raw_command else ent.argv
@@ -78,12 +90,14 @@ class Commands(Module):
     def get_data(self) -> tuple:
         data = list({
             ent
-            for ent in self.nfsdb.get_execs_using_binary(self.args.binary)
+            for b in self.args.binary
+            for ent in self.nfsdb.get_execs_using_binary(b)
             if self.filter_exec(ent)
         } if self.args.binary else {
             ent
             for ent in self.nfsdb.get_execs_filtered(has_command=True)
             if self.filter_exec(ent)
         })
-
+        if self.args.cdb:
+            return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0].path
         return data, DataTypes.commands_data, lambda x: x.argv

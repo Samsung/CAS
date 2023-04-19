@@ -11,3 +11,6 @@ class Renderer(OutputRenderer):
 
     def render_data(self):
         return self.data
+
+    def count_renderer(self):
+        return self.num_entries

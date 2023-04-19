@@ -1,17 +1,17 @@
 import argparse
 import sys
-from client.mod_base import Module
-from client.misc import printdbg, printerr
+from client.mod_base import Module, PipedModule
+from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argmap import add_args as add_args
+from client.argparser import add_args
 
-class DepsFor(Module):
+class DepsFor(Module, PipedModule):
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Dependency generation arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("Dependency generation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
@@ -29,10 +29,16 @@ class DepsFor(Module):
             "debug-fd",
             "match",
             "link-type",
-            "cached"
+            "cached", "cdb"
             ]
-            , g)
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return ent.path
+
+    def exclude_subject(self, ent) -> str:
+        return ent.path
 
     def subject(self, ent) -> str:
         if self.args.show_commands:
@@ -63,9 +69,10 @@ class DepsFor(Module):
                 self.get_exec_of_open(d)
                 for o in self.get_multi_deps(paths)
                 for d in o
-                if self.should_display(d)
+                if self.filter_open(d) and self.should_display(d)
             })
-
+            if self.args.cdb:
+                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
             return data, DataTypes.commands_data, lambda x: x.eid.pid
         elif self.args.details:
             data = list({
@@ -94,13 +101,13 @@ class DepsFor(Module):
             return data, DataTypes.file_data, None
 
 
-class RevDepsFor(Module):
+class RevDepsFor(Module, PipedModule):
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Dependency generation arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("Dependency generation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
@@ -109,8 +116,14 @@ class RevDepsFor(Module):
             "match",
             "cdm", "cdm-ex-pt", "cdm-ex-fl",
             ]
-            , g)
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return ent.path
+
+    def exclude_subject(self, ent) -> str:
+        return ent.path
 
     def subject(self, ent) -> str:
         if self.args.show_commands:

@@ -6,8 +6,8 @@ from client.output_renderers.output import DataTypes
 class CompilerPattern(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("CompilerPattern arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("CompilerPattern arguments")
         return module_parser
 
     def get_data(self) -> tuple:
@@ -23,9 +23,9 @@ class CompilerPattern(Module):
 class LinkerPattern(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("LinkerPattern arguments")
-        return module_parser    
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("LinkerPattern arguments")
+        return module_parser
 
     def get_data(self) -> tuple:
         return {
@@ -37,7 +37,7 @@ class LinkerPattern(Module):
 class VersionInfo(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         module_parser.add_argument_group("VersionInfo arguments")
         return module_parser
 
@@ -48,7 +48,7 @@ class VersionInfo(Module):
 class RootPid(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         module_parser.add_argument_group("RootPid arguments")
         return module_parser
 
@@ -59,7 +59,7 @@ class RootPid(Module):
 class SourceRoot(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         module_parser.add_argument_group("SourceRoot arguments")
         return module_parser
 
@@ -70,7 +70,7 @@ class SourceRoot(Module):
 class ShowConfig(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         module_parser.add_argument_group("ShowConfig arguments")
         return module_parser
 
@@ -81,8 +81,8 @@ class ShowConfig(Module):
 class ShowStat(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("ShowStat arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("ShowStat arguments")
         return module_parser
 
     def get_data(self) -> tuple:

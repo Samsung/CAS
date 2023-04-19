@@ -2,6 +2,8 @@ import fnmatch
 from functools import lru_cache
 import sys
 from abc import abstractmethod
+from typing import List
+import argparse
 import libetrace
 import libcas
 from client.filtering import Filter, FilterException
@@ -68,9 +70,9 @@ class ModulePipeline:
 
 class Module:
     """
-    Abstract class of all modules.
+    Abstract class of all API modules.
     """
-    required_args = []
+    required_args: List[str] = []
     filter = None
 
     def __init__(self, args, nfsdb: libcas.CASDatabase, config) -> None:
@@ -92,9 +94,40 @@ class Module:
         self.original_path = True if "original_path" in self.args and self.args.original_path else False
 
     @abstractmethod
+    def get_argparser() -> argparse.ArgumentParser:
+        """
+        Function returns class customized argument parser.
+
+        :return: argument parser
+        :rtype: argparse.ArgumentParser
+        """
+
+    @abstractmethod
     def subject(self, ent) -> str:
         """
         Function returns simple value of object which depends on context.
+
+        :param ent: _description_
+        :type ent: `libetrace.nfsdbEntry` | `libetrace.nfsdbEntryOpenfile`
+        :return: simple value
+        :rtype: Any
+        """
+
+    @abstractmethod
+    def select_subject(self, ent) -> str:
+        """
+        Function returns simple value of object used in select which depends on context.
+
+        :param ent: _description_
+        :type ent: `libetrace.nfsdbEntry` | `libetrace.nfsdbEntryOpenfile`
+        :return: simple value
+        :rtype: Any
+        """
+
+    @abstractmethod
+    def exclude_subject(self, ent) -> str:
+        """
+        Function returns simple value of object used in exclude which depends on context.
 
         :param ent: _description_
         :type ent: `libetrace.nfsdbEntry` | `libetrace.nfsdbEntryOpenfile`
@@ -112,7 +145,24 @@ class Module:
         """
 
     def get_relative(self, open_path: str) -> str:
-        return open_path.replace(self.source_root, "") if self.relative_path else open_path
+        """
+        Function replaces source root in given path and returns only relative path.
+
+        :param open_path: path to process
+        :type open_path: str
+        :return: relative path or original path if there where no source root in it
+        :rtype: str
+        """
+        if self.relative_path:
+            if self.source_root in open_path:
+                op = open_path.replace(self.source_root, "")
+                if len(op) > 1 and op[0] == '/':
+                    op = op[1:]
+                return op
+            else:
+                return open_path
+        else:
+            return open_path
 
     def get_path(self, open_path:str) -> str:
         """
@@ -155,7 +205,8 @@ class Module:
         return self.has_pipe_path or self.has_exclude or self.has_filter or self.has_select or self.has_append
 
     def filter_open(self, opn: libetrace.nfsdbEntryOpenfile) -> bool:
-        """Function check if provided open element matches filters.
+        """
+        Function check if provided open element matches filters.
 
         :param ent: open element
         :type ent: `libetrace.nfsdbEntryOpenfile`
@@ -168,16 +219,13 @@ class Module:
             ret = ret and (self.filename_matcher(self.subject(opn), self.args.pipe_path))
 
         if self.has_exclude:
-            ret = ret and (not self.filename_matcher(self.subject(opn), self.args.exclude))
+            ret = ret and (not self.filename_matcher(self.exclude_subject(opn), self.args.exclude))
 
         if self.has_filter and self.filter is not None:
             ret = ret and self.filter.resolve_opens_filters(opn)
 
         if self.has_select:
-            ret = ret and (self.filename_matcher(self.subject(opn), self.args.select))
-
-        if self.has_append:
-            ret = ret or (opn.path in self.args.append)
+            ret = ret and (opn.path in self.args.select)
 
         return ret
 
@@ -207,7 +255,7 @@ class Module:
                 ret = ret and (ent.compilation_info is not None)
 
         if self.has_exclude:
-            ret = ret and (not self.filename_matcher(self.subject(ent), self.args.exclude))
+            ret = ret and (not self.filename_matcher(self.exclude_subject(ent), self.args.exclude))
 
         if self.has_pid:
             ret = ret and (ent.eid.pid in self.args.pid)
@@ -216,7 +264,7 @@ class Module:
             ret = ret and self.filter.resolve_exec_filters(ent)
 
         if self.has_select:
-            ret = ret and (self.filename_matcher(self.subject(ent), self.args.select))
+            ret = ret and (self.filename_matcher(self.select_subject(ent), self.args.select))
 
         return ret
 
@@ -233,7 +281,7 @@ class Module:
             for o in (ent.opens_with_children if self.args.with_children else ent.opens):
                 if self.filter_open(o):
                     yield o.path
-    
+
     def yield_open_from_pid(self, pids):
         for ent in self.nfsdb.get_pids(pids):
             for o in (ent.opens_with_children if self.args.with_children else ent.opens):
@@ -311,12 +359,12 @@ class Module:
     def expand_to_deps_param(self, expath_string: str) -> libcas.DepsParam:
         dct = self.expath_to_dict(expath_string)
         return libcas.DepsParam(file=dct["file"],
-            direct=(dct["direct"] if "direct" in dct else None),
+            direct=(dct["direct"] == "true" if "direct" in dct else None),
             exclude_cmd=(dct["exclude_cmd"] if "exclude_cmd" in dct else None),
             exclude_pattern=(dct["exclude_pattern"] if "exclude_pattern" in dct else None),
             negate_pattern=(dct["negate_pattern"] if "negate_pattern" in dct else False))
 
-    def get_ext_paths(self, paths):
+    def get_ext_paths(self, paths) -> List[libcas.DepsParam]:
         if len(paths) > 0:
             for i, path in enumerate(paths):
                 path = path.replace('[', '(').replace(']', ')')
@@ -399,11 +447,16 @@ class Module:
         else:
             return True
 
-    def get_exec_of_open(self, ent) -> libetrace.nfsdbEntry:  # TODO reconsider this
-        if self.args.generate:
-            return ent.opaque if ent.opaque is not None else ent.parent
-        else:
-            return ent.parent
+    def get_exec_of_open(self, ent) -> libetrace.nfsdbEntry:
+        return ent.opaque if ent.opaque is not None else ent.parent
+
+
+class PipedModule:
+    @abstractmethod
+    def set_piped_arg(self, data, data_type) -> None:
+        """
+        Function modifies input path argument considering previous data.
+        """
 
 
 class UnknownModule(Module):

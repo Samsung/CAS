@@ -6,23 +6,24 @@ import argparse
 import os
 import sys
 import re
+from typing import Dict, List, Tuple
 from client.misc import get_output_renderers
-from client.mod_misc import SourceRoot, CompilerPattern, LinkerPattern, VersionInfo, RootPid, ShowConfig, ShowStat
-from client.mod_dbops import ParseDB, Postprocess, StoreCache
-from client.mod_compilation import Compiled, CompilationInfo, RevCompsFor
-from client.mod_dependencies import DepsFor,  RevDepsFor
-from client.mod_executables import Binaries, Commands
-from client.mod_linked_modules import LinkedModules, ModDepsFor
-from client.mod_opened_files import Faccess, ProcRef, RefFiles
 
 
-def get_api_modules() -> dict:
+def get_api_modules() -> Dict:
     """
     Function used to get api keyword-module mapping.
 
     :return: keyword - module map
     :rtype: dict
     """
+    from client.mod_misc import SourceRoot, CompilerPattern, LinkerPattern, VersionInfo, RootPid, ShowConfig, ShowStat
+    from client.mod_dbops import ParseDB, Postprocess, StoreCache
+    from client.mod_compilation import Compiled, CompilationInfo, RevCompsFor
+    from client.mod_dependencies import DepsFor,  RevDepsFor
+    from client.mod_executables import Binaries, Commands
+    from client.mod_modules import LinkedModules, ModDepsFor, RevModDepsFor
+    from client.mod_opened_files import Faccess, ProcRef, RefFiles
     return {
         # Modules using database
         'binaries': Binaries, 'bins': Binaries, 'b': Binaries,
@@ -33,6 +34,7 @@ def get_api_modules() -> dict:
         'faccess': Faccess, 'fa': Faccess,
         'linked_modules': LinkedModules, 'lm': LinkedModules, 'm': LinkedModules,
         'moddeps_for': ModDepsFor,
+        'revmoddeps_for': RevModDepsFor,
         'procref': ProcRef, 'pr': ProcRef,
         'ref_files': RefFiles, 'refs': RefFiles,
         'revcomps_for': RevCompsFor, 'rcomps': RevCompsFor,
@@ -41,7 +43,7 @@ def get_api_modules() -> dict:
         'compiler_pattern': CompilerPattern,
         'linker_pattern': LinkerPattern,
         'root_pid': RootPid, 'rpid': RootPid,
-        'version': VersionInfo, 'ver': VersionInfo,
+        'version': VersionInfo, 'ver': VersionInfo, 'dbversion': VersionInfo,
         'source_root': SourceRoot, 'sroot': SourceRoot,
         'config': ShowConfig, 'cfg': ShowConfig,
         'stat': ShowStat,
@@ -52,7 +54,7 @@ def get_api_modules() -> dict:
     }
 
 
-def get_api_keywords() -> list:
+def get_api_keywords() -> List[str]:
     """
     Function used to get api keyword list.
 
@@ -76,7 +78,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         args = sys.argv[1:]
     else:
         args = list(args)
-    parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG", add_help=False)
+    parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", add_help=False)
     common_group = parser.add_argument_group("Common arguments")
 
     common_group.add_argument("--verbose", "-v", action="store_true", help="Verbalize action")
@@ -97,6 +99,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
 
     common_group.add_argument('--entries-per-page', '-n', type=int, default=None, help='Number of records to display (default: depends on output renderer). Passing 0 will display all.')
     common_group.add_argument('--page', '-p', type=int, default=0, help='')
+    common_group.add_argument('--count', '-l', action='store_true', default=False, help='Display only returned items count.')
 
     def range_type(arg_value, pat=re.compile(r"\[(?:\:?-?\d+\:?){1,3}\]")):
         if not pat.match(arg_value):
@@ -106,6 +109,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     common_group.add_argument('--range', type=range_type, default=None, help='Limit range of returned records - exact copy of python list index [idx] or slice [start:stop:step]')
 
     common_group.add_argument('--sorted', '--sort', '-s', action='store_true', default=False, help='Sort results')
+    common_group.add_argument('--sorting-key', type=str, default=None, help='Sort results')
     common_group.add_argument('--reverse', action='store_true', default=False, help='Reverse sort')
     common_group.add_argument('--relative', '-R', action='store_true', default=False, help='Display file paths relative source root directory')
     common_group.add_argument('--original-path', action='store_true', default=False, help='Use original symlink path instead of target path.')
@@ -134,14 +138,14 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     return parser
 
 
-def get_argparser_pipeline(args=None) -> tuple:
+def get_argparser_pipeline(args: "List[str] | None" = None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
     Function takes args and splits them into common args and list of pipeline args.
 
     :param args: optional arguments - used in test scenarios, defaults to None
-    :type args: list, optional
+    :type args: List[str] | None
     :return: tuple with organized arguments
-    :rtype: tuple
+    :rtype: Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]
     """
     if args is None:
         args = sys.argv[1:]
@@ -150,10 +154,10 @@ def get_argparser_pipeline(args=None) -> tuple:
     parser = get_common_parser(args)
     common_args, remaining_args = parser.parse_known_args(args)
 
-    pipelines = []
+    pipelines: List[List[str]] = []
     pipeline_split = get_api_keywords()
     cmd = remaining_args
-    buff = []
+    buff: List[str] = []
     for x in cmd:
         if len(buff) == 0 and x not in pipeline_split:
             print("ERROR Unknown module '{}'! use one of {}".format(x, pipeline_split))
@@ -166,12 +170,12 @@ def get_argparser_pipeline(args=None) -> tuple:
     if len(buff) > 0:
         pipelines.append(buff)
 
-    pipeline_args = []
+    pipeline_args: List[argparse.Namespace] = []
     for p in pipelines:
         module_name = p.pop(0).replace("--", "")
         m = get_api_modules().get(module_name, None)
         if m is None:
-            print("ERROR: unrecognized module module '{}'.".format(m))
+            print("ERROR: unrecognized module '{}'.".format(m))
             sys.exit(2)
         module_args, rest = m.get_argparser().parse_known_args(p)
         if len(rest) > 0:
@@ -190,15 +194,14 @@ def get_argparser_pipeline(args=None) -> tuple:
     return common_args, pipeline_args, parser
 
 
-def get_args(commandline=None) -> tuple:
+def get_args(commandline:"str | List[str] | None"=None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
-    Function gets commandline from `sys.argv` or `commandline` and splits it to common and pipeline args.
+    Function gets commandline from `sys.argv` or `commandline` parameter and splits it to common and pipeline args.
 
-    Args:
-        commandline (list, optional): Optional command line args list. Defaults to None.
-
-    Returns:
-        tuple: prepared argparsers
+    :param commandline: Optional command line args list. Defaults to None.
+    :type commandline: str | List[str] | None
+    :return: tuple with organized arguments
+    :rtype: Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]
     """
     if commandline:
         common_args, pipeline_args, common_parser = get_argparser_pipeline(commandline if isinstance(commandline, list) else commandline.split())
@@ -210,6 +213,8 @@ def get_args(commandline=None) -> tuple:
             args.path = sum([p.replace("'", "").replace('"', '').split(":") for p in args.path], [])
         if "select" in args and args.select:
             args.select = sum([p.replace("'", "").replace('"', '').split(":") for p in args.select], [])
+        if "append" in args and args.append:
+            args.append = sum([p.replace("'", "").replace('"', '').split(":") for p in args.append], [])
         if "pid" in args and args.pid:
             args.pid = sum([p.replace("'", "").replace('"', '').split(",") for p in args.pid], [])
             args.pid = [int(p) for p in args.pid]
@@ -226,16 +231,17 @@ def get_bash_complete() -> str:
     """
     Function returns bash completion string
 
-    Returns:
-        str: bash completion string
+    :return: bash completion string
+    :rtype: str
     """
+    from client.mod_base import Module
     common_actions = [name for x in get_common_parser()._actions for name in x.option_strings]
     actions = []
     if len(sys.argv) > 2:
         try:
             last_module = [x for x in reversed(sys.argv) if x in get_api_keywords()]
-            actions = [name for x in get_api_modules().get(last_module[0]).get_argparser()._actions for name in x.option_strings]
-        except:
+            actions = [name for x in get_api_modules().get(last_module[0], Module).get_argparser()._actions for name in x.option_strings]
+        except Exception:
             pass
     return "\n".join(get_api_keywords() + common_actions + actions)
 
@@ -252,3 +258,204 @@ def merge_args(arg1: argparse.Namespace, arg2: argparse.Namespace) -> argparse.N
     :rtype: argparse.Namespace
     """
     return argparse.Namespace(**vars(arg1), **vars(arg2))
+
+args_mapping = {
+    "path": lambda x: x.add_argument(
+        '--path',
+        type=str,
+        action='append',
+        default=None,
+        help='Parameter path(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "pid": lambda x: x.add_argument(
+        '--pid',
+        type=str,
+        action='append',
+        default=None,
+        help='Parameter pid(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "select": lambda x: x.add_argument(
+        '--select', '-S',
+        type=str,
+        action='append',
+        default=None,
+        help='Parameter select(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "append": lambda x: x.add_argument(
+        '--append', '-a',
+        type=str,
+        action='append',
+        default=None,
+        help='Manually add result(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "filter": lambda x: x.add_argument(
+        '--filter', '-f',
+        type=str,
+        default=None,
+        help='Filter results'
+    ),
+    "commands": lambda x: x.add_argument(
+        '--commands', '--show-commands',
+        dest='show_commands',
+        action='store_true',
+        default=False,
+        help='Convert file view to commands view'
+    ),
+    "details": lambda x: x.add_argument(
+        '--details', '-t',
+        action='store_true',
+        default=False,
+        help='Changes simple entries list to more verbose format'
+    ),
+    "cdm": lambda x: x.add_argument(
+        '--compilation-dependency-map', '--cdm',
+        dest='cdm',
+        action='store_true',
+        default=False,
+        help='Display compilation dependency map of results'
+    ),
+    "cdm-ex-pt": lambda x: x.add_argument(
+        '--cdm-exclude-patterns',
+        type=str,
+        default=None,
+        help='Exclude patterns for compilation-dependency-map'
+    ),
+    "cdm-ex-fl": lambda x: x.add_argument(
+        '--cdm-exclude-files',
+        type=str,
+        default=None,
+        help='Exclude files for compilation-dependency-map'
+    ),
+    "revdeps": lambda x: x.add_argument(
+        '--revdeps', '-V',
+        action='store_true',
+        default=False,
+        help='Display reverse dependencies of results'
+    ),
+    "rdm": lambda x: x.add_argument(
+        '--reverse-dependency-map', '--rdm',
+        dest='rdm',
+        action='store_true',
+        default=False,
+        help='Display reversed dependency map of results'
+    ),
+    "recursive": lambda x: x.add_argument(
+        '--recursive', '-r',
+        action='store_true',
+        default=False,
+        help=''
+    ),
+    "with-children": lambda x: x.add_argument(
+        '--with-children',
+        action='store_true',
+        default=False,
+        help='Include process child opened files in results'
+    ),
+    "link-type": lambda x: x.add_argument(
+        '--link-type', '-T',
+        type=str,
+        default=None,
+        choices=['shared', 'static', 'exe'],
+        help='Specify linking type'
+    ),
+    "direct": lambda x: x.add_argument(
+        '--direct',
+        action='store_true',
+        default=False,
+        help='Use direct dependencies - dependency processing is stopped if file is module.'),
+
+    "parent": lambda x: x.add_argument(
+        '--parent',
+        action='store_true',
+        default=False,
+        help=''
+    ),
+    "binary": lambda x: x.add_argument(
+        '--binary', '-b',
+        type=str,
+        action='append',
+        default=None,
+        help='Parameter binary(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "raw-command": lambda x: x.add_argument(
+        '--raw-command', '-R',
+        action='store_true',
+        default=False,
+        help='Show command as list of arguments'
+    ),
+    "extended": lambda x: x.add_argument(
+        '--extended', '-e',
+        action='store_true',
+        default=False,
+        help='Include additional info about compilation and linking (CC, CXX, C++, AS, LD)'
+    ),
+    "filerefs": lambda x: x.add_argument(
+        '--filerefs', '-F',
+        action='store_true',
+        default=False,
+        help='UNSUPPORTED'
+    ),
+    "dep-graph": lambda x: x.add_argument(
+        '--dep-graph', '-G',
+        action='store_true',
+        default=False,
+        help='Display generated dependencies as graph'
+    ),
+    "wrap-deps": lambda x: x.add_argument(
+        '--wrap-deps', '-w',
+        action='store_true',
+        default=False,
+        help='Dependency processing with respect of wrapping process.'
+    ),
+    "with-pipes": lambda x: x.add_argument(
+        '--with-pipes', '-P',
+        action='store_true',
+        default=False,
+        help='Dependency processing with respect of piped process.'
+    ),
+    "timeout": lambda x: x.add_argument(
+        '--timeout', '-tm',
+        type=int,
+        default=None,
+        help='Set timeout on dependency processing'
+    ),
+    "direct-global": lambda x: x.add_argument(
+        '--direct-global', '--Dg',
+        action='store_true',
+        default=False,
+        help=''
+    ),
+    "dry-run": lambda x: x.add_argument(
+        '--dry-run', '-N',
+        action='store_true',
+        help=''
+    ),
+    "debug-fd": lambda x: x.add_argument(
+        '--debug-fd', '--df',
+        action='store_true',
+        default=False,
+        help='Print debug information from dependency processing'
+    ),
+    "match": lambda x: x.add_argument(
+        '--match', '-m',
+        action='store_true',
+        default=False,
+        help='Add matched files to return view'
+    ),
+    "cached": lambda x: x.add_argument(
+        '--cached',
+        action='store_true',
+        default=False,
+        help='Use pre-generated dependency database instead of real-time deps generation.'
+    ),
+    "cdb": lambda x: x.add_argument(
+        '--cdb',
+        action='store_true',
+        default=False,
+        help='Output compilations as compilation database'
+    )
+}
+
+def add_args(args: list, parser):
+    for arg in args:
+        args_mapping[arg](parser)

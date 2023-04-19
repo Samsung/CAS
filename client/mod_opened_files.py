@@ -1,27 +1,33 @@
 import argparse
 import sys
-from client.mod_base import Module
+from client.mod_base import Module, PipedModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argmap import add_args as add_args
+from client.argparser import add_args
 
-class Faccess(Module):
+class Faccess(Module, PipedModule):
     """
     Module get process list that referenced given file path(s)
-    """    
+    """
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="File access module displays all processes that read given path(s) with access mode information.", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("File access module generation arguments")
+        module_parser = argparse.ArgumentParser(description="File access module displays all processes that read given path(s) with access mode information.")
+        arg_group = module_parser.add_argument_group("File access module generation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
             "path"
             ]
-            , g)
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return self.subject(ent)
+
+    def exclude_subject(self, ent) -> str:
+        return self.subject(ent)
 
     def subject(self, ent) -> str:
         return ent.original_path if self.args.original_path else ent.path
@@ -42,7 +48,7 @@ class Faccess(Module):
             data = list({
                 self.get_exec_of_open(o)
                 for o in self.nfsdb.get_opens_of_path(self.args.path)
-                if self.filter_open(o) and self.filter_exec(self.get_exec_of_open(o))
+                if self.filter_exec(self.get_exec_of_open(o)) and self.filter_open(o)
             })
             return data, DataTypes.commands_data, lambda x: x.eid.pid
         elif self.args.details:
@@ -61,16 +67,16 @@ class Faccess(Module):
             return data, DataTypes.process_data, lambda x: x[0]
 
 
-class ProcRef(Module):
+class ProcRef(Module, PipedModule):
     """
     Module used to get files referenced by given process.
     """
     required_args = ["pid:1+"]
-    
+
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Process references module arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
+        arg_group = module_parser.add_argument_group("Process references module arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
@@ -81,8 +87,14 @@ class ProcRef(Module):
             "rdm",
             "recursive",
             "link-type" ]
-            , g)
+            ,arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return self.subject(ent)
+
+    def exclude_subject(self, ent) -> str:
+        return self.subject(ent)
 
     def subject(self, ent) -> str:
         return ent.original_path if self.args.original_path else ent.path
@@ -135,8 +147,8 @@ class RefFiles(Module):
 
     @staticmethod
     def get_argparser():
-        parser = argparse.ArgumentParser(description="This module is used to query all files referenced during traced process execution.", epilog="TODO EPILOG")
-        g = parser.add_argument_group("Referenced Files arguments")
+        parser = argparse.ArgumentParser(description="This module is used to query all files referenced during traced process execution.")
+        arg_group = parser.add_argument_group("Referenced Files arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
@@ -145,12 +157,23 @@ class RefFiles(Module):
             "revdeps",
             "rdm",
             "recursive",
-            "link-type"]
-            , g)
+            "link-type","cdb"]
+            , arg_group)
         return parser
 
+    def select_subject(self, ent) -> str:
+        return self.subject(ent)
+
+    def exclude_subject(self, ent) -> str:
+        return self.subject(ent)
+
     def subject(self, ent) -> str:
-        return ent.path
+        if self.args.show_commands:
+            return ent.binary
+        elif self.args.details:
+            return ent
+        else:
+            return ent.path
 
     def get_data(self) -> tuple:
         if self.args.show_commands:

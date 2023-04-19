@@ -32,7 +32,7 @@ class DataTypes(Enum):
 class OutputRenderer:
     default_entries_count = 0
 
-    def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda:LambdaType) -> None:
+    def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: LambdaType) -> None:
         self.args = args
         self.num_entries = len(data) if isinstance(data, list) else -1
 
@@ -40,7 +40,7 @@ class OutputRenderer:
             self.args.entries_per_page = self.default_entries_count
 
         if self.args.range:
-            parts = self.args.range.replace("[","").replace("]","").split(":")
+            parts = self.args.range.replace("[", "").replace("]", "").split(":")
             if len(parts) == 1:
                 self.data = [data[int(parts[0])]]
             elif len(parts) == 2:
@@ -84,8 +84,10 @@ class OutputRenderer:
         }[self.output_type]
 
     def render_data(self):
-        if self.args.sorted and self.output_type.value < DataTypes.config_data.value:
+        if not self.args.count and self.args.sorted and self.output_type.value < DataTypes.config_data.value:
             self.data = sorted(self.data, key=self.sort_lambda)
+        if self.args.count:
+            return self.count_renderer()
         return self.output_renderer()
 
     @abstractmethod

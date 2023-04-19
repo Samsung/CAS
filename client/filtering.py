@@ -1,7 +1,9 @@
 import re
 from fnmatch import translate as translate_wc_to_re
+from typing import List, Dict, Tuple, Optional
 import libetrace
 
+from libcas import CASConfig
 
 class Filter:
     """
@@ -11,19 +13,15 @@ class Filter:
 
     string example:
     (path=/abs,type=wc)or(class=compiled)and(path=*.c,type=wc)
-
-    object example
-    [ [ {"path":"/abs", "type":"wc"} ] , [ {"class": "compiled"} , {"path": "*.c" , "type" : "wc"} ] ]
-
     """
     def __init__(self, flt, origin, config, source_root) -> None:
-        self.filter_dict = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
+        self.filter_dict: List[List[Dict[str, "str|bool|int|re.Pattern"]]] = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
         self.config = config
         self.source_root = source_root
         self.origin = origin
-        self.needs_compilation = False
-        self.needs_linking = False
-        self.parameters_schema = {
+        self.needs_compilation: bool = False
+        self.needs_linking: bool = False
+        self.parameters_schema: Dict[str, Optional[List[str]]] = {
             "class": ["linked", "linked_static", "linked_shared", "linked_exe", "compiled", "plain", "compiler", "linker"],
             "type": ["re", "wc", "ex"],
             "path": None,
@@ -61,25 +59,36 @@ class Filter:
                     f_and['type'] = "ex"
 
                 if 'path' in f_and:
-                    if f_and['type'] == "wc":
+                    if f_and['type'] == "wc" or f_and['type'] == "ex":
+                        if f_and['type'] == "ex":
+                            f_and["path"] = f'*{f_and["path"]}*'
                         f_and['type'] = "re"
                         f_and['path_pattern'] = re.compile(translate_wc_to_re(f_and["path"]))
                     elif f_and['type'] == "re":
                         f_and['path_pattern'] = re.compile(f_and["path"])
-                elif 'type' in f_and and 'cwd' in f_and:
-                    if f_and['type'] == "wc":
+                elif 'cwd' in f_and:
+                    if f_and['type'] == "wc" or f_and['type'] == "ex":
+                        if f_and['type'] == "ex":
+                            f_and["cwd"] = f'*{f_and["cwd"]}*'
                         f_and['type'] = "re"
                         f_and['cwd_pattern'] = re.compile(translate_wc_to_re(f_and["cwd"]))
                     elif f_and['type'] == "re":
                         f_and['cwd_pattern'] = re.compile(f_and["cwd"])
-                elif 'type' in f_and and 'bin' in f_and:
-                    if f_and['type'] == "wc":
+                elif 'bin' in f_and:
+                    if f_and['type'] == "wc" or f_and['type'] == "ex":
+                        if f_and['type'] == "ex":
+                            f_and["bin"] = f'*{f_and["bin"]}*'
                         f_and['type'] = "re"
                         f_and['bin_pattern'] = re.compile(translate_wc_to_re(f_and["bin"]))
                     elif f_and['type'] == "re":
                         f_and['bin_pattern'] = re.compile(f_and["bin"])
-                elif 'type' in f_and and 'cmd' in f_and:
-                    if f_and['type'] == "re":
+                elif 'cmd' in f_and:
+                    if f_and['type'] == "wc" or f_and['type'] == "ex":
+                        if f_and['type'] == "ex":
+                            f_and["cmd"] = f'*{f_and["cmd"]}*'
+                        f_and['type'] = "re"
+                        f_and['cmd_pattern'] = re.compile(translate_wc_to_re(f_and["cmd"]))
+                    elif f_and['type'] == "re":
                         f_and['cmd_pattern'] = re.compile(f_and["cmd"])
 
                 if 'type' not in f_and and len(main_keywords) > 0:
@@ -111,10 +120,16 @@ class Filter:
 
         self.ored = len(self.filter_dict) > 1
         self.anded = len([f_and for f_or in self.filter_dict for f_and in f_or]) > 1
+        if self.origin and self.origin.args.debug:
+            print (self.filter_dict)
+        if self.origin and self.origin.args.debug:
+            print(self.libetrace_filter)
 
     @staticmethod
-    def _process_part(filter_part) -> dict:
+    def _process_part(filter_part) -> Dict:
         filter_part = filter_part.replace("(", "").replace(")", "")
+        if len(filter_part) == 0:
+            raise FilterException("Empty filter part!")
         ret = {}
         for filter_part in filter_part.split(","):
             if len(filter_part.split("=")) == 2:
@@ -124,7 +139,7 @@ class Filter:
         return ret
 
     @staticmethod
-    def _filter_str_to_dict(filter_string: str) -> list:
+    def _filter_str_to_dict(filter_string: str) -> List:
         filter_string = filter_string.replace('[', '(').replace(']', ')').replace(')OR(', ')or(').replace(')AND(', ')and(')
         for _ in range(filter_string.count(" ")):
             filter_string = filter_string.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
@@ -143,21 +158,25 @@ class Filter:
         """
         ret = True
 
-        if filter_part["filter_class"]:
+        if ret and filter_part["filter_class"]:
             if filter_part["class"] == "compiled":
-                ret = ret and (opn.opaque is not None and opn.opaque.compilation_info is not None)
+                ret = ret and (opn.opaque is not None and opn.opaque.compilation_info is not None and opn.opaque.compilation_info.file_paths[0] == opn.path)
             elif filter_part["class"] == "linked":
-                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None)
+                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_path == opn.path)
             elif filter_part["class"] == "linked_static":
-                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_type == 0)
+                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_path == opn.path and opn.opaque.linked_type == 0)
             elif filter_part["class"] == "linked_shared":
-                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_type == 1 and ("-shared" in opn.opaque.argv or "--shared" in opn.opaque.argv))
+                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_path == opn.path and opn.opaque.linked_type == 1 and ("-shared" in opn.opaque.argv or "--shared" in opn.opaque.argv))
             elif filter_part["class"] == "linked_exe":
-                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_type == 1 and not ("-shared" in opn.opaque.argv or "--shared" in opn.opaque.argv))
+                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None and opn.opaque.linked_path == opn.path and opn.opaque.linked_type == 1 and not ("-shared" in opn.opaque.argv or "--shared" in opn.opaque.argv))
+            elif filter_part["class"] == "compiler":
+                ret = ret and (opn.opaque is not None and opn.opaque.compilation_info is not None)
+            elif filter_part["class"] == "linker":
+                ret = ret and (opn.opaque is not None and opn.opaque.linked_file is not None)
             elif filter_part["class"] == "plain":
                 ret = ret and (opn.opaque is None)
 
-        if filter_part["filter_source_type"]:
+        if ret and filter_part["filter_source_type"]:
             if opn.path in self.origin.get_src_types():
                 if filter_part["source_type"] == "c":
                     ret = ret and (self.origin.get_src_types()[opn.path] == 1)
@@ -168,7 +187,7 @@ class Filter:
             else:
                 ret = ret and False
 
-        if filter_part["filter_access"]:
+        if ret and filter_part["filter_access"]:
             if filter_part["access"] == "r":
                 ret = ret and (opn.is_read() and not opn.is_write())
             elif filter_part["access"] == "w":
@@ -176,7 +195,7 @@ class Filter:
             elif filter_part["access"] == "rw":
                 ret = ret and (opn.is_read() and opn.is_write())
 
-        if filter_part["filter_exists"]:
+        if ret and filter_part["filter_exists"]:
             if filter_part["exists"] == "1":
                 ret = ret and (not opn.is_dir() and opn.exists() == 1)
             elif filter_part["exists"] == "0":
@@ -184,19 +203,19 @@ class Filter:
             elif filter_part["exists"] == "2":
                 ret = ret and (opn.is_dir() and opn.exists() == 1)
 
-        if filter_part["filter_link"]:
+        if ret and filter_part["filter_link"]:
             if filter_part["link"] == "1":
                 ret = ret and (opn.is_symlink())
             elif filter_part["link"] == "0":
                 ret = ret and (not opn.is_symlink())
 
-        if filter_part["filter_source_root"]:
-            if filter_part["source_root"] == "1":
+        if ret and filter_part["filter_source_root"]:
+            if filter_part["source_root"] == "1" or filter_part["source_root"] == "true":
                 ret = ret and (opn.path.startswith(self.source_root))
-            elif filter_part["source_root"] == "0":
+            elif filter_part["source_root"] == "0" or filter_part["source_root"] == "false":
                 ret = ret and (not opn.path.startswith(self.source_root))
 
-        if filter_part["filter_path"]:
+        if ret and filter_part["filter_path"]:
             if "path_pattern" in filter_part:
                 ret = ret and (False if not filter_part['path_pattern'].match(opn.path) else True)
             else:
@@ -204,7 +223,7 @@ class Filter:
 
         return ret if (not filter_part.get("negate", "false") == "true") else not ret
 
-    def _match_exec_filter(self, exe: libetrace.nfsdbEntry, filter_part: dict) -> bool:
+    def _match_exec_filter(self, exe: libetrace.nfsdbEntry, filter_part: Dict) -> bool:
         """
         Function check if exec should pass filter part.
 
@@ -233,7 +252,7 @@ class Filter:
             if "cmd_pattern" in filter_part:
                 ret = ret and (False if not filter_part['cmd_pattern'].match(" ".join(exe.argv)) else True)
             else:
-                ret = ret and (" ".join(exe.argv) == filter_part["cwd"])
+                ret = ret and (" ".join(exe.argv) == filter_part["cmd"])
 
         if filter_part["filter_bin"]:
             if 'bin_pattern' in filter_part:

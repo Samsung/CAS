@@ -1,21 +1,33 @@
 import argparse
 import sys
-from client.mod_base import Module
+from client.mod_base import Module, PipedModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argmap import add_args as add_args
+from client.argparser import add_args
 
 class Compiled(Module):
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Compiled files arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("Compiled files arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
-            "revdeps"]
-            , g)
+            "revdeps", "cdb"]
+            , arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        if self.args.show_commands:
+            return ent.compilation_info.files[0].path
+        else:
+            return ent.original_path if self.args.original_path else ent.path
+
+    def exclude_subject(self, ent) -> str:
+        if self.args.show_commands:
+            return ent.compilation_info.files[0].path
+        else:
+            return ent.original_path if self.args.original_path else ent.path
 
     def subject(self, ent) -> str:
         if self.args.show_commands:
@@ -31,6 +43,8 @@ class Compiled(Module):
                 for o in ent.compilation_info.files
                 if self.filter_open(o) and self.filter_exec(ent)
             })
+            if self.args.cdb:
+                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
             return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0].path
         elif self.args.details:
             data = list({
@@ -55,21 +69,27 @@ class Compiled(Module):
             return data, DataTypes.compiled_data, None
 
 
-class RevCompsFor(Module):
+class RevCompsFor(Module, PipedModule):
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Reverse compilation arguments")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("Reverse compilation arguments")
         add_args( [
             "filter", "select", "append",
             "details", "commands",
             "path",
             "revdeps",
-            "match"]
-            , g)
+            "match", "cdb"]
+            , arg_group)
         return module_parser
+
+    def select_subject(self, ent) -> str:
+        return ent.compilation_info.files[0].path
+
+    def exclude_subject(self, ent) -> str:
+        return ent.compilation_info.files[0].path
 
     def subject(self, ent) -> str:
         return ent.compilation_info.files[0].path
@@ -110,14 +130,14 @@ class RevCompsFor(Module):
             return data, DataTypes.compiled_data, None
 
 
-class CompilationInfo(Module):
+class CompilationInfo(Module, PipedModule):
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="This module display extended compilation information.", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Compilation info arguments")
-        add_args( ["path"], g)
+        module_parser = argparse.ArgumentParser(description="This module display extended compilation information.")
+        arg_group = module_parser.add_argument_group("Compilation info arguments")
+        add_args( ["path", "details"], arg_group)
         return module_parser
 
     def set_piped_arg(self, data, data_type):

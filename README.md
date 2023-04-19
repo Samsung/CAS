@@ -54,7 +54,8 @@ export CAS_DIR=$(pwd)
 
 You can build all components using any decent compiler however for FTDB processor to work you'll need `llvm` and `clang` in version 10. In standard Ubuntu 20.04 distribution the above command will install this version by default. In case of other OS arrangements please make sure that the `llvm-config --version` returns `10.0.0`. Alternatively you can pass `-DLLVM_CONFIG_BIN=llvm-config-10` to cmake invocation to properly setup the clang processor based on clang 10 libraries.
 
-First build the tracer:
+Building the tracer:
+
 ```bash
 (cd ${CAS_DIR}/tracer && make && sudo make modules_install)
 ```
@@ -68,7 +69,7 @@ After the tracer module is installed setup the tracing wrapper:
 
 This will modify your sudoers file to allow for using the tracer kernel module by any user in the system.
 
-Now build rest of the tools in the CAS suite:
+Building CAS libraries:
 ```bash
 mkdir -p ${CAS_DIR}/build_release && cd ${CAS_DIR}/build_release
 # This will configure to build with standard system compiler 'cc'

@@ -1,9 +1,10 @@
 import json
 import os
 import sys
+from typing import Tuple, Dict
+from types import ModuleType
 
-
-def get_file_info(mode: int) -> "tuple[int, int, int]":
+def get_file_info(mode: int) -> Tuple[int, int, int]:
     """
     Function split opened file bit value ( 0emmmmxx ) into:
     - exist value bit 1
@@ -83,7 +84,7 @@ def stat_from_code(stat_value: int) -> str:
     }[stat_value]
 
 
-def fix_cmd(cmd: list, join=True) -> str:
+def fix_cmd(cmd: list, join: bool = True) -> str:
     """
     Function used to escape special char in command line and returns them in json-friendly version.
 
@@ -103,7 +104,7 @@ def fix_cmd(cmd: list, join=True) -> str:
         return json.dumps(cmd.rstrip().replace("\\", "\\\\").replace("\"", "\\\"").replace(" ", "\\ "))
 
 
-def fix_cmd_makefile(cmd: list, static=False) -> str:
+def fix_cmd_makefile(cmd: list, static: bool = False) -> str:
     """
     Function used to escape special char in command line and returns them in makefile-friendly version.
 
@@ -122,7 +123,7 @@ def fix_cmd_makefile(cmd: list, static=False) -> str:
             if x != "" else "\\\"\\\"" for x in cmd]) if isinstance(cmd, list) else cmd
 
 
-def get_output_renderers() -> dict:
+def get_output_renderers() -> Dict[str, ModuleType]:
     """
     Function check for output renderers and returns map with names and Renderer object.
 
