@@ -15,6 +15,7 @@ class DataTypes(Enum):
     rdm_data = 8
     dep_graph_data = 9
     cdm_data = 10
+    compilation_db_data = 11
 
     # Dict view
     config_data = 21
@@ -51,6 +52,8 @@ class OutputRenderer:
                 assert False, "Wrong range!"
         else:
             if isinstance(data, list) and self.args.entries_per_page != 0:
+                if len(data) < (self.args.page * self.args.entries_per_page):
+                    self.args.page = int(len(data)/self.args.entries_per_page)
                 self.data = data[self.args.page * self.args.entries_per_page:(self.args.page + 1) * self.args.entries_per_page]
             else:
                 self.data = data
@@ -71,6 +74,7 @@ class OutputRenderer:
             DataTypes.commands_data: self.commands_data_renderer,
             DataTypes.compiled_data: self.compiled_data_renderer,
             DataTypes.compilation_info_data: self.compilation_info_data_renderer,
+            DataTypes.compilation_db_data: self.compilation_db_data_renderer,
             DataTypes.rdm_data: self.rdm_data_renderer,
             DataTypes.cdm_data: self.cdm_data_renderer,
             DataTypes.dep_graph_data: self.dep_graph_data_renderer,
@@ -124,6 +128,10 @@ class OutputRenderer:
 
     @abstractmethod
     def cdm_data_renderer(self):
+        self.assert_not_implemented()
+
+    @abstractmethod
+    def compilation_db_data_renderer(self):
         self.assert_not_implemented()
 
     @abstractmethod

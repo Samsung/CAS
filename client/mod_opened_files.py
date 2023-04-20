@@ -185,6 +185,8 @@ class RefFiles(Module):
                 self.get_exec_of_open(o)
                 for o in self.nfsdb.opens_iter()
             })
+            if self.args.cdb:
+                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
             return data, DataTypes.commands_data, lambda x: x.eid.pid
         elif self.args.details:
             data = [

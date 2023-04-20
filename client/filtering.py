@@ -14,7 +14,7 @@ class Filter:
     string example:
     (path=/abs,type=wc)or(class=compiled)and(path=*.c,type=wc)
     """
-    def __init__(self, flt, origin, config, source_root) -> None:
+    def __init__(self, flt, origin, config: CASConfig, source_root: str) -> None:
         self.filter_dict: List[List[Dict[str, "str|bool|int|re.Pattern"]]] = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
         self.config = config
         self.source_root = source_root
@@ -145,7 +145,7 @@ class Filter:
             filter_string = filter_string.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
         return [[Filter._process_part(f) for f in ors.split(")and(")] if ")and(" in ors else [Filter._process_part(ors)] for ors in filter_string.split(")or(")]
 
-    def _match_opens_filter(self, opn: libetrace.nfsdbEntryOpenfile, filter_part: dict) -> bool:
+    def _match_opens_filter(self, opn: libetrace.nfsdbEntryOpenfile, filter_part: Dict) -> bool:
         """
         Function check if open should pass filter part.
 

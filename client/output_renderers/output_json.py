@@ -104,11 +104,11 @@ class Renderer(OutputRenderer):
         return self.formatter()                                
 
     def compilation_info_data_renderer(self):
-        return self.formatter(self._compilation_info_entry_format)     
+        return self.formatter(self._compilation_info_entry_format)
 
     def _str_entry_format(self, row):
         if isinstance(row, str):
-            if row[0] == '"' and row[-1] == '"':
+            if '"' in row and row[0] == '"' and row[-1] == '"':
                 return '        {}'.format(self.origin_module.get_path(row))
             else:
                 return '        "{}"'.format(self.origin_module.get_path(row))
@@ -126,7 +126,7 @@ class Renderer(OutputRenderer):
             "cwd": "{cwd}",
             "command": {command}{linked}{compiled}{objects}
         }}'''.format(
-            cls="compilation" if row.compilation_info is not None else "linker" if row.is_linking() else "command",
+            cls="compiler" if row.compilation_info is not None else "linker" if row.linked_file is not None else "command",
             pid=row.eid.pid,
             idx=row.eid.index,
             ppid=row.parent_eid.pid if hasattr(row, "parent_eid") else -1,
@@ -181,12 +181,12 @@ class Renderer(OutputRenderer):
             "pid": {pid}
         }}'''.format(access=access_from_code(get_file_info(row[1])[2]), pid=row[0])
 
-    def _file_entry_format(self, row):
+    def _file_entry_format(self, row:libetrace.nfsdbEntryOpenfile):
         return '''        {{
             "filename": "{filename}",
             "original_path": "{original_path}",
             "ppid": {ppid},
-            "type": "plain",
+            "type": "{type}",
             "access": "{access}",
             "exists": {exists},
             "link": {link}
@@ -194,7 +194,8 @@ class Renderer(OutputRenderer):
             filename=self.origin_module.get_path(row.path),
             original_path=row.original_path,
             ppid=row.parent.eid.pid,
-            access=access_from_code(get_file_info(row.mode)[2]), 
+            type = "linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path  else "plain",
+            access=access_from_code(get_file_info(row.mode)[2]),
             exists=1 if row.exists() else 0,
             link=1 if row.is_symlink() else 0
         )
@@ -224,6 +225,16 @@ class Renderer(OutputRenderer):
             filename=filename,
             refs=("" if not row.opens else '\n            '+',\n            '.join(['"{}"'.format(o.path) for o in row.opens]) + "\n        ")
         )
+
+    def compilation_db_data_renderer(self):
+        return "[\n" + ',\n'.join([self.compilation_db_formatter(row) for row in self.data]) + "\n]"
+
+    def compilation_db_formatter(self, row:libetrace.nfsdbEntry):
+        return '''    {{\n        "directory": "{dir}",\n        "command": {cmd},\n        "file": "{filename}"\n    }}'''.format(
+                filename=row.compilation_info.file_paths[0],
+                cmd=fix_cmd(row.argv),
+                dir=row.cwd
+                )
 
     def cdm_data_renderer(self):
         return "{\n" + ',\n'.join([self.cdm_formatter(row) for row in self.data]) + "\n}"

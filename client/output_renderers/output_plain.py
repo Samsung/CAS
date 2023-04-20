@@ -100,7 +100,7 @@ class Renderer(OutputRenderer):
             if self.args.entry_detail_fmt:
                 entry_fmt = self.args.entry_detail_fmt.replace("\\n", os.linesep)
             else:
-                entry_fmt = self.output_formats["default-output"][view_name]["entry-detail-fmt"]    
+                entry_fmt = self.output_formats["default-output"][view_name]["entry-detail-fmt"]
         elif self.args.generate:
             if self.args.openrefs:
                 entry_fmt = "{b}{sep}{w}{sep}{v}{sep}{n}"
@@ -116,6 +116,7 @@ class Renderer(OutputRenderer):
     def _file_entry_format(self, row: libetrace.nfsdbEntryOpenfile, entry_fmt):
         return entry_fmt.format(
             f=self.origin_module.get_path(row.path),
+            c="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path  else "plain",
             o=row.original_path,
             p=row.parent.eid.pid,
             t=stat_from_code(get_file_info(row.mode)[1]),

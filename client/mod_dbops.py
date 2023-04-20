@@ -10,11 +10,20 @@ from client.output_renderers.output import DataTypes
 
 
 class ParseDB(Module):
+    """
+    Module used to process raw tracer log to database image file.
+
+    Consumes:
+    - .nfsdb
+
+    Produces:
+    - .nfsdb.img.tmp
+    """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("DB Parsing arguments")
-        g.add_argument('--force', action='store_true', default=False)
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("DB Parsing arguments")
+        arg_group.add_argument('--force', action='store_true', default=False)
         return module_parser
 
     def get_data(self) -> tuple:
@@ -48,28 +57,45 @@ class ParseDB(Module):
 
 
 class Postprocess(Module):
+    """
+    Module used to process information about:
+    - linked files
+    - reverse binary mappings
+    - command patterns
+    - compilations.
+
+    Consumes:
+    - .nfsdb.img.tmp
+
+    Produces:
+    - .nfsdb.comps.json
+    - .nfsdb.rbm.json
+    - .nfsdb.pcp.json
+    - .nfsdb.link.json
+    - .nfsdb.json
+    """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Postprocess arguments")
-        g.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
-        g.add_argument('--allow-pp-in-compilations', '-ap', action="store_true", default=False, help="Compute compiler matches with '-E' as compilations")
-        g.add_argument('--no-auto-detect-icc', '-na', action='store_true', default=False)
-        g.add_argument('--debug-compilations', action='store_true', default=False)
-        g.add_argument('--max-chunk-size', type=int, default=sys.maxsize, help='')
-        g.add_argument("--new-database", action="store_true", default=False, help="Recompute database components during update")
+        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("Postprocess arguments")
+        arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
+        arg_group.add_argument('--allow-pp-in-compilations', '-ap', action="store_true", default=False, help="Compute compiler matches with '-E' as compilations")
+        arg_group.add_argument('--no-auto-detect-icc', '-na', action='store_true', default=False)
+        arg_group.add_argument('--debug-compilations', action='store_true', default=False)
+        arg_group.add_argument('--max-chunk-size', type=int, default=sys.maxsize, help='')
+        arg_group.add_argument("--new-database", action="store_true", default=False, help="Recompute database components during update")
 
-        g.add_argument('--compilations', '-c', action='store_true', default=False)
-        g.add_argument('--linking', '-l', action='store_true', default=False)
-        g.add_argument('--module-dependencies', '-L', action='store_true', default=False, help="")
-        g.add_argument('--rbm', action='store_true', default=False, help="")
+        arg_group.add_argument('--compilations', '-c', action='store_true', default=False)
+        arg_group.add_argument('--linking', '-l', action='store_true', default=False)
+        arg_group.add_argument('--module-dependencies', '-L', action='store_true', default=False, help="")
+        arg_group.add_argument('--rbm', action='store_true', default=False, help="")
 
-        g.add_argument('--rbm-wrapping-binaries', type=str, default=None, help="")
-        g.add_argument('--precompute-command-patterns', '--pcp', action='store_true', default=False, help="")
-        g.add_argument("--link-deps", action="store_true", default=False, help="Compute dependencies for all linked modules")
+        arg_group.add_argument('--rbm-wrapping-binaries', type=str, default=None, help="")
+        arg_group.add_argument('--precompute-command-patterns', '--pcp', action='store_true', default=False, help="")
+        arg_group.add_argument("--link-deps", action="store_true", default=False, help="Compute dependencies for all linked modules")
 
-        g.add_argument('--no-update', '-U', action='store_true', default=False)
-        g.add_argument('--force', action='store_true', default=False)
+        arg_group.add_argument('--no-update', '-U', action='store_true', default=False)
+        arg_group.add_argument('--force', action='store_true', default=False)
         return module_parser
 
     def get_data(self) -> tuple:
@@ -114,15 +140,28 @@ class Postprocess(Module):
 
 
 class StoreCache(Module):
+    """
+    Module used store processed information from postprocess step and calculate dependencies.
+
+    Consumes:
+    - .nfsdb.json
+    - .nfsdb.comps.json
+    - .nfsdb.rbm.json
+    - .nfsdb.pcp.json
+    - .nfsdb.link.json
+
+    Produces:
+    - .nfsdb.img
+    """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description ="TODO DESCRIPTION ", epilog="TODO EPILOG")
-        g = module_parser.add_argument_group("Cache DB arguments")
-        g.add_argument('--create', '-C', action='store_true', default=False)
-        g.add_argument('--deps-create', '-DC', action='store_true', default=False)
-        g.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
-        g.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
-        g.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')" )
+        module_parser = argparse.ArgumentParser(description ="TODO DESCRIPTION ")
+        arg_group = module_parser.add_argument_group("Cache DB arguments")
+        arg_group.add_argument('--create', '-C', action='store_true', default=False)
+        arg_group.add_argument('--deps-create', '-DC', action='store_true', default=False)
+        arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
+        arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
+        arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')" )
         return module_parser
 
     def get_data(self) -> tuple:

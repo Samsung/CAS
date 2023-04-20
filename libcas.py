@@ -198,7 +198,12 @@ class CASDatabase:
         self.cache_db_loaded = self.db.load_deps(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe)
         return self.cache_db_loaded
 
-    def linked_modules(self):
+    @lru_cache(maxsize=1)
+    def linked_modules_paths(self,) -> List[str]:
+        return list({x.path for x in self.linked_modules()})
+
+    @lru_cache(maxsize=1)
+    def linked_modules(self) -> List[libetrace.nfsdbEntryOpenfile]:
         return list({x[0] for x in self.db.linked_modules()})
 
     def get_pid(self, pid: int) -> List[libetrace.nfsdbEntry]:
@@ -302,12 +307,12 @@ class CASDatabase:
         :param wrap_deps: process wrappers (like bash) will be respected
         :type wrap_deps: bool
         :param all_modules: list of all modules - needed in direct deps generation
-        :type all_modules: List[str]        
+        :type all_modules: List[str]
         """
 
         direct = direct_global
         if direct and all_modules is None:
-            assert False, "Pass all_modules if direct is set!"
+            all_modules = self.linked_modules_paths()
 
         if isinstance(epath, str):  # simple path - no excludes
             excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath)
@@ -324,7 +329,7 @@ class CASDatabase:
                 direct = epath.direct
 
             if direct and all_modules is None:
-                assert False, "Pass all_modules if direct is set!"
+                all_modules = self.linked_modules_paths()
 
             excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath.file)
 
@@ -345,19 +350,19 @@ class CASDatabase:
                                      exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
                                      exclude_commands_index=excl_commands_index)
 
-    def get_multi_deps_cached(self, epaths: list, direct_global=False) -> List[libetrace.nfsdbEntryOpenfile]:
+    def get_multi_deps_cached(self, epaths: list, direct_global=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
         """
         Function returns cached list of open files that are dependencies of given file(s).
-        """        
+        """
         ret = []
         for epath in epaths:
             ret += [self.get_module_dependencies(epath, direct=direct_global)]
         return ret
 
-    def get_multi_deps(self, epaths: list, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[libetrace.nfsdbEntryOpenfile]:
+    def get_multi_deps(self, epaths: list, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
         """
         Function returns list of open files that are dependencies of given file(s).
-        """    
+        """
         ret = []
         for epath in epaths:
             ret += [self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]]

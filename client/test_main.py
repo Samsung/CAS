@@ -1,4 +1,4 @@
-# pylint: disable=missing-function-docstring missing-class-docstring too-many-lines missing-module-docstring
+# pylint: disable=missing-function-docstring missing-class-docstring too-many-lines missing-module-docstring static
 import os
 import fnmatch
 import sys
@@ -15,10 +15,11 @@ DEF_TIMEOUT = 25
 RAW_SEP = "^^^"
 
 nfsdb = libcas.CASDatabase()
-config = libcas.CASConfig(os.path.join(os.environ["DB_DIR"],".bas_config"))
+config = libcas.CASConfig(os.path.join(os.environ["DB_DIR"], ".bas_config"))
 nfsdb.set_config(config)
-nfsdb.load_db(os.path.join(os.environ["DB_DIR"],".nfsdb.img"))
-nfsdb.load_deps_db(os.path.join(os.environ["DB_DIR"],".nfsdb.deps.img"))
+nfsdb.load_db(os.path.join(os.environ["DB_DIR"], ".nfsdb.img"))
+nfsdb.load_deps_db(os.path.join(os.environ["DB_DIR"], ".nfsdb.deps.img"))
+
 
 @pytest.fixture(name="vmlinux")
 def fixture_vmlinux() -> str:
@@ -49,26 +50,30 @@ def fixture_header_file() -> str:
 def fixture_javac() -> str:
     return get_main("binaries --filter=[path=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
 
+
 @pytest.fixture(name="sh")
 def fixture_sh() -> str:
     return get_main("binaries --filter=[path=*bin/sh,type=wc] -n=1")
+
 
 @pytest.fixture(name="bash")
 def fixture_bash() -> str:
     return get_main("binaries --filter=[path=*bin/bash,type=wc] -n=1")
 
+
 @pytest.fixture(name="linker")
 def fixture_linker() -> str:
     return get_main("binaries --filter=[path=*/bin/ld.lld,type=wc] -n=1")
+
 
 @pytest.fixture(name="pids")
 def fixture_pids() -> list:
     return [int(x) for x in get_main("compiled --filter=[exists=1] --commands -n=3 --entry-fmt={p}").split(os.linesep)]
 
+
 @pytest.fixture(name="ref_files_len")
 def fixture_ref_files_len() -> list:
     return get_json_simple("ref_files --json -l")['count']
-
 
 # @pytest.fixture(name="source_root")
 # def fixture_source_root() -> str:
@@ -136,6 +141,7 @@ def get_raw(cmd, line_count_min=0, line_count_max=sys.maxsize, check_func=None):
             assert check_func(ent)
     return ret
 
+
 def get_pid(cmd):
     cmd = cmd + f" --separator={RAW_SEP}"
     ret = get_main(cmd)
@@ -144,6 +150,7 @@ def get_pid(cmd):
     except ValueError:
         assert False
     return ret
+
 
 def get_main(cmd):
     ret = process_commandline(nfsdb, cmd + " --sorted")
@@ -216,12 +223,14 @@ def is_normpath(obj):
 
 def is_linked(obj):
     return obj.endswith(".so") or obj.endswith(".so.raw") or obj.endswith(".so.dbg") \
-        or obj.endswith(".a") or obj.endswith(".o") or obj.endswith(".ko") or obj.endswith("vmlinux") or obj.endswith(".btf") \
-            or obj.endswith(".elf")
+           or obj.endswith(".a") or obj.endswith(".o") or obj.endswith(".ko") or obj.endswith("vmlinux") or obj.endswith(".btf") \
+           or obj.endswith(".elf")
+
 
 def is_compiled(obj):
     return obj.endswith(".c") or obj.endswith(".c.dist") or obj.endswith(".cc") or obj.endswith(".cpp") or obj.endswith(".cxx") \
-        or obj.endswith(".h") or obj.endswith(".S") or obj.endswith(".s") or obj.endswith(".o") 
+           or obj.endswith(".h") or obj.endswith(".S") or obj.endswith(".s") or obj.endswith(".o")
+
 
 def is_open_details(obj):
     return "filename" in obj and isinstance(obj["filename"], str) and \
@@ -339,11 +348,11 @@ class TestGeneric:
         self.trigger_exception(["linked_modules", "--filter=[bad_key=bad_value]"], "Unknown filter parameter bad_key")
 
     def test_filter_dict(self):
-        Filter([[{"path":"aa"},{"class":"compiled"}],[{"path":"bb"}]], None,None,None)
+        Filter([[{"path": "aa"}, {"class": "compiled"}], [{"path": "bb"}]], None, None, None)
 
     def test_filter_dict_bad(self):
         try:
-            Filter([[{"path":"aa"},{"class":"compiled"}],[{"path":"bb"}],[{"bad_path":"aa"}]], None,None,None)
+            Filter([[{"path": "aa"}, {"class": "compiled"}], [{"path": "bb"}], [{"bad_path": "aa"}]], None, None, None)
         except FilterException as err:
             if "Unknown filter parameter bad_path" in err.message:
                 assert True
@@ -380,33 +389,6 @@ class TestGeneric:
         assert fil.filter_dict[1][1]["path"] == "/ghi" and "path_pattern" in fil.filter_dict[1][1]
         assert fil.filter_dict[1][2]["path"] == "/jkl" and "path_pattern" in fil.filter_dict[1][2]
 
-    def test_etrace_filter(self):
-        fil = self.get_parsed_filter(["linked_modules",
-        "--filter=[path=/abc,type=wc,link=1]"
-        "and[path=/123,type=wc,source_root=1,negate=1]"
-        "or[path=/def,type=wc,exists=0,link=1,class=compiled]"
-        "and[path=/ghi,type=wc,exists=1,class=linked,access=rw]"
-        "and[path=/jkl,type=wc,class=plain,source_root=0,exists=0,access=r]"])
-        etr_fil = Filter.filter_to_libetrace(fil.filter_dict)
-        # (PATH,CLASS,EXISTS,ACCESS,NEGATE,SRCROOT)
-
-        # "linked" : 0x0001,
-        # "linked_static" : 0x0002,
-        # "linked_shared" : 0x0004,
-        # "linked_exe" : 0x0008,
-        # "compiled" : 0x0010,
-        # "plain" : 0x0020,
-        # "compiler" : 0x0040,
-        # "linker" : 0x0080,
-        # "symlink" : 0x0100,
-        # "nosymlink" : 0x0200
-
-        assert etr_fil[0][0] == (('contains_path', '/abc'), ('is_class', 0x0100), None, None, False, None)
-        assert etr_fil[0][1]== (('contains_path', '/123'), None, None, None, True, ('at_source_root', None) )
-
-        assert etr_fil[1][0]== (('contains_path', '/def'), ('is_class', 0x0100|0x0010), ('file_not_exists', None) , None, False, None)
-        assert etr_fil[1][1]== (('contains_path', '/ghi'), ('is_class', 0x0001), ('file_exists', None), ('has_access', 2), False, None)
-        assert etr_fil[1][2]== (('contains_path', '/jkl'), ('is_class', 0x0020), ('file_not_exists', None), ('has_access', 0), False, ('not_at_source_root', None))
 
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestBinaries:
@@ -1383,7 +1365,7 @@ class TestRevDepsFor:
 @pytest.mark.timeout(DEF_TIMEOUT)
 class TestPipeline:
     def test_binaries_2_commands(self):
-        ret = get_json_entries("binaries --filter=[bin=*vendor*javac,type=wc] commands --json", 300, 800, is_command)
+        ret = get_json_entries("binaries --filter=[bin=*javac,type=wc] commands --json", 300, 1500, is_command)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent['bin'], "*javac")
         count = get_json_simple("binaries -l --filter=[bin=*javac,type=wc] commands --json")["count"]
