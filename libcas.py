@@ -1037,7 +1037,8 @@ class CASDatabase:
                                 fn = os.path.normpath(os.path.join(cwd, exe.argv[-1-i]))
                                 if not os.path.exists(fn):
                                     if "tmp" not in fn:
-                                        print ("{} - does not exist".format(fn), flush=True)
+                                        print ("Error: {} - does not exist".format(fn), flush=True)
+                                        print ("Original cmd: {}".format(exe.argv), flush=True)
                                     not_exist += 1
                                     continue
                                 # fn - the path to the compiled file that exists
