@@ -149,7 +149,7 @@ class RefFiles(Module):
     def get_argparser():
         parser = argparse.ArgumentParser(description="This module is used to query all files referenced during traced process execution.")
         arg_group = parser.add_argument_group("Referenced Files arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "with-children",
@@ -157,7 +157,7 @@ class RefFiles(Module):
             "revdeps",
             "rdm",
             "recursive",
-            "link-type","cdb"]
+            "link-type", "cdb"]
             , arg_group)
         return parser
 

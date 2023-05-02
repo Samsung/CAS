@@ -236,12 +236,6 @@ class Filter:
         """
         ret = True
 
-        if filter_part["filter_path"]:
-            if "path_pattern" in filter_part:
-                ret = ret and (False if not filter_part['path_pattern'].match(self.origin.subject(exe)) else True)
-            else:
-                ret = ret and (filter_part["path"] in self.origin.subject(exe))
-
         if filter_part["filter_cwd"]:
             if "cwd_pattern" in filter_part:
                 ret = ret and (False if not filter_part['cwd_pattern'].match(exe.cwd) else True)
@@ -271,9 +265,9 @@ class Filter:
 
         if filter_part["filter_source_root"]:
             if filter_part["source_root"] == "1":
-                ret = ret and (self.origin.subject(exe).startswith(self.source_root))
+                ret = ret and (exe.bpath.startswith(self.source_root))
             elif filter_part["source_root"] == "0":
-                ret = ret and (not self.origin.subject(exe).startswith(self.source_root))
+                ret = ret and (not exe.bpath.startswith(self.source_root))
 
         return ret if (not filter_part.get("negate", "false") == "true") else not ret
 

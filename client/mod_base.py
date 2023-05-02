@@ -79,7 +79,7 @@ class Module:
         self.args = args
         self.config = config
         self.nfsdb = nfsdb
-        self.source_root = nfsdb.source_root if hasattr(nfsdb,"source_root") else ""
+        self.source_root = nfsdb.source_root if hasattr(nfsdb, "source_root") else ""
 
         self.has_pipe_path = True if "pipe_path" in self.args and self.args.pipe_path and len(self.args.pipe_path) > 0 else False
         self.has_filter = True if "filter" in self.args and self.args.filter else False
@@ -93,7 +93,7 @@ class Module:
         self.relative_path = True if "relative" in self.args and self.args.relative else False
         self.original_path = True if "original_path" in self.args and self.args.original_path else False
 
-    @abstractmethod
+    @staticmethod
     def get_argparser() -> argparse.ArgumentParser:
         """
         Function returns class customized argument parser.

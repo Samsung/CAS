@@ -21,9 +21,9 @@ class ParseDB(Module):
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("DB Parsing arguments")
-        arg_group.add_argument('--force', action='store_true', default=False)
+        module_parser = argparse.ArgumentParser(description="Module used to process tracing file into nfsdb itermediate file.")
+        arg_group = module_parser.add_argument_group("Parse arguments")
+        arg_group.add_argument('--force', action='store_true', default=False, help="Force operation even if intermediate file exist")
         return module_parser
 
     def get_data(self) -> tuple:
@@ -67,16 +67,18 @@ class Postprocess(Module):
     Consumes:
     - .nfsdb.img.tmp
 
-    Produces:
+    Intermediate:
     - .nfsdb.comps.json
     - .nfsdb.rbm.json
     - .nfsdb.pcp.json
     - .nfsdb.link.json
+
+    Produces:
     - .nfsdb.json
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
+        module_parser = argparse.ArgumentParser(description="Module used for generating intermediate data file.")
         arg_group = module_parser.add_argument_group("Postprocess arguments")
         arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
         arg_group.add_argument('--allow-pp-in-compilations', '-ap', action="store_true", default=False, help="Compute compiler matches with '-E' as compilations")
@@ -145,21 +147,22 @@ class StoreCache(Module):
 
     Consumes:
     - .nfsdb.json
-    - .nfsdb.comps.json
-    - .nfsdb.rbm.json
-    - .nfsdb.pcp.json
-    - .nfsdb.link.json
+
+    Intermediate
+    - .nfsdb.depmap.json
+    - .nfsdb.ddepmap.json
 
     Produces:
     - .nfsdb.img
+    - .nfsdb.deps.img
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description ="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Cache DB arguments")
-        arg_group.add_argument('--create', '-C', action='store_true', default=False)
-        arg_group.add_argument('--deps-create', '-DC', action='store_true', default=False)
-        arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='')
+        module_parser = argparse.ArgumentParser(description ="Module used for cache creation.")
+        arg_group = module_parser.add_argument_group("Cache creation arguments")
+        arg_group.add_argument('--create', '-C', action='store_true', default=False, help='Process only cache creation.')
+        arg_group.add_argument('--deps-create', '-DC', action='store_true', default=False, help='Process only dependency cache creation.')
+        arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='Maximum allowed dependency count for single module - used to detect dependency generation issues.')
         arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
         arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')" )
         return module_parser
