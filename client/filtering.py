@@ -122,8 +122,6 @@ class Filter:
         self.anded = len([f_and for f_or in self.filter_dict for f_and in f_or]) > 1
         if self.origin and self.origin.args.debug:
             print (self.filter_dict)
-        if self.origin and self.origin.args.debug:
-            print(self.libetrace_filter)
 
     @staticmethod
     def _process_part(filter_part) -> Dict:
