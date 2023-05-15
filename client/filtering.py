@@ -23,7 +23,7 @@ class Filter:
         self.needs_linking: bool = False
         self.parameters_schema: Dict[str, Optional[List[str]]] = {
             "class": ["linked", "linked_static", "linked_shared", "linked_exe", "compiled", "plain", "compiler", "linker"],
-            "type": ["re", "wc", "ex"],
+            "type": ["re", "wc", "sp"],
             "path": None,
             "cwd": None,
             "bin": None,
@@ -48,50 +48,50 @@ class Filter:
                     if self.parameters_schema[k] is not None and f_and[k] not in self.parameters_schema[k]:
                         raise FilterException("'{}' is not proper '{}=' parameter value! Allowed values: {} ".format(f_and[k], k, ", ".join(self.parameters_schema[k])))
 
-                main_keywords = [x for x in ['path' in f_and, 'cwd' in f_and, 'bin' in f_and, 'cmd' in f_and] if x is True]
-                if len(main_keywords) > 1:
-                    raise FilterException("More than one main primary parameter! Choose between: path, cwd, bin, cmd")
+                typed_keywords = [x for x in ['path' in f_and, 'cwd' in f_and, 'bin' in f_and, 'cmd' in f_and] if x is True]
+                if len(typed_keywords) > 1:
+                    raise FilterException("More than one typed parameter! Choose between: path, cwd, bin, cmd")
 
-                if 'type' in f_and and len(main_keywords) == 0:
-                    raise FilterException("'type' sub-parameter present but without associated primary parameter! Allowed values: path, cwd, bin, cmd")
+                if 'type' in f_and and len(typed_keywords) == 0:
+                    raise FilterException("'type' sub-parameter present but without associated typed parameter! Allowed values: path, cwd, bin, cmd")
 
-                if 'type' not in f_and and len(main_keywords) > 0:
-                    f_and['type'] = "ex"
+                if 'type' not in f_and and len(typed_keywords) > 0:
+                    f_and['type'] = "sp"
 
                 if 'path' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "ex":
-                        if f_and['type'] == "ex":
+                    if f_and['type'] == "wc" or f_and['type'] == "sp":
+                        if f_and['type'] == "sp":
                             f_and["path"] = f'*{f_and["path"]}*'
                         f_and['type'] = "re"
                         f_and['path_pattern'] = re.compile(translate_wc_to_re(f_and["path"]))
                     elif f_and['type'] == "re":
                         f_and['path_pattern'] = re.compile(f_and["path"])
                 elif 'cwd' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "ex":
-                        if f_and['type'] == "ex":
+                    if f_and['type'] == "wc" or f_and['type'] == "sp":
+                        if f_and['type'] == "sp":
                             f_and["cwd"] = f'*{f_and["cwd"]}*'
                         f_and['type'] = "re"
                         f_and['cwd_pattern'] = re.compile(translate_wc_to_re(f_and["cwd"]))
                     elif f_and['type'] == "re":
                         f_and['cwd_pattern'] = re.compile(f_and["cwd"])
                 elif 'bin' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "ex":
-                        if f_and['type'] == "ex":
+                    if f_and['type'] == "wc" or f_and['type'] == "sp":
+                        if f_and['type'] == "sp":
                             f_and["bin"] = f'*{f_and["bin"]}*'
                         f_and['type'] = "re"
                         f_and['bin_pattern'] = re.compile(translate_wc_to_re(f_and["bin"]))
                     elif f_and['type'] == "re":
                         f_and['bin_pattern'] = re.compile(f_and["bin"])
                 elif 'cmd' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "ex":
-                        if f_and['type'] == "ex":
+                    if f_and['type'] == "wc" or f_and['type'] == "sp":
+                        if f_and['type'] == "sp":
                             f_and["cmd"] = f'*{f_and["cmd"]}*'
                         f_and['type'] = "re"
                         f_and['cmd_pattern'] = re.compile(translate_wc_to_re(f_and["cmd"]))
                     elif f_and['type'] == "re":
                         f_and['cmd_pattern'] = re.compile(f_and["cmd"])
 
-                if 'type' not in f_and and len(main_keywords) > 0:
+                if 'type' not in f_and and len(typed_keywords) > 0:
                     raise FilterException("'type' sub-parameter not present! Allowed values: {}".format(self.parameters_schema['type']))
 
                 if 'type' in f_and and f_and['type'] == "wc":

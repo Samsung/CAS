@@ -450,7 +450,7 @@ class CASDatabase:
         return ret
 
     @staticmethod
-    def parse_trace_to_json(tracer_db_filename, json_db_filename):
+    def parse_trace_to_json(tracer_db_filename, json_db_filename, debug=False):
         """
         Wrapper function for `libetrace.parse_nfsdb` function that parses trace file into json file.
 
@@ -459,7 +459,13 @@ class CASDatabase:
         :param json_db_filename: output json database file path
         :type json_db_filename: str
         """
+        if debug:
+            print("Before parse")
+            print_mem_usage()
         libetrace.parse_nfsdb(tracer_db_filename, json_db_filename)
+        if debug:
+            print("After parse")
+            print_mem_usage()
 
     @staticmethod
     def get_src_root_from_tracefile(filename):

@@ -19,6 +19,20 @@ Bash completeion may be a great help when using cas - check [Bash completion](#b
 CAS Client requires database processed from CAS Tracer.
 CAS Database contains information about opened files and process executed during tracing.
 
+Running CAS Clinet generally starts with using one of [modules](#modules) as argument.
+
+    cas MODULE
+
+Optional [filters](#filters) and [parameters](#parameters) can be added.
+
+    cas MODULE filters* parameters*
+
+CAS Client can use pipelines - which means that response from one module can be used as input to another.
+
+    cas MODULE1 filters1* parameters1* MODULE2 filters2*
+
+Output from CAS Client is depend on selected module and selected output renderer ([more about output renderers](#output-renderer)).
+
 # Modules
 
 There are several `modules` that can be used to get CAS Database information.
@@ -74,13 +88,13 @@ Typical case of building database looks like this:
     ```
     cas post-process --set-root=/directory/where/tracing/started
     ```
-    This step uses `.nfsdb.img.tmp` and produce a lot of information:
+    This step uses `.nfsdb.img.tmp` and produce following files:
     - compilations info - `.nfsdb.comps.json`
     - reversed binary mapping - `.nfsdb.rbm.json`
     - precompiled command patterns - `.nfsdb.pcp.json`
     - linked files info - `.nfsdb.link.json`
 
-    At the end of postprocessing information from `.nfsdb.img.tmp` are merged with the above files and written to `.nfsdb.json`.
+    At the end of postprocessing executable data from `.nfsdb.img.tmp` is merged with files above and written to `.nfsdb.json`.
 
 3) Build database images
     ```
@@ -89,7 +103,7 @@ Typical case of building database looks like this:
     This step uses `.nfsdb.json` and produces `.nfsdb.img` optimized memory-mapping database.
 
 
-# Filtering
+# Filters
 
 All query commands can use filtering. Filters can use `and` and `or` logical expressions between filter parts. Each filter part can be negated.
 
@@ -113,77 +127,127 @@ Filter type depends on context of returned information - eg `linked_modules` mod
 
 ## Filter keywords
 
-**`class=<class_opt>`** - filters returned values based on file or executable category.
+**`class=<class_opt>`** - specify file or executable class.
 
-      <class_opt>:
-          linked
-          linked_static
-          linked_shared
-          linked_exe
-          compiled
-          plain
-          compiler
-          linker
+    <class_opt>:
+        // file class filters
+        linked
+        linked_static
+        linked_shared
+        linked_exe
+        compiled
+        plain
+        // execs class filters
+        compiler 
+        linker 
 
 **`path=<file_path>`** - specify file path (applies to `file` filters)
 
-**`cwd=<cwd_dir>`** - specify cwd dir filter (applies to `execs` filter)
+**`cwd=<cwd_dir>`** - specify executable current working directory filter (applies to `execs` filter)
 
-**`bin=<bin_path>`** - specify executable bin path filter(applies to `execs` filter)
+**`bin=<bin_path>`** - specify executable bin path filter (applies to `execs` filter)
 
 **`cmd=<cmd>`** - specify command line filter (applies to `execs` filter)
 
 **`type=<type_opt>`** - specify type of "path", "cwd", "bin", "cmd" parameters.
 
-      <type_opt>:
-          re   -->  regular expression
-          wc   -->  wildcard
-          ex   -->  simple partial match - default if no type is provided
+    <type_opt>:
+        sp   -->  simple partial match - default if no type is provided
+        re   -->  regular expression
+        wc   -->  wildcard
 
-**`ppid=<process_pid>`** - specify process parent pid (applies to `execs` filter)
+**`ppid=<process_pid>`** - specify pid of parent process (applies to `execs` filter)
 
 **`access=<access_opt>`** - specify file access method (applies to `file` filter)
 
-      <access_opt>:
-          r    -->  only read
-          w    -->  only written
-          rw   -->  read and written
+    <access_opt>:
+        r    -->  only read
+        w    -->  only written
+        rw   -->  read and written
 
 **`exists=<exists_opt>`** - specify file presence at the time of database generation (applies to `file` filter)
 
-      <exists_opt>:
-          0    -->  file does not exists
-          1    -->  file exists
-          2    -->  directory exists
+    <exists_opt>:
+        0    -->  file does not exists
+        1    -->  file exists
+        2    -->  directory exists
 
 **`link=<link_opt>`** - specify if file is symlink (applies to `file` filter)
 
-      <link_opt>:
-          0    -->  only read
-          1    -->  only read
+    <link_opt>:
+        0    -->  only read
+        1    -->  only read
 
 **`source_root=<source_root_opt>`** - specify if file or binary is located in source root
 
-      <source_root_opt>:
-          0    -->  only read
-          1    -->  only read
+    <source_root_opt>:
+        0    -->  only read
+        1    -->  only read
 
 **`source_type=<source_type_opt>`** - specify compiled file type (applies to `file` filter)
 
-      <source_type_opt>:
-          c
-          c++
-          other
+    <source_type_opt>:
+        c
+        c++
+        other
 
 **`negate=<negate_opt>`** - negate filter
 
-      <negate_opt>:
-          0    -->  normal filter
-          1    -->  negate filter
+    <negate_opt>:
+        0    -->  normal filter
+        1    -->  negate filter
+
+# Parameters
+
+Some parameters can be used multiple times (will be marked as `multi-parameter`) by invoking it multiple times or using `:` separator.
+Example 
+```
+cas compilation_info_for --path=/file1 --path=/file2 --path=/file3:/file4
+```
+
+## Input parameters
+
+**`--path=<paths>`** - Path parameter - used for most of `xx_for` modules. (`multi-parameter`)
+
+        cas deps_for --path=/file1 --path=/file2
+
+There is special case of `path` parameter that allows extended options - check [Extended path argument](#extended-path-argument)
+
+**`--select=<paths> -S=<paths>`** - Select option forces return of file paths even if filters disallow them. (`multi-parameter`)
+
+        cas linked_modules --filter=[path=/dev/null] --select=/file1 --select=/file2
+
+**`--append=<paths> -a=<paths>`** - Append option forces return of file paths even if they don't exists in module results. (`multi-parameter`)
+
+        cas linked_modules --append=/file1 --append=/file2
+
+**`--pid=<pids>`** - Process id parameter. (`multi-parameter`)
+
+        cas commands --pid=123 --pid=456
+
+**`--binary=<paths> -b=<paths>`** - Binary parameter - used to get execs using provided binary path. (`multi-parameter`)
+
+        cas bineries --binary=/file1 --binary=/file2        
+
+## Return data modifiers
+
+**`--commands --show-commands`** - Changes returned opens data to executables. 
+
+**`--details -t`** - Returns more information about execs / opens.
+
+**`--compilation-dependency-map --cdm`** - Returns compilation dependency map. 
+
+**`--cdm-exclude-patterns`** - Exclude patterns for compilation-dependency-map
+
+**`--cdm-exclude-files`** - Exclude files for compilation-dependency-map
+
+**`--reverse-dependency-map --rdm`** - Returns reverse dependency map
+
+**`--revdeps`** - Prints reverse dependencies
 
 # Extended path argument
 
-Dependency generation steps can use extended path arguments.
+Dependency generation steps can use extended path arguments. This enable to pass extended parameters to each specified path.
 
 ## Usage
 
@@ -199,7 +263,7 @@ Dependency generation steps can use extended path arguments.
 
 ## Examples
 
-    --path=[file=/abcd,direct=true,exclude=*.ko]
+    --path=[file=/abcd,direct=true,exclude=*.ko] --path=[file=/xyz,direct=false,exclude=*.a]
 
 # Bash completion
 There is handy bash completion script in `tools/bash_completion` dir. 
