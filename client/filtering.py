@@ -1,9 +1,11 @@
 import re
 from fnmatch import translate as translate_wc_to_re
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Optional
 import libetrace
+from client.misc import get_file_info
 
 from libcas import CASConfig
+
 
 class Filter:
     """
@@ -15,7 +17,7 @@ class Filter:
     (path=/abs,type=wc)or(class=compiled)and(path=*.c,type=wc)
     """
     def __init__(self, flt, origin, config: CASConfig, source_root: str) -> None:
-        self.filter_dict: List[List[Dict[str, "str|bool|int|re.Pattern"]]] = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
+        self.filter_dict: List[List[Dict[str, "str | bool | int | re.Pattern"]]] = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
         self.config = config
         self.source_root = source_root
         self.origin = origin
@@ -117,11 +119,12 @@ class Filter:
                 f_and["filter_cwd"] = 'cwd' in f_and
                 f_and["filter_bin"] = 'bin' in f_and
                 f_and["filter_ppid"] = 'pid' in f_and
+                f_and["filter_negate"] = 'negate' in f_and
 
         self.ored = len(self.filter_dict) > 1
         self.anded = len([f_and for f_or in self.filter_dict for f_and in f_or]) > 1
         if self.origin and self.origin.args.debug:
-            print (self.filter_dict)
+            print(self.filter_dict)
 
     @staticmethod
     def _process_part(filter_part) -> Dict:
@@ -186,26 +189,29 @@ class Filter:
                 ret = ret and False
 
         if ret and filter_part["filter_access"]:
+            exist, stat, mode = get_file_info(opn.mode)
             if filter_part["access"] == "r":
-                ret = ret and (opn.is_read() and not opn.is_write())
+                ret = ret and (mode == 0)
             elif filter_part["access"] == "w":
-                ret = ret and (not opn.is_read() and opn.is_write())
+                ret = ret and (mode == 1)
             elif filter_part["access"] == "rw":
-                ret = ret and (opn.is_read() and opn.is_write())
+                ret = ret and (mode == 2)
 
         if ret and filter_part["filter_exists"]:
+            exist, stat, mode = get_file_info(opn.mode)
             if filter_part["exists"] == "1":
-                ret = ret and (not opn.is_dir() and opn.exists() == 1)
+                ret = ret and (not stat == 2 and exist)
             elif filter_part["exists"] == "0":
-                ret = ret and (opn.exists() == 0)
+                ret = ret and (not exist)
             elif filter_part["exists"] == "2":
-                ret = ret and (opn.is_dir() and opn.exists() == 1)
+                ret = ret and (stat == 2 and exist)
 
         if ret and filter_part["filter_link"]:
+            exist, stat, mode = get_file_info(opn.mode)
             if filter_part["link"] == "1":
-                ret = ret and (opn.is_symlink())
+                ret = ret and (stat == 10)
             elif filter_part["link"] == "0":
-                ret = ret and (not opn.is_symlink())
+                ret = ret and (not stat == 10)
 
         if ret and filter_part["filter_source_root"]:
             if filter_part["source_root"] == "1" or filter_part["source_root"] == "true":
@@ -215,18 +221,21 @@ class Filter:
 
         if ret and filter_part["filter_path"]:
             if "path_pattern" in filter_part:
-                ret = ret and (False if not filter_part['path_pattern'].match(opn.path) else True)
+                ret = ret and (filter_part['path_pattern'].match(opn.path) is not None)
             else:
                 ret = ret and (filter_part["path"] in opn.path)
 
-        return ret if (not filter_part.get("negate", "false") == "true") else not ret
+        if filter_part["filter_negate"]:
+            ret = not ret
+
+        return ret
 
     def _match_exec_filter(self, exe: libetrace.nfsdbEntry, filter_part: Dict) -> bool:
         """
         Function check if exec should pass filter part.
 
-        :param opn: exec object
-        :type opn: libetrace.nfsdbEntry
+        :param exe: exec object
+        :type exe: libetrace.nfsdbEntry
         :param filter_part: filter part
         :type filter_part: dict
         :return: True if exec matches filter part conditions otherwise False
@@ -267,7 +276,10 @@ class Filter:
             elif filter_part["source_root"] == "0":
                 ret = ret and (not exe.bpath.startswith(self.source_root))
 
-        return ret if (not filter_part.get("negate", "false") == "true") else not ret
+        if filter_part["filter_negate"]:
+            ret = not ret
+
+        return ret
 
     def resolve_opens_filters(self, opn: libetrace.nfsdbEntryOpenfile) -> bool:
         """
@@ -289,8 +301,8 @@ class Filter:
         """
         Function check if exec should pass all filters.
 
-        :param opn: exec object
-        :type opn: libetrace.nfsdbEntryOpenfile
+        :param exe: exec object
+        :type exe: libetrace.nfsdbEntryOpenfile
         :return: True if exec matches filters conditions otherwise False
         :rtype: bool
         """
@@ -306,9 +318,9 @@ class FilterException(Exception):
     """
     Exception object used by `Filter` class
 
-    :param Exception: exception base
-    :type Exception: class
+    :param message: Exception message
+    :type message: str
     """
-    def __init__(self, message):
+    def __init__(self, message: str):
         super(FilterException, self).__init__(message)
         self.message = message

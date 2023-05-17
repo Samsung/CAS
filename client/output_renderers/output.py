@@ -72,29 +72,30 @@ class OutputRenderer:
         }[self.output_type]
 
     def get_sorting_lambda(self, original_sort_lambda):
-        if isinstance(self.data[0], libetrace.nfsdbEntry):
-            if self.args.sorting_key is not None:
-                if self.args.sorting_key == "bin":
-                    return lambda x: x.bpath
-                elif self.args.sorting_key == "cwd":
-                    return lambda x: x.cwd
-                elif self.args.sorting_key == "cmd":
-                    return lambda x: " ".join(x.argv)
-                else:
-                    print("Wrong sorted-key value! Allowed [ bin, cwd, cmd ]")
-                    exit(1)
+        if len(self.data) > 0:
+            if isinstance(self.data[0], libetrace.nfsdbEntry):
+                if self.args.sorting_key is not None:
+                    if self.args.sorting_key == "bin":
+                        return lambda x: x.bpath
+                    elif self.args.sorting_key == "cwd":
+                        return lambda x: x.cwd
+                    elif self.args.sorting_key == "cmd":
+                        return lambda x: " ".join(x.argv)
+                    else:
+                        print("Wrong sorted-key value! Allowed [ bin, cwd, cmd ]")
+                        exit(1)
 
-        if isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
-            if self.args.sorting_key is not None:
-                if self.args.sorting_key == "mode":
-                    return lambda x: x.mode
-                if self.args.sorting_key == "path":
-                    return lambda x: x.path
-                if self.args.sorting_key == "original_path":
-                    return lambda x: x.original_path
-                else:
-                    print("Wrong sorted-key value! Allowed [ path, original_path, mode ]")
-                    exit(1)
+            if isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
+                if self.args.sorting_key is not None:
+                    if self.args.sorting_key == "mode":
+                        return lambda x: x.mode
+                    if self.args.sorting_key == "path":
+                        return lambda x: x.path
+                    if self.args.sorting_key == "original_path":
+                        return lambda x: x.original_path
+                    else:
+                        print("Wrong sorted-key value! Allowed [ path, original_path, mode ]")
+                        exit(1)
         return original_sort_lambda
 
     def render_data(self):

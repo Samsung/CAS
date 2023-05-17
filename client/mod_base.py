@@ -2,7 +2,7 @@ import fnmatch
 from functools import lru_cache
 import sys
 from abc import abstractmethod
-from typing import List
+from typing import List, Dict
 import argparse
 import libetrace
 import libcas
@@ -268,12 +268,12 @@ class Module:
 
         return ret
 
-    def get_reverse_dependencies_opens(self, file_paths:"str| list[str]", recursive:bool=False) -> "list[libetrace.nfsdbEntryOpenfile]":
-        lm_map = { lm.path:lm for lm in self.nfsdb.linked_modules() }
-        return [ lm_map[r] for r in list(self.nfsdb.get_reverse_dependencies(file_paths, recursive=recursive))]
+    def get_reverse_dependencies_opens(self, file_paths: "str | list[str]", recursive: bool = False) -> List[libetrace.nfsdbEntryOpenfile]:
+        lm_map = {lm.path: lm for lm in self.nfsdb.linked_modules()}
+        return [lm_map[r] for r in list(self.nfsdb.get_reverse_dependencies(file_paths, recursive=recursive))]
 
-    @lru_cache(maxsize=1) # this one is optimization for filter source_type
-    def get_src_types(self):
+    @lru_cache(maxsize=1)  # this one is optimization for filter source_type
+    def get_src_types(self) -> Dict[str, int]:
         return {ent.compilation_info.files[0].path: ent.compilation_info.type for ent in self.nfsdb.get_compilations()}
 
     def yield_path_from_pid(self, pids):
@@ -292,12 +292,14 @@ class Module:
         if self.args.cached:
             return self.nfsdb.get_multi_deps_cached(paths, direct_global=self.args.direct_global)
         else:
-            return self.nfsdb.get_multi_deps(paths, direct_global=self.args.direct_global, dep_graph=self.args.dep_graph, 
-                debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes, wrap_deps=self.args.wrap_deps)
+            return self.nfsdb.get_multi_deps(paths, direct_global=self.args.direct_global, dep_graph=self.args.dep_graph,
+                                             debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
+                                             wrap_deps=self.args.wrap_deps)
 
     def get_dependency_graph(self, epaths):
-        return self.nfsdb.get_dependency_graph(epaths, direct_global=self.args.direct_global, debug=self.args.debug, 
-            debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes, wrap_deps=self.args.wrap_deps) 
+        return self.nfsdb.get_dependency_graph(epaths, direct_global=self.args.direct_global, debug=self.args.debug,
+                                               debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
+                                               wrap_deps=self.args.wrap_deps)
 
     def get_revdeps(self, file_paths):
         return self.nfsdb.get_reverse_dependencies(file_paths, recursive=self.args.recursive)
@@ -322,8 +324,8 @@ class Module:
             else:
                 cdm_exclude_files.append(self.args.cdm_exclude_files)
 
-        return self.nfsdb.get_cdm(file_paths, cdm_exclude_files=cdm_exclude_files, cdm_exclude_patterns=cdm_exclude_patterns, 
-            recursive=self.args.recursive,sort=self.args.sorted, reverse=self.args.reverse)
+        return self.nfsdb.get_cdm(file_paths, cdm_exclude_files=cdm_exclude_files, cdm_exclude_patterns=cdm_exclude_patterns,
+                                  recursive=self.args.recursive,sort=self.args.sorted, reverse=self.args.reverse)
 
     def expath_to_dict(self, expath_string: str) -> dict:
         parameters_schema = {
@@ -359,10 +361,10 @@ class Module:
     def expand_to_deps_param(self, expath_string: str) -> libcas.DepsParam:
         dct = self.expath_to_dict(expath_string)
         return libcas.DepsParam(file=dct["file"],
-            direct=(dct["direct"] == "true" if "direct" in dct else None),
-            exclude_cmd=(dct["exclude_cmd"] if "exclude_cmd" in dct else None),
-            exclude_pattern=(dct["exclude_pattern"] if "exclude_pattern" in dct else None),
-            negate_pattern=(dct["negate_pattern"] if "negate_pattern" in dct else False))
+                                direct=(dct["direct"] == "true" if "direct" in dct else None),
+                                exclude_cmd=(dct["exclude_cmd"] if "exclude_cmd" in dct else None),
+                                exclude_pattern=(dct["exclude_pattern"] if "exclude_pattern" in dct else None),
+                                negate_pattern=(dct["negate_pattern"] if "negate_pattern" in dct else False))
 
     def get_ext_paths(self, paths) -> List[libcas.DepsParam]:
         if len(paths) > 0:
@@ -413,7 +415,7 @@ class Module:
 
         if self.args.filter:
             try:
-                self.filter = Filter(self.args.filter, self, self.config,self.source_root)
+                self.filter = Filter(self.args.filter, self, self.config, self.source_root)
             except FilterException as err:
                 printerr("ERROR: {}".format(err.message))
                 sys.exit(1)
@@ -438,7 +440,7 @@ class Module:
                 return output_renderers[name].Renderer
         return output_renderers['plain'].Renderer
 
-    def should_display(self, ent) -> bool: # TODO reconsider this
+    def should_display(self, ent) -> bool:  # TODO reconsider this
         if self.args.generate:
             if self.args.all:
                 return True
@@ -447,7 +449,7 @@ class Module:
         else:
             return True
 
-    def get_exec_of_open(self, ent) -> libetrace.nfsdbEntry:
+    def get_exec_of_open(self, ent: libetrace.nfsdbEntryOpenfile) -> libetrace.nfsdbEntry:
         return ent.opaque if ent.opaque is not None else ent.parent
 
 

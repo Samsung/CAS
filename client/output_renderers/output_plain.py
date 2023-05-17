@@ -58,7 +58,7 @@ class Renderer(OutputRenderer):
         o.add_argument('--separator', '--sep', type=str, default=",", help="Specify separator")
 
     def count_renderer(self):
-        return self.num_entries
+        return str(self.num_entries)
 
     def formatter(self, fmt, entry_fmt):
         if len(self.data) > 0:

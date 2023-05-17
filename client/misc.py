@@ -3,7 +3,9 @@ import os
 import sys
 from typing import Tuple, Dict
 from types import ModuleType
+from functools import lru_cache
 
+@lru_cache(maxsize=1024)
 def get_file_info(mode: int) -> Tuple[int, int, int]:
     """
     Function split opened file bit value ( 0emmmmxx ) into:
