@@ -2,6 +2,8 @@ from abc import abstractmethod
 from enum import Enum
 from types import LambdaType
 
+import libetrace
+
 
 class DataTypes(Enum):
     # List values
@@ -35,34 +37,16 @@ class OutputRenderer:
 
     def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: LambdaType) -> None:
         self.args = args
+        self.data = data
         self.num_entries = len(data) if isinstance(data, list) else -1
+        self.sort_lambda = self.get_sorting_lambda(sort_lambda)
 
         if self.args.entries_per_page is None:
             self.args.entries_per_page = self.default_entries_count
 
-        if self.args.range:
-            parts = self.args.range.replace("[", "").replace("]", "").split(":")
-            if len(parts) == 1:
-                self.data = [data[int(parts[0])]]
-            elif len(parts) == 2:
-                self.data = data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None]
-            elif len(parts) == 3:
-                self.data = data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None:int(parts[2]) if parts[2] != '' else None]
-            else:
-                assert False, "Wrong range!"
-        else:
-            if isinstance(data, list) and self.args.entries_per_page != 0:
-                if len(data) < (self.args.page * self.args.entries_per_page):
-                    self.args.page = int(len(data)/self.args.entries_per_page)
-                self.data = data[self.args.page * self.args.entries_per_page:(self.args.page + 1) * self.args.entries_per_page]
-            else:
-                self.data = data
-
-        self.count = len(self.data) if isinstance(self.data, list) else -1
         self.origin_module = origin
         self.output_type = output_type
         self.output_renderer = self.assign_renderer()
-        self.sort_lambda = sort_lambda
         assert False if self.output_renderer is None else True
 
     def assign_renderer(self):
@@ -87,9 +71,54 @@ class OutputRenderer:
             DataTypes.null_data: self.null_data_renderer
         }[self.output_type]
 
+    def get_sorting_lambda(self, original_sort_lambda):
+        if isinstance(self.data[0], libetrace.nfsdbEntry):
+            if self.args.sorting_key is not None:
+                if self.args.sorting_key == "bin":
+                    return lambda x: x.bpath
+                elif self.args.sorting_key == "cwd":
+                    return lambda x: x.cwd
+                elif self.args.sorting_key == "cmd":
+                    return lambda x: " ".join(x.argv)
+                else:
+                    print("Wrong sorted-key value! Allowed [ bin, cwd, cmd ]")
+                    exit(1)
+
+        if isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
+            if self.args.sorting_key is not None:
+                if self.args.sorting_key == "mode":
+                    return lambda x: x.mode
+                if self.args.sorting_key == "path":
+                    return lambda x: x.path
+                if self.args.sorting_key == "original_path":
+                    return lambda x: x.original_path
+                else:
+                    print("Wrong sorted-key value! Allowed [ path, original_path, mode ]")
+                    exit(1)
+        return original_sort_lambda
+
     def render_data(self):
         if not self.args.count and self.args.sorted and self.output_type.value < DataTypes.config_data.value:
-            self.data = sorted(self.data, key=self.sort_lambda)
+            self.data = sorted(self.data, key=self.sort_lambda, reverse=self.args.reverse)
+        if self.args.range:
+            parts = self.args.range.replace("[", "").replace("]", "").split(":")
+            if len(parts) == 1:
+                self.data = [self.data[int(parts[0])]]
+            elif len(parts) == 2:
+                self.data = self.data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None]
+            elif len(parts) == 3:
+                self.data = self.data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None:int(parts[2]) if parts[2] != '' else None]
+            else:
+                assert False, "Wrong range!"
+        else:
+            if isinstance(self.data, list) and self.args.entries_per_page != 0:
+                if len(self.data) < (self.args.page * self.args.entries_per_page):
+                    self.args.page = int(len(self.data)/self.args.entries_per_page)
+                self.data = self.data[self.args.page * self.args.entries_per_page:(self.args.page + 1) * self.args.entries_per_page]
+            else:
+                self.data = self.data
+
+        self.count = len(self.data) if isinstance(self.data, list) else -1
         if self.args.count:
             return self.count_renderer()
         return self.output_renderer()
