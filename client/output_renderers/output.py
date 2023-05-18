@@ -72,7 +72,7 @@ class OutputRenderer:
         }[self.output_type]
 
     def get_sorting_lambda(self, original_sort_lambda):
-        if len(self.data) > 0:
+        if self.args.sorted and isinstance(self.data,list) and len(self.data) > 0:
             if isinstance(self.data[0], libetrace.nfsdbEntry):
                 if self.args.sorting_key is not None:
                     if self.args.sorting_key == "bin":

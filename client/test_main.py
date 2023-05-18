@@ -48,22 +48,22 @@ def fixture_header_file() -> str:
 
 @pytest.fixture(name="javac")
 def fixture_javac() -> str:
-    return get_main("binaries --filter=[path=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
+    return get_main("binaries --filter=[bin=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
 
 
 @pytest.fixture(name="sh")
 def fixture_sh() -> str:
-    return get_main("binaries --filter=[path=*bin/sh,type=wc] -n=1")
+    return get_main("binaries --filter=[bin=*bin/sh,type=wc] -n=1")
 
 
 @pytest.fixture(name="bash")
 def fixture_bash() -> str:
-    return get_main("binaries --filter=[path=*bin/bash,type=wc] -n=1")
+    return get_main("binaries --filter=[bin=*bin/bash,type=wc] -n=1")
 
 
 @pytest.fixture(name="linker")
 def fixture_linker() -> str:
-    return get_main("binaries --filter=[path=*/bin/ld.lld,type=wc] -n=1")
+    return get_main("binaries --filter=[bin=*/bin/ld.lld,type=wc] -n=1")
 
 
 @pytest.fixture(name="pids")
@@ -363,10 +363,10 @@ class TestGeneric:
         self.trigger_exception(["linked_modules", "--filter=[path=/some_file,type=bad_value]or[path=/some_file,type=re]"], "parameter value")
 
     def test_filter_missing_primary_key(self):
-        self.trigger_exception(["linked_modules", "--filter=[type=re]"], "sub-parameter present but without associated primary parameter")
+        self.trigger_exception(["linked_modules", "--filter=[type=re]"], "sub-parameter present but without associated typed parameter")
 
     def test_filter_multiple_primary_key(self):
-        self.trigger_exception(["linked_modules", "--filter=[cwd=/1,path=/2]"], "More than one main primary parameter")
+        self.trigger_exception(["linked_modules", "--filter=[cwd=/1,path=/2]"], "More than one typed parameter")
 
     def test_filter_path(self):
         fil = self.get_parsed_filter(["linked_modules", "--filter=[path=/abc,type=wc]"])
@@ -424,12 +424,12 @@ class TestBinaries:
             assert javac in ent
 
     def test_with_filter(self):
-        ret = get_json_entries("binaries -n=10 --filter=[path=*.py,type=wc,exists=1] --json", 50, 150, is_normpath)
+        ret = get_json_entries("binaries -n=10 --filter=[bin=*.py,type=wc,exists=1] --json", 50, 150, is_normpath)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent, "*.py")
 
     def test_with_filter_raw(self):
-        ret = get_raw("binaries --filter=[path=*.py,type=wc,exists=1]", 50, 150, is_normpath)
+        ret = get_raw("binaries --filter=[bin=*.py,type=wc,exists=1]", 50, 150, is_normpath)
         for ent in ret.split(os.linesep):
             assert fnmatch.fnmatch(ent, "*.py")
 
