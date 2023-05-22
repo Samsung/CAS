@@ -7,6 +7,7 @@ import libcas
 
 
 class Renderer(OutputRenderer):
+
     help = 'Prints output line-by-line (generated from output_renderers dir)'
     default_entries_count = 0
     output_formats = {
@@ -67,7 +68,7 @@ class Renderer(OutputRenderer):
                     yield len(self.data)
                 if "{L}" in fmt:
                     for row in self.data:
-                        yield self.origin_module.get_path(row)
+                        yield self.origin_module.get_path(row) if self.args.relative else row
             elif isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
                 if "{S}" in fmt:
                     yield len(self.data)
@@ -115,8 +116,8 @@ class Renderer(OutputRenderer):
 
     def _file_entry_format(self, row: libetrace.nfsdbEntryOpenfile, entry_fmt):
         return entry_fmt.format(
-            f=self.origin_module.get_path(row.path),
-            c="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path  else "plain",
+            f=self.origin_module.get_path(row.path) if self.args.relative else row.path,
+            c="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path else "plain",
             o=row.original_path,
             p=row.parent.eid.pid,
             t=stat_from_code(get_file_info(row.mode)[1]),
@@ -295,3 +296,6 @@ class Renderer(OutputRenderer):
                 yield row[0]
                 for opn in row[1]:
                     yield '  {}'.format(opn)
+
+    def compilation_db_data_renderer(self):
+        return "Compilation db available in --json output"

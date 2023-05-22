@@ -214,11 +214,11 @@ class RevModDepsFor(Module, PipedModule):
         if self.args.show_commands:
             data = list({
                 o.parent if self.args.all else o.opaque
-                for o in self.get_reverse_dependencies_opens(self.args.path,recursive=self.args.recursive)
+                for o in self.get_reverse_dependencies_opens(self.args.path, recursive=self.args.recursive)
                 if (self.args.all or o.opaque is not None) and self.filter_open(o) and self.filter_exec(o.parent if self.args.all else o.opaque)
             } if self.args.generate else {
                 o.parent
-                for o in self.get_reverse_dependencies_opens(self.args.path,recursive=self.args.recursive)
+                for o in self.get_reverse_dependencies_opens(self.args.path, recursive=self.args.recursive)
                 if self.filter_open(o) and self.filter_exec(o.parent)
             })
 
@@ -226,7 +226,7 @@ class RevModDepsFor(Module, PipedModule):
         elif self.args.details:
             data = list({
                 o
-                for o in self.get_reverse_dependencies_opens(self.args.path,recursive=self.args.recursive)
+                for o in self.get_reverse_dependencies_opens(self.args.path, recursive=self.args.recursive)
                 if self.filter_open(o)
             })
 
@@ -234,7 +234,7 @@ class RevModDepsFor(Module, PipedModule):
         else:
             data = list({
                 o.path
-                for o in self.get_reverse_dependencies_opens(self.args.path,recursive=self.args.recursive)
+                for o in self.get_reverse_dependencies_opens(self.args.path, recursive=self.args.recursive)
                 if self.filter_open(o)
             })
 

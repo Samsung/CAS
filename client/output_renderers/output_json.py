@@ -1,4 +1,5 @@
 import json
+from typing import Dict
 from client.output_renderers.output import OutputRenderer
 from client.misc import fix_cmd, access_from_code, fix_cmd_makefile, get_file_info
 import libetrace
@@ -6,6 +7,7 @@ import libcas
 
 
 class Renderer(OutputRenderer):
+
     help = 'Prints output in json format (generated from output_renderers dir)'
     default_entries_count = 1000
 
@@ -21,7 +23,7 @@ class Renderer(OutputRenderer):
         pass
 
     def count_renderer(self):
-        return json.dumps({ "count": self.num_entries })
+        return json.dumps({"count": self.num_entries})
 
     def formatter(self, format_func=None):
         if len(self.data) > 0:
@@ -34,11 +36,15 @@ class Renderer(OutputRenderer):
                     )
             # Assign formatter according to output type
             if isinstance(self.data[0], str):
+                if self.data[0][0] == '"' and self.data[0][-1] == '"':
+                    fmt = '        ', ''
+                else:
+                    fmt = '        "', '"'
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
                     num_entries=self.num_entries,
-                    entries="\n"+",\n".join([self._str_entry_format(row) for row in self.data])+"\n    "
+                    entries="\n"+",\n".join([fmt[0]+self.origin_module.get_path(row)+fmt[1] for row in self.data])+"\n    "
                     )
             elif isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
                 return self.entries_format.format(
@@ -46,7 +52,7 @@ class Renderer(OutputRenderer):
                     page=0 if not self.args.page else self.args.page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([self._file_entry_format(row) for row in self.data])+"\n    "
-                )                
+                )
             elif isinstance(self.data[0], libetrace.nfsdbEntry):
                 if self.args.generate:
                     if self.args.makefile:
@@ -106,14 +112,12 @@ class Renderer(OutputRenderer):
     def compilation_info_data_renderer(self):
         return self.formatter(self._compilation_info_entry_format)
 
-    def _str_entry_format(self, row):
-        if isinstance(row, str):
-            if '"' in row and row[0] == '"' and row[-1] == '"':
-                return '        {}'.format(self.origin_module.get_path(row))
-            else:
-                return '        "{}"'.format(self.origin_module.get_path(row))
-        else:
-            return '        "{}"'.format(self.origin_module.get_path(self.origin_module.subject(row)))
+    # def _str_entry_format(self, row, escaped):
+    #     if escaped:
+    #         return '        {}'.format(self.origin_module.get_path(row) if self.args.relative else row)
+    #     else:
+    #         return '        "{}"'.format(self.origin_module.get_path(row) if self.args.relative else row)
+
 
     def _command_entry_format(self, row):
         return '''        {{
@@ -170,8 +174,8 @@ class Renderer(OutputRenderer):
             compiled_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.files) > 0 else "", ",\n".join(['                "' + d.path + '"' for d in sorted(row.compilation_info.files)])),
             include_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.headers) > 0 else "", ",\n".join(['                "' + d.path + '"' for d in sorted(row.compilation_info.headers)])),
             include_paths='[{}{}\n            ]'.format("\n" if len(row.compilation_info.ipaths) > 0 else "", ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.ipaths)])),
-            defs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.defs) > 0 else "", ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0],json.dumps(d[1])) for d in sorted(row.compilation_info.defs)])),
-            undefs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.undefs) > 0 else "", ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0],json.dumps(d[1])) for d in sorted(row.compilation_info.undefs)])),
+            defs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.defs) > 0 else "", ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.defs)])),
+            undefs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.undefs) > 0 else "", ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.undefs)])),
             deps=[]
         )
 
@@ -181,7 +185,7 @@ class Renderer(OutputRenderer):
             "pid": {pid}
         }}'''.format(access=access_from_code(get_file_info(row[1])[2]), pid=row[0])
 
-    def _file_entry_format(self, row:libetrace.nfsdbEntryOpenfile):
+    def _file_entry_format(self, row: libetrace.nfsdbEntryOpenfile):
         return '''        {{
             "filename": "{filename}",
             "original_path": "{original_path}",
@@ -191,10 +195,10 @@ class Renderer(OutputRenderer):
             "exists": {exists},
             "link": {link}
         }}'''.format(
-            filename=self.origin_module.get_path(row.path),
+            filename=self.origin_module.get_path(row.path) if self.args.relative else row.path,
             original_path=row.original_path,
             ppid=row.parent.eid.pid,
-            type = "linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path  else "plain",
+            type="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path else "plain",
             access=access_from_code(get_file_info(row.mode)[2]),
             exists=1 if row.exists() else 0,
             link=1 if row.is_symlink() else 0
@@ -223,17 +227,17 @@ class Renderer(OutputRenderer):
             dir=row.cwd,
             cmd=fix_cmd(row.argv),
             filename=filename,
-            refs=("" if not row.opens else '\n            '+',\n            '.join(['"{}"'.format(o.path) for o in row.opens]) + "\n        ")
+            refs=("" if not row.opens else '\n            '+',\n            '.join(['"'+o.path+'"' for o in row.opens]) + "\n        ")
         )
 
     def compilation_db_data_renderer(self):
         return "[\n" + ',\n'.join([self.compilation_db_formatter(row) for row in self.data]) + "\n]"
 
-    def compilation_db_formatter(self, row:libetrace.nfsdbEntry):
+    def compilation_db_formatter(self, row: Dict[str, str]):
         return '''    {{\n        "directory": "{dir}",\n        "command": {cmd},\n        "file": "{filename}"\n    }}'''.format(
-                filename=row.compilation_info.file_paths[0],
-                cmd=fix_cmd(row.argv),
-                dir=row.cwd
+                filename=row["filename"],
+                cmd=row["cmd"],
+                dir=row["dir"]
                 )
 
     def cdm_data_renderer(self):
@@ -243,12 +247,12 @@ class Renderer(OutputRenderer):
         if self.args.sorted:
             return '''    "{filename}": [{deps}]'''.format(
                 filename=row[0],
-                deps=('\n        '+',\n        '.join(['"{}"'.format(o) for o in sorted(row[1], reverse=self.args.reverse)]) + "\n    ")
+                deps=('\n        '+',\n        '.join(['"' + o + '"' for o in sorted(row[1], reverse=self.args.reverse)]) + "\n    ")
                 )
         else:
             return '''    "{filename}": [{deps}]'''.format(
                 filename=row[0],
-                deps=('\n        '+',\n        '.join(['"{}"'.format(o) for o in row[1]]) + "\n    ")
+                deps=('\n        '+',\n        '.join(['"' + o + '"' for o in row[1]]) + "\n    ")
                 )
 
     def rdm_data_renderer(self):
@@ -258,12 +262,12 @@ class Renderer(OutputRenderer):
         if self.args.sorted:
             return '''    "{filename}": [{deps}]'''.format(
                 filename=row[0],
-                deps=('\n        '+',\n        '.join(['"{}"'.format(o) for o in sorted(row[1], reverse=self.args.reverse)]) + "\n    ")
+                deps=('\n        '+',\n        '.join(['"' + o + '"' for o in sorted(row[1], reverse=self.args.reverse)]) + "\n    ")
                 )
         else:
             return '''    "{filename}": [{deps}]'''.format(
                 filename=row[0],
-                deps=('\n        '+',\n        '.join(['"{}"'.format(o) for o in row[1]]) + "\n    ")
+                deps=('\n        '+',\n        '.join(['"' + o + '"' for o in row[1]]) + "\n    ")
                 )
 
     def dep_graph_data_renderer(self):
@@ -280,8 +284,8 @@ class Renderer(OutputRenderer):
                     ]
                 ]'''.format(
                     pid=row[0],
-                    opens=",\n".join(['                        "{}"'.format(wr_file) for wr_file in row[1]]),
-                    cmd=",\n".join(['                        {}'.format(fix_cmd(cmd)) for cmd in row[2]])
+                    opens=",\n".join(['                        "' + wr_file + '"' for wr_file in row[1]]),
+                    cmd=",\n".join(['                        '+fix_cmd(cmd) for cmd in row[2]])
                 )
 
     def dep_graph_formatter(self, row):

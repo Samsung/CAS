@@ -5,6 +5,7 @@ from client.misc import printdbg
 from client.output_renderers.output import DataTypes
 from client.argparser import add_args
 
+
 class Faccess(Module, PipedModule):
     """
     Module get process list that referenced given file path(s)
@@ -15,12 +16,11 @@ class Faccess(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="File access module displays all processes that read given path(s) with access mode information.")
         arg_group = module_parser.add_argument_group("File access module generation arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "path"
-            ]
-            ,arg_group)
+            ], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:
@@ -77,7 +77,7 @@ class ProcRef(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         arg_group = module_parser.add_argument_group("Process references module arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "pid",
@@ -86,8 +86,7 @@ class ProcRef(Module, PipedModule):
             "revdeps",
             "rdm",
             "recursive",
-            "link-type" ]
-            ,arg_group)
+            "link-type"], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:
@@ -118,7 +117,7 @@ class ProcRef(Module, PipedModule):
         if self.args.show_commands:
             data = list({
                 ent
-                for ent in self.nfsdb.get_pids([tuple([pid]) for pid in self.args.pid])
+                for ent in self.nfsdb.get_pids([(pid,) for pid in self.args.pid])
                 if self.filter_exec(ent)
             })
             return data, DataTypes.commands_data, lambda x: x.eid.pid
@@ -157,8 +156,7 @@ class RefFiles(Module):
             "revdeps",
             "rdm",
             "recursive",
-            "link-type", "cdb"]
-            , arg_group)
+            "link-type", "cdb"], arg_group)
         return parser
 
     def select_subject(self, ent) -> str:
@@ -167,7 +165,7 @@ class RefFiles(Module):
     def exclude_subject(self, ent) -> str:
         return self.subject(ent)
 
-    def subject(self, ent) -> str:
+    def subject(self, ent) -> "str | nfsdbEntryOpenfile":
         if self.args.show_commands:
             return ent.binary
         elif self.args.details:
@@ -186,7 +184,8 @@ class RefFiles(Module):
                 for o in self.nfsdb.opens_iter()
             })
             if self.args.cdb:
-                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
+                data = list(self.cdb_fix_multiple(data))
+                return data, DataTypes.compilation_db_data, lambda x: x['filename']
             return data, DataTypes.commands_data, lambda x: x.eid.pid
         elif self.args.details:
             data = [

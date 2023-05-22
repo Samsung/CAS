@@ -40,10 +40,14 @@ class Binaries(Module):
             return data, DataTypes.commands_data, lambda x: x.bpath
         else:
             data = list({
-                ex.bpath
+                ex.bpath if not self.args.relative else self.get_relative(ex.bpath)
                 for ex in self.nfsdb.get_execs_filtered(has_command=True)
                 if self.filter_exec(ex)}
-            ) if self.needs_open_filtering() else [x for x in self.nfsdb.db.bpaths() if len(x) >0 ]
+            ) if self.needs_open_filtering() else [
+                x if not self.args.relative else self.get_relative(x)
+                for x in self.nfsdb.db.bpaths() 
+                if len(x) > 0 
+                ]
 
             return data, DataTypes.binary_data, None
 
@@ -99,5 +103,6 @@ class Commands(Module, PipedModule):
             if self.filter_exec(ent)
         })
         if self.args.cdb:
-            return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0].path
+            data = list(self.cdb_fix_multiple(data))
+            return data, DataTypes.compilation_db_data, lambda x: x['filename']
         return data, DataTypes.commands_data, lambda x: x.argv

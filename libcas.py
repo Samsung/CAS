@@ -20,10 +20,9 @@ from bas import clang
 from bas import exec_worker
 
 try:
-    # If tqdm is available use it for nice progressbar
-    from tqdm import tqdm as progressbar
+    from tqdm import tqdm as Progressbar
 except ModuleNotFoundError:
-    class progressbar():
+    class Progressbar:
         n = 0
         x = None
 
@@ -40,12 +39,13 @@ except ModuleNotFoundError:
         def close(self):
             pass
 
+
 class DepsParam:
     """
     Extended parameter used in deps generation. Enables use per-path excludes and direct switch.
 
     :param file: path to process
-    :type config_file: str
+    :type file: str
     :param direct: return only direct dependencies of this file
     :type direct: bool
     :param exclude_cmd: list of commands to exclude while generating dependencies of this file
@@ -56,7 +56,7 @@ class DepsParam:
     :type negate_pattern: bool
     """
 
-    def __init__(self, file:str, direct:bool=None, exclude_cmd:List[str]=None, exclude_pattern:List[str]=None, negate_pattern:bool=False):
+    def __init__(self, file: str, direct: bool = None, exclude_cmd: List[str] = None, exclude_pattern: List[str] = None, negate_pattern: bool = False):
         self.file = file
         self.direct = direct
         self.negate_pattern = negate_pattern
@@ -143,6 +143,7 @@ class CASConfig:
 
         return excl_patterns, excl_commands, excl_commands_index
 
+
 def print_mem_usage():
     # Check psutil._pslinux.Process.memory_info() for details
     mi = psutil.Process().memory_info()
@@ -207,9 +208,9 @@ class CASDatabase:
         return list({x[0] for x in self.db.linked_modules()})
 
     def get_pid(self, pid: int) -> List[libetrace.nfsdbEntry]:
-        return self.db[tuple([pid])]
+        return self.db[(pid,)]
 
-    def get_pids(self, pidlist: List[Tuple[int,Optional[int]]]) -> List[libetrace.nfsdbEntry]:
+    def get_pids(self, pidlist: List[Tuple]) -> List[libetrace.nfsdbEntry]:
         return self.db[pidlist]
 
     def get_exec(self, pid: int, index: int) -> libetrace.nfsdbEntry:
@@ -287,8 +288,8 @@ class CASDatabase:
             module_path = module_path.file
         return self.db.mdeps(module_path, direct=direct)
 
-    def get_deps(self, epath:"DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
-        wrap_deps=False, all_modules:Optional[List[str]]=None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
+    def get_deps(self, epath: "DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
+                 wrap_deps=False, all_modules: Optional[List[str]] = None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
         """
         Function calculates dependencies of given file.
 
@@ -552,7 +553,7 @@ class CASDatabase:
                 pbar.refresh()
             return module_path, [(x.ptr[0], x.ptr[1], x.path) for x in ret[2]]
 
-        pbar = progressbar(total = len(all_modules), disable=None)
+        pbar = Progressbar(total=len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 0)
         processed.value = 0
 
@@ -565,40 +566,40 @@ class CASDatabase:
         pbar.refresh()
         pbar.close()
 
-        depmap = { d[0]:d[1] for d in results}
+        depmap = {d[0]: d[1] for d in results}
         depmap_keys = list(depmap.keys())
         del results
-        deplst = { k:len(v) for k, v in depmap.items()}
+        deplst = {k: len(v) for k, v in depmap.items()}
         print("")
         print("# Sorted list of dependencies count")
-        errcount = 0
+        err_count = 0
 
         for m, q in sorted(deplst.items(), key=lambda item: item[1], reverse=True):
             print("  %s: %d" % (m, q))
             if deps_threshold and q > int(deps_threshold):
                 print("ERROR: Number of direct dependencies [%d] for linked module [%s] exceeds the threshold [%d]" % (q, m, int(deps_threshold)))
-                errcount+=1
+                err_count += 1
 
         global get_full_deps
         def get_full_deps(lm):
             return calc_deps(lm, direct=False, allm=depmap_keys)
 
-        if errcount > 0:
-            print("ERROR: Exiting due dependency mismatch errors (%d errors)" % errcount)
-            sys.exit(errcount)
+        if err_count > 0:
+            print("ERROR: Exiting due dependency mismatch errors (%d errors)" % err_count)
+            sys.exit(err_count)
 
         print("Saving {} ...".format(ddepmap_filename))
         with open(ddepmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
             json.dump(obj=depmap, fp=f, indent=4)
-        if debug: print("DEBUG: written {}".format(ddepmap_filename))
+        if debug:
+            print("DEBUG: written {}".format(ddepmap_filename))
 
         # Compute full dependency list for all modules
 
-        full_depmap = {}
         print("")
         print("Computing full dependency list for all modules...")
 
-        pbar = progressbar(total = len(all_modules), disable=None)
+        pbar = Progressbar(total = len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 1)
         processed.value = 0
 
@@ -617,7 +618,8 @@ class CASDatabase:
         print("Saving {} ...".format(depmap_filename))
         with open(depmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
             json.dump(obj=full_depmap, fp=f, indent=4)
-        if debug: print("DEBUG: written {}".format(depmap_filename))
+        if debug:
+            print("DEBUG: written {}".format(depmap_filename))
 
         mismatch_list = list()
         for k, v in full_depmap.items():
@@ -636,18 +638,18 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def is_integrated_clang_compiler(compiler_path:str, test_file:str) -> bool:
+    def is_integrated_clang_compiler(compiler_path: str, test_file: str) -> bool:
         pn = subprocess.Popen(["%s" % compiler_path, "-c", "-Wall", "-o", "/dev/null", test_file, "-###"], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, err = pn.communicate()
         return " (in-process)" in out.decode("utf-8")
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def have_integrated_cc1(compiler_path:str, is_integrated:bool, test_file:str) -> bool:
+    def have_integrated_cc1(compiler_path: str, is_integrated: bool, test_file: str) -> bool:
         return CASDatabase.is_integrated_clang_compiler(compiler_path, test_file) and is_integrated
 
     @staticmethod
-    def clang_ir_generation(cmds:List[str]) -> bool:
+    def clang_ir_generation(cmds: List[str]) -> bool:
         if "-x" in cmds:
             if cmds[cmds.index("-x")+1] == "ir":
                 return True
@@ -662,53 +664,48 @@ class CASDatabase:
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def maybe_compiler_binary(binary_path_or_link:str) -> str:
+    def maybe_compiler_binary(binary_path_or_link: str) -> str:
         if binary_path_or_link.endswith("/cc") or binary_path_or_link.endswith("/c++"):
             return os.path.realpath(binary_path_or_link)
         else:
             return binary_path_or_link
 
     @staticmethod
-    @lru_cache(maxsize=1024)
-    def is_elf_executable(path:str) -> bool:
+    def read_path_file_info(path: str) -> Set[str]:
         if os.path.exists(path):
             path = os.path.realpath(path)
             pn = subprocess.Popen(["file", path], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             out, _ = pn.communicate()
-            out_file = set([x.strip(",") for x in out.decode("utf-8").split()])
-            return "ELF" in out_file and "executable" in out_file
-        else:
-            return False
+            return set([x.strip(",") for x in out.decode("utf-8").split()])
 
     @staticmethod
     @lru_cache(maxsize=1024)
-    def is_elf_interpreter(path:str) -> bool:
-        if os.path.exists(path):
-            path = os.path.realpath(path)
-            pn = subprocess.Popen(["file", path], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            out, _ = pn.communicate()
-            out_file = set([x.strip(",") for x in out.decode("utf-8").split()])
-            return "ELF" in out_file and "interpreter" in out_file
-        else:
-            return False
+    def is_elf_executable(path: str) -> bool:
+        r = CASDatabase.read_path_file_info(path)
+        return "ELF" in r and "executable" in r
 
-    def post_process(self, json_db_filename, wrapping_bin_list:List[str], workdir,
-        process_linking=True, process_comp=True, process_rbm=True, process_pcp=True,
-        new_database=True, no_update=False, no_auto_detect_icc=False, max_chunk_size=sys.maxsize,
-        allow_pp_in_compilations=False, jobs=multiprocessing.cpu_count(),
-        debug_compilations=False, debug=False, verbose=False):
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def is_elf_interpreter(path: str) -> bool:
+        r = CASDatabase.read_path_file_info(path)
+        return "ELF" in r and "interpreter" in r
 
-
+    def post_process(self, json_db_filename, wrapping_bin_list: List[str], workdir,
+                     process_linking=True, process_comp=True, process_rbm=True, process_pcp=True,
+                     new_database=True, no_update=False, no_auto_detect_icc=False, max_chunk_size=sys.maxsize,
+                     allow_pp_in_compilations=False, jobs=multiprocessing.cpu_count(),
+                     debug_compilations=False, debug=False, verbose=False):
 
         start_time = time.time()
         total_start_time = time.time()
 
-        interediate_db = json_db_filename.replace(".nfsdb.json", ".nfsdb.img.tmp")
-        if not os.path.exists(interediate_db):
+        intermediate_db = json_db_filename.replace(".nfsdb.json", ".nfsdb.img.tmp")
+        if not os.path.exists(intermediate_db):
             print("NO intermediate database!")
             exit(2)
-        self.load_db(interediate_db, debug=False, quiet=True, mp_safe=True, no_map_memory=False)
-        if debug: print_mem_usage()
+        self.load_db(intermediate_db, debug=False, quiet=True, mp_safe=True, no_map_memory=False)
+        if debug:
+            print_mem_usage()
         no_module_specified = (not process_pcp and not process_linking and not process_comp and not process_rbm)
         do_rbm = process_rbm or no_module_specified
         do_pcp = process_pcp or no_module_specified
@@ -721,30 +718,29 @@ class CASDatabase:
                 with open(test_file, "w", encoding=sys.getfilesystemencoding()) as out_f:
                     out_f.write(";\n")
 
-        start_time = time.time()
-        wr_map:Dict[int,List[str]] = {}
+        wr_map: Dict[int, List[str]] = {}
         allow_llvm_bc = True
-        gcc_comp_pids:List[int] = []
-        gpp_comp_pids:List[int] = []
-        integrated_clang_compilers:Set[str] = set()
-        clang_execs:List[int] = []
-        clangpp_execs:List[int] = []
-        clang_pattern_match_execs:List[int] = []
-        clangpp_pattern_match_execs:List[int] = []
+        gcc_comp_pids: List[int] = []
+        gpp_comp_pids: List[int] = []
+        integrated_clang_compilers: Set[str] = set()
+        clang_execs: List[int] = []
+        clangpp_execs: List[int] = []
+        clang_pattern_match_execs: List[int] = []
+        clangpp_pattern_match_execs: List[int] = []
         clangxx_input_execs = []
         gxx_input_execs = []
-        comp_pids:Set[int] = set()
+        comp_pids: Set[int] = set()
         gcc_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.gcc_spec]))
         gpp_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.gpp_spec]))
         clang_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.clang_spec]))
         clangpp_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.clangpp_spec]))
-        cc1_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in ["*cc1","*cc1plus"]]))
+        cc1_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in ["*cc1", "*cc1plus"]]))
         comps_filename = os.path.join(workdir, ".nfsdb.comps.json")
         rbm_filename = os.path.join(workdir, ".nfsdb.rbm.json")
         pcp_filename = os.path.join(workdir, ".nfsdb.pcp.json")
         link_filename = os.path.join(workdir, ".nfsdb.link.json")
         manager = multiprocessing.Manager() 
-        out_compilation_info = manager.dict() # we will need this for multiprocessing
+        out_compilation_info = manager.dict()  # we will need this for multiprocessing
         out_linked = dict()
         out_pcp_map = dict()
         out_rbm = dict()
@@ -752,22 +748,23 @@ class CASDatabase:
         if do_rbm:
             if new_database or not os.path.exists(rbm_filename):
                 start_time = time.time()
-                def set_children_list(exe:libetrace.nfsdbEntry, ptree:Dict, ignore_binaries:Set[str]) -> None:
+
+                def set_children_list(exe: libetrace.nfsdbEntry, ptree: Dict, ignore_binaries: Set[str]) -> None:
                     for chld in exe.childs:
                         if not ignore_binaries or not set([u.binary for u in self.get_pid(exe.eid.pid)]) & ignore_binaries:
                             set_children_list(chld, ptree, ignore_binaries)
                     assert exe.eid.pid not in ptree, "process tree have entry for pid {}".format(exe.eid.pid)
-                    if len(exe.childs)>0:
+                    if len(exe.childs) > 0:
                         ptree[exe.eid.pid] = [c.eid.pid for c in exe.childs]
                     else:
                         ptree[exe.eid.pid] = []
 
-                def process_tree_for_pid(ex:libetrace.nfsdbEntry, ignore_binaries:Set[str]):
+                def process_tree_for_pid(exe: libetrace.nfsdbEntry, ignore_binaries: Set[str]):
                     ptree = {}
-                    set_children_list(ex, ptree, ignore_binaries)
+                    set_children_list(exe, ptree, ignore_binaries)
                     return ptree
 
-                def update_reverse_binary_mapping(reverse_binary_mapping:Dict[int,int], pid:int, ptree, root_pid, root_binary):
+                def update_reverse_binary_mapping(reverse_binary_mapping: Dict[int, int], pid: int, ptree, root_pid, root_binary):
                     if pid in ptree:
                         for chld_pid in ptree[pid]:
                             if chld_pid in reverse_binary_mapping:
@@ -778,8 +775,8 @@ class CASDatabase:
                                     reverse_binary_mapping[chld_pid] = root_pid
                                 update_reverse_binary_mapping(reverse_binary_mapping, chld_pid, ptree, root_pid, root_binary)
 
-                def build_reverse_binary_mapping(bin_lst:List[str]) -> "dict[int,int]":
-                    reverse_binary_mapping:Dict[int,int] = dict()
+                def build_reverse_binary_mapping(bin_lst: List[str]) -> Dict[int, int]:
+                    reverse_binary_mapping: Dict[int, int] = dict()
                     for binary in bin_lst:
                         for bin_ex in self.get_execs_using_binary(binary):
                             ptree = process_tree_for_pid(bin_ex, set(bin_lst))
@@ -1023,9 +1020,10 @@ class CASDatabase:
                     for x in integrated_clang_compilers:
                         print("  %s" % x)
 
-                    clangxx_input_execs:List[Tuple] = [ (xT[0].ptr, xT[1])
-                            for xT in [(x, 1) for x in clang_input_execs] + [(x, 2) for x in clangpp_input_execs]
-                            if os.path.join(xT[0].cwd, self.maybe_compiler_binary(xT[0].binary)) in clangxx_compilers
+                    clangxx_input_execs:List[Tuple] = [
+                        (xT[0].ptr, xT[1])
+                        for xT in [(x, 1) for x in clang_input_execs] + [(x, 2) for x in clangpp_input_execs]
+                        if os.path.join(xT[0].cwd, self.maybe_compiler_binary(xT[0].binary)) in clangxx_compilers
                     ]
 
                     del clang_input_execs
@@ -1197,7 +1195,7 @@ class CASDatabase:
                         if debug: print_mem_usage()
                         print(flush=True)
 
-                        pbar = progressbar(total = len(clangxx_input_execs), disable=None)
+                        pbar = Progressbar(total = len(clangxx_input_execs), disable=None)
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
@@ -1434,7 +1432,7 @@ class CASDatabase:
                         print("Searching for gcc compilations ... (%d candidates; %d jobs)" % (len(gxx_input_execs), jobs))
                         if debug: print_mem_usage()
                         print(flush=True)
-                        pbar = progressbar(total = len(gxx_input_execs), disable=None )
+                        pbar = Progressbar(total = len(gxx_input_execs), disable=None)
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
@@ -1491,7 +1489,7 @@ class CASDatabase:
 
             with open (json_db_filename + ".tmp", "wb") as ofile:
                 ofile.write(b"[")
-                pbar = progressbar(total=len(self.db), disable=None)
+                pbar = Progressbar(total=len(self.db), disable=None)
                 for i, ex in enumerate(self.db.iter()):
                     pbar.n += 1
                     pbar.refresh()

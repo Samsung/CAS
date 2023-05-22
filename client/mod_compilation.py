@@ -5,16 +5,16 @@ from client.misc import printdbg
 from client.output_renderers.output import DataTypes
 from client.argparser import add_args
 
+
 class Compiled(Module):
     @staticmethod
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
         arg_group = module_parser.add_argument_group("Compiled files arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
-            "revdeps", "cdb"]
-            , arg_group)
+            "revdeps", "cdb"], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:
@@ -41,10 +41,11 @@ class Compiled(Module):
                 ent
                 for ent in self.nfsdb.get_execs_filtered(has_comp_info=True)
                 for o in ent.compilation_info.files
-                if self.filter_open(o) and self.filter_exec(ent)
+                if self.filter_open(o)
             })
             if self.args.cdb:
-                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
+                data = list(self.cdb_fix_multiple(data))
+                return data, DataTypes.compilation_db_data, lambda x: x['filename']
             return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0].path
         elif self.args.details:
             data = list({
@@ -76,13 +77,12 @@ class RevCompsFor(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
         arg_group = module_parser.add_argument_group("Reverse compilation arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "path",
             "revdeps",
-            "match", "cdb"]
-            , arg_group)
+            "match", "cdb"], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:
@@ -137,7 +137,7 @@ class CompilationInfo(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="This module display extended compilation information.")
         arg_group = module_parser.add_argument_group("Compilation info arguments")
-        add_args( ["path", "details"], arg_group)
+        add_args(["path", "details"], arg_group)
         return module_parser
 
     def set_piped_arg(self, data, data_type):

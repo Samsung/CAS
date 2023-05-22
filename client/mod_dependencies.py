@@ -5,6 +5,7 @@ from client.misc import printdbg
 from client.output_renderers.output import DataTypes
 from client.argparser import add_args
 
+
 class DepsFor(Module, PipedModule):
     required_args = ["path:1+"]
 
@@ -12,7 +13,7 @@ class DepsFor(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "path",
@@ -30,8 +31,7 @@ class DepsFor(Module, PipedModule):
             "match",
             "link-type",
             "cached", "cdb"
-            ]
-            ,arg_group)
+            ], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:
@@ -50,10 +50,10 @@ class DepsFor(Module, PipedModule):
         if data_type == "str":
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
-        if data_type == "nfsdbEntryOpenfile":
+        elif data_type == "nfsdbEntryOpenfile":
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        else:
             print("ERROR: Wrong pipe input data {}.".format(data_type))
             sys.exit(2)
 
@@ -72,7 +72,8 @@ class DepsFor(Module, PipedModule):
                 if self.filter_open(d) and self.should_display(d)
             })
             if self.args.cdb:
-                return data, DataTypes.compilation_db_data, lambda x: x.compilation_info.files[0]
+                data = list(self.cdb_fix_multiple(data))
+                return data, DataTypes.compilation_db_data, lambda x: x['filename']
             return data, DataTypes.commands_data, lambda x: x.eid.pid
         elif self.args.details:
             data = list({
@@ -108,15 +109,14 @@ class RevDepsFor(Module, PipedModule):
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
         arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
+        add_args([
             "filter", "select", "append",
             "details", "commands",
             "path",
             "recursive",
             "match",
             "cdm", "cdm-ex-pt", "cdm-ex-fl",
-            ]
-            ,arg_group)
+            ], arg_group)
         return module_parser
 
     def select_subject(self, ent) -> str:

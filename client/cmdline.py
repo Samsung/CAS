@@ -8,7 +8,8 @@ from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
 
-def process_commandline(cas_db: libcas.CASDatabase, commandline:"str | List[str] | None" = None):
+
+def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None):
     """
     Main function used to process commandline execution.
     By default it feeds arguments from sys.argv but can be overwritten by optional commandline value
@@ -53,7 +54,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline:"str | List[str]
             ])
 
         if common_args.output_file:
-            with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w",encoding="") as output_file:
+            with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w", encoding="") as output_file:
                 if output_file.writable():
                     ret = module_pipeline.render()
                     if isinstance(ret, Iterator) or isinstance(ret, Generator):

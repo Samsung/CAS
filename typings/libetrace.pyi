@@ -66,7 +66,7 @@ class nfsdb:
         """
         Get list of nfsdbEntry that utilize given binary paths.
 
-        :param bpath: List of binary paths
+        :param bpaths: List of binary paths
         :return: List of nfsdbEntry objects
         """
 
@@ -118,15 +118,15 @@ class nfsdb:
         :type depmap: dict
         :param direct_depmap: direct dependency map
         :type direct_depmap: dict
-        :param db_cache_filename: output filename
-        :type db_cache_filename: str
+        :param deps_cache_db_filename: output filename
+        :type deps_cache_db_filename: str
         :param show_stats: show statistics, defaults to False
         :type show_stats: bool, optional
         """
 
     def iter(self, ) -> Iterator[nfsdbEntry]:
         """
-        Returns interator over executables
+        Returns iterator over executables
         """
 
     def filtered(self, has_comp_info: bool = ..., has_linked_file: bool = ..., has_command: bool = ...) -> Iterator[nfsdbEntry]:
@@ -211,7 +211,7 @@ class nfsdb:
         exclude_commands_index: List[str] = ..., all_modules: List[str] = ...) -> Tuple[List[int],List[str],List[nfsdbEntryOpenfile],Dict]: ...
 
 
-    def mdeps(self, module_path:"str|List[str]", direct:bool=False) -> List[nfsdbEntryOpenfile]:
+    def mdeps(self, module_path:"str | List[str]", direct:bool=False) -> List[nfsdbEntryOpenfile]:
         """
         Returns list of file dependencies of given module
 
@@ -223,7 +223,7 @@ class nfsdb:
         :rtype: list[nfsdbEntryOpenfile]
         """
 
-    def mdeps_count(self, module_path:"str|List[str]", direct:bool=False) -> int:
+    def mdeps_count(self, module_path:"str | List[str]", direct:bool=False) -> int:
         """
         Returns dependency module count of given module
 
@@ -235,7 +235,7 @@ class nfsdb:
         :rtype: int
         """
 
-    def rdeps(self, file_path:"str|List[str]", recursive:bool=False) -> Set[str]:
+    def rdeps(self, file_path:"str | List[str]", recursive:bool=False) -> Set[str]:
         """
         Returns reversed dependencies of given file
 
@@ -257,7 +257,7 @@ class nfsdb:
         :rtype: bool
         """
 
-    def path_read(self, ) -> bool:
+    def path_read(self, path) -> bool:
         """
         Returns information if path was open for reading
 
@@ -267,7 +267,7 @@ class nfsdb:
         :rtype: bool
         """
 
-    def path_write(self, ) -> bool:
+    def path_write(self, path) -> bool:
         """
         Returns information if path was open for writing
 
@@ -277,7 +277,7 @@ class nfsdb:
         :rtype: bool
         """
 
-    def path_regular(self, ) -> bool:
+    def path_regular(self, path) -> bool:
         """
         Returns information if path is regular file
 
@@ -311,14 +311,14 @@ def parse_nfsdb(tracer_db_filename:str, json_db_filename:str) -> "int | None":
     """
 
 
-def precompute_command_patterns(excl_commands:List[str], proccess_map:Dict, debug:bool=False) -> "dict | None":
+def precompute_command_patterns(excl_commands: List[str], process_map: Dict, debug: bool = False) -> Optional[Dict]:
     """
     Function calculate exclude command patterns for executables using process map dict
 
     :param excl_commands: patterns of excluded commands
     :type excl_commands: list[str]
-    :param proccess_map: process map eg. { PID: [execs0, execs1, ...] }
-    :type proccess_map: Dict
+    :param process_map: process map eg. { PID: [execs0, execs1, ...] }
+    :type process_map: Dict
     :param debug: display debug information on stdout, defaults to False
     :type debug: bool, optional
     :return: precomputed command patterns dict or None if function failed
@@ -326,11 +326,11 @@ def precompute_command_patterns(excl_commands:List[str], proccess_map:Dict, debu
     """
 
 
-def is_ELF_or_LLVM_BC_file(written_files:List[str]):...
+def is_ELF_or_LLVM_BC_file(written_files: List[str]):...
 
-def is_ELF_file(written_files:List[str]):...
+def is_ELF_file(written_files: List[str]):...
 
-def create_nfsdb(db:dict, src_root:str, set_version:str, pcp_patterns:list, cache_db_filename:str, show_stats:bool=False) -> bool:
+def create_nfsdb(db: dict, src_root: str, set_version: str, pcp_patterns: list, cache_db_filename: str, show_stats: bool = False) -> bool:
     """
     Function takes database in dict format and stores it to highly-optimized image file (.nfsdb.img).
 

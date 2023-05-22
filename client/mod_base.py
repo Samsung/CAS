@@ -2,12 +2,13 @@ import fnmatch
 from functools import lru_cache
 import sys
 from abc import abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Tuple
+from os import path
 import argparse
 import libetrace
 import libcas
 from client.filtering import Filter, FilterException
-from client.misc import get_output_renderers, printdbg, printerr
+from client.misc import get_output_renderers, printdbg, printerr, fix_cmd
 
 
 class ModulePipeline:
@@ -136,7 +137,7 @@ class Module:
         """
 
     @abstractmethod
-    def get_data(self) -> "tuple":
+    def get_data(self) -> Tuple:
         """
         Function returns `data` records with `DataType` and optional sorting lambda.
 
@@ -164,7 +165,7 @@ class Module:
         else:
             return open_path
 
-    def get_path(self, open_path:str) -> str:
+    def get_path(self, open_path: str) -> str:
         """
         Function returns desired path. If --relative-path parameter is provided it removes source_root from path.
 
@@ -208,8 +209,8 @@ class Module:
         """
         Function check if provided open element matches filters.
 
-        :param ent: open element
-        :type ent: `libetrace.nfsdbEntryOpenfile`
+        :param opn: open element
+        :type opn: `libetrace.nfsdbEntryOpenfile`
         :return: `True` if filtering allow given element otherwise `False`
         :rtype: bool
         """
@@ -325,7 +326,16 @@ class Module:
                 cdm_exclude_files.append(self.args.cdm_exclude_files)
 
         return self.nfsdb.get_cdm(file_paths, cdm_exclude_files=cdm_exclude_files, cdm_exclude_patterns=cdm_exclude_patterns,
-                                  recursive=self.args.recursive,sort=self.args.sorted, reverse=self.args.reverse)
+                                  recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
+
+    def cdb_fix_multiple(self, data: List[libetrace.nfsdbEntry]) -> List[Dict[str, str]]:
+        for exe in data:
+            if exe.compilation_info is not None:
+                if len(exe.compilation_info.file_paths) > 1:
+                    for comp_file in exe.compilation_info.file_paths:
+                        yield {"filename": comp_file, "cmd": fix_cmd(exe.argv), "dir": exe.cwd}
+                else:
+                    yield {"filename": exe.compilation_info.file_paths[0], "cmd": fix_cmd(exe.argv), "dir": exe.cwd}
 
     def expath_to_dict(self, expath_string: str) -> dict:
         parameters_schema = {

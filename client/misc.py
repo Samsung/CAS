@@ -5,6 +5,7 @@ from typing import Tuple, Dict
 from types import ModuleType
 from functools import lru_cache
 
+
 @lru_cache(maxsize=1024)
 def get_file_info(mode: int) -> Tuple[int, int, int]:
     """
@@ -38,6 +39,7 @@ def get_file_info(mode: int) -> Tuple[int, int, int]:
     return exists, stat_mode, open_mode
 
 
+@lru_cache(maxsize=1024)
 def access_from_code(opn_value) -> str:
     """
     Function returns string representation of open value(s).
@@ -65,6 +67,7 @@ def access_from_code(opn_value) -> str:
         }[opn_value]
 
 
+@lru_cache(maxsize=1024)
 def stat_from_code(stat_value: int) -> str:
     """
     Function returns string representation of stat value.
@@ -119,10 +122,10 @@ def fix_cmd_makefile(cmd: list, static: bool = False) -> str:
     """
     if static:
         return " ".join([x.rstrip().replace("#", "\\#").replace("$", "\\$").replace("(", "\\(").replace(")", "\\)").replace("\"", "\\\"").replace(" ", "\\ ")
-            if x != "" else "\\\"\\\"" for x in cmd[1:]]) if isinstance(cmd, list) else cmd
+                         if x != "" else "\\\"\\\"" for x in cmd[1:]]) if isinstance(cmd, list) else cmd
     else:
         return " ".join([x.rstrip().replace("#", "\\#").replace("$", "\\$").replace("(", "\\(").replace(")", "\\)").replace("\"", "\\\"").replace(" ", "\\ ")
-            if x != "" else "\\\"\\\"" for x in cmd]) if isinstance(cmd, list) else cmd
+                         if x != "" else "\\\"\\\"" for x in cmd]) if isinstance(cmd, list) else cmd
 
 
 def get_output_renderers() -> Dict[str, ModuleType]:
@@ -142,7 +145,7 @@ def get_output_renderers() -> Dict[str, ModuleType]:
     return ret
 
 
-def get_config_path(config_file:str) -> str:
+def get_config_path(config_file: str) -> str:
     """
     Function attempt to return most probably config path for CASConfig.
     Order:
