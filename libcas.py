@@ -1329,14 +1329,29 @@ class CASDatabase:
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running gcc -fplugin command:")
-                                    print ("[%s] %s"%(cwd," ".join(nargv)))  
+                                    print ("[%s] %s"%(cwd," ".join(nargv)))
                                     continue
                                 if ret != 0:
-                                    print ("Error getting input files from gcc compilation command (%d):"%(ret))
-                                    print ("----------------------------------------")
-                                    print (out)
-                                    print ("----------------------------------------")
-                                    continue
+                                    if "Permission denied" in out:
+                                        try:
+                                            out, ret = worker.runCmd("/tmp/", nargv[0], nargv[1:], "")
+                                        except exec_worker.ExecWorkerException:
+                                            worker.initialize()
+                                            print("Exception while running gcc -fplugin command:")
+                                            print ("[%s] %s"%(cwd," ".join(nargv)))
+                                            continue
+                                        if ret != 0:
+                                            print ("Error getting input files from gcc compilation command (%d):"%(ret))
+                                            print ("----------------------------------------")
+                                            print (out)
+                                            print ("----------------------------------------")
+                                            continue
+                                    else:
+                                        print ("Error getting input files from gcc compilation command (%d):"%(ret))
+                                        print ("----------------------------------------")
+                                        print (out)
+                                        print ("----------------------------------------")
+                                        continue
 
                                 fns = out.strip().split("\n")
 
