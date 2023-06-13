@@ -54,7 +54,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             ])
 
         if common_args.output_file:
-            with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w", encoding="") as output_file:
+            with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w", encoding=sys.getdefaultencoding()) as output_file:
                 if output_file.writable():
                     ret = module_pipeline.render()
                     if isinstance(ret, Iterator) or isinstance(ret, Generator):
