@@ -816,23 +816,24 @@ class CASDatabase:
                 print("command patterns precomputed processed (%d patterns)  [%.2fs]" % (len(self.config.string_table), time.time()-start_time))
                 out_pcp_map = dict()
 
-        if do_linked:
-            def get_effective_args(args:List[str], cwd:str) -> List[str]:
-                ret = []
-                for i, arg in enumerate(args):
-                    if arg.startswith("@"):
-                        f = os.path.normpath(os.path.join(cwd, arg[1:]))
-                        if os.path.exists(f):
-                            with open(f, "r") as arg_file:
-                                r = arg_file.read()
-                                ret.extend(r.split())
-                        else:
-                            print("Parsing args failed! {}".format(args))
-                            print("Argfile does not exists {}".format(f))
+        def get_effective_args(args:List[str], cwd:str) -> List[str]:
+            ret = []
+            for i, arg in enumerate(args):
+                if arg.startswith("@"):
+                    f = os.path.normpath(os.path.join(cwd, arg[1:]))
+                    if os.path.exists(f):
+                        with open(f, "r") as arg_file:
+                            r = arg_file.read()
+                            ret.extend(r.split())
                     else:
-                        ret.append(arg)
+                        print("Parsing args failed! {}".format(args))
+                        print("Argfile does not exists {}".format(f))
+                else:
+                    ret.append(arg)
 
-                return ret
+            return ret
+
+        if do_linked:
 
             start_time = time.time()
 
@@ -923,35 +924,36 @@ class CASDatabase:
                         fork_map[ex.eid.pid] = [ch.eid.pid for ch in ex.childs]
                     if do_compilations and ex.binary != '':
                         b = os.path.realpath(ex.binary) if ex.binary.endswith("/cc") or ex.binary.endswith("/c++") else ex.binary
+                        effective_args:List[str] = get_effective_args(ex.argv, ex.cwd)
                         if clangpp_spec_patterns.match(b):
                             clangpp_pattern_match_execs.append(ex.ptr)
-                            if ("-cc1" in ex.argv or ("-c" in ex.argv and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in ex.argv, test_file))) \
-                                and "-o" in ex.argv and ("-emit-llvm-bc" not in ex.argv or allow_llvm_bc) \
-                                and not self.clang_ir_generation(ex.argv) and not self.clang_pp_input(ex.argv) \
-                                and "-analyze" not in ex.argv and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
+                            if ("-cc1" in effective_args or ("-c" in effective_args and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
+                                and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
+                                and not self.clang_ir_generation(effective_args) and not self.clang_pp_input(effective_args) \
+                                and "-analyze" not in effective_args and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
                                 clangpp_execs.append(ex.ptr)
-                                if not ex.argv[-1] == "-":
+                                if not effective_args[-1] == "-":
                                     clangpp_input_execs.append(ex)
-                                if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in ex.argv, test_file):
+                                if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif clang_spec_patterns.match(b):
                             clang_pattern_match_execs.append(ex.ptr)
-                            if ("-cc1" in ex.argv or ("-c" in ex.argv and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in ex.argv, test_file))) \
-                                and "-o" in ex.argv and ("-emit-llvm-bc" not in ex.argv or allow_llvm_bc) \
-                                and not self.clang_ir_generation(ex.argv) and not self.clang_pp_input(ex.argv) \
-                                and "-analyze" not in ex.argv and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
+                            if ("-cc1" in effective_args or ("-c" in effective_args and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
+                                and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
+                                and not self.clang_ir_generation(effective_args) and not self.clang_pp_input(effective_args) \
+                                and "-analyze" not in effective_args and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
                                 clang_execs.append(ex.ptr)
-                                if not ex.argv[-1] == "-":
+                                if not effective_args[-1] == "-":
                                     clang_input_execs.append(ex)
-                                if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in ex.argv, test_file):
+                                if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif gcc_spec_patterns.match(b):
                             gcc_comp_pids.append(ex.ptr)
-                            if "-" not in ex.argv:
+                            if "-" not in effective_args:
                                 gcc_input_execs.append(ex)
                         elif gpp_spec_patterns.match(b):
                             gpp_comp_pids.append(ex.ptr)
-                            if "-" not in ex.argv:
+                            if "-" not in effective_args:
                                 gpp_input_execs.append(ex)
 
                 print("input map created in [%.2fs]" % (time.time()-start_time))
