@@ -9121,7 +9121,7 @@ PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args) {
 	PyObject* py_fmt = PyTuple_GetItem(args,0);
 	const char* fmt =  PyString_get_c_str(py_fmt);
 	enum format_type* par_type = malloc(256*sizeof(enum format_type));
-	size_t n = vsnprintf_parse_format(&par_type,256,fmt);
+	int n = vsnprintf_parse_format(&par_type,256,fmt);
 
 	if (n<0) {
 		free(par_type);
