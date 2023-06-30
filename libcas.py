@@ -821,7 +821,7 @@ class CASDatabase:
             for i, arg in enumerate(args):
                 if arg.startswith("@"):
                     f = os.path.normpath(os.path.join(cwd, arg[1:]))
-                    if os.path.exists(f):
+                    if os.path.isfile(f):
                         with open(f, "r") as arg_file:
                             r = arg_file.read()
                             ret.extend(r.split())
