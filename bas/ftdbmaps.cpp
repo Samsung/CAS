@@ -70,5 +70,7 @@ int ftdb_maps(struct ftdb* ftdb, int show_stats) {
 	printf("fdrefmap keys: %zu\n",ulong_entryMap_count(&ftdb->fdrefmap));
 	printf("fdhrefmap keys: %zu\n",stringRef_entryMap_count(&ftdb->fdhrefmap));
 
+	BUILD_STRINGREF_ENTRYLIST_MAP(ftdb,fdnrefmap,fdnrefmap);
+
 	return 1;
 }
