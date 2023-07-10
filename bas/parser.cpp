@@ -1,974 +1,1307 @@
-#include <stdio.h>
-#include <inttypes.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include "utils.h"
-#include "parser.h"
-/* Generated using 'gperf phash.txt > phash.h' */
-#include "phash.h"
-#include <map>
+#include "parser.hpp"
 
-static unsigned int simple_hash(const char *s) {
-    return hash(s, strlen(s));
+/* Refactored based on SimpleJSON */
+std::string json_escape(const std::string &input) {
+    std::string result;
+    for (size_t i = 0; i < input.length(); ++i) {
+        switch (input[i]) {
+        case '\"':
+            result += "\\\"";
+            break;
+        case '\\':
+            result += "\\\\";
+            break;
+        case '\b':
+            result += "\\b";
+            break;
+        case '\f':
+            result += "\\f";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        default:
+        {
+            if ((static_cast<unsigned>(input[i]) < 0x80) && (static_cast<unsigned>(input[i]) > 0x1F))
+            {
+                result += input[i];
+            }
+            break;
+        }
+        }
+    }
+    return result;
 }
 
-static unsigned int simple_hashn(const char *s, size_t len) {
-    return hash(s, len);
+Errorable<void> StreamParser::parse_line(const char *line, size_t size, uint64_t line_number) {
+    auto &_process_map = process_map();
+    auto &_stats_collector = stats_collector();
+    eventTuple_t event_tuple;
+
+    if (size < 4 || std::strncmp(line, "0: ", 3))
+        return BadFormatError(line_number);
+
+    auto ret = parse_generic_args(line + 3, line_number);
+
+    if (ret.is_error())
+        return std::move(ret);
+
+    event_tuple = ret.value();
+
+    set_last_event_time(event_tuple.timestamp);
+
+    if (!first_event_time())
+        set_first_event_time(event_tuple.timestamp);
+
+    auto map_lookup = _process_map.find(event_tuple.pid);
+
+    if (event_tuple.tag == Tag::ContEnd)
+        _stats_collector.increment_multilines();
+
+    if (map_lookup == _process_map.end())
+        _process_map.insert(std::make_pair(event_tuple.pid, Process(event_tuple.pid, event_tuple)));
+    else
+        map_lookup->second.event_list.push_back(event_tuple);
+
+    schedule_processing(event_tuple);
+
+    return {};
 }
 
-static int process_arg(char *arg, enum SYSEVENT cmd, void *cmdArgs) {
+void CachingParser::schedule_processing(eventTuple_t &event) {
+    auto &_cache = cache();
+    auto &_process_map = process_map();
+    auto &_pending_exits = pending_exits();
+    auto _lifetime = cache_lifetime();
 
-    char *eargname = strchr(arg, '=');
-    *eargname = 0;
+    _pending_exits.insert(event.pid);
 
-    switch (simple_hash(arg)) {
-    case PHASH_STR(pid): {
-        assert(cmd == SYSEVENT_SCHEDFORK);
-        if (sscanf(eargname + 1, SYSEVENT_SCHEDFORK_ARG_PID_FMT, &((struct SchedForkArgs *)cmdArgs)->cpid) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(argsize): {
-        assert(cmd == SYSEVENT_NEWPROC);
-        if (sscanf(eargname + 1, SYSEVENT_NEWPROC_ARG_ARGSIZE_FMT, &((struct NewProcArgs *)cmdArgs)->argsize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(prognameisize): {
-        assert(cmd == SYSEVENT_NEWPROC);
-        if (sscanf(eargname + 1, SYSEVENT_NEWPROC_ARG_PROGNAMEISIZE_FMT,
-                   &((struct NewProcArgs *)cmdArgs)->prognameisize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(prognamepsize): {
-        assert(cmd == SYSEVENT_NEWPROC);
-        if (sscanf(eargname + 1, SYSEVENT_NEWPROC_ARG_PROGNAMEPSIZE_FMT,
-                   &((struct NewProcArgs *)cmdArgs)->prognamepsize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(cwdsize): {
-        assert(cmd == SYSEVENT_NEWPROC);
-        if (sscanf(eargname + 1, SYSEVENT_NEWPROC_ARG_CWDSIZE_FMT, &((struct NewProcArgs *)cmdArgs)->cwdsize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(fd): {
-        assert((cmd == SYSEVENT_CLOSE) || (cmd == SYSEVENT_OPEN));
-        if (cmd == SYSEVENT_CLOSE) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct CloseArgs *)cmdArgs)->fd) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_OPEN) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct OpenArgs *)cmdArgs)->fd) == 1) {
-                goto done;
-            }
-        }
-    } break;
-    case PHASH_STR(fd1): {
-        assert(cmd == SYSEVENT_PIPE);
-        if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct PipeArgs *)cmdArgs)->fd1) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(fd2): {
-        assert(cmd == SYSEVENT_PIPE);
-        if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct PipeArgs *)cmdArgs)->fd2) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(oldfd): {
-        assert(cmd == SYSEVENT_DUP);
-        if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct DupArgs *)cmdArgs)->oldfd) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(newfd): {
-        assert(cmd == SYSEVENT_DUP);
-        if (sscanf(eargname + 1, SYSEVENT__ARG_FD_FMT, &((struct DupArgs *)cmdArgs)->newfd) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(flags): {
-        assert((cmd == SYSEVENT_SYSCLONE) || (cmd == SYSEVENT_OPEN) || (cmd == SYSEVENT_RENAME2FROM) ||
-               (cmd == SYSEVENT_LINKATFROM) || (cmd == SYSEVENT_PIPE) || (cmd == SYSEVENT_DUP));
-        if (cmd == SYSEVENT_SYSCLONE) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct SysCloneArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_OPEN) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct OpenArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_RENAME2FROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct RenameArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_LINKATFROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct LinkArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_PIPE) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct PipeArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_DUP) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FLAGS_FMT, &((struct DupArgs *)cmdArgs)->flags) == 1) {
-                goto done;
-            }
-        }
-    } break;
-    case PHASH_STR(mode): {
-        assert(cmd == SYSEVENT_OPEN);
-        if (sscanf(eargname + 1, SYSEVENT_OPEN_ARG_MODE_FMT, &((struct OpenArgs *)cmdArgs)->mode) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(fnamesize): {
-        assert((cmd == SYSEVENT_OPEN) || (cmd == SYSEVENT_RENAMEFROM) || (cmd == SYSEVENT_RENAME2FROM) ||
-               (cmd == SYSEVENT_RENAMETO) || (cmd == SYSEVENT_LINKFROM) || (cmd == SYSEVENT_LINKATFROM) ||
-               (cmd == SYSEVENT_LINKTO));
-        if (cmd == SYSEVENT_OPEN) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct OpenArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_RENAMEFROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct RenameArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_RENAME2FROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct RenameArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_RENAMETO) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct RenameArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_LINKFROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct LinkArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_LINKATFROM) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct LinkArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        } else if (cmd == SYSEVENT_LINKTO) {
-            if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct LinkArgs *)cmdArgs)->fnamesize) == 1) {
-                goto done;
-            }
-        }
-    } break;
-    case PHASH_STR(forigsize): {
-        assert(cmd == SYSEVENT_OPEN);
-        if (sscanf(eargname + 1, SYSEVENT__ARG_FNAMESIZE_FMT, &((struct OpenArgs *)cmdArgs)->forigsize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(targetnamesize): {
-        assert(cmd == SYSEVENT_SYMLINK);
-        if (sscanf(eargname + 1, SYSEVENT_SYMLINK_ARG_TARGETNAMESIZE_FMT,
-                   &((struct SymLinkArgs *)cmdArgs)->targetnamesize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(linknamesize): {
-        assert(cmd == SYSEVENT_SYMLINK);
-        if (sscanf(eargname + 1, SYSEVENT_SYMLINK_ARG_LINKNAMESIZE_FMT,
-                   &((struct SymLinkArgs *)cmdArgs)->linknamesize) == 1) {
-            goto done;
-        }
-    } break;
-    case PHASH_STR(resolvednamesize): {
-        assert(cmd == SYSEVENT_SYMLINK);
-        if (sscanf(eargname + 1, SYSEVENT_SYMLINK_ARG_RESOLVEDNAMESIZE_FMT,
-                   &((struct SymLinkArgs *)cmdArgs)->resolvednamesize) == 1) {
-            goto done;
-        }
-    } break;
+    if (event.tag == Tag::Exit) {
+        _cache.push_back(CacheEntry(event.pid, event.line_number + _lifetime));
+        _pending_exits.erase(event.pid);
     }
 
-    return 0;
+    if (!_cache.size())
+        return;
 
-done:
-    *eargname = '=';
-    return 1;
+    auto &entry = _cache.front();
+
+    if (entry.hitcount == event.line_number) {
+        auto &process = _process_map.at(entry.pid);
+        cache_hit(process);
+        _cache.erase(_cache.begin());
+    }
 }
 
-int parse_generic_args(const char *line, eventTuple_t *evln) {
+void CachingParser::cache_hit(Process &process, bool pending) {
+    std::sort(process.event_list.begin(), process.event_list.end(),
+            [] (const eventTuple_t &a, const eventTuple_t &b) {
+                return a.timestamp < b.timestamp;
+            });
+    process.first_event_time = process.event_list.front().timestamp;
+
+    if (pending)
+        process.last_event_time = last_event_time();
+    else
+        process.last_event_time = process.event_list.back().timestamp;
+
+    trigger_parsing(process);
+}
+
+void CachingParser::cleanup_cache(void) {
+    auto &_cache = cache();
+    auto &_process_map = process_map();
+    auto &_pending_exits = pending_exits();
+    auto &_stats_collector = stats_collector();
+
+    for (auto it = _cache.begin(); it != _cache.end(); ) {
+        auto &cached_entry = *it;
+        auto &process = _process_map.at(cached_entry.pid);
+        cache_hit(process);
+        it = _cache.erase(it);
+        _stats_collector.increment_procs_at_exit();
+    }
+
+    for (auto it = _pending_exits.begin(); it != _pending_exits.end(); ) {
+        auto &pid  = *it;
+        auto &process = _process_map.at(pid);
+        cache_hit(process, true);
+        it = _pending_exits.erase(it);
+        _stats_collector.increment_procs_at_exit();
+    }
+}
+
+Errorable<NewProcArguments> StreamParser::parse_newproc_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    NewProcArguments arguments;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::ArgSize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+
+            arguments.argsize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Prognameisize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+
+            arguments.prognameisize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Prognamepsize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+
+            arguments.prognamepsize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::CwdSize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+
+            arguments.cwdsize = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<SchedForkArguments> StreamParser::parse_schedfork_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    SchedForkArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Pid)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.cpid = std::strtoull(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
+Errorable<SysCloneArguments> StreamParser::parse_sysclone_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    SysCloneArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Flags)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.flags = std::strtoull(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
+Errorable<OpenArguments> StreamParser::parse_open_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    OpenArguments arguments;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Fnamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno)
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.fnamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Forigsize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno)
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.forigsize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Flags:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno)
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.flags = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Mode:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno)
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.mode = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Fd:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno)
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.fd = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<CloseArguments> StreamParser::parse_close_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    CloseArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Fd)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.fd = std::strtoll(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
+Errorable<PipeArguments> StreamParser::parse_pipe_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    PipeArguments arguments;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Fd1: {
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.fd1 = value;
+            event_line = ++endptr;
+            break;
+        }
+        case ShortArguments::Fd2: {
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.fd2 = value;
+            event_line = ++endptr;
+            break;
+        }
+        case ShortArguments::Flags: {
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.flags = value;
+            event_line = ++endptr;
+            goto ret;
+        }
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<RenameArguments> StreamParser::parse_rename_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    RenameArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Fnamesize)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.fnamesize = std::strtoull(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
+Errorable<LinkArguments> StreamParser::parse_link_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    LinkArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Fnamesize)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.fnamesize = std::strtoull(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
+Errorable<RenameArguments> StreamParser::parse_rename2_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    RenameArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    switch (tag) {
+    case ShortArguments::Fnamesize:
+        errno = 0;
+        value = std::strtoull(++separator, &endptr, 10);
+        if (errno) [[unlikely]]
+            return IntegerParseError(event.line_number, separator, errno);
+        else if (*endptr != ',') [[unlikely]]
+            return BadSeparatorError(event.line_number, separator);
+        arguments.fnamesize = value;
+        event_line = ++endptr;
+        break;
+    case ShortArguments::Flags:
+        errno = 0;
+        value = std::strtoull(++separator, &endptr, 10);
+        if (errno) [[unlikely]]
+            return IntegerParseError(event.line_number, separator, errno);
+        else if (*endptr != 0) [[unlikely]]
+            return BadSeparatorError(event.line_number, separator);
+        arguments.flags = value;
+        goto ret;
+    default:
+        return UnexpectedTagError(event.line_number, tag);
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<LinkArguments> StreamParser::parse_linkat_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    LinkArguments arguments;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Fnamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.fnamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Flags:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.flags = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<DupArguments> StreamParser::parse_dup_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    DupArguments arguments;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Oldfd:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.oldfd = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Newfd:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.newfd = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Flags:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.flags = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+Errorable<SymlinkArguments> StreamParser::parse_symlink_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    SymlinkArguments arguments;
+    arguments.resolvednamesize = -1;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Targetnamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.targetnamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Resolvednamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.resolvednamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Linknamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.linknamesize = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
+size_t StreamParser::parse_arguments(std::vector<eventTuple_t>::iterator &it,
+                                     const std::vector<eventTuple_t>::iterator &end_it,
+                                     std::vector<std::string> &result)
+{
+    ssize_t last_argument = NOT_INDEXED;
+    size_t size = 0;
+
+    for (;;) {
+        auto &event = *it;
+
+        if (it == end_it)
+            break;
+
+        if (event.tag != Tag::Cont && event.tag != Tag::ContEnd && event.tag != Tag::ArrayedArguments)
+            break;
+
+        if (event.tag == Tag::Cont) {
+            auto &previous_argument = result.back();
+            previous_argument.append("\\n" + json_escape(event.event_arguments));
+            size += event.event_arguments.size() + 1;
+            it++;
+            continue;
+        }
+
+        if (event.tag == Tag::ContEnd) {
+            it++;
+            continue;
+        }
+
+        if (last_argument == event.argument_index) {
+            auto &previous_argument = result.back();
+            previous_argument.append(json_escape(event.event_arguments));
+            size += event.event_arguments.size();
+            it++;
+            continue;
+        } else if (last_argument + 1 != event.argument_index) {
+            size++;
+        }
+
+        if (event.tag == Tag::ArrayedArguments)
+            last_argument = event.argument_index;
+
+        result.push_back(json_escape(event.event_arguments));
+        size += event.event_arguments.size() + 1;
+        it++;
+    }
+
+    return size;
+}
+
+size_t StreamParser::parse_long_argument(std::vector<eventTuple_t>::iterator &it,
+        const std::vector<eventTuple_t>::iterator &end_it, Tag begin, Tag extended, Tag end,
+        std::string &result)
+{
+    ssize_t last_argument = NOT_INDEXED;
+    size_t size = 0;
+
+    for (;;) {
+        auto &event = *it;
+
+        if (it == end_it)
+            break;
+
+        if (event.tag != begin && event.tag != extended && event.tag != end && event.tag != Tag::Cont && event.tag != Tag::ContEnd)
+            break;
+
+        if (event.tag == end) {
+            it++;
+            break;
+        }
+
+        if (event.tag == Tag::Cont) {
+            result.append('\n' + json_escape(event.event_arguments));
+            size += event.event_arguments.size() + 1;
+            it++;
+            continue;
+        }
+
+        if (event.tag == Tag::ContEnd) {
+            it++;
+            continue;
+        }
+
+        if (event.tag == begin) {
+            result = json_escape(event.event_arguments);
+            size += event.event_arguments.size();
+            it++;
+            continue;
+        }
+
+        if (event.tag == extended)
+            last_argument = event.argument_index;
+
+        result.append(json_escape(event.event_arguments));
+        size += event.event_arguments.size();
+        it++;
+    }
+
+    return size;
+}
+
+Errorable<eventTuple_t> StreamParser::parse_generic_args(const char *line, size_t line_number) {
     char *event_separator;
     char *argument_bracket;
     char *endptr;
+    ssize_t argument_index = NOT_INDEXED;
     unsigned long long pid;
     unsigned long cpu;
     unsigned long time;
     unsigned long timen;
+    eventTuple_t event;
+    Tag tag = Tag::None;
 
     errno = 0;
-    pid = strtoull(line, &endptr, 10);
-    if (errno || *endptr != ',') /* [[unlikely]] */
-        return 0;
-    line = ++endptr;
-    cpu = strtoul(line, &endptr, 10);
-    if (errno || *endptr != ',') /* [[unlikely]] */
-        return 0;
-    line = ++endptr;
-    time = strtoul(line, &endptr, 10);
-    if (errno || *endptr != ',') /* [[unlikely]] */
-        return 0;
-    line = ++endptr;
-    timen = strtoul(line, &endptr, 10);
-    if (errno || *endptr != '!') /* [[unlikely]] */
-        return 0;
+    pid = std::strtoull(line, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(line_number, line, errno);
+    else if (*endptr != ',') [[unlikely]]
+        return BadSeparatorError(line_number, line);
     line = ++endptr;
 
-    event_separator = const_cast<char *>(strchr(line, '|'));
+    cpu = std::strtoul(line, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(line_number, line, errno);
+    else if (*endptr != ',') [[unlikely]]
+        return BadSeparatorError(line_number, line);
+    line = ++endptr;
 
-    if (!event_separator) {
-        argument_bracket = const_cast<char *>(line);
-        if ((*argument_bracket == 'A') && (*(++argument_bracket) == '[')) {
-            while (isdigit(*(++argument_bracket)))
-                ;
-            if (*argument_bracket != ']')
-                return 0;
-        }
-    }
+    time = std::strtoul(line, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(line_number, line, errno);
+    else if (*endptr != ',') [[unlikely]]
+        return BadSeparatorError(line_number, line);
+    line = ++endptr;
 
-    evln->pid = pid;
-    evln->cpu = cpu;
-    evln->timen = time * 1000000000UL + timen;
-    evln->event = simple_hashn(line, event_separator - line);
-    evln->event_line = strdup(line);
-    return 1;
-}
+    timen = std::strtoul(line, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(line_number, line, errno);
+    else if (*endptr != '!') [[unlikely]]
+        return BadSeparatorError(line_number, line);
+    line = ++endptr;
 
-static int parse_args(char *args, enum SYSEVENT cmd, void *cmdArgs) {
+    event_separator = const_cast<char *>(std::strchr(line, '|'));
+    argument_bracket = const_cast<char *>(std::strchr(line, '['));
 
-    char *beg = args;
-    char *end = 0;
-    do {
-        end = strchr(beg, ',');
-        if (end) {
-            *end = 0;
-            int rv = process_arg(beg, cmd, cmdArgs);
-            *end = ',';
-            if (!rv)
-                return 0;
-            beg = end + 1;
-        } else {
-            if (!process_arg(beg, cmd, cmdArgs))
-                return 0;
-        }
-    } while (end);
-    return 1;
-}
+    if (!event_separator && !argument_bracket) {
+        return BadSeparatorError(line_number, line);
+    } else if ((event_separator && argument_bracket && event_separator > argument_bracket) || (!event_separator && argument_bracket)) {
+        errno = 0;
+        argument_index = std::strtoull(argument_bracket + 1, &endptr, 10);
+        if (errno) [[unlikely]]
+            return IntegerParseError(line_number, line, errno);
+        else if (*endptr != ']') [[unlikely]]
+            return BadSeparatorError(line_number, line);
 
-static char *get_longpath_arg(vpeventTuple_t *event_list, unsigned long *vi, const char *tag, const char *tag_end) {
+        tag = static_cast<Tag>(hash(line, (argument_bracket + 1) - line));
+        if (tag != Tag::ArrayedArguments)
+           return UnexpectedArgumentEndError(line_number);
+    } else if ((event_separator && argument_bracket && event_separator < argument_bracket) || (event_separator && !argument_bracket)) {
+        tag = static_cast<Tag>(hash(line, event_separator - line));
+        switch (tag) {
+        case Tag::ProgramInterpreterExtended:
+        case Tag::ProgramPathExtended:
+        case Tag::CurrentWorkingDirectoryExtended:
+        case Tag::AbsolutePathExtended:
+        case Tag::OriginalPathExtended:
+        case Tag::RenameFromPathExtended:
+        case Tag::RenameToPathExtended:
+        case Tag::LinkFromPathExtended:
+        case Tag::LinkToPathExtended:
+        case Tag::SymlinkTargetNameExtended:
+        case Tag::SymlinkTargetPathExtended:
+        case Tag::SymlinkPathExtended:
+            argument_bracket = std::strchr(event_separator + 1, '[');
+            if (!argument_bracket)
+                return BadSeparatorError(line_number, event_separator + 1);
 
-    char *longfn = 0;
-    long cargidx = -1;
-    while (*vi < VEC_SIZE(*event_list)) {
-        eventTuple_t *ievln = VEC_ACCESS(*event_list, *vi);
-        if ((ievln->event_line[0] == tag[0]) && (ievln->event_line[1] == tag[1]) && (ievln->event_line[2] == '|')) {
-            return strndup(ievln->event_line + 3, strlen(ievln->event_line + 3) - 1);
-        } else if ((ievln->event_line[0] == tag[0]) && (ievln->event_line[1] == tag[1]) &&
-                   (ievln->event_line[2] == '[')) {
-            char *cmde = strchr(ievln->event_line + 3, ']');
-            *cmde = 0;
-            long argidx;
-            if (sscanf(ievln->event_line + 3, "%ld", &argidx) != 1) {
-                return 0;
-            }
-            *cmde = ']';
-            // Beware on trailing newlines
-            size_t slen = strlen(cmde + 1) - 1;
-            if (argidx == 0) {
-                longfn = strndup(cmde + 1, slen);
-            } else {
-                if (argidx != cargidx + 1) {
-                    return 0;
-                }
-                longfn = strnappend(longfn, cmde + 1, slen);
-            }
-            cargidx = argidx;
-        } else if (strcmp(ievln->event_line, tag_end) == 0) {
-            return longfn;
-        } else {
-            return 0;
-        }
-        (*vi)++;
-    }
-    return 0;
-}
-
-long parse_write_process_events(upid_t pid, vpeventTuple_t *event_list, struct parse_context *context,
-                                uint64_t start_time, uint64_t end_time) {
-
-    unsigned long vi = 0;
-    long n_processed = 0;
-    long n_execs = 0;
-    unsigned procidx = 0;
-    uint64_t exe_start_time = start_time;
-    size_t ve_init_size = context->ve.size();
-    context->ve.push_back(parsed_entry(pid));
-    context->pset.insert(pid);
-    std::vector<syscall_raw> &srvec = context->srvec;
-    size_t srvec_init_size = srvec.size();
-
-    while (vi < VEC_SIZE(*event_list)) {
-        eventTuple_t *evln = VEC_ACCESS(*event_list, vi);
-        char *cmde = strchr(evln->event_line, '|');
-        uint8_t event = simple_hashn(evln->event_line, cmde - evln->event_line);
-        switch (event) {
-        case PHASH_STR(New_proc): {
-            struct NewProcArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_NEWPROC, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            /* Read exec arguments */
-            int done = 0;
-            long cargidx = -1;
-            char *longargs = 0;
-            VEC_INIT(argnfo.argv);
-            ++vi;
-            while (vi < VEC_SIZE(*event_list)) {
-                eventTuple_t *ievln = VEC_ACCESS(*event_list, vi);
-                if ((ievln->event_line[0] == 'P') && (ievln->event_line[1] == 'I')) {
-                    char *longfn = get_longpath_arg(event_list, &vi, "PI", "PI_end\n");
-                    if (!longfn) {
-                        fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                                ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    if (strlen(longfn) != argnfo.prognameisize) {
-                        fprintf(
-                            stderr,
-                            "ERROR: Size mismatch in progname_i (%zu vs %zu) exec argument [%lu]: [" GENERIC_ARG_PID_FMT
-                            "] %s\n",
-                            strlen(longfn), argnfo.prognameisize, vi, ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    argnfo.progname_i = longfn;
-                } else if ((ievln->event_line[0] == 'P') && (ievln->event_line[1] == 'P')) {
-                    char *longfn = get_longpath_arg(event_list, &vi, "PP", "PP_end\n");
-                    if (!longfn) {
-                        fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                                ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    if (strlen(longfn) != argnfo.prognamepsize) {
-                        fprintf(
-                            stderr,
-                            "ERROR: Size mismatch in progname_p (%zu vs %zu) exec argument [%lu]: [" GENERIC_ARG_PID_FMT
-                            "] %s\n",
-                            strlen(longfn), argnfo.prognamepsize, vi, ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    argnfo.progname_p = longfn;
-                } else if ((ievln->event_line[0] == 'C') && (ievln->event_line[1] == 'W')) {
-                    char *longfn = get_longpath_arg(event_list, &vi, "CW", "CW_end\n");
-                    if (!longfn) {
-                        fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                                ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    if (strlen(longfn) != argnfo.cwdsize) {
-                        fprintf(stderr,
-                                "ERROR: Size mismatch in cwd (%zu vs %zu) exec argument [%lu]: [" GENERIC_ARG_PID_FMT
-                                "] %s\n",
-                                strlen(longfn), argnfo.cwdsize, vi, ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    argnfo.cwd = longfn;
-                } else if ((ievln->event_line[0] == 'A') && (ievln->event_line[1] == '[')) {
-                    char *cmde = strchr(ievln->event_line + 2, ']');
-                    *cmde = 0;
-                    long argidx;
-                    if (sscanf(ievln->event_line + 2, "%ld", &argidx) != 1) {
-                        fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                                ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                    *cmde = ']';
-                    // Beware on trailing newlines
-                    size_t slen = strlen(cmde + 1) - 1;
-                    if (argidx == cargidx) {
-                        // Keep another part of the string
-                        longargs = strnappend(longargs, cmde + 1, slen);
-                    } else {
-                        if (argidx > 0) {
-                            VEC_APPEND(const char *, argnfo.argv, longargs);
-                        }
-                        // Setup new string for processing
-                        cargidx = argidx;
-                        longargs = strndup(cmde + 1, slen);
-                    }
-                } else if (ievln->event_line[0] == 'E') {
-                    char *cmde = strchr(ievln->event_line, '|');
-                    if (simple_hashn(ievln->event_line, cmde - ievln->event_line) == PHASH_STR(End_of_args)) {
-                        procidx++;
-                        VEC_APPEND(const char *, argnfo.argv, longargs);
-                        unsigned long ai;
-                        uint64_t utn = (uint64_t)evln->timen;
-                        context->ve.back().settime(utn - exe_start_time);
-                        MAKE_JSON_ESCAPED(_progname_p, argnfo.progname_p);
-                        MAKE_JSON_ESCAPED(_cwd, argnfo.cwd);
-                        const char *p = path_join(_cwd, _progname_p);
-                        struct parsed_entry e(evln->pid, procidx, p ? p : _progname_p, _cwd);
-                        context->ve.push_back(e);
-                        exe_start_time = utn;
-                        if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                            fprintf(context->rawoutfd, ",\n");
-                        if (context->rawoutfd)
-                            fprintf(context->rawoutfd,
-                                    "{\"c\":\"e\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                                    ",\"b\":\"%s\",\"w\":\"%s\",\"v\":[",
-                                    evln->pid, procidx, utn - context->start_time, p ? p : _progname_p, _cwd);
-                        free((void *)p);
-                        FREE_JSON_ESCAPED(_progname_p);
-                        FREE_JSON_ESCAPED(_cwd);
-                        for (ai = 0; ai < VEC_SIZE(argnfo.argv); ++ai) {
-                            MAKE_JSON_ESCAPED(argi, VEC_ACCESS(argnfo.argv, ai));
-                            context->ve.back().argv.push_back(argi);
-                            if (context->rawoutfd)
-                                fprintf(context->rawoutfd, "\"%s\"", argi);
-                            FREE_JSON_ESCAPED(argi);
-                            if ((ai < VEC_SIZE(argnfo.argv) - 1) && (context->rawoutfd))
-                                fprintf(context->rawoutfd, ",");
-                        }
-                        if (context->rawoutfd)
-                            fprintf(context->rawoutfd, "]}");
-                        srvec.push_back(syscall_raw(pid, syscall_raw::SYS_EXEC, utn - context->start_time));
-                        free((void *)argnfo.progname_i);
-                        free((void *)argnfo.progname_p);
-                        free((void *)argnfo.cwd);
-                        for (ai = 0; ai < VEC_SIZE(argnfo.argv); ++ai) {
-                            free((void *)VEC_ACCESS(argnfo.argv, ai));
-                        }
-                        VEC_DESTROY(argnfo.argv);
-                        done = 1;
-                        n_processed++;
-                        n_execs++;
-                        context->event_count.exec++;
-                        break;
-                    } else {
-                        fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                                ievln->pid, ievln->event_line);
-                        goto error;
-                    }
-                } else {
-                    fprintf(stderr, "ERROR: Invalid exec argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            ievln->pid, ievln->event_line);
-                    goto error;
-                }
-                ++vi;
-            }
-            if (!done) {
-                fprintf(stderr, "ERROR: Failed to process exec args [%lu]\n", vi);
-                goto error;
-            }
+            errno = 0;
+            argument_index = std::strtoull(argument_bracket + 1, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(line_number, line, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(line_number, line);
+            break;
+        default:
             break;
         }
-        case PHASH_STR(SchedFork): {
-            struct SchedForkArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_SCHEDFORK, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            struct parsed_entry &e = context->ve.back();
-            e.vchild.push_back(std::pair<upid_t, unsigned long>(argnfo.cpid, 0));
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd)
-                fprintf(context->rawoutfd,
-                        "{\"c\":\"f\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                        ",\"h\":" GENERIC_ARG_PID_FMT ",\"f\":%lu}",
-                        evln->pid, procidx, utn - context->start_time, argnfo.cpid, (unsigned long)0);
-            assert(context->rev_fork_map.find(argnfo.cpid) == context->rev_fork_map.end());
-            context->rev_fork_map.insert(std::pair<upid_t, std::pair<upid_t, unsigned>>(
-                argnfo.cpid, std::pair<upid_t, unsigned>(evln->pid, context->ve.size() - ve_init_size - 1)));
+    }
+
+    event.pid = pid;
+    event.cpu = cpu;
+    event.tag = tag;
+    event.argument_index = argument_index;
+    event.timestamp = time * 1000000000UL + timen;
+    event.line_number = line_number;
+    event.event_arguments = tag == Tag::ArrayedArguments ? ++endptr : ++event_separator;
+
+    return event;
+}
+
+Errorable<void> StreamParser::process_events(Process &process) {
+    long n_processed = 0;
+    long n_execs = 0;
+    uint64_t exe_start_time = process.first_event_time;
+    size_t size = 0;
+    auto& _stats_collector = stats_collector();
+
+    auto bound_check_iter = [](std::vector<eventTuple_t>::iterator &it, std::vector<eventTuple_t>::iterator &end_it) {
+        if (it == end_it) {
+            format_print("unexpected end of arguments, last one on line ", ((*(it - 1)).line_number));
+            exit(EXIT_FAILURE);
+        }
+    };
+
+    auto increment_bound_check_iter = [&](std::vector<eventTuple_t>::iterator &it, std::vector<eventTuple_t>::iterator &end_it) {
+        bound_check_iter(it, end_it);
+        it++;
+        bound_check_iter(it, end_it);
+    };
+
+    auto end_it = process.event_list.end();
+    for (auto it = process.event_list.begin(); it != end_it; ) {
+        auto &evln = *it;
+        switch (evln.tag) {
+        case Tag::NewProc: {
+            std::string program_interpreter;
+            NewProcArguments argnfo = {};
+            Execution execution;
+            auto result = StreamParser::parse_newproc_short_arguments(evln);
+            if (result.is_error())
+                return result;
+
+            argnfo = result.value();
+
+            increment_bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::ProgramInterpreter,
+                    Tag::ProgramInterpreterExtended, Tag::ProgramInterpreterEnd, program_interpreter);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.prognameisize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.prognameisize);
+
+            last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::ProgramPath,
+                    Tag::ProgramPathExtended, Tag::ProgramPathEnd, execution.program_path);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.prognamepsize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.prognamepsize);
+
+            last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::CurrentWorkingDirectory,
+                    Tag::CurrentWorkingDirectoryExtended, Tag::CurrentWorkingDirectoryEnd,
+                    execution.current_working_directory);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.cwdsize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.cwdsize);
+
+            last_it = it;
+            size = StreamParser::parse_arguments(it, end_it, execution.arguments);
+
+            bound_check_iter(it, end_it);
+
+            if ((*it).tag != Tag::EndOfArgs)
+                return UnexpectedArgumentEndError((*it).line_number);
+
+            it++;
+
+            auto &previous_execution = process.executions.back();
+            previous_execution.elapsed_time = evln.timestamp - exe_start_time;
+
+            execution.pid = evln.pid;
+            execution.index = previous_execution.index + 1;
+            process.executions.push_back(execution);
+
+            exe_start_time = evln.timestamp;
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_EXEC,
+                        evln.timestamp - first_event_time()));
+
             n_processed++;
-            context->event_count.fork++;
-            srvec.push_back(syscall_raw(pid, syscall_raw::SYS_FORK, argnfo.cpid, 0, utn - context->start_time));
+            n_execs++;
+            _stats_collector.increment_exec();
+
+            break;
         } break;
-        case PHASH_STR(SysClone): {
-            struct SysCloneArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_SYSCLONE, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
+        case Tag::SchedFork: {
+            SchedForkArguments argnfo = {};
+            auto result = StreamParser::parse_schedfork_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            it++;
+            argnfo = result.value();
+            Execution &e = process.executions.back();
+            e.children.push_back(Child(argnfo.cpid, 0));
+
+            register_child(argnfo.cpid, evln.pid, process.executions.size() - 1);
+            n_processed++;
+            _stats_collector.increment_fork();
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_FORK, argnfo.cpid, 0,
+                        evln.timestamp - first_event_time()));
+        } break;
+        case Tag::SysClone: {
+            SysCloneArguments argnfo = {};
+            auto result = StreamParser::parse_sysclone_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            argnfo = result.value();
+
             /* There should be SchedFork or SysCloneFailed event following Clone */
-            ++vi;
-            if (vi >= VEC_SIZE(*event_list)) {
-                fprintf(stderr,
-                        "WARNING: Missing SchedFork/SysCloneFailed after Clone at [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        vi, evln->pid, evln->event_line);
-                break;
-            }
-            eventTuple_t *ievln = VEC_ACCESS(*event_list, vi);
-            char *cmde = strchr(ievln->event_line, '|');
-            uint8_t event = simple_hashn(ievln->event_line, cmde - ievln->event_line);
-            if ((event != PHASH_STR(SchedFork)) && (event != PHASH_STR(SysCloneFailed))) {
-                fprintf(stderr,
-                        "WARNING: Missing SchedFork/SysCloneFailed after Clone at [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        vi, ievln->pid, ievln->event_line);
-                vi--;
-                break;
-            }
-            if (event == PHASH_STR(SysCloneFailed)) {
+            ++it;
+            bound_check_iter(it, end_it);
+            auto &ievln = *it;
+            if ((ievln.tag != Tag::SchedFork) && (ievln.tag != Tag::SysCloneFailed))
+                return {};
+            if (ievln.tag == Tag::SysCloneFailed) {
                 /* Nothing to do, just keep going */
+                it++;
             } else {
-                struct SchedForkArgs argnfo_fork = {};
-                if (!parse_args(cmde + 1, SYSEVENT_SCHEDFORK, &argnfo_fork)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            ievln->pid, ievln->event_line);
-                    goto error;
-                }
-                uint64_t utn = (uint64_t)evln->timen;
-                struct parsed_entry &e = context->ve.back();
-                e.vchild.push_back(std::pair<upid_t, unsigned long>(argnfo_fork.cpid, argnfo.flags));
-                if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                    fprintf(context->rawoutfd, ",\n");
-                if (context->rawoutfd)
-                    fprintf(context->rawoutfd,
-                            "{\"c\":\"f\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                            ",\"h\":" GENERIC_ARG_PID_FMT ",\"f\":%lu}",
-                            evln->pid, procidx, utn - context->start_time, argnfo_fork.cpid, argnfo.flags);
-                assert(context->rev_fork_map.find(argnfo_fork.cpid) == context->rev_fork_map.end());
-                context->rev_fork_map.insert(std::pair<upid_t, std::pair<upid_t, unsigned>>(
-                    argnfo_fork.cpid, std::pair<upid_t, unsigned>(evln->pid, context->ve.size() - ve_init_size - 1)));
+                SchedForkArguments argnfo_fork = {};
+                auto result = StreamParser::parse_schedfork_short_arguments(ievln);
+                if (result.is_error())
+                    return result;
+                it++;
+                argnfo_fork = result.value();
+                Execution &e = process.executions.back();
+
+                e.children.push_back(Child(argnfo_fork.cpid, argnfo.flags));
+
+                register_child(argnfo_fork.cpid, evln.pid, process.executions.size() - 1);
                 n_processed += 2;
-                context->event_count.fork++;
-                srvec.push_back(
-                    syscall_raw(pid, syscall_raw::SYS_FORK, argnfo_fork.cpid, argnfo.flags, utn - context->start_time));
+                _stats_collector.increment_fork();
+                append_syscall(syscall_raw(process.pid, syscall_raw::SYS_FORK, argnfo_fork.cpid,
+                            argnfo.flags, evln.timestamp - first_event_time()));
             }
         } break;
-        case PHASH_STR(Close): {
-            struct CloseArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_CLOSE, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd)
-                fprintf(context->rawoutfd,
-                        "{\"c\":\"c\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64 ",\"fd\":%d}", evln->pid,
-                        procidx, utn - context->start_time, argnfo.fd);
+        case Tag::Close: {
+            CloseArguments argnfo = {};
+            auto result = StreamParser::parse_close_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            argnfo = result.value();
             n_processed++;
-            context->event_count.close++;
-            srvec.push_back(syscall_raw(pid, syscall_raw::SYS_CLOSE, argnfo.fd, -1, 0, utn - context->start_time));
+            _stats_collector.increment_close();
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_CLOSE, argnfo.fd, -1, 0,
+                        evln.timestamp - first_event_time()));
+            it++;
         } break;
-        case PHASH_STR(Pipe): {
-            struct PipeArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_PIPE, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd)
-                fprintf(context->rawoutfd,
-                        "{\"c\":\"p\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                        ",\"fdr\":%d,\"fdw\":%d,\"f\":%lu}",
-                        evln->pid, procidx, utn - context->start_time, argnfo.fd1, argnfo.fd2, argnfo.flags);
+        case Tag::Pipe: {
+            PipeArguments argnfo = {};
+            auto result = StreamParser::parse_pipe_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            argnfo = result.value();
             n_processed++;
-            context->event_count.pipe++;
-            srvec.push_back(syscall_raw(pid, syscall_raw::SYS_PIPE, argnfo.fd1, argnfo.fd2, argnfo.flags,
-                                        utn - context->start_time));
+            _stats_collector.increment_pipe();
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_PIPE, argnfo.fd1, argnfo.fd2,
+                        argnfo.flags, evln.timestamp - first_event_time()));
+            it++;
         } break;
-        case PHASH_STR(Dup): {
-            struct DupArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_DUP, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd)
-                fprintf(context->rawoutfd,
-                        "{\"c\":\"d\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                        ",\"ofd\":%d,\"nfd\":%d,\"f\":%lu}",
-                        evln->pid, procidx, utn - context->start_time, argnfo.oldfd, argnfo.newfd, argnfo.flags);
+        case Tag::Dup: {
+            DupArguments argnfo = {};
+            auto result = StreamParser::parse_dup_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            argnfo = result.value();
             n_processed++;
-            context->event_count.dup++;
-            srvec.push_back(syscall_raw(pid, syscall_raw::SYS_DUP, argnfo.oldfd, argnfo.newfd, argnfo.flags,
-                                        utn - context->start_time));
+
+            _stats_collector.increment_dup();
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_DUP, argnfo.oldfd,
+                        argnfo.newfd, argnfo.flags, evln.timestamp - first_event_time()));
+            it++;
         } break;
-        case PHASH_STR(Open): {
-            struct OpenArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_OPEN, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                        evln->event_line);
-                goto error;
-            }
-            /* Get open arguments */
-            ++vi;
-            char *longfn = get_longpath_arg(event_list, &vi, "FN", "FN_end\n");
-            if (!longfn) {
-                fprintf(stderr, "WARNING: Invalid open argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
-            }
-            if (strlen(longfn) != argnfo.fnamesize) {
-                fprintf(stderr,
-                        "ERROR: Size mismatch in fname (%zu vs %zu) open argument [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        strlen(longfn), argnfo.fnamesize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            ++vi;
-            char *longfo = get_longpath_arg(event_list, &vi, "FO", "FO_end\n");
-            if (!longfo) {
-                fprintf(stderr, "WARNING: Invalid open argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
-            }
-            if (strlen(longfo) != argnfo.forigsize) {
-                fprintf(stderr,
-                        "ERROR: Size mismatch in fname (%zu vs %zu) open argument [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        strlen(longfo), argnfo.forigsize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            MAKE_JSON_ESCAPED(_longfn, longfn);
-            MAKE_JSON_ESCAPED(_longfo, longfo);
-            struct parsed_entry &e = context->ve.back();
-            e.addUpdateFile(_longfn, argnfo.flags, evln->pid, _longfo);
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd)
-                fprintf(context->rawoutfd,
-                        "{\"c\":\"o\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                        ",\"h\":\"%s\",\"o\":\"%s\",\"f\":%lu,\"m\":%ld,\"fd\":%d}",
-                        evln->pid, procidx, utn - context->start_time, _longfn, _longfo, argnfo.flags, argnfo.mode,
-                        argnfo.fd);
-            FREE_JSON_ESCAPED(_longfn);
-            FREE_JSON_ESCAPED(_longfo);
-            free((void *)longfn);
-            free((void *)longfo);
+        case Tag::Open: {
+            OpenArguments argnfo = {};
+            auto opened_file = OpenFile();
+            std::string absolute_path;
+            std::string original_path;
+            auto result = StreamParser::parse_open_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            argnfo = result.value();
+
+            ++it;
+            bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::AbsolutePath,
+                    Tag::AbsolutePathExtended, Tag::AbsolutePathEnd, absolute_path);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.fnamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.fnamesize);
+
+            last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::OriginalPath,
+                    Tag::OriginalPathExtended, Tag::OriginalPathEnd, original_path);
+
+            if (size != argnfo.forigsize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.forigsize);
+
+            Execution &execution = process.executions.back();
+
+            opened_file.mode = argnfo.flags & 0x03;
+            opened_file.absolute_path = std::move(absolute_path);
+
+            execution.add_open_file(original_path, opened_file);
+
             n_processed++;
-            context->event_count.open++;
+            _stats_collector.increment_open();
         } break;
-        case PHASH_STR(RenameFrom):
-        case PHASH_STR(Rename2From): {
-            struct RenameArgs argnfo_RF = {};
-            if (event == PHASH_STR(RenameFrom)) {
-                if (!parse_args(cmde + 1, SYSEVENT_RENAMEFROM, &argnfo_RF)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, evln->event_line);
-                    goto error;
-                }
+        case Tag::RenameFrom:
+        case Tag::Rename2From: {
+            std::string from_path;
+            std::string to_path;
+            auto from = OpenFile();
+            auto to = OpenFile();
+            RenameArguments argnfo_RF = {};
+            if (evln.tag == Tag::RenameFrom) {
+                auto result = StreamParser::parse_rename_short_arguments(evln);
+                if (result.is_error())
+                    return result;
+                argnfo_RF = result.value();
             } else {
-                if (!parse_args(cmde + 1, SYSEVENT_RENAME2FROM, &argnfo_RF)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, evln->event_line);
-                    goto error;
-                }
+                auto result = StreamParser::parse_rename2_short_arguments(evln);
+                if (result.is_error())
+                    return result;
+                argnfo_RF = result.value();
             }
             /* Get rename arguments */
-            ++vi;
-            char *longfn_RF = get_longpath_arg(event_list, &vi, "RF", "RF_end\n");
-            if (!longfn_RF) {
-                fprintf(stderr, "WARNING: Invalid rename argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
-            }
-            if (strlen(longfn_RF) != argnfo_RF.fnamesize) {
-                fprintf(stderr,
-                        "ERROR: Size mismatch in fname (%zu vs %zu) rename argument [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        strlen(longfn_RF), argnfo_RF.fnamesize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            /* Next event should be RenameTo or RenameFailed */
-            ++vi;
-            if (vi >= VEC_SIZE(*event_list))
-                break;
-            eventTuple_t *ievln = VEC_ACCESS(*event_list, vi);
-            char *cmde = strchr(ievln->event_line, '|');
-            if ((simple_hashn(ievln->event_line, cmde - ievln->event_line)) == PHASH_STR(RenameTo)) {
-                struct RenameArgs argnfo_RT = {};
-                if (!parse_args(cmde + 1, SYSEVENT_RENAMETO, &argnfo_RT)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            ievln->pid, ievln->event_line);
-                    goto error;
-                }
-                /* Get rename arguments */
-                ++vi;
-                char *longfn_RT = get_longpath_arg(event_list, &vi, "RT", "RT_end\n");
-                if (!longfn_RT) {
-                    fprintf(stderr, "WARNING: Invalid rename argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                    continue;
-                }
-                if (strlen(longfn_RT) != argnfo_RT.fnamesize) {
-                    fprintf(stderr,
-                            "ERROR: Size mismatch in fname (%zu vs %zu) rename argument [%lu]: [" GENERIC_ARG_PID_FMT
-                            "] %s\n",
-                            strlen(longfn_RF), argnfo_RF.fnamesize, vi, evln->pid, evln->event_line);
-                    goto error;
-                }
-                uint64_t utn = (uint64_t)evln->timen;
-                MAKE_JSON_ESCAPED(_longfn_RF, longfn_RF);
-                MAKE_JSON_ESCAPED(_longfn_RT, longfn_RT);
-                struct parsed_entry &e = context->ve.back();
-                e.addUpdateFile(longfn_RF, O_RDONLY);
-                e.addUpdateFile(longfn_RT, O_WRONLY);
-                if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                    fprintf(context->rawoutfd, ",\n");
-                if (context->rawoutfd)
-                    fprintf(context->rawoutfd,
-                            "{\"c\":\"r\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                            ",\"o\":\"%s\",\"n\":\"%s\",\"f\":%lu}",
-                            evln->pid, procidx, utn - context->start_time, _longfn_RF, _longfn_RT, argnfo_RF.flags);
-                FREE_JSON_ESCAPED(_longfn_RF);
-                FREE_JSON_ESCAPED(_longfn_RT);
-                free((void *)longfn_RF);
-                free((void *)longfn_RT);
+            ++it;
+            bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::RenameFromPath, Tag::RenameFromPathExtended, Tag::RenameFromPathEnd, from_path);
+
+            if (size != argnfo_RF.fnamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo_RF.fnamesize);
+
+            bound_check_iter(it, end_it);
+
+            auto &ievln = *it;
+            if (ievln.tag == Tag::RenameTo) {
+                RenameArguments argnfo_RT = {};
+                auto result = StreamParser::parse_rename_short_arguments(ievln);
+                if (result.is_error())
+                    return result;
+
+                argnfo_RT = result.value();
+                ++it;
+                bound_check_iter(it, end_it);
+
+                last_it = it;
+                size = StreamParser::parse_long_argument(it, end_it, Tag::RenameToPath, Tag::RenameToPathExtended, Tag::RenameToPathEnd, to_path);
+
+                if (size != argnfo_RT.fnamesize)
+                    return SizeMismatchError(last_it->line_number, argnfo_RT.fnamesize, size);
+
+                Execution &e = process.executions.back();
+
+                from.mode = O_RDONLY;
+                from.absolute_path = from_path;
+                to.mode = O_WRONLY;
+                to.absolute_path = to_path;
+
+                e.add_open_file(from_path, from);
+                e.add_open_file(to_path, to);
+
                 n_processed += 2;
-                context->event_count.rename++;
-            } else if ((simple_hashn(ievln->event_line, cmde - ievln->event_line)) == PHASH_STR(RenameFailed)) {
-                free((void *)longfn_RF);
+                _stats_collector.increment_rename();
+            } else if (ievln.tag == Tag::RenameFailed) {
+                it++;
             } else {
-                fprintf(stderr,
-                        "WARNING: Invalid event after Rename(2)From (" GENERIC_ARG_PID_FMT
-                        ")[%lu]: [" GENERIC_ARG_PID_FMT "] %s\n",
-                        pid, vi, ievln->pid, ievln->event_line);
-                free((void *)longfn_RF);
-                vi--;
+                return {};
                 break;
             }
         } break;
-        case PHASH_STR(RenameFailed): {
+        case Tag::RenameFailed: {
             /* Sometimes it's just happening */
-            fprintf(stderr, "WARNING: Stray RenameFailed event at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                    evln->event_line);
+            it++;
         } break;
-        case PHASH_STR(LinkFailed): {
+        case Tag::LinkFailed: {
             /* Didn't happen but eventually it will */
-            fprintf(stderr, "WARNING: Stray LinkFailed event at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                    evln->event_line);
+            it++;
         } break;
-        case PHASH_STR(LinkFrom):
-        case PHASH_STR(LinkatFrom): {
-            struct LinkArgs argnfo_LF = {};
-            if (event == PHASH_STR(LinkFrom)) {
-                if (!parse_args(cmde + 1, SYSEVENT_LINKFROM, &argnfo_LF)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, evln->event_line);
-                    goto error;
-                }
+        case Tag::LinkFrom:
+        case Tag::LinkatFrom: {
+            std::string from_path;
+            std::string to_path;
+            auto from = OpenFile();
+            auto to = OpenFile();
+            LinkArguments argnfo_LF = {};
+            if (evln.tag == Tag::LinkFrom) {
+                auto result = StreamParser::parse_link_short_arguments(evln);
+                if (result.is_error())
+                    return result;
+
+                argnfo_LF = result.value();
             } else {
-                if (!parse_args(cmde + 1, SYSEVENT_LINKATFROM, &argnfo_LF)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, evln->event_line);
-                    goto error;
-                }
+                auto result = StreamParser::parse_linkat_short_arguments(evln);
+                if (result.is_error())
+                    return result;
+                argnfo_LF = result.value();
             }
             /* Get link arguments */
-            ++vi;
-            char *longfn_LF = get_longpath_arg(event_list, &vi, "LF", "LF_end\n");
-            if (!longfn_LF) {
-                fprintf(stderr, "WARNING: Invalid link argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
-            }
-            if (strlen(longfn_LF) != argnfo_LF.fnamesize) {
-                fprintf(stderr,
-                        "ERROR: Size mismatch in fname (%zu vs %zu) link argument [%lu]: [" GENERIC_ARG_PID_FMT
-                        "] %s\n",
-                        strlen(longfn_LF), argnfo_LF.fnamesize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            /* Next event should be LinkTo or LinkFailed */
-            ++vi;
-            if (vi >= VEC_SIZE(*event_list))
-                break;
-            eventTuple_t *ievln = VEC_ACCESS(*event_list, vi);
-            char *cmde = strchr(ievln->event_line, '|');
-            if ((simple_hashn(ievln->event_line, cmde - ievln->event_line)) == PHASH_STR(LinkTo)) {
-                struct LinkArgs argnfo_LT = {};
-                if (!parse_args(cmde + 1, SYSEVENT_LINKTO, &argnfo_LT)) {
-                    fprintf(stderr, "ERROR: Failed to process args at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            ievln->pid, ievln->event_line);
-                    goto error;
-                }
-                /* Get link arguments */
-                ++vi;
-                char *longfn_LT = get_longpath_arg(event_list, &vi, "LT", "LT_end\n");
-                if (!longfn_LT) {
-                    fprintf(stderr, "WARNING: Invalid link argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                            evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                    continue;
-                }
-                if (strlen(longfn_LT) != argnfo_LT.fnamesize) {
-                    fprintf(stderr,
-                            "ERROR: Size mismatch in fname (%zu vs %zu) link argument [%lu]: [" GENERIC_ARG_PID_FMT
-                            "] %s\n",
-                            strlen(longfn_LT), argnfo_LT.fnamesize, vi, evln->pid, evln->event_line);
-                    goto error;
-                }
-                uint64_t utn = (uint64_t)evln->timen;
-                MAKE_JSON_ESCAPED(_longfn_LF, longfn_LF);
-                MAKE_JSON_ESCAPED(_longfn_LT, longfn_LT);
-                struct parsed_entry &e = context->ve.back();
-                e.addUpdateFile(longfn_LF, O_RDONLY);
-                e.addUpdateFile(longfn_LT, O_WRONLY);
-                if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                    fprintf(context->rawoutfd, ",\n");
-                if (context->rawoutfd)
-                    fprintf(context->rawoutfd,
-                            "{\"c\":\"l\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                            ",\"o\":\"%s\",\"n\":\"%s\",\"f\":%lu}",
-                            evln->pid, procidx, utn - context->start_time, _longfn_LF, _longfn_LT, argnfo_LF.flags);
-                FREE_JSON_ESCAPED(_longfn_LF);
-                FREE_JSON_ESCAPED(_longfn_LT);
-                free((void *)longfn_LF);
-                free((void *)longfn_LT);
+            increment_bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::LinkFromPath, Tag::LinkFromPathExtended, Tag::LinkFromPathEnd, from_path);
+
+            if (size != argnfo_LF.fnamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo_LF.fnamesize);
+
+            bound_check_iter(it, end_it);
+
+            auto &ievln = *it;
+            if (ievln.tag == Tag::LinkTo) {
+                LinkArguments argnfo_LT = {};
+                auto result = StreamParser::parse_link_short_arguments(ievln);
+                if (result.is_error())
+                    return result;
+
+                argnfo_LT = result.value();
+                increment_bound_check_iter(it, end_it);
+
+                last_it = it;
+                size = StreamParser::parse_long_argument(it, end_it, Tag::LinkToPath, Tag::LinkToPathExtended, Tag::LinkToPathEnd, to_path);
+
+                if (size != argnfo_LT.fnamesize)
+                    return SizeMismatchError(last_it->line_number, size, argnfo_LT.fnamesize);
+
+                Execution &e = process.executions.back();
+
+                to.mode = O_WRONLY;
+                to.absolute_path = to_path;
+                from.mode = O_RDONLY;
+                from.absolute_path = to_path;
+
+                e.add_open_file(to_path, to);
+                e.add_open_file(from_path, from);
+
                 n_processed += 2;
-                context->event_count.link++;
-            } else if ((simple_hashn(ievln->event_line, cmde - ievln->event_line)) == PHASH_STR(LinkFailed)) {
-                free((void *)longfn_LF);
+                _stats_collector.increment_link();
+            } else if (ievln.tag == Tag::LinkFailed) {
+                it++;
             } else {
-                fprintf(stderr,
-                        "WARNING: Invalid event after Link(At)From (" GENERIC_ARG_PID_FMT
-                        ")[%lu]: [" GENERIC_ARG_PID_FMT "] %s\n",
-                        pid, vi, ievln->pid, ievln->event_line);
-                free((void *)longfn_LF);
-                vi--;
+                return {};
                 break;
             }
         } break;
-        case PHASH_STR(Symlink): {
-            struct SymLinkArgs argnfo = {};
-            if (!parse_args(cmde + 1, SYSEVENT_SYMLINK, &argnfo)) {
-                fprintf(stderr, "ERROR: Failed to process args at [%lu]: %s\n", vi, evln->event_line);
-                goto error;
+        case Tag::Symlink: {
+            std::string original_target;
+            std::string absolute_target;
+            std::string absolute_symlink;
+            auto from = OpenFile();
+            auto to = OpenFile();
+            SymlinkArguments argnfo = {};
+            auto result = StreamParser::parse_symlink_short_arguments(evln);
+            if (result.is_error())
+                return result;
+
+            argnfo = result.value();
+            ++it;
+            bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::SymlinkTargetName, Tag::SymlinkTargetNameExtended, Tag::SymlinkTargetNameEnd, original_target);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.targetnamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.targetnamesize);
+
+            if (argnfo.resolvednamesize != -1) {
+                last_it = it;
+                ssize_t size = StreamParser::parse_long_argument(it, end_it, Tag::SymlinkTargetPath, Tag::SymlinkTargetPathExtended, Tag::SymlinkTargetPathEnd, absolute_target);
+
+                bound_check_iter(it, end_it);
+
+                if (size != argnfo.resolvednamesize)
+                    return SizeMismatchError(last_it->line_number, size, argnfo.resolvednamesize);
             }
-            /* Get symlink arguments */
-            ++vi;
-            char *longfn_ST = get_longpath_arg(event_list, &vi, "ST", "ST_end\n");
-            if (!longfn_ST) {
-                fprintf(stderr, "WARNING: Invalid symlink argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
+
+            last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::SymlinkPath, Tag::SymlinkPathExtended, Tag::SymlinkPathEnd, absolute_symlink);
+
+            if (size != argnfo.linknamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.linknamesize);
+
+            Execution &e = process.executions.back();
+
+            to.mode = O_WRONLY;
+            to.absolute_path = absolute_symlink;
+
+            if (!absolute_target.empty()) {
+                from.mode = O_RDONLY;
+                from.absolute_path = absolute_target;
+
+                e.add_open_file(absolute_target, from);
             }
-            if (strlen(longfn_ST) != argnfo.targetnamesize) {
-                fprintf(
-                    stderr,
-                    "ERROR: Size mismatch in targetnamesize (%zu vs %zu) symlink argument [%lu]: [" GENERIC_ARG_PID_FMT
-                    "] %s\n",
-                    strlen(longfn_ST), argnfo.targetnamesize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            ++vi;
-            char *longfn_SR = get_longpath_arg(event_list, &vi, "SR", "SR_end\n");
-            if (longfn_SR) {
-                if (strlen(longfn_ST) != argnfo.targetnamesize) {
-                    fprintf(stderr,
-                            "ERROR: Size mismatch in resolvednamesize (%zu vs %zu) symlink argument [%lu]: "
-                            "[" GENERIC_ARG_PID_FMT "] %s\n",
-                            strlen(longfn_SR), argnfo.resolvednamesize, vi, evln->pid, evln->event_line);
-                    goto error;
-                }
-                ++vi;
-            }
-            char *longfn_SL = get_longpath_arg(event_list, &vi, "SL", "SL_end\n");
-            if (!longfn_SL) {
-                fprintf(stderr, "WARNING: Invalid symlink argument line [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi,
-                        evln->pid, VEC_ACCESS(*event_list, vi)->event_line);
-                continue;
-            }
-            if (strlen(longfn_SL) != argnfo.linknamesize) {
-                fprintf(
-                    stderr,
-                    "ERROR: Size mismatch in linknamesize (%zu vs %zu) symlink argument [%lu]: [" GENERIC_ARG_PID_FMT
-                    "] %s\n",
-                    strlen(longfn_SL), argnfo.linknamesize, vi, evln->pid, evln->event_line);
-                goto error;
-            }
-            uint64_t utn = (uint64_t)evln->timen;
-            MAKE_JSON_ESCAPED(_longfn_ST, longfn_ST);
-            MAKE_JSON_ESCAPED(_longfn_SR, longfn_SR);
-            MAKE_JSON_ESCAPED(_longfn_SL, longfn_SL);
-            struct parsed_entry &e = context->ve.back();
-            if (_longfn_SR) {
-                e.addUpdateFile(_longfn_SR, O_RDONLY);
-            }
-            e.addUpdateFile(longfn_SL, O_WRONLY);
-            if ((context->total_event_count + n_processed > 0) && (context->rawoutfd))
-                fprintf(context->rawoutfd, ",\n");
-            if (context->rawoutfd) {
-                if (_longfn_SR) {
-                    fprintf(context->rawoutfd,
-                            "{\"c\":\"s\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                            ",\"o\":\"%s\",\"r\":\"%s\",\"n\":\"%s\"}",
-                            evln->pid, procidx, utn - context->start_time, _longfn_ST, _longfn_SR, _longfn_SL);
-                } else {
-                    fprintf(context->rawoutfd,
-                            "{\"c\":\"s\",\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"t\":%" PRIu64
-                            ",\"o\":\"%s\",\"n\":\"%s\"}",
-                            evln->pid, procidx, utn - context->start_time, _longfn_ST, _longfn_SL);
-                }
-            }
-            FREE_JSON_ESCAPED(_longfn_ST);
-            FREE_JSON_ESCAPED(_longfn_SR);
-            FREE_JSON_ESCAPED(_longfn_SL);
-            free((void *)longfn_ST);
-            free((void *)longfn_SR);
-            free((void *)longfn_SL);
+
+            e.add_open_file(absolute_symlink, to);
             n_processed += 2;
-            context->event_count.symlink++;
+            _stats_collector.increment_symlink();
         } break;
-        case PHASH_STR(Exit): {
+        case Tag::Exit: {
             // Nothing to get from it right now (later we might get process return code)
-            uint64_t utn = (uint64_t)evln->timen;
-            if (context->start_time == 0)
-                context->start_time = utn;
+            if (first_event_time() == 0)
+                set_first_event_time(evln.timestamp);
             n_processed++;
-            context->event_count.exit++;
-            srvec.push_back(syscall_raw(pid, syscall_raw::SYS_EXIT, utn - context->start_time));
+            _stats_collector.increment_exit();
+            append_syscall(syscall_raw(process.pid, syscall_raw::SYS_EXIT, evln.timestamp - first_event_time()));
+            it++;
         } break;
         default: {
             /* Try to ignore it */
-            fprintf(stderr, "WARNING: Invalid sys command at [%lu]: [" GENERIC_ARG_PID_FMT "] %s\n", vi, evln->pid,
-                    evln->event_line);
+            return {};
+            it++;
             break;
         }
         }
-        vi++;
     }
 
-    context->ve.back().settime(end_time - exe_start_time);
-    context->total_event_count += n_processed;
-    context->total_execs_count += n_execs;
-    context->process_count++;
-    return n_processed;
 
-error:
-    /* Pretend as if this process exited immediately after the fork */
-    context->ve.resize(ve_init_size + 1);
-    context->ve.back().settime(end_time - exe_start_time);
-    context->total_event_count += n_processed;
-    context->process_count++;
-    for (size_t u = 0; u < srvec.size() - srvec_init_size; ++u)
-        srvec.pop_back();
-    context->event_count.exit++;
-    srvec.push_back(syscall_raw(pid, syscall_raw::SYS_EXIT, end_time - context->start_time));
-    return n_processed;
+    auto &last_execution = process.executions.back();
+    last_execution.elapsed_time = process.last_event_time - exe_start_time;
+
+    process.event_list.clear();
+    process.event_list.shrink_to_fit();
+
+    _stats_collector.add_processed(n_processed);
+    _stats_collector.add_execs(n_execs);
+    _stats_collector.increment_processes();
+    // return n_processed;
+
+// error:
+//     /* Pretend as if this process exited immediately after the fork */
+//     this->ve.resize(ve_init_size + 1);
+//     this->ve.back().settime(process.last_event_time - exe_start_time);
+//     this->stats.total_event_count += n_processed;
+//     this->stats.process_count++;
+//     for (size_t u = 0; u < srvec.size() - srvec_init_size; ++u)
+//         srvec.pop_back();
+//     this->stats.events.exit_count++;
+//     srvec.push_back(syscall_raw(process.pid, syscall_raw::SYS_EXIT, evnode.last_event_time - this->start_time));
+//     return n_processed;
+//
+    return {};
 }

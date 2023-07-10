@@ -38,7 +38,7 @@ class ParseDB(Module):
 
         if not os.path.exists(json_db_filename) or self.args.force:
             print("Generating {} from {}".format(json_db_filename, tracer_db_filename))
-            libcas.CASDatabase.parse_trace_to_json(tracer_db_filename, json_db_filename, self.args.debug)
+            libcas.CASDatabase.parse_trace_to_json(tracer_db_filename, json_db_filename, threads=multiprocessing.cpu_count(),debug=self.args.debug)
             print("Done parse [%.2fs]" % (time.time()-total_start_time))
         else:
             print ("Json database found ( use --force to rebuild )")

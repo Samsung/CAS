@@ -1,25 +1,21 @@
-#include <cstdio>
 #include <cstdint>
 #include <cstring>
-#include <cassert>
 #include <cstdlib>
 #include <cstddef>
+#include <cerrno>
+#include <csignal>
+
 #include <algorithm>
-#include <deque>
-#include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <signal.h>
-#include <inttypes.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sched.h>
-#include "rbtree.h"
-#include "parser.h"
-#include "utils.h"
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+
+#include "parser.hpp"
 
 static volatile int interrupt = 0;
-static void intHandler(int v) {
+static void intHandler(int signum) {
+    (void) signum;
+
     interrupt = 1;
 }
 
@@ -29,20 +25,7 @@ int parser_main(int argc, char **argv);
 }
 #endif
 
-struct eventlist_node {
-    upid_t pid;
-    vpeventTuple_t *event_list;
-};
-
-struct flush_cache_entry {
-    struct eventlist_node *evnode;
-    unsigned long hitcount; /* When this value is reached the cache is flushed */
-    flush_cache_entry(struct eventlist_node *evnode, unsigned long hitcount) : evnode(evnode), hitcount(hitcount) {
-    }
-};
-
 static int pipe_open_for_write(struct fdmap_node *from, struct fdmap_node *to, int stdpipe = 0) {
-
     std::set<uint32_t> pms;
     for (auto u = from->fdmap.begin(); u != from->fdmap.end(); ++u) {
         /* if stdpipe is 0 we don't care about the fd value */
@@ -60,38 +43,158 @@ static int pipe_open_for_write(struct fdmap_node *from, struct fdmap_node *to, i
     return 0;
 }
 
+void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& output, size_t split = 0) {
+    size_t progress_counter = 0;
+    size_t process_map_size = results.process_map.size();
+
+    std::cout << "Flushing entries...\n";
+    std::cout.flush();
+
+    output << "[\n";
+
+    auto print_entry = [&](Execution& execution) {
+        if (results.parent_map.find(execution.pid) != results.parent_map.end())
+            execution.parent = results.parent_map[execution.pid];
+        else
+            execution.parent = std::pair<upid_t, unsigned>(-1, 0);
+
+        output << "{\"p\":" << execution.pid;
+        output << ",\"x\":" << execution.index;
+        output << ",\"e\":" << execution.elapsed_time;
+        output << ",\"b\":\"" << execution.program_path << "\"";
+        output << ",\"w\":\"" << execution.current_working_directory << "\"";
+        output << ",\"v\":[";
+
+        for (auto u = execution.arguments.begin(); u != execution.arguments.end(); ++u) {
+            output << "\"" << *u << "\"";
+            if (u != execution.arguments.end() - 1)
+                output << ',';
+        }
+
+        output << "],\"c\":[";
+
+        for (auto u = execution.children.begin(); u != execution.children.end(); ++u) {
+            auto &child = *u;
+            output << "{\"p\":" << child.pid << ",\"f\":" << child.flags << "}";
+            if (u != execution.children.end() - 1)
+                output << ',';
+        }
+
+        output << "],\"r\":{\"p\":" << execution.parent.first << ",\"x\":" << execution.parent.second << "},";
+        output << "\"i\":[";
+
+        std::pair<upid_t, unsigned> pipe_map_key(execution.pid, execution.index);
+        if (pipe_map.find(pipe_map_key) != pipe_map.end()) {
+            std::set<std::pair<upid_t, unsigned>> &pmv = pipe_map[pipe_map_key];
+            for (auto u = pmv.begin(); u != pmv.end(); ++u) {
+                if (u != pmv.begin())
+                    output << ',';
+
+                output << "{\"p\":" << (*u).first << ",\"x\":" << (*u).second << '}';
+            }
+        }
+
+        output << "]";
+    };
+
+    auto print_files = [&](Execution& execution) {
+        size_t path_size = 0;
+
+        output << ",\"o\":[";
+
+        for (auto iter = execution.opened_files.cbegin(), end_iter = execution.opened_files.cend();
+                iter != end_iter; ++iter) {
+            auto &original_path = iter->first;
+            auto &file = iter->second;
+
+            output << "{\"p\":\"" << file.absolute_path << "\",";
+            path_size += file.absolute_path.size();
+
+            if (original_path != file.absolute_path) {
+                output << "\"o\":\"" << original_path << "\",";
+                path_size += original_path.size();
+            }
+
+            output << "\"m\":" << file.mode << ",\"s\":" << file.size << '}';
+
+            if (split && path_size >= split && std::next(iter) != end_iter) {
+                output << "]},\n";
+                print_entry(execution);
+                output << ",\"o\":[";
+                path_size = 0;
+            }
+
+            if (std::next(iter) != end_iter)
+                output << ',';
+        }
+
+        output << "]}";
+    };
+
+    /* Now update parent pid information in parsed entries and flush the entries */
+    for (auto it = results.process_map.begin(), end_iter = results.process_map.end();
+            it != end_iter; ++it) {
+        progress_counter++;
+        if (isatty(STDOUT_FILENO) && !(progress_counter % 100)) {
+            std::cout << (progress_counter * 100) / process_map_size << "%\r";
+            std::cout.flush();
+        }
+
+        auto& process = it->second;
+        for (size_t i = 0; i < process.executions.size(); i++) {
+            auto& execution = process.executions[i];
+
+            print_entry(execution);
+            print_files(execution);
+
+            if (std::next(it) != results.process_map.end()
+                || (std::next(it) == results.process_map.end() && i != process.executions.size() - 1))
+            {
+                output << ",\n";
+            }
+        }
+
+        if (interrupt)
+            break;
+    }
+
+    output << "\n]";
+}
+
 void print_help() {
-    printf("Usage: etrace_parser <tracer_db_path> <parsed_db_path> [-r [<parsed_raw_db_path]]\n");
-    printf("where:\n");
-    printf("       <tracer_db_path>: by default it is '.nfsdb' file in the current directory\n");
-    printf("       <parsed_db_path>: by default it is '.nfsdb.json' file in the current directory\n");
-    printf("       -r: when this option is passed, along the parsed database also specified raw parsed JSON file is "
-           "created ('.nfsdb.raw.json' file by default)\n");
+    std::cout << "Usage: etrace_parser [-t] [-j <N>] [-c <N>] [-s <N>] <path to tracer output> <destination of outputted file>\n";
+    std::cout << "where:\n";
+    std::cout << "\t<path to tracer output>: by default it is '.nfsdb' file in the current directory\n";
+    std::cout << "\t<destination of outputted file>: by default it is '.nfsdb.json' file in the current directory\n";
+    std::cout << "options:\n";
+    std::cout << "\t-j <N>: amount of threads to create in the threadpool. Specifying 0 means that ";
+    std::cout << "the parse will utilize std::thread::hardware_concurrency() - 1 threads. Defaults to 1\n";
+    std::cout << "\t-c <N>: specify the cache margin. Specifying 0 means that the cache is disabled. Defaults to 10000.\n";
+    std::cout << "\t-s <N>: specify amount of bytes at which the entry should be split, Specifying 0";
+    std::cout << " means that the entries won't be split. This is especially useful when using versions";
+    std::cout << " MongoDB that limit the single document size to 16M. Defaults to 0.\n";
+    std::cout << "\t-t: print parsing statistics\n";
 }
 
 int parser_main(int argc, char **argv) {
+    std::unique_ptr<StreamParser> parser;
+    std::error_code err;
+    std::ifstream input;
+    std::ofstream output;
+
+    struct sigaction act;
+    size_t thread_count = 1;
+    size_t entry_split = 0;
+    size_t cache_lifetime = 10000;
+    size_t file_size;
+    size_t total_read = 0;
+    unsigned long line_count = 0;
     const char *input_path = nullptr;
     const char *output_path = nullptr;
-    const char *rawout_path = nullptr;
-    char *line = NULL;
-    size_t len = 0;
-    size_t total_read = 0;
-    size_t file_size;
-    ssize_t read;
-    const static int print_stats = 1;
-    unsigned long lineno = 0;
-    long multilines = 0;
-    uint64_t last_event_time = 0;
-    struct parse_context context = {};
-    FILE *filp;
-    int fd;
-    int ret;
-    struct statx statbuf = {0};
-    // @TODO: add back event list caching
-    std::map<upid_t, eventlist_node *> event_map;
-    peventTuple_t evln = 0;
-    std::deque<flush_cache_entry> flush_cache;
-    struct sigaction act;
+    char line[2048] = { 0 };
+    char *endptr = nullptr;
+    bool no_progress = false;
+    bool print_stats = false;
 
     act.sa_handler = intHandler;
     sigaction(SIGINT, &act, 0);
@@ -103,13 +206,102 @@ int parser_main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
 
-        if (!std::strncmp(argv[i], "-r", 2)) {
-            if (i == argc - 1) {
-                printf("Improper argument passed to option -r\n");
+        if (!std::strncmp(argv[i], "-j", 2)) {
+            errno = 0;
+
+            thread_count = std::strtoull(argv[i] + 2, &endptr, 10);
+            if (errno) {
+                std::cerr << std::strerror(errno);
                 return EXIT_FAILURE;
             }
 
-            rawout_path = argv[i++];
+            if (endptr == (argv[i] + 2) && i == argc - 1) {
+                std::cerr << "invalid value passed to -j argument, quitting\n";
+                return EXIT_FAILURE;
+            } else if (endptr == (argv[i] + 2) && i < argc - 1) {
+                errno = 0;
+
+                thread_count = std::strtoull(argv[++i], &endptr, 10);
+                if (errno) {
+                    std::cerr << std::strerror(errno);
+                    return EXIT_FAILURE;
+                }
+
+                if (*endptr != 0) {
+                    std::cerr << "invalid value passed to -j argument, quitting\n";
+                    return EXIT_FAILURE;
+                }
+            } else if (*endptr == 0)
+                continue;
+
+            continue;
+        }
+
+        if (!std::strncmp(argv[i], "-c", 2)) {
+            errno = 0;
+
+            cache_lifetime = std::strtoull(argv[i] + 2, &endptr, 10);
+            if (errno) {
+                std::cerr << std::strerror(errno);
+                return EXIT_FAILURE;
+            }
+
+            if (endptr == (argv[i] + 2) && i == argc - 1) {
+                std::cerr << "invalid value passed to -c argument, quitting\n";
+                return EXIT_FAILURE;
+            } else if (endptr == (argv[i] + 2) && i < argc - 1) {
+                errno = 0;
+
+                cache_lifetime = std::strtoull(argv[++i], &endptr, 10);
+                if (errno) {
+                    std::cerr << std::strerror(errno);
+                    return EXIT_FAILURE;
+                }
+
+                if (*endptr != 0) {
+                    std::cerr << "invalid value passed to -c argument, quitting\n";
+                    return EXIT_FAILURE;
+                }
+            } else if (*endptr == 0)
+                continue;
+
+            continue;
+        }
+
+        if (!std::strncmp(argv[i], "-s", 2)) {
+            errno = 0;
+
+            entry_split = std::strtoull(argv[i] + 2, &endptr, 10);
+            if (errno) {
+                std::cerr << std::strerror(errno);
+                return EXIT_FAILURE;
+            }
+
+            if (endptr == (argv[i] + 2) && i == argc - 1) {
+                std::cerr << "invalid value passed to -s argument, quitting\n";
+                return EXIT_FAILURE;
+            } else if (endptr == (argv[i] + 2) && i < argc - 1) {
+                errno = 0;
+
+                entry_split = std::strtoull(argv[++i], &endptr, 10);
+                if (errno) {
+                    std::cerr << std::strerror(errno);
+                    return EXIT_FAILURE;
+                }
+
+                if (*endptr != 0) {
+                    std::cerr << "invalid value passed to -s argument, quitting\n";
+                    return EXIT_FAILURE;
+                }
+            } else if (*endptr == 0)
+                continue;
+
+            continue;
+        }
+
+        if (!std::strncmp(argv[i], "-t", 2)) {
+            print_stats = true;
+
             continue;
         }
 
@@ -124,281 +316,97 @@ int parser_main(int argc, char **argv) {
         }
     }
 
+    thread_count = thread_count == 0 ? std::thread::hardware_concurrency() - 1 : thread_count;
+
     if (!input_path)
         input_path = ".nfsdb";
 
     if (!output_path)
         output_path = ".nfsdb.json";
 
-    context.outfd = fopen(output_path, "w");
-    if (!context.outfd) {
-        printf("Failed to open %s for writing: %d\n", output_path, errno);
+    if (thread_count > 1)
+        parser = std::make_unique<MultithreadedParser>(thread_count);
+    else
+        parser = std::make_unique<SinglethreadedParser>();
+
+    if (cache_lifetime)
+        parser->set_cache_lifetime(cache_lifetime);
+
+    input.open(input_path);
+    if (!input.good()) {
+        std::cerr << "couldn't open " << input_path << " for reading, quitting\n";
         return EXIT_FAILURE;
     }
 
-    if (rawout_path) {
-        context.rawoutfd = fopen(rawout_path,"w");
-        if (!context.rawoutfd) {
-            printf("failed to open %s for writing: %d\n", rawout_path, errno);
+    file_size = std::filesystem::file_size(input_path, err);
+    if (err) {
+        no_progress = true;
+        std::cout << "couldn't get " << input_path << " size, continuing with no progress bar\n";
+    }
+
+    std::cout << "Parsing events...\n";
+    std::cout.flush();
+
+    while (input.getline(line, 2048)) {
+        if (!input.good()) {
+            std::cerr << "error while reading the file, quitting\n";
             return EXIT_FAILURE;
         }
-    }
 
-    filp = fopen(input_path, "rb");
-    if (!filp) {
-        printf("Failed to open %s for reading: %d\n", input_path, errno);
-        return ENOENT;
-    }
-
-    fd = fileno(filp);
-    ret = statx(fd, "", AT_EMPTY_PATH, STATX_SIZE, &statbuf);
-    if (ret == -1) {
-        fprintf(stderr, "Failed to stat %s: %s\n", input_path, strerror(errno));
-        return EXIT_FAILURE;
-    }
-    file_size = statbuf.stx_size;
-
-    printf("Parsing events ...\n");
-    fflush(stdout);
-
-    if (context.rawoutfd)
-        fprintf(context.rawoutfd, "[");
-    fprintf(context.outfd, "[");
-    vpeventTuple_t *event_list = nullptr;
-
-    while ((read = getline(&line, &len, filp)) != -1) {
-        if (lineno++ == 0) {
-            /* Ignore first line (INITCWD) */
+        /* Ignore first line (INITCWD) */
+        if (!line_count++)
             continue;
-        }
-        if (!(lineno % 10000)) {
-            printf("\r%lu%%", total_read / (file_size / 100));
-            fflush(stdout);
-        }
-        if ((strlen(line) < 4) || ((line[0] != '0') || (line[1] != ':') || (line[2] != ' '))) {
-            fprintf(stderr, "ERROR: Invalid format for log line [%lu]: %s\n", lineno, line);
-            return EXIT_FAILURE;
-        } else {
-            evln = TYPE_CREATE(eventTuple_t);
-            if (!parse_generic_args(line + 3, evln)) {
-                fprintf(stderr, "ERROR: Cannot parse generic args [%lu]: %s\n", lineno, line);
-                return EXIT_FAILURE;
-            }
-        }
-        last_event_time = (uint64_t)evln->timen;
-        if (context.start_time == 0) {
-            context.start_time = last_event_time;
-        }
-        if (context.root_pid <= 0) {
-            context.root_pid = evln->pid;
+
+        auto read = input.gcount();
+
+        if (!no_progress && !(line_count % 10000) && isatty(STDOUT_FILENO)) {
+            std::cout << total_read * 100 / file_size << "%\r";
+            std::cout.flush();
         }
 
-        struct eventlist_node *evnode = nullptr;
-        auto map_lookup = event_map.find(evln->pid);
-        if (map_lookup == event_map.end()) {
-            event_list = TYPE_CREATE(vpeventTuple_t);
-            VEC_INIT(*event_list);
-            evnode = (eventlist_node *)malloc(sizeof(struct eventlist_node));
-            evnode->pid = evln->pid;
-            evnode->event_list = event_list;
-            event_map[evln->pid] = evnode;
-        } else {
-            event_list = map_lookup->second->event_list;
-        }
+        auto ret = parser->parse_line(line, read, line_count);
+        if (ret.is_error())
+            std::cout << ret.explain();
 
-        VEC_APPEND(eventTuple_t *, *event_list, evln);
-        /* Handle special cases */
-        if (!strncmp(evln->event_line, "Cont", 4)) {
-            if (evln->event_line[4] == '|') {
-                VEC_POPBACK(*event_list);
-                assert(VEC_SIZE(*event_list) > 0);
-                eventTuple_t *prev_evln = VEC_BACK(*event_list);
-                prev_evln->event_line = strappend(prev_evln->event_line, &evln->event_line[5]);
-            } else if (!strncmp(&evln->event_line[4], "_end", 4)) {
-                VEC_POPBACK(*event_list);
-                multilines++;
-            } else {
-                fprintf(stderr, "ERROR: Invalid format for log line [%lu]: %s\n", lineno, line);
-                return EXIT_FAILURE;
-            }
-            free((void *)evln->event_line);
-            free((void *)evln);
-        } else if (!strncmp(evln->event_line, "Exit", 4)) {
-            /* It turns out that in some cases when processes are migrated across processors there might be events in
-             * the log for a given process *after* the 'Exit' event. Delay the parsing upon 'Exit' for some predefined
-             * amount of events. */
-            auto map_lookup = event_map.find(evln->pid);
-            if (map_lookup != event_map.end()) {
-                struct eventlist_node *evnode = map_lookup->second;
-                flush_cache.push_back(flush_cache_entry(evnode, lineno + EVENT_FLUSH_CACHE_MARGIN));
-            }
-        }
-
-        if (flush_cache.front().hitcount == lineno) {
-            struct eventlist_node *evnode = flush_cache.front().evnode;
-            flush_cache.pop_front();
-            long evcount;
-            /* Sort the event list by the start time (sometimes events gets intermingled when process is migrated across
-             * processors )*/
-            qsort(evnode->event_list->a, VEC_SIZE(*evnode->event_list), sizeof(eventTuple_t *),
-                  [](const void *a, const void *b) -> int {
-                      eventTuple_t *lhs = *((eventTuple_t **)a);
-                      eventTuple_t *rhs = *((eventTuple_t **)b);
-
-                      if (lhs->timen < rhs->timen)
-                          return -1;
-                      else if (lhs->timen > rhs->timen)
-                          return 1;
-                      else
-                          return 0;
-                  });
-            eventTuple_t *start = VEC_ACCESS(*evnode->event_list, 0);
-            eventTuple_t *last = VEC_ACCESS(*evnode->event_list, VEC_SIZE(*evnode->event_list) - 1);
-            uint64_t start_time = (uint64_t)start->timen;
-            uint64_t end_time = (uint64_t)last->timen;
-            if ((evcount =
-                     parse_write_process_events(evnode->pid, evnode->event_list, &context, start_time, end_time)) < 0) {
-                fprintf(stderr, "ERROR: Failed to parse process events for (" GENERIC_ARG_PID_FMT ")\n", evnode->pid);
-                return EXIT_FAILURE;
-            }
-            /* Now get rid of the map entry */
-            for (unsigned long vi = 0; vi < VEC_SIZE(*evnode->event_list); ++vi) {
-                eventTuple_t *evt = VEC_ACCESS(*evnode->event_list, vi);
-                free((void *)evt->event_line);
-                free((void *)evt);
-            }
-            VEC_DESTROY(*evnode->event_list);
-            free((void *)evnode->event_list);
-            event_map.erase(evnode->pid);
-            free(evnode);
-        }
         if (interrupt)
             break;
 
         total_read += read;
     }
+
     if (!interrupt) {
-        printf("\r100%%\n");
+        std::cout << "100%\r";
     } else {
-        printf("\n");
+        std::cout << '\n';
         return 2;
     }
-    long procs_at_exit = 0;
 
-    for (auto it = flush_cache.begin(); it != flush_cache.end(); ) {
-        struct eventlist_node *evnode = (*it).evnode;
-        qsort(evnode->event_list->a, VEC_SIZE(*evnode->event_list), sizeof(eventTuple_t *),
-            [](const void *a, const void *b) -> int {
-                eventTuple_t *lhs = *((eventTuple_t **)a);
-                eventTuple_t *rhs = *((eventTuple_t **)b);
+    parser->finish_parsing();
 
-                if (lhs->timen < rhs->timen)
-                    return -1;
-                else if (lhs->timen > rhs->timen)
-                    return 1;
-                else
-                    return 0;
-        });
-        eventTuple_t *start = VEC_ACCESS(*evnode->event_list, 0);
-        eventTuple_t *last = VEC_ACCESS(*evnode->event_list, VEC_SIZE(*evnode->event_list) - 1);
-        uint64_t start_time = (uint64_t)start->timen;
-        uint64_t end_time = (uint64_t)last->timen;
-        long evcount;
-        if ((evcount =
-                    parse_write_process_events(evnode->pid, evnode->event_list, &context, start_time, end_time)) < 0) {
-            fprintf(stderr, "ERROR: Failed to parse process events for (" GENERIC_ARG_PID_FMT ")\n", evnode->pid);
-            return EXIT_FAILURE;
-        }
-        it = flush_cache.erase(it);
-        event_map.erase(evnode->pid);
-        for (unsigned long vi = 0; vi < VEC_SIZE(*evnode->event_list); ++vi) {
-            eventTuple_t *evt = VEC_ACCESS(*evnode->event_list, vi);
-            free((void *)evt->event_line);
-            free((void *)evt);
-        }
-        VEC_DESTROY(*evnode->event_list);
-        free((void *)evnode->event_list);
-        free((void *) evnode);
-        procs_at_exit++;
-    }
+    input.close();
 
-    for (auto it = event_map.cbegin(); it != event_map.cend();) {
-        struct eventlist_node *evnode = (struct eventlist_node *)it->second;
-        qsort(evnode->event_list->a, VEC_SIZE(*evnode->event_list), sizeof(eventTuple_t *),
-              [](const void *a, const void *b) -> int {
-                  eventTuple_t *lhs = *((eventTuple_t **)a);
-                  eventTuple_t *rhs = *((eventTuple_t **)b);
-
-                  if (lhs->timen < rhs->timen)
-                      return -1;
-                  else if (lhs->timen > rhs->timen)
-                      return 1;
-                  else
-                      return 0;
-              });
-        eventTuple_t *start = VEC_ACCESS(*evnode->event_list, 0);
-        uint64_t start_time = (uint64_t)start->timen;
-        long evcount;
-        if ((evcount = parse_write_process_events(evnode->pid, evnode->event_list, &context, start_time,
-                                                  last_event_time)) < 0) {
-            fprintf(stderr, "ERROR: Failed to parse process events for (" GENERIC_ARG_PID_FMT ")\n", evnode->pid);
-            return EXIT_FAILURE;
-        }
-        event_map.erase(it++);
-        for (unsigned long vi = 0; vi < VEC_SIZE(*evnode->event_list); ++vi) {
-            eventTuple_t *evt = VEC_ACCESS(*evnode->event_list, vi);
-            free((void *)evt->event_line);
-            free((void *)evt);
-        }
-        VEC_DESTROY(*evnode->event_list);
-        free((void *)evnode->event_list);
-        /* Add artificial Exit event */
-        if ((evcount > 0) && (context.rawoutfd))
-            fprintf(context.rawoutfd, ",\n");
-        if (context.rawoutfd)
-            fprintf(context.rawoutfd, "{\"c\":\"x\",\"p\": " GENERIC_ARG_PID_FMT ",\"t\":%lu}", evnode->pid, 0UL);
-        free((void *)evnode);
-        procs_at_exit++;
-    }
-
-    /* Check if we have some child processes without any parsed entries (no syscalls called in child whatsoever)
-     * In such case add artificial empty execution
-     */
-    unsigned long empty_child_count = 0;
-    for (std::map<upid_t, std::pair<upid_t, unsigned>>::iterator i = context.rev_fork_map.begin();
-         i != context.rev_fork_map.end(); ++i) {
-        if (context.pset.find((*i).first) == context.pset.end()) {
-            empty_child_count++;
-        }
-    }
+    auto results = parser->release_results();
+    auto stats = parser->stats();
 
     if (print_stats) {
-        printf("processes: %ld\n", context.process_count);
-        printf("total event count: %ld\n", context.total_event_count);
-        printf("  exec: %ld\n", context.event_count.exec);
-        printf("  fork: %ld\n", context.event_count.fork);
-        printf("  close: %ld\n", context.event_count.close);
-        printf("  open: %ld\n", context.event_count.open);
-        printf("  pipe: %ld\n", context.event_count.pipe);
-        printf("  dup: %ld\n", context.event_count.dup);
-        printf("  rename: %ld\n", context.event_count.rename);
-        printf("  link: %ld\n", context.event_count.link);
-        printf("  symlink: %ld\n", context.event_count.symlink);
-        printf("  exit: %ld\n", context.event_count.exit);
-        printf("multilines: %ld\n", multilines);
-        printf("written rw entries: %ld\n", context.total_rw_count);
-        printf("written fork entries: %ld\n", context.total_fork_count);
-        printf("procs_at_exit: %ld\n", procs_at_exit);
-        printf("empty child processes: %ld\n", empty_child_count);
+        std::cout << "Parsing statistics: \n";
+        std::cout << "\tProcesses: " << stats.process_count << '\n';
+        std::cout << "\tTotal event count: " << stats.total_event_count << '\n';
+        std::cout << "\texec: " << stats.exec_count << '\n';
+        std::cout << "\tfork: " << stats.fork_count << '\n';
+        std::cout << "\tclose: " << stats.close_count << '\n';
+        std::cout << "\topen: " << stats.open_count << '\n';
+        std::cout << "\tpipe: " << stats.pipe_count << '\n';
+        std::cout << "\tdup: " << stats.dup_count << '\n';
+        std::cout << "\trename: " << stats.rename_count << '\n';
+        std::cout << "\tlink: " << stats.link_count << '\n';
+        std::cout << "\tsymlink: " << stats.symlink_count << '\n';
+        std::cout << "\texit: " << stats.exit_count << '\n';
+        std::cout << "\tMultilines: " << stats.multilines_count << '\n';
+        std::cout << "\tProcesses at exit: " << stats.procs_at_exit << '\n';
+        std::cout << "\tempty child count: " << stats.empty_child_count << '\n';
     }
 
-    if (context.rawoutfd)
-        fprintf(context.rawoutfd, "]");
-
-    fclose(filp);
-    if (context.rawoutfd)
-        fclose(context.rawoutfd);
-    free(line);
     if (interrupt)
         return 2;
 
@@ -437,22 +445,25 @@ int parser_main(int argc, char **argv) {
      * that come from stdout (1) to stdin (0) between siblings.
      */
 
-    printf("Creating pipe map...\n");
-    printf("0%%");
-    fflush(stdout);
+    std::cout << "Creating pipe map...\n";
+    std::cout.flush();
 
     pipe_map_t pipe_map;
-    std::map<upid_t,unsigned> exeIdxMap;
-    std::map<upid_t,std::set<upid_t>> fork_map;
-    std::map<upid_t,upid_t> rev_fork_map;
+    std::map<upid_t, unsigned> exeIdxMap;
+    std::map<upid_t, std::set<upid_t>> fork_map;
+    std::map<upid_t, upid_t> rev_fork_map;
+    std::map<upid_t, fdmap_node*> fdmap_process_map;
     syscall_raw *root_sys = nullptr;
-    std::map<upid_t,fdmap_node*> fdmap_process_map;
     fdmap_node *root_fdmap_node = nullptr;
 
-    std::sort(context.srvec.begin(), context.srvec.end(), [](const syscall_raw &a, const syscall_raw &b) { return a.start_time < b.start_time; });
+    std::sort(results.syscalls.begin(), results.syscalls.end(),
+            [](const syscall_raw &a, const syscall_raw &b) {
+                return a.start_time < b.start_time;
+            });
+
     /* Create root file descriptor map */
-    if (context.srvec.size() > 0) {
-        root_sys = context.srvec.data();
+    if (results.syscalls.size() > 0) {
+        root_sys = results.syscalls.data();
         root_fdmap_node = new fdmap_node(root_sys->pid);
         fdmap_process_map.insert(std::pair<upid_t,fdmap_node*>(root_sys->pid,root_fdmap_node));
     }
@@ -464,18 +475,24 @@ int parser_main(int argc, char **argv) {
 #endif
 
     uint32_t pipe_index = 0;
-    for (auto i = context.srvec.begin(); i != context.srvec.end(); ++i) {
-        if (context.srvec.size() >= 100) {
-            if ((std::distance(context.srvec.begin(), i) % (context.srvec.size() / 100)) == 0) {
-                printf("\r%lu%%", std::distance(context.srvec.begin(), i) / (context.srvec.size() / 100));
-                fflush(stdout);
-            }
+    size_t progress_counter = 0;
+    size_t syscalls_size = results.syscalls.size();
+    for (auto i = results.syscalls.begin(); i != results.syscalls.end(); ++i) {
+        progress_counter++;
+        if (isatty(STDOUT_FILENO) && !(progress_counter % 100)) {
+            std::cout << (progress_counter * 100) / syscalls_size << "%\r";
+            std::cout.flush();
         }
+
         syscall_raw &sys = (*i);
         if (sys.sysname == syscall_raw::SYS_PIPE) {
+            /*
+             * i0 -> fd1
+             * i1 -> fd2
+             * ul -> flags
+             */
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at PIPE [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid << ") at PIPE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
@@ -483,9 +500,13 @@ int parser_main(int argc, char **argv) {
             fdmap->fdmap.insert(std::pair<int, fdinfo>(sys.i1, fdinfo(0, 1, (sys.ul & O_CLOEXEC) != 0, pipe_index)));
             pipe_index++;
         } else if (sys.sysname == syscall_raw::SYS_DUP) {
+            /*
+             * i0 -> oldfd
+             * i1 -> newfd
+             * ul -> flags
+             */
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at DUP [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid << ") at PIPE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
@@ -501,17 +522,18 @@ int parser_main(int argc, char **argv) {
             fdmap->fdmap.insert(std::pair<int, fdinfo>(
                 sys.i1, fdinfo(old_fdinfo.piperd, old_fdinfo.pipewr, (sys.ul & O_CLOEXEC) != 0, old_fdinfo.pipe_mark)));
         } else if (sys.sysname == syscall_raw::SYS_FORK) {
+            /*
+             * sv -> pid of fork?
+             * ul -> flags
+             */
             exeIdxMap.insert(std::pair<upid_t, unsigned>(sys.pv, 0));
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at FORK [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid << ") at PIPE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
             if (fdmap_process_map.find(sys.pv) != fdmap_process_map.end()) {
-                printf("WARNING: file descriptor map for new process (" GENERIC_ARG_PID_FMT
-                       ") spawned at (" GENERIC_ARG_PID_FMT ") at FORK already in map [%zu|%lu]\n",
-                       sys.pv, sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: file descriptor map for new process (" << sys.pv << ") spawned at " << sys.pid << " at FORK already in map [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             if (sys.ul & CLONE_FILES) {
@@ -529,9 +551,7 @@ int parser_main(int argc, char **argv) {
                 }
             }
             if (rev_fork_map.find(sys.pv) != rev_fork_map.end()) {
-                printf("WARNINIG: parent process entry for process (" GENERIC_ARG_PID_FMT
-                       ") spawned at (" GENERIC_ARG_PID_FMT ") at FORK already in reverse process map [%zu|%lu]\n",
-                       sys.pv, sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: parent process entry for process (" << sys.pv << ") spawned at (" << sys.pid << ") at FORK already in reverse process map [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             rev_fork_map.insert(std::pair<upid_t, upid_t>(sys.pv, sys.pid));
@@ -546,8 +566,7 @@ int parser_main(int argc, char **argv) {
                 exeIdxMap[sys.pid]++;
             }
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at EXECVE [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid << ") at EXECVE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
@@ -560,10 +579,8 @@ int parser_main(int argc, char **argv) {
                                                                   (*u).second.cloexec, (*u).second.pipe_mark)));
                 }
                 if (fdmap->refs.find(sys.pid) == fdmap->refs.end()) {
-                    printf(
-                        "ERROR: missing identifier for shared file descriptor table for process (" GENERIC_ARG_PID_FMT
-                        ") at EXECVE [%zu|%lu]\n",
-                        sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                    std::cerr << "ERROR: missing identifier for shared file descriptor table for process (" << sys.pid;
+                    std::cerr << ") at EXECVE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                     return 1;
                 }
                 fdmap->refs.erase(sys.pid);
@@ -571,25 +588,23 @@ int parser_main(int argc, char **argv) {
             }
             fdmap = fdmap_process_map[sys.pid];
             /* Close file descriptors marked as CLOEXEC */
-            std::set<int> to_close;
-            for (auto u = fdmap->fdmap.begin(); u != fdmap->fdmap.end(); ++u) {
-                if ((*u).second.cloexec) {
-                    to_close.insert((*u).first);
+            for (auto u = fdmap->fdmap.begin(); u != fdmap->fdmap.end(); ) {
+                auto &descriptor = u->second;
+                if (descriptor.cloexec) {
+                    u = fdmap->fdmap.erase(u);
+                    continue;
                 }
-            }
-            for (auto u = to_close.begin(); u != to_close.end(); ++u) {
-                fdmap->fdmap.erase(*u);
+                ++u;
             }
             if (rev_fork_map.find(sys.pid) == rev_fork_map.end()) {
-                printf("WARNING: could not find active parent for process (" GENERIC_ARG_PID_FMT
-                       ") at EXECVE [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: could not find active parent for process (" << sys.pid;
+                std::cerr << ") at EXECVE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             upid_t ppid = rev_fork_map[sys.pid];
             if (fdmap_process_map.find(ppid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at EXECVE [%zu|%lu]\n",
-                       ppid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << ppid << ") at EXECVE";
+                std::cerr << " [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *parent_fdmap = fdmap_process_map[ppid];
@@ -614,9 +629,8 @@ int parser_main(int argc, char **argv) {
 #ifdef ENABLE_SIBLING_PIPE_CHECK
             /* Now the siblings */
             if (fork_map.find(ppid) == fork_map.end()) {
-                printf("WARNING: no entry in process map for parent process (" GENERIC_ARG_PID_FMT
-                       ") at EXECVE [%zu|%lu]\n",
-                       ppid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no entry in process map for parent process (" << ppid;
+                std::cerr << ") at EXECVE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             std::set<upid_t> &siblings_with_me = fork_map[ppid];
@@ -636,9 +650,14 @@ int parser_main(int argc, char **argv) {
 #endif
 
         } else if (sys.sysname == syscall_raw::SYS_CLOSE) {
+            /*
+             * i0 -> fd
+             * i1 -> -1
+             * ul -> 0
+             */
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at CLOSE [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid;
+                std::cerr << ") at CLOSE [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
@@ -649,17 +668,15 @@ int parser_main(int argc, char **argv) {
             }
         } else if (sys.sysname == syscall_raw::SYS_EXIT) {
             if (rev_fork_map.find(sys.pid) == rev_fork_map.end()) {
-                printf("WARNING: no entry in reverse process map for process (" GENERIC_ARG_PID_FMT
-                       ") at EXIT [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no entry in reverse process map for process (" << sys.pid;
+                std::cerr << ") at EXIT [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             /* Remove this process from its parent children */
             upid_t ppid = rev_fork_map[sys.pid];
             if (fork_map.find(ppid) == fork_map.end()) {
-                printf("WARNING: no entry in process map for parent process (" GENERIC_ARG_PID_FMT
-                       ") at EXIT [%zu|%lu]\n",
-                       ppid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no entry in process map for parent process (" << ppid;
+                std::cerr << ") at EXIT [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
             } else {
                 std::set<upid_t> &pchlds = fork_map[ppid];
                 pchlds.erase(sys.pid);
@@ -679,17 +696,15 @@ int parser_main(int argc, char **argv) {
                 root_chlds.insert(chlds.begin(), chlds.end());
             }
             if (fdmap_process_map.find(sys.pid) == fdmap_process_map.end()) {
-                printf("WARNING: no file descriptor table for process (" GENERIC_ARG_PID_FMT ") at EXIT [%zu|%lu]\n",
-                       sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                std::cerr << "WARNING: no file descriptor table for process (" << sys.pid;
+                std::cerr << ") at EXIT [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                 continue;
             }
             fdmap_node *fdmap = fdmap_process_map[sys.pid];
             if (fdmap->refs.size() > 1) {
                 if (fdmap->refs.find(sys.pid) == fdmap->refs.end()) {
-                    printf(
-                        "ERROR: missing identifier for shared file descriptor table for process (" GENERIC_ARG_PID_FMT
-                        ") at EXIT [%zu|%lu]\n",
-                        sys.pid, std::distance(context.srvec.begin(), i), sys.start_time);
+                    std::cerr << "ERROR: missing identifier for shared file descriptor table for process (" << sys.pid;
+                    std::cerr << ") at EXIT [" << std::distance(results.syscalls.begin(), i) << "|" << sys.start_time << "]\n";
                     return 1;
                 }
                 fdmap->refs.erase(sys.pid);
@@ -703,17 +718,16 @@ int parser_main(int argc, char **argv) {
             break;
     } /* for(i) */
     if (!interrupt)
-        printf("\r100%%\n");
+        std::cout << "100%\r";
     else
-        printf("\n");
+        std::cout << '\n';
     if (interrupt)
         return 2;
     for (auto u = fdmap_process_map.begin(); u != fdmap_process_map.end(); ++u) {
         if ((*u).second->refs.size() > 1) {
             if ((*u).second->refs.find((*u).first) == (*u).second->refs.end()) {
-                printf("ERROR: missing identifier for shared file descriptor table for process (" GENERIC_ARG_PID_FMT
-                       ") at destructor\n",
-                       (*u).first);
+                std::cerr << "ERROR: missing identifier for shared file descriptor table for process (" << (*u).first;
+                std::cerr << ") at destructor\n";
                 return 1;
             }
             (*u).second->refs.erase((*u).first);
@@ -722,118 +736,35 @@ int parser_main(int argc, char **argv) {
         }
     }
     unsigned long pipe_map_entries = 0;
-    for (auto u = pipe_map.begin(); u != pipe_map.end(); ++u) {
+    for (auto u = pipe_map.begin(); u != pipe_map.end(); ++u)
         pipe_map_entries += (*u).second.size();
-    }
-    printf("pipe_map size at exit: %zu keys, %lu entries total\n", pipe_map.size(), pipe_map_entries);
+
+    std::cout << "pipe_map size at exit: " << pipe_map.size() << " keys, " << pipe_map_entries << " entries total\n";
 #ifdef ENABLE_PARENT_PIPE_CHECK
-    printf("parent pipe count: %lu\n", parent_pipe_count);
+    std::cout << "parent pipe count: " << parent_pipe_count << '\n';
 #endif
 
-    printf("Flushing entries...\n");
-    printf("0%%");
-    fflush(stdout);
-    std::sort(context.ve.begin(), context.ve.end(), [](const parsed_entry &a, const parsed_entry &b) {
-        if (a.pid < b.pid)
-            return true;
-        if (a.pid > b.pid)
-            return false;
+    output.open(output_path);
+    if (!output.good()) {
+        std::cerr << "couldn't open " << output_path << " for writing, quitting\n";
+        return EXIT_FAILURE;
+    }
 
-        return a.procidx < b.procidx;
-    });
-    /* Now update parent pid information in parsed entries and flush the entries */
-    for (auto i = context.ve.begin(); i != context.ve.end(); ++i) {
-        if ((context.ve.size() >= 100) && ((std::distance(context.ve.begin(), i) % (context.ve.size() / 100)) == 0)) {
-            printf("\r%lu%%", std::distance(context.ve.begin(), i) / (context.ve.size() / 100));
-            fflush(stdout);
-        }
-        struct parsed_entry &e = *i;
-        if (context.rev_fork_map.find(e.pid) != context.rev_fork_map.end()) {
-            e.parent = context.rev_fork_map[e.pid];
-        } else {
-            e.parent = std::pair<upid_t, unsigned>(-1, 0);
-        }
-        if (i == context.ve.begin()) {
-            fprintf(context.outfd, "\n");
-        } else {
-            fprintf(context.outfd, ",\n");
-        }
-        // Print the entry
-        auto rwi = e.rwmap.begin();
-    print_entry:
-        fprintf(context.outfd, "{\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u,\"e\":%lu,\"b\":\"%s\",\"w\":\"%s\",\"v\":[",
-                e.pid, e.procidx, e.etime, e.progname_p.c_str(), e.cwd.c_str());
-        for (auto u = e.argv.begin(); u != e.argv.end(); ++u) {
-            fprintf(context.outfd, "\"%s\"", (*u).c_str());
-            if (u != e.argv.end() - 1)
-                fprintf(context.outfd, ",");
-        }
-        fprintf(context.outfd, "],\"c\":[");
-        for (auto u = e.vchild.begin(); u != e.vchild.end(); ++u) {
-            fprintf(context.outfd, "{\"p\":" GENERIC_ARG_PID_FMT ",\"f\":%ld}", (*u).first, (*u).second);
-            if (u != e.vchild.end() - 1)
-                fprintf(context.outfd, ",");
-        }
-        fprintf(context.outfd, "],\"r\":{\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u},\"i\":[", e.parent.first,
-                e.parent.second);
-        std::pair<upid_t, unsigned> pipe_map_key(e.pid, e.procidx);
-        if (pipe_map.find(pipe_map_key) != pipe_map.end()) {
-            std::set<std::pair<upid_t, unsigned>> &pmv = pipe_map[pipe_map_key];
-            for (auto u = pmv.begin(); u != pmv.end(); ++u) {
-                if (u != pmv.begin())
-                    fprintf(context.outfd, ",");
-                fprintf(context.outfd, "{\"p\":" GENERIC_ARG_PID_FMT ",\"x\":%u}", (*u).first, (*u).second);
-            }
-        }
-        fprintf(context.outfd, "],\"o\":[");
-        auto chi = rwi;
-        unsigned long chsize = 0;
-        for (; rwi != e.rwmap.end(); ++rwi) {
-            if (rwi != chi)
-                fprintf(context.outfd, ",");
-            if ((*rwi).first.second.length() <= 0) {
-                fprintf(context.outfd, "{\"p\":\"%s\",\"m\":%u,\"s\":%ld}", (*rwi).first.first.c_str(),
-                        (*rwi).second.first, (*rwi).second.second);
-                chsize += 15 + strlen((*rwi).first.first.c_str());
-            } else {
-                fprintf(context.outfd, "{\"p\":\"%s\",\"o\":\"%s\",\"m\":%u,\"s\":%ld}", (*rwi).first.first.c_str(),
-                        (*rwi).first.second.c_str(), (*rwi).second.first, (*rwi).second.second);
-                chsize += 22 + strlen((*rwi).first.first.c_str()) + strlen((*rwi).first.second.c_str());
-            }
-#if SPLIT_EXEC_ENTRY_AT_SIZE > 0
-            if (chsize > SPLIT_EXEC_ENTRY_AT_SIZE) {
-#else
-            if (0) {
-#endif
-                /* We've surpassed a limit of 'SPLIT_EXEC_ENTRY_AT_SIZE'[B] for read/write entries (Mongo complains
-                 * whenever single document size is larger than 16MB, let's stay on the safe side here). Print another
-                 * entry with the same values except the read/write array which will have continuation of file entries
-                 */
-                ++rwi;
-                if (rwi != e.rwmap.end()) {
-                    fprintf(context.outfd, "]},\n");
-                    goto print_entry;
-                } else
-                    break;
-            }
-        } /* for() */
-        fprintf(context.outfd, "]}");
-        if (interrupt)
-            break;
-    } /* for(i) */
+    flush_entries(results, pipe_map, output, entry_split);
+
     if (!interrupt)
-        printf("\r100%%\n");
+        std::cout << "\r100%\r";
     else
-        printf("\n");
+        std::cout << "\n";
+
     if (interrupt)
         return 2;
-    fprintf(context.outfd, "]");
-    fclose(context.outfd);
+
+    output.close();
 
     return 0;
 }
 
 int main(int argc, char **argv) {
-
     return parser_main(argc, argv);
 }

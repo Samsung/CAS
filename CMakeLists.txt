@@ -269,16 +269,21 @@ execute_process (
 add_executable(etrace_parser
     bas/main.cpp
     bas/parser.cpp
-    bas/rbtree.c
-    bas/utils.c
+    bas/error.cpp
 )
+
 install(TARGETS etrace_parser DESTINATION .)
 
-target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
+target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
 target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
+target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-attributes>)
 target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-unused-value>)
+target_compile_options(etrace_parser PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-march=native>)
+target_compile_options(etrace_parser PRIVATE -Wall)
+target_compile_options(etrace_parser PRIVATE -Wextra)
 target_compile_options(etrace_parser PRIVATE $<$<CONFIG:Debug>:-O0>)
 target_compile_options(etrace_parser PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
+target_link_libraries(etrace_parser pthread)
 
 add_executable(cati
     bas/etrace_cat.c
@@ -311,17 +316,16 @@ add_library(etrace SHARED
         bas/utils.c
         bas/filedeps.cpp
         bas/nfsdb_maps.cpp
-        bas/parser.cpp
-        bas/main.cpp
 )
 
-target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
+target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
 if(IS_CLANG)
     target_compile_options(etrace PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
 endif()
 target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-O0>)
 target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
+target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-attributes>)
 target_compile_options(etrace PRIVATE "-DLIBRARY_BUILD=1")
 
 add_library(ftdb SHARED

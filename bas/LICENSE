@@ -18,14 +18,14 @@ from the Linux kernel source tree and therefore might be distributed
 under GNU General Public License v.2 or any later version.
 Red Black Trees:
 (C) 1999  Andrea Arcangeli <andrea@suse.de>
-(C) 2002  David Woodhouse <dwmw2@infradead.org>
+(C) 2002  David Woodhouse <dwnw2@infradead.org>
 (C) 2012  Michel Lespinasse <walken@google.com>
 Interval Trees:
 (C) 2012  Michel Lespinasse <walken@google.com>
 Please see the following files for details:
 - rbtree.c
 - rbtree.h
-- rbtree_augmented.h
+- rbtree_augumented.h
 - interval_tree.c
 - interval_tree.h
 - interval_tree_generic.h
@@ -63,3 +63,17 @@ under GNU General Public License v.2 or any later version. Please see utils.c fi
 
 Rich compare snippet for Python objects was taken from the Python 3.8 source code which is GPL compatible
 and therefore might be distributed under the PSF License Agreement. Please see utils.h file for details.
+
+C++ thread pool implementation comes from https://github.com/bshoshany/thread-pool by Barak Shoshany.
+
+Copyright (c) 2022 Barak Shoshany
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.

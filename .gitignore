@@ -23,3 +23,9 @@ __pycache__/
 
 .pytest_cache
 llvm.sh
+
+# installed build
+cati
+etrace_parser
+worker
+clang-proc/clang-proc

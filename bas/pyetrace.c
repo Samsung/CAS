@@ -4,6 +4,8 @@
 
 #include <fcntl.h>
 #include <stdbool.h>
+#include <spawn.h>
+#include <sys/wait.h>
 
 DEFINE_COMPILER(gcc);
 DEFINE_COMPILER(clang);
@@ -1261,34 +1263,50 @@ interrupted:
 }
 
 PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args) {
-
+	int ret;
 	int argc = 1;
+	char *envp[] = { NULL };
+	const char **argv = NULL;
 	Py_ssize_t nargs = PyTuple_Size(args);
+	pid_t pid;
 
-	if (nargs>=1) {
+	if (nargs >= 1)
 		argc += nargs;
-	}
 
-	const char** argv = malloc(argc*sizeof(char**));
-	argv[0] = "libetrace.parse_nfsdb";
+	argv = malloc(argc + 1 * sizeof(char*));
+	argv[0] = "etrace_parser";
 
-	for (Py_ssize_t i=0; i<nargs; ++i) {
-		PyObject* arg = PyTuple_GetItem(args,i);
+	for (Py_ssize_t i = 1; i <= nargs; ++i) {
+		PyObject* arg = PyTuple_GetItem(args, i - 1);
 		if (!PyUnicode_Check(arg)) {
 			free(argv);
 			Py_RETURN_NONE;
 		}
-		argv[1+i] = PyString_get_c_str(arg);
+
+		argv[i] = PyString_get_c_str(arg);
 	}
 
-	int r = parser_main(argc,(char**)argv);
+	argv[argc] = NULL;
 
-	for (Py_ssize_t i=0; i<nargs; ++i) {
-		PYASSTR_DECREF(argv[1+i]);
-	}
+	ret = posix_spawnp(&pid, "etrace_parser", NULL, NULL, (char *const*) argv, envp);
+	if (ret)
+		goto err;
+	waitpid(pid, &ret, 0);
+	if (!WIFEXITED(ret))
+		goto err;
+
+	for (Py_ssize_t i = 1; i <= nargs; ++i)
+		PYASSTR_DECREF(argv[i]);
+
 	free(argv);
 
-	return PyLong_FromLong(r);
+	return PyLong_FromLong(WEXITSTATUS(ret));
+err:
+	for (Py_ssize_t i = 1; i <= nargs; ++i)
+		PYASSTR_DECREF(argv[i]);
+
+	free(argv);
+	Py_RETURN_NONE;
 }
 
 void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self) {

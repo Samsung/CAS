@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#include "klib.h"
-
 /* Taken from Python 3.8 source code which is GPL compatible */
 #define Py_RETURN_RICHCOMPARE_internal(val1, val2, op)                      \
     do {                                                                    \
@@ -23,9 +21,6 @@
             Py_UNREACHABLE();                                               \
         }                                                                   \
     } while (0)
-
-#define STRUCT_CREATE(tag)  ((type*)calloc(1,sizeof(struct tag)))
-#define TYPE_CREATE(type)  ((type*)calloc(1,sizeof(type)))
 
 #define TIME_MARK_START(start_marker)		\
 		struct timeval  tv_mark_##start_marker;	\
@@ -113,19 +108,6 @@
 #define DBGC(...)
 #endif
 
-#define VEC_DECL(type)				kvec_t(type)
-#define VEC_INIT(v)					kv_init(v)
-#define VEC_APPEND(type,v,value)	kv_push(type,v,value)
-#define VEC_POPBACK(v)				kv_pop(v)
-#define VEC_ACCESS(v,index)			kv_A(v,index)
-#define VEC_INSERT(type,v,index)	kv_a(type,v,index)
-#define VEC_BACK(v)					kv_A(v,kv_size(v)-1)
-#define VEC_SIZE(v)					kv_size(v)
-#define VEC_DESTROY(v)				kv_destroy(v)
-
-typedef VEC_DECL(const char*) vs_t;
-typedef vs_t* pvs_t;
-
 #define lazy_alloc_output() do { \
 	if (!output) { \
 		output = __output = malloc(2*len+1); \
@@ -133,26 +115,6 @@ typedef vs_t* pvs_t;
 		output+=i; \
 	} \
 } while(0)
-
-#define MAKE_JSON_ESCAPED(s,rfs) \
-	const char* s; \
-	const char* __##s; \
-	do { \
-		__##s = json_escape((const char*)rfs); \
-		if (__##s) { \
-			s = __##s; \
-		} \
-		else { \
-			s = (const char*)rfs; \
-		} \
-	} \
-    while(0)
-
-#define FREE_JSON_ESCAPED(s) \
-	do { \
-		free((void*)__##s); \
-	} \
-	while(0)
 
 static inline char* strappend(char* s, const char* news) {
 	size_t ssize = strlen(s);

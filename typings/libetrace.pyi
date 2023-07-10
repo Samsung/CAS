@@ -298,7 +298,7 @@ class nfsdb:
         """
 
 
-def parse_nfsdb(tracer_db_filename:str, json_db_filename:str) -> "int | None":
+def parse_nfsdb(tracer_db_filename:str, json_db_filename:str, threads:str) -> "int | None":
     """
     Function parse raw tracer file (.nfsdb), translate it to dict object and store as json file (.nfsdb.json).
 
@@ -306,6 +306,8 @@ def parse_nfsdb(tracer_db_filename:str, json_db_filename:str) -> "int | None":
     :type tracer_db_filename: str
     :param json_db_filename: output json database file path
     :type json_db_filename: str
+    :param threads: switch for specifying amount of workers for parsing process
+    :type threads: str
     :return: return code of parse process or None
     :rtype: int | None
     """

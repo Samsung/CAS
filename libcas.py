@@ -78,7 +78,7 @@ class DepsParam:
 class CASConfig:
     """
     CAS configuration handler. Loads config from filesystem, and generates excludes.
-    Specifies compilers and linkers matching patterns, dependency excludes patterns and more. 
+    Specifies compilers and linkers matching patterns, dependency excludes patterns and more.
 
     :param config_file: config file path
     :type config_file: str
@@ -451,7 +451,7 @@ class CASDatabase:
         return ret
 
     @staticmethod
-    def parse_trace_to_json(tracer_db_filename, json_db_filename, debug=False):
+    def parse_trace_to_json(tracer_db_filename, json_db_filename, threads=1, debug=False):
         """
         Wrapper function for `libetrace.parse_nfsdb` function that parses trace file into json file.
 
@@ -463,7 +463,7 @@ class CASDatabase:
         if debug:
             print("Before parse")
             print_mem_usage()
-        libetrace.parse_nfsdb(tracer_db_filename, json_db_filename)
+        libetrace.parse_nfsdb(tracer_db_filename, json_db_filename, '-j'+str(threads))
         if debug:
             print("After parse")
             print_mem_usage()
@@ -610,7 +610,7 @@ class CASDatabase:
 
         pbar.n = processed.value
         pbar.refresh()
-        pbar.close()        
+        pbar.close()
 
         full_depmap = {r[0]: r[1] for r in results}
         del results
@@ -739,7 +739,7 @@ class CASDatabase:
         rbm_filename = os.path.join(workdir, ".nfsdb.rbm.json")
         pcp_filename = os.path.join(workdir, ".nfsdb.pcp.json")
         link_filename = os.path.join(workdir, ".nfsdb.link.json")
-        manager = multiprocessing.Manager() 
+        manager = multiprocessing.Manager()
         out_compilation_info = manager.dict()  # we will need this for multiprocessing
         out_linked = dict()
         out_pcp_map = dict()
@@ -1201,7 +1201,7 @@ class CASDatabase:
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
-                        found_comps.value = 0    
+                        found_comps.value = 0
                         sstart = time.time()
                         procs = []
                         for i in range(jobs-1):
@@ -1453,7 +1453,7 @@ class CASDatabase:
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
-                        found_comps.value = 0                        
+                        found_comps.value = 0
                         sstart = time.time()
                         procs = []
                         for i in range(jobs-1):

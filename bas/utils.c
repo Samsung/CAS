@@ -16,45 +16,6 @@
 # define IS_EINTR(x) 0
 #endif
 
-/* Taken from https://github.com/nbsdx/SimpleJSON.git: public license */
-const char* json_escape(const char* s) {
-    if (!s) return 0;
-	size_t len = strlen(s);
-    char* output = 0;
-    char* __output = 0;
-    unsigned i;
-    for(i = 0; i < len; ++i ) {
-    	if (((unsigned char)s[i]>=0x80)||(s[i]<=0x1F)) {
-    		lazy_alloc_output();
-    	}
-        switch( s[i] ) {
-            case '\"': { lazy_alloc_output(); *output++ = '\\'; *output++ = '\"'; break; }
-            case '\\': { lazy_alloc_output(); *output++ = '\\'; *output++ = '\\'; break; }
-            case '\b': { lazy_alloc_output(); *output++ = '\\'; *output++ = 'b'; break; }
-            case '\f': { lazy_alloc_output(); *output++ = '\\'; *output++ = 'f'; break; }
-            case '\n': { lazy_alloc_output(); *output++ = '\\'; *output++ = 'n'; break; }
-            case '\r': { lazy_alloc_output(); *output++ = '\\'; *output++ = 'r'; break; }
-            case '\t': { lazy_alloc_output(); *output++ = '\\'; *output++ = 't'; break; }
-            default  :
-            {
-                if (output) {
-					if (((unsigned char)s[i]<0x80)&&(s[i]>0x1F)) { // Ignore non-ASCII characters
-						*output++ = s[i];
-					}
-                }
-                break;
-            }
-        }
-    }
-    if (output) {
-    	*output++=0;
-    }
-    if (output)
-    	return __output;
-    else
-    	return 0;
-}
-
 /* Taken from GNU CoreUtils 6.9 cat: GPL v.2 */
 ssize_t safe_rd (int fd, void const *buf, size_t count)
 {

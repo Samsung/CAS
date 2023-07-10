@@ -1,6 +1,6 @@
 /* ANSI-C code produced by gperf version 3.1 */
-/* Command-line: gperf ../phash.txt  */
-/* Computed positions: -k'1,3,9-10' */
+/* Command-line: gperf phash.txt  */
+/* Computed positions: -k'1-2,9,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
       && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) \
@@ -30,12 +30,12 @@
 #endif
 
 
-#define TOTAL_KEYWORDS 45
+#define TOTAL_KEYWORDS 82
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 16
-#define MIN_HASH_VALUE 4
-#define MAX_HASH_VALUE 68
-/* maximum key range = 65, duplicates = 0 */
+#define MIN_HASH_VALUE 2
+#define MAX_HASH_VALUE 149
+/* maximum key range = 148, duplicates = 0 */
 
 #ifdef __GNUC__
 __inline
@@ -45,45 +45,42 @@ inline
 #endif
 #endif
 static unsigned int
-hash (register const char *str, register size_t len)
+hash (const char *str, size_t len)
 {
   static unsigned char asso_values[] =
     {
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 55,
-      50, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69,  5, 45, 25,
-      25, 69, 69, 69, 69, 69,  0, 69, 15, 50,
-      30, 69, 10,  0, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69,  0, 69, 20, 69, 20,
-      15,  0, 10,  0,  0, 20, 69,  0,  0,  0,
-       5,  0, 10, 69, 10,  0,  0, 25, 69, 30,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-      69, 69, 69, 69, 69, 69
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 100,
+       95, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150,  35, 150,  40,  25,   0,
+        0, 150, 150,  55, 150, 150,   5, 150,  65,  45,
+       25, 150,   0,  30,  10, 150, 150,  35, 150, 150,
+      150,   0, 150, 150, 150,  30, 150,  50, 150,  20,
+        0,   0,  15, 150, 150,   0, 150,   0,  15,  15,
+       45,  15,  55, 150,   5,  30,   5,  25, 150,  75,
+        5,  50, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150, 150, 150, 150, 150,
+      150, 150, 150, 150, 150, 150
     };
-  register unsigned int hval = len;
+  unsigned int hval = len;
 
   switch (hval)
     {
       default:
-        hval += asso_values[(unsigned char)str[9]];
-      /*FALLTHROUGH*/
-      case 9:
         hval += asso_values[(unsigned char)str[8]];
       /*FALLTHROUGH*/
       case 8:
@@ -92,91 +89,12 @@ hash (register const char *str, register size_t len)
       case 5:
       case 4:
       case 3:
-        hval += asso_values[(unsigned char)str[2]];
-      /*FALLTHROUGH*/
       case 2:
+        hval += asso_values[(unsigned char)str[1]];
+      /*FALLTHROUGH*/
       case 1:
         hval += asso_values[(unsigned char)str[0]];
         break;
     }
-  return hval;
-}
-
-const char *
-in_word_set (register const char *str, register size_t len)
-{
-  static const char * wordlist[] =
-    {
-      "", "", "", "",
-      "time",
-      "timen",
-      "",
-      "Symlink",
-      "SysClone",
-      "SchedFork",
-      "Close",
-      "LinkTo",
-      "fd",
-      "LinkFrom",
-      "Cont",
-      "LinkatFrom",
-      "", "",
-      "Cont_end",
-      "mode",
-      "oldfd",
-      "", "",
-      "RenameTo",
-      "targetnamesize",
-      "RenameFrom",
-      "",
-      "argsize",
-      "pid",
-      "forigsize",
-      "LinkFailed",
-      "", "",
-      "prognamepsize",
-      "ppid",
-      "flags",
-      "Rename2From",
-      "linknamesize",
-      "cwd",
-      "fnamesize",
-      "newfd",
-      "",
-      "cwdsize",
-      "prognameisize",
-      "Pipe",
-      "", "",
-      "RenameFailed",
-      "cpu",
-      "Exit",
-      "Progname_p",
-      "resolvednamesize",
-      "",
-      "New_proc",
-      "Open",
-      "", "", "",
-      "Dup",
-      "SysCloneFailed",
-      "Progname_i",
-      "End_of_args",
-      "",
-      "fd2",
-      "", "", "", "",
-      "fd1"
-    };
-
-  if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
-    {
-      register unsigned int key = hash (str, len);
-
-      if (key <= MAX_HASH_VALUE)
-        {
-          register const char *s = wordlist[key];
-
-          if (*str == *s && !strcmp (str + 1, s + 1))
-            return s;
-        }
-    }
-  return 0;
+  return hval + asso_values[(unsigned char)str[len - 1]];
 }
