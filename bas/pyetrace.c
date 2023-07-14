@@ -1273,7 +1273,7 @@ PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args) {
 	if (nargs >= 1)
 		argc += nargs;
 
-	argv = malloc(argc + 1 * sizeof(char*));
+	argv = malloc((argc + 1) * sizeof(char*));
 	argv[0] = "etrace_parser";
 
 	for (Py_ssize_t i = 1; i <= nargs; ++i) {
