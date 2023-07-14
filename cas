@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == "bash_complete":
         from client.argparser import get_bash_complete
         print(get_bash_complete())
         exit(0)
+
+    cas_dir = os.path.dirname(os.path.realpath(__file__))
+    # this should bypas problems with execve of etrace_parser
+    if cas_dir not in os.environ["PATH"]:
+        os.environ["PATH"] = os.environ["PATH"] + f":{cas_dir}"
 
     try:
         import libetrace as _
@@ -15,7 +21,6 @@ if __name__ == '__main__':
         print("eg. export PYTHONPATH=/home/j.doe/CAS/:$PYTHONPATH")
         sys.exit(2)
 
-    import os
     from signal import signal, SIGPIPE, SIG_DFL
     from typing import Generator,  Iterator
     import libcas
