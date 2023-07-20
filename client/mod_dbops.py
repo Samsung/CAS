@@ -41,17 +41,17 @@ class ParseDB(Module):
             libcas.CASDatabase.parse_trace_to_json(tracer_db_filename, json_db_filename, threads=multiprocessing.cpu_count(),debug=self.args.debug)
             print("Done parse [%.2fs]" % (time.time()-total_start_time))
         else:
-            print ("Json database found ( use --force to rebuild )")
+            print("Json database found ( use --force to rebuild )")
 
         if not os.path.exists(intm_db_filename) or self.args.force:
             src_root = libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
             if os.path.exists(json_db_filename) and src_root is not None:
                 total_start_time = time.time()
                 print("Generating intermediate cache")
-                libcas.CASDatabase.create_db_image(json_db_filename, src_root, "", [], intm_db_filename, self.args.debug)
+                libcas.CASDatabase.create_db_image(json_db_filename, src_root, "", [], [], intm_db_filename, self.args.debug)
                 print("Done parse [%.2fs]" % (time.time()-total_start_time))
         else:
-            print ("Intermediate database found ( use --force to rebuild )")
+            print("Intermediate database found ( use --force to rebuild )")
 
         return None, DataTypes.null_data, None
 
@@ -104,7 +104,6 @@ class Postprocess(Module):
         total_start_time = time.time()
         json_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.json_database))
         tracer_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.tracer_database))
-        intm_db_filename = os.path.abspath(os.path.join(self.args.dbdir, ".nfsdb.img.tmp"))
         workdir = os.path.dirname(json_db_filename)
 
         src_root = self.args.set_root if self.args.set_root is not None else libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
@@ -132,10 +131,10 @@ class Postprocess(Module):
         db = libcas.CASDatabase()
         db.set_config(self.config)
         db.post_process(json_db_filename=json_db_filename, wrapping_bin_list=wrapping_bin_list, workdir=workdir,
-            process_linking=self.args.linking, process_comp=self.args.compilations, process_rbm=self.args.rbm, process_pcp=self.args.precompute_command_patterns,
-            new_database=self.args.new_database, no_update=self.args.no_update, no_auto_detect_icc=self.args.no_auto_detect_icc,
-            max_chunk_size=self.args.max_chunk_size, allow_pp_in_compilations=self.args.allow_pp_in_compilations, jobs=self.args.jobs,
-            debug_compilations=self.args.debug_compilations, debug=self.args.debug, verbose=self.args.verbose)
+                        process_linking=self.args.linking, process_comp=self.args.compilations, process_rbm=self.args.rbm, process_pcp=self.args.precompute_command_patterns,
+                        new_database=self.args.new_database, no_update=self.args.no_update, no_auto_detect_icc=self.args.no_auto_detect_icc,
+                        max_chunk_size=self.args.max_chunk_size, allow_pp_in_compilations=self.args.allow_pp_in_compilations, jobs=self.args.jobs,
+                        debug_compilations=self.args.debug_compilations, debug=self.args.debug, verbose=self.args.verbose)
 
         print("Done postprocess [%.2fs]" % (time.time()-total_start_time))
         return None, DataTypes.null_data, None
@@ -158,13 +157,14 @@ class StoreCache(Module):
     """
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description ="Module used for cache creation.")
+        module_parser = argparse.ArgumentParser(description="Module used for cache creation.")
         arg_group = module_parser.add_argument_group("Cache creation arguments")
         arg_group.add_argument('--create', '-C', action='store_true', default=False, help='Process only cache creation.')
         arg_group.add_argument('--deps-create', '-DC', action='store_true', default=False, help='Process only dependency cache creation.')
         arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='Maximum allowed dependency count for single module - used to detect dependency generation issues.')
         arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
-        arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')" )
+        arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
+        arg_group.add_argument('--shared_argvs', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
         return module_parser
 
     def get_data(self) -> tuple:
@@ -186,11 +186,12 @@ class StoreCache(Module):
         if self.args.create or (not self.args.deps_create and not self.args.create):
             if self.args.exclude_command_patterns is None:
                 self.args.exclude_command_patterns = []
-            else:
+            elif isinstance(self.args.exclude_command_patterns, str):
                 self.args.exclude_command_patterns = self.args.exclude_command_patterns.split(":")
+
             start_time = time.time()
             print("creating cache from json database ...")
-            libcas.CASDatabase.create_db_image(json_db_filename, src_root, self.args.set_version, self.args.exclude_command_patterns, cache_db_filename, self.args.debug)
+            libcas.CASDatabase.create_db_image(json_db_filename, src_root, self.args.set_version, self.args.exclude_command_patterns, self.args.shared_argvs.split(":"), cache_db_filename, self.args.debug)
             print("cache stored [%.2fs]" % (time.time() - start_time))
 
         if self.args.deps_create or (not self.args.deps_create and not self.args.create):
@@ -203,8 +204,8 @@ class StoreCache(Module):
             db.set_config(self.config)
             db.load_db(cache_db_filename, debug=self.args.debug, quiet=True, mp_safe=True, no_map_memory=False)
             db.create_deps_db_image(deps_cache_db_filename=deps_cache_db_filename, depmap_filename=depmap_filename,
-                ddepmap_filename=ddepmap_filename, jobs=self.args.jobs, deps_threshold=self.args.deps_threshold,
-                debug=self.args.debug)
+                                    ddepmap_filename=ddepmap_filename, jobs=self.args.jobs, deps_threshold=self.args.deps_threshold,
+                                    debug=self.args.debug)
             print("deps stored [%.2fs]" % (time.time() - start_time))
 
         print("Done cache [%.2fs]" % (time.time() - total_start_time))

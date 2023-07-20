@@ -8,6 +8,7 @@ extern "C" {
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <list>
 
 struct eid_cmp {
     bool operator() (const struct eid& a, const struct eid& b) const {
@@ -92,6 +93,7 @@ unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb) {
 	} while(0)
 
 typedef std::vector<struct nfsdb_entry*> vexecs_t;
+typedef std::list<struct nfsdb_entry*> lexecs_t;
 typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
 
 /*
@@ -147,7 +149,7 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
  *
  * fileMap:
  *  Maps a unique file path to a list of open file handles that used this path (i.e. nfsdb entry and openfile index within this entry)
- *   per open mode (RD,WR,RW)
+ *   per open mode (RD,WR,RW) + single global access set (either RD, WR or RW)
  *
  * linkedMap:
  *  Maps a unique linked file path to a nfsdb entry that created this linked file path
@@ -156,14 +158,14 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
 int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 
 	std::map<unsigned long,vexecs_t> processMap;
-	std::map<unsigned long,vexecs_t> bexeMap;
+	std::map<unsigned long,lexecs_t> bexeMap;
 	forkMap_t forkMap;
 	typedef std::pair<unsigned long,unsigned long> openfileHandle;
 	typedef std::set<openfileHandle> openfileHandleSet;
 	std::map<unsigned long,std::set<unsigned long>> pipeMap;
 	std::map<unsigned long,std::set<unsigned long>> wrMap;
 	std::map<unsigned long,std::set<unsigned long>> rdMap;
-	std::map<unsigned long,std::tuple<openfileHandleSet,openfileHandleSet,openfileHandleSet>> fileMap;
+	std::map<unsigned long,std::tuple<openfileHandleSet,openfileHandleSet,openfileHandleSet,openfileHandleSet,unsigned long>> fileMap;
 	std::map<unsigned long,struct nfsdb_entry*> linkedMap;
 	for (unsigned long u=0; u<nfsdb->nfsdb_count; ++u) {
 
@@ -172,7 +174,14 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		unsigned long pid = entry->eid.pid;
 		processMap[pid].push_back(entry);
 
-		bexeMap[entry->bpath].push_back(entry);
+		/* If the entry is a compiler or linker move the first such entry at the beginning of the 'bexeMap'
+		   (it can ease the burden of checking whether a given path is a compiler or linker) */
+		if ((entry->compilation_info)||(entry->linked_file)) {
+			bexeMap[entry->bpath].push_front(entry);
+		}
+		else {
+			bexeMap[entry->bpath].push_back(entry);
+		}
 
 		for (unsigned long i=0; i<entry->child_ids_count; ++i) {
 			forkMap[pid].push_back(entry->child_ids[i].pid);
@@ -238,6 +247,23 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		openfileHandleSet& rdSet = std::get<0>((*i).second);
 		openfileHandleSet& wrSet = std::get<1>((*i).second);
 		openfileHandleSet& rwSet = std::get<2>((*i).second);
+		openfileHandleSet& gaSet = std::get<3>((*i).second);
+
+		/* Fill the global access set that will be used for filtering of referenced files */
+		if ((rdSet.size()>0)&&(wrSet.size()>0)) {
+			gaSet.insert(rdSet.begin(),rdSet.end());
+			gaSet.insert(wrSet.begin(),wrSet.end());
+			std::get<4>((*i).second) = ACCESS_RW;
+		}
+		else if (rdSet.size()>0) {
+			gaSet.insert(rdSet.begin(),rdSet.end());
+			std::get<4>((*i).second) = ACCESS_READ;
+		}
+		else {
+			gaSet.insert(wrSet.begin(),wrSet.end());
+			std::get<4>((*i).second) = ACCESS_WRITE;
+		}
+
 		std::set_intersection(rdSet.begin(), rdSet.end(),
 							  wrSet.begin(), wrSet.end(),
 							  std::inserter(rwSet,rwSet.begin()));
@@ -245,6 +271,8 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 			rdSet.erase(*u);
 			wrSet.erase(*u);
 		}
+
+		/* Flush file map entries to cache structures */
 		struct nfsdb_fileMap_node* node = fileMap_insert_key(&nfsdb->filemap, (*i).first);
 		node->rd_entry_list = (struct nfsdb_entry**)malloc(rdSet.size()*sizeof(struct nfsdb_entry*));
 		node->rd_entry_index = (unsigned long*)malloc(rdSet.size()*sizeof(unsigned long));
@@ -270,6 +298,15 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 			node->rw_entry_list[u] = &nfsdb->nfsdb[(*j).first];
 			node->rw_entry_index[u] = (*j).second;
 		}
+		node->ga_entry_list = (struct nfsdb_entry**)malloc(gaSet.size()*sizeof(struct nfsdb_entry*));
+		node->ga_entry_index = (unsigned long*)malloc(gaSet.size()*sizeof(unsigned long));
+		node->ga_entry_count = gaSet.size();
+		u=0;
+		for (openfileHandleSet::iterator j=gaSet.begin(); j!=gaSet.end(); ++j,++u) {
+			node->ga_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->ga_entry_index[u] = (*j).second;
+		}
+		node->global_access = std::get<4>((*i).second);
 	}
 	if (show_stats) {
 		printf("fileMap" " keys: %zu:%zu\n",fileMap.size(),fileMap_count(&nfsdb->filemap));

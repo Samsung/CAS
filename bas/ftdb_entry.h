@@ -793,7 +793,9 @@
 	PyTuple_SetItem(__tuple,__index,__val);	\
 } while(0)
 
-#define PYASSTR_DECREF(__node) do { Py_DecRef((PyObject*)container_of(__node,PyBytesObject,ob_sval)); } while(0)
+#define PYASSTR_DECREF(__node) do { \
+	Py_DecRef((PyObject*)container_of(__node,PyBytesObject,ob_sval));	\
+} while(0)
 
 #define VALIDATE_FTDB_ENTRY(__db,__key)	\
 do {	\

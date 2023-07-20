@@ -2,7 +2,7 @@
 """
 Libetrace module  - API of nfsdb database.
 """
-from typing import overload, Iterator, List, Dict, Tuple, Set, Optional
+from typing import overload, Iterator, List, Dict, Tuple, Set, Optional, Sized
 
 class error(Exception):
     pass
@@ -38,7 +38,7 @@ class nfsdb:
         :return: nfsdbEntry object
         """
     @overload
-    def __getitem__(self, pid: Tuple[int, Optional[int]]) -> List[nfsdbEntry]:
+    def __getitem__(self, pid: "Tuple[int, int] | Tuple[int,]") -> List[nfsdbEntry]:
         """
         Get list of nfsdbEntry matching given pid(,index) pair.
 
@@ -46,9 +46,17 @@ class nfsdb:
         :return: List of nfsdbEntry objects
         """
     @overload
-    def __getitem__(self, pids: List[Tuple[int, Optional[int]]]) -> List[nfsdbEntry]:
+    def __getitem__(self, pids: "List[Tuple[int, int]] | List[Tuple[int,]]") -> List[nfsdbEntry]:
         """
         Get list of nfsdbEntry matching given list of pid(,index) pairs.
+
+        :param pids: List of tuples (pid,) or (pid,index)
+        :return: List of nfsdbEntry objects
+        """
+    @overload
+    def __getitem__(self, pids: "Tuple[int, int] | Tuple[int,]") -> List[nfsdbEntry]:
+        """
+        Get list of nfsdbEntry matching given pid(,index) pair.
 
         :param pids: List of tuples (pid,) or (pid,index)
         :return: List of nfsdbEntry objects
@@ -129,17 +137,87 @@ class nfsdb:
         Returns iterator over executables
         """
 
-    def filtered(self, has_comp_info: bool = ..., has_linked_file: bool = ..., has_command: bool = ...) -> Iterator[nfsdbEntry]:
+    def filtered_paths(self, flt: List) -> List[str]:
         """
-        Filter executables depends on given parameters.
+        Filter opens depends on given filter parameter.
 
-        :param has_comp_info: database file path
-        :param has_linked_file: print debugging information
-        :param has_command: prevent any verbosity
-        :return: list of filtered executables
+        :param filter: filters list
+        :return: list of filtered open paths
         """
 
-    def opens_iter(self, ) -> Iterator[nfsdbEntryOpenfile]:
+    def filtered_paths_iter(self, flt: List) -> nfsdbFilteredOpensPathsIter:
+        """
+        Filter opens depends on given filter parameter and returns iterator.
+
+        :param filter: filters list
+        :return: filtered open paths iterator
+        """
+
+    def filtered_opens(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path:Optional[str]=None, wc:Optional[str]=None, re:Optional[str]=None,
+                        compiled:Optional[bool]=None, linked:Optional[bool]=None, linked_static:Optional[bool]=None,
+                        linked_shared:Optional[bool]=None, linked_exe:Optional[bool]=None, plain:Optional[bool]=None,
+                        compiler:Optional[bool]=None, linker:Optional[bool]=None, binary:Optional[bool]=None,
+                        symlink:Optional[bool]=None, no_symlink:Optional[bool]=None,
+                        file_exists:Optional[bool]=None,file_not_exists:Optional[bool]=None,dir_exists:Optional[bool]=None,
+                        has_access:Optional[int]=None,negate:Optional[bool]=None,
+                        at_source_root:Optional[bool]=None,not_at_source_root:Optional[bool]=None,
+                        source_type:Optional[int]=None) -> List[nfsdbEntryOpenfile]:
+        """
+        Filter opens depends on given filter parameter.
+
+        :param filter: filters list
+        :return: list of filtered nfsdbEntryOpenfile
+        """
+
+    def filtered_opens_iter(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path:Optional[str]=None, wc:Optional[str]=None, re:Optional[str]=None,
+                        compiled:Optional[bool]=None, linked:Optional[bool]=None, linked_static:Optional[bool]=None,
+                        linked_shared:Optional[bool]=None, linked_exe:Optional[bool]=None, plain:Optional[bool]=None,
+                        compiler:Optional[bool]=None, linker:Optional[bool]=None, binary:Optional[bool]=None,
+                        symlink:Optional[bool]=None, no_symlink:Optional[bool]=None,
+                        file_exists:Optional[bool]=None,file_not_exists:Optional[bool]=None,dir_exists:Optional[bool]=None,
+                        has_access:Optional[int]=None,negate:Optional[bool]=None,
+                        at_source_root:Optional[bool]=None,not_at_source_root:Optional[bool]=None,
+                        source_type:Optional[int]=None) -> nfsdbFilteredOpensIter:
+        """
+        Filter opens depends on given filter parameter.
+
+        :param filter: filters list
+        :return: filtered nfsdbEntryOpenfile objects iterator
+        """
+
+    def filtered_execs(self, exec_filter:Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]]=None,
+                        cwd_has_str: Optional[str]=None, cwd_wc: Optional[str]=None, cwd_re: Optional[str]=None,
+                        cmd_has_str: Optional[str]=None, cmd_wc: Optional[str]=None, cmd_re: Optional[str]=None,
+                        bin_has_str: Optional[str]=None, bin_wc: Optional[str]=None, bin_re: Optional[str]=None,
+                        has_ppid: Optional[int]=None, has_command: Optional[bool]=None, has_comp_info: Optional[bool]=None,
+                        has_linked_file:Optional[bool]=None, negate: Optional[bool]=None,
+                        bin_at_source_root: Optional[bool]=None, bin_not_at_source_root: Optional[bool]=None,
+                        cwd_at_source_root: Optional[bool]=None, cwd_not_at_source_root: Optional[bool]=None) -> List[nfsdbEntry]:
+        """
+        Filter opens depends on given filter parameter.
+
+        :param filter: filters list
+        :return: list of filtered nfsdbEntryOpenfile
+        """
+
+    def filtered_execs_iter(self, exec_filter:Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]]=None,
+                        cwd_has_str: Optional[str]=None, cwd_wc: Optional[str]=None, cwd_re: Optional[str]=None,
+                        cmd_has_str: Optional[str]=None, cmd_wc: Optional[str]=None, cmd_re: Optional[str]=None,
+                        bin_has_str: Optional[str]=None, bin_wc: Optional[str]=None, bin_re: Optional[str]=None,
+                        has_ppid: Optional[int]=None, has_command: Optional[bool]=None, has_comp_info: Optional[bool]=None,
+                        has_linked_file:Optional[bool]=None, negate: Optional[bool]=None,
+                        bin_at_source_root: Optional[bool]=None, bin_not_at_source_root: Optional[bool]=None,
+                        cwd_at_source_root: Optional[bool]=None, cwd_not_at_source_root: Optional[bool]=None) -> nfsdbFilteredCommandsIter:
+        """
+        Filter opens depends on given filter parameter.
+
+        :param filter: filters list
+        :return: filtered nfsdbEntryOpenfile objects iterator
+        """
+
+    def opens_iter(self, ) -> nfsdbOpensIter:
         """
         Returns list of opens as nfsdbEntryOpenfile iterator.
         """
@@ -204,11 +282,47 @@ class nfsdb:
         """
         Returns list of all linked modules paths (executions matched with config ld_spec)
         """
-
-    def fdeps(self, file_path, debug: bool = False, dry_run: bool = False, direct: bool = False, debug_fd: bool = False,
+    # TODO - finish documenting
+    def fdeps(self, file_path:"str|List[str]", debug: bool = False, dry_run: bool = False, direct: bool = False, debug_fd: bool = False,
         negate_pattern: bool = False, dep_graph: bool = False, wrap_deps: bool = False, use_pipes: bool = False,
         recursive: bool = ..., timeout: int = ..., exclude_patterns: List[str] = ..., exclude_commands: List[str] = ...,
-        exclude_commands_index: List[str] = ..., all_modules: List[str] = ...) -> Tuple[List[int],List[str],List[nfsdbEntryOpenfile],Dict]: ...
+        exclude_commands_index: List[str] = ..., all_modules: List[str] = ...) -> Tuple[List[int],List[str],List[nfsdbEntryOpenfile],Dict]:
+        """
+        Function generate dependencies of given file.
+
+        :param file_path: file path(s)
+        :type file_path: "str|List[str]"
+        :param debug: print debug information, defaults to False
+        :type debug: bool, optional
+        :param dry_run: process dependency generation but without returning values, defaults to False
+        :type dry_run: bool, optional
+        :param direct: return only direct dependencies - it means that dependency processing is stopped at file that is module, defaults to False
+        :type direct: bool, optional
+        :param debug_fd: prints information about dependency processing, defaults to False
+        :type debug_fd: bool, optional
+        :param negate_pattern: negates provided pattern, defaults to False
+        :type negate_pattern: bool, optional
+        :param dep_graph: returns dependency graph (last element of returned tuple), defaults to False
+        :type dep_graph: bool, optional
+        :param wrap_deps: include wrapped process in generation, defaults to False
+        :type wrap_deps: bool, optional
+        :param use_pipes: include piped process in generation, defaults to False
+        :type use_pipes: bool, optional
+        :param recursive: _description_, defaults to ...
+        :type recursive: bool, optional
+        :param timeout: max time , defaults to ...
+        :type timeout: int, optional
+        :param exclude_patterns: list of files that will stop further generation when found, defaults to ...
+        :type exclude_patterns: List[str], optional
+        :param exclude_commands: list of commands patterns that will stop further generation when foud, defaults to ...
+        :type exclude_commands: List[str], optional
+        :param exclude_commands_index: _description_, defaults to ...
+        :type exclude_commands_index: List[str], optional
+        :param all_modules: list of all modules - needed for direct parameter, defaults to ...
+        :type all_modules: List[str], optional
+        :return: Tuple with process id, list of paths, list of opens objects and optionaly dependency graph
+        :rtype: Tuple[List[int],List[str],List[nfsdbEntryOpenfile],Dict]
+        """
 
 
     def mdeps(self, module_path:"str | List[str]", direct:bool=False) -> List[nfsdbEntryOpenfile]:
@@ -287,7 +401,7 @@ class nfsdb:
         :rtype: bool
         """
 
-    def precompute_command_patterns(self, excl_commands:List[str])-> "dict | None":
+    def precompute_command_patterns(self, excl_commands:List[str])-> Optional[Dict]:
         """
         Function calculate exclude command patterns for executables using database nfsdbEntry
 
@@ -298,7 +412,7 @@ class nfsdb:
         """
 
 
-def parse_nfsdb(tracer_db_filename:str, json_db_filename:str, threads:str) -> "int | None":
+def parse_nfsdb(tracer_db_filename:str, json_db_filename:str, threads:str) -> Optional[int]:
     """
     Function parse raw tracer file (.nfsdb), translate it to dict object and store as json file (.nfsdb.json).
 
@@ -332,7 +446,7 @@ def is_ELF_or_LLVM_BC_file(written_files: List[str]):...
 
 def is_ELF_file(written_files: List[str]):...
 
-def create_nfsdb(db: dict, src_root: str, set_version: str, pcp_patterns: list, cache_db_filename: str, show_stats: bool = False) -> bool:
+def create_nfsdb(db: dict, src_root: str, set_version: str, pcp_patterns: list, shared_argvs: List[str], cache_db_filename: str, show_stats: bool = False) -> bool:
     """
     Function takes database in dict format and stores it to highly-optimized image file (.nfsdb.img).
 
@@ -346,6 +460,8 @@ def create_nfsdb(db: dict, src_root: str, set_version: str, pcp_patterns: list, 
     :type pcp_patterns: list
     :param cache_db_filename: filename of cache database
     :type cache_db_filename: str
+    :param shared_argvs: list of shared library generation switches to be searched in linking command
+    :type shared_argvs: List[str]
     :param show_stats: show stats while building database, defaults to False
     :type show_stats: bool, optional
     :return: True if success otherwise False
@@ -610,7 +726,7 @@ class nfsdbEntry:
 
         :return: True if process is compiler otherwise False
         :rtype: bool
-        """        
+        """
 
     def is_linking(self) -> bool:
         """
@@ -623,6 +739,32 @@ class nfsdbEntry:
     def open_stat(self) -> bool: ...
 
     def open_access(self) -> bool: ...
+
+
+class nfsdbFilteredIter(Iterator, Sized):
+    """
+    Iterator for filtered opens path results.
+    """
+
+class nfsdbOpensIter(Iterator, Sized):
+    """
+    Iterator for filtered opens path results.
+    """
+
+class nfsdbFilteredOpensPathsIter(Iterator, Sized):
+    """
+    Iterator for filtered opens path results.
+    """
+
+class nfsdbFilteredOpensIter(Iterator, Sized):
+    """
+    Iterator for filtered opens results.
+    """
+
+class nfsdbFilteredCommandsIter(Iterator, Sized):
+    """
+    Iterator for filtered execs results.
+    """
 
 class clang:
 

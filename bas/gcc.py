@@ -78,6 +78,7 @@ class gcc(libetrace.gcc):
             cc_include_paths = parse_config(out.decode("utf-8"))
             self.cc_include_paths.append(cc_include_paths)
         if debug:
+            print("DEBUG [compiler] [preprocessor] [include paths]")
             for cpi_tuple in zip(self.c_compilers,self.c_preprocessors,self.c_include_paths):
                 print ("[%s] [%s] %s\n"%(cpi_tuple[0],cpi_tuple[1],cpi_tuple[2]))
             for ccpi_tuple in zip(self.cc_compilers,self.cc_preprocessors,self.cc_include_paths):

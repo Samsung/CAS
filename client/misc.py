@@ -7,7 +7,7 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=1024)
-def get_file_info(mode: int) -> Tuple[int, int, int]:
+def get_file_info(mode: int) -> Tuple[bool, int, int]:
     """
     Function split opened file bit value ( 0emmmmxx ) into:
     - exist value bit 1
@@ -67,7 +67,7 @@ def access_from_code(opn_value) -> str:
         }[opn_value]
 
 
-@lru_cache(maxsize=1024)
+@lru_cache(maxsize=10)
 def stat_from_code(stat_value: int) -> str:
     """
     Function returns string representation of stat value.

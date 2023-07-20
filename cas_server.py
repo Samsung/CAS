@@ -24,11 +24,14 @@ CORS(app)
 cas_db = libcas.CASDatabase()
 
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
-bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command", "extended", "dep-graph", "filerefs", "direct-global", "cached", "wrap-deps", "with-pipes", "original-path", "parent",
+bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command", 
+            "extended", "dep-graph", "filerefs", "direct-global", "cached", "wrap-deps", "with-pipes", "original-path", "parent",
             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download"]
 
-
 def translate_to_cmdline(req: Request) -> List[str]:
+    """
+    Function translates url request to client argument list.
+    """
     ret = []
     ret.append(req.path.replace("/", ""))
     for key, val in req.args.items(multi=True):
@@ -37,9 +40,8 @@ def translate_to_cmdline(req: Request) -> List[str]:
                 ret.append(f"--{key}")
         else:
             ret.append(f"--{key}={val}")
+    
     ret.append("--json")
-    print(req.query_string)
-    print(" ".join(ret))
     return ret
 
 

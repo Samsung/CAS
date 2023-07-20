@@ -2,7 +2,7 @@ import sys
 import os
 import io
 import zipfile
-from typing import Generator, Iterator
+from typing import Generator, Iterator, List
 import libcas
 from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
@@ -53,7 +53,13 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             for pipe_element in pipeline_args
             ])
 
-        if common_args.output_file:
+        if common_args.ide:
+            from client.ide_generator.project_generator import project_generator_map, ProjectGenerator
+            project_generator:ProjectGenerator = project_generator_map[common_args.ide](args=common_args, cas_db=cas_db)
+            project_generator.generate(data=module_pipeline.render())
+            return None
+
+        elif common_args.output_file:
             with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w", encoding=sys.getdefaultencoding()) as output_file:
                 if output_file.writable():
                     ret = module_pipeline.render()
@@ -80,6 +86,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             with open(os.path.abspath(os.path.expanduser(common_args.generate_zip)), 'wb') as out_file:
                 out_file.write(zip_buffer.getvalue())
                 print("Output zipped to {}".format(os.path.abspath(os.path.expanduser(common_args.generate_zip))))
+            return None
         else:
             return module_pipeline.render()
     else:

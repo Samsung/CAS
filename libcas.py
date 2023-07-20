@@ -11,18 +11,19 @@ import time
 import shlex
 import re
 import subprocess
+import base64
 from functools import lru_cache
 import shutil
-import psutil
 import libetrace
 from bas import gcc
 from bas import clang
 from bas import exec_worker
 
 try:
-    from tqdm import tqdm as Progressbar
+    # If tqdm is available use it for nice progressbar
+    from tqdm import tqdm as progressbar
 except ModuleNotFoundError:
-    class Progressbar:
+    class progressbar:
         n = 0
         x = None
 
@@ -56,7 +57,8 @@ class DepsParam:
     :type negate_pattern: bool
     """
 
-    def __init__(self, file: str, direct: bool = None, exclude_cmd: List[str] = None, exclude_pattern: List[str] = None, negate_pattern: bool = False):
+    def __init__(self, file: str, direct: Optional[bool] = None, exclude_cmd: Optional[List[str]] = None,
+                exclude_pattern: Optional[List[str]] = None, negate_pattern: bool = False):
         self.file = file
         self.direct = direct
         self.negate_pattern = negate_pattern
@@ -144,19 +146,6 @@ class CASConfig:
         return excl_patterns, excl_commands, excl_commands_index
 
 
-def print_mem_usage():
-    # Check psutil._pslinux.Process.memory_info() for details
-    mi = psutil.Process().memory_info()
-
-    def fmt(by):
-        return f"{by / (1024 * 1024):.2f} MB"
-
-    print(f"RAM || rss {fmt(mi.rss)} || vms {fmt(mi.vms)} || "
-          f"shared {fmt(mi.shared)} || text {fmt(mi.text)} || "
-          f"lib {fmt(mi.lib)} || data {fmt(mi.data)} "
-          f"|| dirty {fmt(mi.dirty)}")
-
-
 class CASDatabase:
     """
     Wrapping object for libetrace.nfsdb interface.
@@ -188,65 +177,498 @@ class CASDatabase:
         """
         self.config = config
 
-    def load_db(self, db_file, debug=False, quiet=True, mp_safe=True, no_map_memory=False):
+    def load_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
+        """
+        Function uses libetrace.load to load database and applies config.
+
+        :param db_file: Database file
+        :type db_file: str
+        :param debug: print debug information, defaults to False
+        :type debug: bool, optional
+        :param quiet: suppress verbose prints, defaults to True
+        :type quiet: bool, optional
+        :param mp_safe: load database in read-only mode slower but safer when using multiprocessing, defaults to True
+        :type mp_safe: bool, optional
+        :param no_map_memory: prevents memory mapping, defaults to False
+        :type no_map_memory: bool, optional
+        :return: True if load succed otherwise False
+        :rtype: bool
+        """
+
         self.db_loaded = self.db.load(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe, no_map_memory=no_map_memory)
         self.source_root = self.db.source_root
         assert self.config is not None, "Please set config first. Use CASDatabase.set_config()"
         self.config.apply_source_root(self.source_root)
         return self.db_loaded
 
-    def load_deps_db(self, db_file, debug=False, quiet=True, mp_safe=True):
-        self.cache_db_loaded = self.db.load_deps(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe)
+    def load_deps_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
+        """
+        Function uses libetrace.load_deps to load database from given filename
+
+        :param cache_filename: database file path
+        :type db_file: str
+        :param debug: print debug information, defaults to False
+        :type debug: bool, optional
+        :param quiet: suppress verbose prints, defaults to True
+        :type quiet: bool, optional
+        :param mp_safe: load database in read-only mode slower but safer when using multiprocessing, defaults to True
+        :type mp_safe: bool, optional
+        :param no_map_memory: prevents memory mapping, defaults to False
+        :type no_map_memory: bool, optional
+        :return: True if load succed otherwise False
+        :rtype: bool
+        """
+
+        self.cache_db_loaded = self.db.load_deps(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe, no_map_memory=no_map_memory)
         return self.cache_db_loaded
 
     @lru_cache(maxsize=1)
-    def linked_modules_paths(self,) -> List[str]:
-        return list({x.path for x in self.linked_modules()})
+    def linked_module_paths(self) -> List[str]:
+        """
+        Function returns linked modules paths.
+        This function uses cache.
+
+        :return: List of module paths
+        :rtype: List[str]
+        """
+
+        return list({x[0] for x in self.db.linked_module_paths()})
 
     @lru_cache(maxsize=1)
     def linked_modules(self) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns linked modules as libetrace.nfsdbEntryOpenfile objects.
+        This function uses cache.
+
+        :return: List of opens objects that are modules
+        :rtype: List[libetrace.nfsdbEntryOpenfile]
+        """
+
         return list({x[0] for x in self.db.linked_modules()})
 
-    def get_pid(self, pid: int) -> List[libetrace.nfsdbEntry]:
-        return self.db[(pid,)]
+    def get_entries_with_pid(self, pid: int) -> List[libetrace.nfsdbEntry]:
+        """
+        Function return list of execs with given pid.
 
-    def get_pids(self, pidlist: List[Tuple]) -> List[libetrace.nfsdbEntry]:
+        :param pid: process pid
+        :type pid: int
+        :return: list of execs object
+        :rtype: List[libetrace.nfsdbEntry]
+        """
+
+        return self.db[tuple([pid])]
+
+    def get_entries_with_pids(self, pidlist: "List[Tuple[int, int]]| List[Tuple[int,]]") -> List[libetrace.nfsdbEntry]:
+        """
+        Function return list of execs with given list of pid,idx tuples.
+
+        :param pidlist: process pid and optional index tuple
+        :type pidlist: List[Tuple[int, Optional[int]]]
+        :return: list of execs object
+        :rtype: List[libetrace.nfsdbEntry]
+        """
+
         return self.db[pidlist]
 
     def get_exec(self, pid: int, index: int) -> libetrace.nfsdbEntry:
+        """
+        Function returns exec with given pid and index.
+
+        :param pid: process pid
+        :type pid: int
+        :param index: process index
+        :type index: int
+        :return: exec object
+        :rtype: libetrace.nfsdbEntry
+        """
         return self.db[(pid, index)][0]
 
-    def get_exec_at_pos(self, pos: int) -> libetrace.nfsdbEntry:
-        return self.db[pos]
+    def get_exec_at_pos(self, ptr: int) -> libetrace.nfsdbEntry:
+        """
+        Function returns exec with given pointer value.
 
-    def get_eid(self, eid: tuple):
+        :param pos: pointer to exec `libetrace.nfsdbEntry.ptr`
+        :type pos: int
+        :return: exec object
+        :rtype: libetrace.nfsdbEntry
+        """
+        return self.db[ptr]
+
+    def get_eid(self, eid: "Tuple[int, int] | Tuple[int,]") -> List[libetrace.nfsdbEntry]:
+        """
+        Function returns execs with given eid value.
+
+        :param pos: list of execs matching given eid value
+        :type pos: `Tuple[int, int] | Tuple[int,]`
+        :return: list of exec objects
+        :rtype: `List[libetrace.nfsdbEntry]`
+        """
         return self.db[eid]
 
-    def get_eids(self, eids: list):
+    def get_eids(self, eids: "List[Tuple[int, int]] | List[Tuple[int,]]"):
+        """
+        Function returns execs with given eid values.
+
+        :param pos: list of execs matching given eid values
+        :type pos: `"List[Tuple[int, int]] | List[Tuple[int,]]"`
+        :return: list of exec objects
+        :rtype: `List[libetrace.nfsdbEntry]`
+        """
         return self.db[eids]
 
-    def opens_iter(self):
+    def opens_list(self) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns list of all opens objects.
+
+        :return: list of opens
+        :rtype: List[libetrace.nfsdbEntryOpenfile]
+        """
+        return self.db.opens()
+
+    def opens_iter(self) -> libetrace.nfsdbOpensIter:
+        """
+        Function returns iterator to all opens objects.
+
+        :return: opens iterator
+        :rtype: libetrace.nfsdbOpensIter
+        """
         return self.db.opens_iter()
 
-    def opens_list(self):
+    def opens_paths(self) -> List[str]:
+        """
+        Function returns list of unique opens paths.
+
+        :return: list of open paths
+        :rtype: List[str]
+        """
         return self.db.opens_paths()
 
-    def opens_num(self):
-        return len(self.db.opens_paths())
+    def filtered_paths(self, flt: List) -> List[str]:
+        return self.db.filtered_paths(flt)
+
+    def filtered_paths_iter(self, flt: List) -> libetrace.nfsdbFilteredOpensPathsIter:
+        return self.db.filtered_paths_iter(flt)
+
+
+    def filtered_opens(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path: Optional[str] = None, wc: Optional[str] = None, re: Optional[str] = None,
+                        compiled: Optional[bool] = None, linked: Optional[bool] = None, linked_static: Optional[bool] = None,
+                        linked_shared: Optional[bool] = None, linked_exe: Optional[bool] = None, plain: Optional[bool] = None,
+                        compiler: Optional[bool] = None, linker: Optional[bool] = None, binary: Optional[bool] = None,
+                        symlink: Optional[bool] = None, no_symlink: Optional[bool] = None,
+                        file_exists: Optional[bool] = None, file_not_exists: Optional[bool] = None, dir_exists: Optional[bool] = None,
+                        has_access: Optional[int] = None, negate: Optional[bool] = None,
+                        at_source_root: Optional[bool] = None, not_at_source_root: Optional[bool] = None,
+                        source_type: Optional[int] = None) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function filters opens with given `file_filter` and set of global filter parameters and returns list of opens objects.
+
+        Global filter switches are used before `file_filter`.
+
+        :param file_filter: file filter object, defaults to None
+        :type file_filter: Optional[List], optional
+        :param path: match opens with given paths, defaults to None
+        :type path: Optional[List[str]], optional
+        :param has_path: _description_, defaults to None
+        :type has_path: Optional[str], optional
+        :param wc: match opens with wildcard, defaults to None
+        :type wc: Optional[str], optional
+        :param re: match opens with regex, defaults to None
+        :type re: Optional[str], optional
+        :param compiled: returns opens that has been use in compilation, defaults to None
+        :type compiled: Optional[bool], optional
+        :param linked: returns opens that has been use in linking, defaults to None
+        :type linked: Optional[bool], optional
+        :param linked_static: returns opens that has been use in linking static module, defaults to None
+        :type linked_static: Optional[bool], optional
+        :param linked_shared: returns opens that has been use in linking shared module, defaults to None
+        :type linked_shared: Optional[bool], optional
+        :param linked_exe: returns opens that has been use in linking executable module, defaults to None
+        :type linked_exe: Optional[bool], optional
+        :param plain: returns opens that wasn't used in any linking or compilation, defaults to None
+        :type plain: Optional[bool], optional
+        :param compiler: returns opens which path is compilers, defaults to None
+        :type compiler: Optional[bool], optional
+        :param linker: returns opens which path is linkers, defaults to None
+        :type linker: Optional[bool], optional
+        :param binary: returns opens which path is binary file, defaults to None
+        :type binary: Optional[bool], optional
+        :param symlink: returns opens which path is symlink, defaults to None
+        :type symlink: Optional[bool], optional
+        :param no_symlink: returns opens which path is not symlink, defaults to None
+        :type no_symlink: Optional[bool], optional
+        :param file_exists: returns opens which path exists while building database, defaults to None
+        :type file_exists: Optional[bool], optional
+        :param file_not_exists: returns opens which path did not exists while building database, defaults to None
+        :type file_not_exists: Optional[bool], optional
+        :param dir_exists: returns opens which path is dir and exists while building database, defaults to None
+        :type dir_exists: Optional[bool], optional
+        :param has_access: returns opens which where opened with given access type, defaults to None
+        :type has_access: Optional[int], optional
+        :param negate: negate global switches, defaults to None
+        :type negate: Optional[bool], optional
+        :param at_source_root: returns opens with source root in begining of path, defaults to None
+        :type at_source_root: Optional[bool], optional
+        :param not_at_source_root: returns opens without source root in begining of path, defaults to None
+        :type not_at_source_root: Optional[bool], optional
+        :param source_type: returns opens with path that was compiled and matching given source type, defaults to None
+        :type source_type: Optional[int], optional
+        :return: list of opens objects
+        :rtype: List[libetrace.nfsdbEntryOpenfile]
+        """
+        return self.db.filtered_opens(file_filter=file_filter, path=path, has_path=has_path, wc=wc, re=re, compiled=compiled,
+                                        linked=linked, linked_static=linked_static, linked_shared=linked_shared,
+                                        linked_exe=linked_exe, plain=plain, compiler=compiler,linker=linker, binary=binary, symlink=symlink,
+                                        no_symlink=no_symlink, file_exists=file_exists, file_not_exists=file_not_exists, dir_exists=dir_exists,
+                                        has_access=has_access, negate=negate, at_source_root=at_source_root, not_at_source_root=not_at_source_root, source_type=source_type)
+
+    def filtered_opens_iter(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path: Optional[str] = None, wc: Optional[str] = None, re: Optional[str] = None,
+                        compiled: Optional[bool] = None, linked: Optional[bool] = None, linked_static: Optional[bool] = None,
+                        linked_shared: Optional[bool] = None, linked_exe: Optional[bool] = None, plain: Optional[bool] = None,
+                        compiler: Optional[bool] = None, linker: Optional[bool] = None, binary: Optional[bool] = None,
+                        symlink: Optional[bool] = None, no_symlink: Optional[bool] = None,
+                        file_exists: Optional[bool] = None, file_not_exists: Optional[bool] = None, dir_exists: Optional[bool] = None,
+                        has_access: Optional[int] = None, negate: Optional[bool] = None,
+                        at_source_root: Optional[bool] = None, not_at_source_root: Optional[bool] = None,
+                        source_type: Optional[int] = None) -> libetrace.nfsdbFilteredOpensIter:
+        """
+        Function filters opens with given `file_filter` and set of global filter parameters  and returns opens objects iterator.
+
+        Global filter switches are used before `file_filter`.
+
+        :param file_filter: file filter object, defaults to None
+        :type file_filter: Optional[List], optional
+        :param path: match opens with given paths, defaults to None
+        :type path: Optional[List[str]], optional
+        :param has_path: _description_, defaults to None
+        :type has_path: Optional[str], optional
+        :param wc: match opens with wildcard, defaults to None
+        :type wc: Optional[str], optional
+        :param re: match opens with regex, defaults to None
+        :type re: Optional[str], optional
+        :param compiled: returns opens that has been use in compilation, defaults to None
+        :type compiled: Optional[bool], optional
+        :param linked: returns opens that has been use in linking, defaults to None
+        :type linked: Optional[bool], optional
+        :param linked_static: returns opens that has been use in linking static module, defaults to None
+        :type linked_static: Optional[bool], optional
+        :param linked_shared: returns opens that has been use in linking shared module, defaults to None
+        :type linked_shared: Optional[bool], optional
+        :param linked_exe: returns opens that has been use in linking executable module, defaults to None
+        :type linked_exe: Optional[bool], optional
+        :param plain: returns opens that wasn't used in any linking or compilation, defaults to None
+        :type plain: Optional[bool], optional
+        :param compiler: returns opens which path is compilers, defaults to None
+        :type compiler: Optional[bool], optional
+        :param linker: returns opens which path is linkers, defaults to None
+        :type linker: Optional[bool], optional
+        :param binary: returns opens which path is binary file, defaults to None
+        :type binary: Optional[bool], optional
+        :param symlink: returns opens which path is symlink, defaults to None
+        :type symlink: Optional[bool], optional
+        :param no_symlink: returns opens which path is not symlink, defaults to None
+        :type no_symlink: Optional[bool], optional
+        :param file_exists: returns opens which path exists while building database, defaults to None
+        :type file_exists: Optional[bool], optional
+        :param file_not_exists: returns opens which path did not exists while building database, defaults to None
+        :type file_not_exists: Optional[bool], optional
+        :param dir_exists: returns opens which path is dir and exists while building database, defaults to None
+        :type dir_exists: Optional[bool], optional
+        :param has_access: returns opens which where opened with given access type, defaults to None
+        :type has_access: Optional[int], optional
+        :param negate: negate global switches, defaults to None
+        :type negate: Optional[bool], optional
+        :param at_source_root: returns opens with source root in begining of path, defaults to None
+        :type at_source_root: Optional[bool], optional
+        :param not_at_source_root: returns opens without source root in begining of path, defaults to None
+        :type not_at_source_root: Optional[bool], optional
+        :param source_type: returns opens with path that was compiled and matching given source type, defaults to None
+        :type source_type: Optional[int], optional
+        :return: open objects iterator
+        :rtype: libetrace.nfsdbFilteredOpensIter
+        """
+        return self.db.filtered_opens_iter(file_filter=file_filter, path=path, has_path=has_path, wc=wc, re=re, compiled=compiled,
+                                        linked=linked, linked_static=linked_static, linked_shared=linked_shared,
+                                        linked_exe=linked_exe, plain=plain, compiler=compiler,linker=linker, binary=binary, symlink=symlink,
+                                        no_symlink=no_symlink, file_exists=file_exists, file_not_exists=file_not_exists, dir_exists=dir_exists,
+                                        has_access=has_access, negate=negate, at_source_root=at_source_root, not_at_source_root=not_at_source_root, source_type=source_type)
+
+    def filtered_execs(self, exec_filter:Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]] = None,
+                        cwd_has_str: Optional[str] = None, cwd_wc: Optional[str] = None, cwd_re: Optional[str] = None,
+                        cmd_has_str: Optional[str] = None, cmd_wc: Optional[str] = None, cmd_re: Optional[str] = None,
+                        bin_has_str: Optional[str] = None, bin_wc: Optional[str] = None, bin_re: Optional[str] = None,
+                        has_ppid: Optional[int] = None, has_command: Optional[bool] = None, has_comp_info: Optional[bool] = None,
+                        has_linked_file:Optional[bool] = None, negate: Optional[bool] = None,
+                        bin_at_source_root: Optional[bool] = None, bin_not_at_source_root: Optional[bool] = None,
+                        cwd_at_source_root: Optional[bool] = None, cwd_not_at_source_root: Optional[bool] = None) -> List[libetrace.nfsdbEntry]:
+        """
+        Function filters execs with given `exec_filter` and set of global filter parameters and returns list of execs objects.
+
+        Global filter switches are used before `exec_filter`.
+
+        :param exec_filter: exec filter object, defaults to None
+        :type exec_filter: Optional[List], optional
+        :param bins: return execs with given bins, defaults to None
+        :type bins: Optional[List[str]], optional
+        :param pids: return execs with given pids, defaults to None
+        :type pids: Optional[List[int]], optional
+        :param cwd_has_str: return execs which cwd contains given path, defaults to None
+        :type cwd_has_str: Optional[str], optional
+        :param cwd_wc: return execs which cwd matches given wildcard, defaults to None
+        :type cwd_wc: Optional[str], optional
+        :param cwd_re: return execs which cwd matches given regex, defaults to None
+        :type cwd_re: Optional[str], optional
+        :param cmd_has_str: return execs which cmd contains given path, defaults to None
+        :type cmd_has_str: Optional[str], optional
+        :param cmd_wc: return execs which cmd matches given wildcard, defaults to None
+        :type cmd_wc: Optional[str], optional
+        :param cmd_re: return execs which cmd matches given regex, defaults to None
+        :type cmd_re: Optional[str], optional
+        :param bin_has_str: return execs which bin contains given path, defaults to None
+        :type bin_has_str: Optional[str], optional
+        :param bin_wc: return execs which bin matches given wildcard, defaults to None
+        :type bin_wc: Optional[str], optional
+        :param bin_re: return execs which bin matches given regex, defaults to None
+        :type bin_re: Optional[str], optional
+        :param has_ppid: return execs with given parent pids, defaults to None
+        :type has_ppid: Optional[int], optional
+        :param has_command: return execs that are generic commands, defaults to None
+        :type has_command: Optional[bool], optional
+        :param has_comp_info: return execs that are compilations, defaults to None
+        :type has_comp_info: Optional[bool], optional
+        :param has_linked_file: return execs that are linkers, defaults to None
+        :type has_linked_file: Optional[bool], optional
+        :param negate: negate global switches, defaults to None
+        :type negate: Optional[bool], optional
+        :param bin_at_source_root: return execs which bin starts with source root, defaults to None
+        :type bin_at_source_root: Optional[bool], optional
+        :param bin_not_at_source_root: return execs which bin does not starts with source root, defaults to None
+        :type bin_not_at_source_root: Optional[bool], optional
+        :param cwd_at_source_root: return execs which cwd starts with source root, defaults to None
+        :type cwd_at_source_root: Optional[bool], optional
+        :param cwd_not_at_source_root: return execs which cwd does not starts with source root, defaults to None
+        :type cwd_not_at_source_root: Optional[bool], optional
+        :return: list of execs objects
+        :rtype: List[libetrace.nfsdbEntry]
+        """
+        return self.db.filtered_execs(exec_filter=exec_filter, bins=bins, pids=pids, cwd_has_str=cwd_has_str, cwd_wc=cwd_wc, cwd_re=cwd_re,
+                                    cmd_has_str=cmd_has_str, cmd_wc=cmd_wc, cmd_re=cmd_re, bin_has_str=bin_has_str, bin_wc=bin_wc, bin_re=bin_re,
+                                    has_ppid=has_ppid, has_command=has_command, has_comp_info=has_comp_info, has_linked_file=has_linked_file,negate=negate,
+                                    bin_at_source_root=bin_at_source_root,bin_not_at_source_root=bin_not_at_source_root,
+                                    cwd_at_source_root=cwd_at_source_root,cwd_not_at_source_root=cwd_not_at_source_root)
+
+    def filtered_execs_iter(self, exec_filter:Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]] = None,
+                        cwd_has_str: Optional[str] = None, cwd_wc: Optional[str] = None, cwd_re: Optional[str] = None,
+                        cmd_has_str: Optional[str] = None, cmd_wc: Optional[str] = None, cmd_re: Optional[str] = None,
+                        bin_has_str: Optional[str] = None, bin_wc: Optional[str] = None, bin_re: Optional[str] = None,
+                        has_ppid: Optional[int] = None, has_command: Optional[bool] = None, has_comp_info: Optional[bool] = None,
+                        has_linked_file:Optional[bool] = None, negate: Optional[bool] = None,
+                        bin_at_source_root: Optional[bool] = None, bin_not_at_source_root: Optional[bool] = None,
+                        cwd_at_source_root: Optional[bool] = None, cwd_not_at_source_root: Optional[bool] = None) -> libetrace.nfsdbFilteredCommandsIter:
+        """
+        Function filters execs with given `exec_filter` and set of global filter parameters and returns execs objects iterator.
+
+        Global filter switches are used before `exec_filter`.
+
+        :param exec_filter: exec filter object, defaults to None
+        :type exec_filter: Optional[List], optional
+        :param bins: return execs with given bins, defaults to None
+        :type bins: Optional[List[str]], optional
+        :param pids: return execs with given pids, defaults to None
+        :type pids: Optional[List[int]], optional
+        :param cwd_has_str: return execs which cwd contains given path, defaults to None
+        :type cwd_has_str: Optional[str], optional
+        :param cwd_wc: return execs which cwd matches given wildcard, defaults to None
+        :type cwd_wc: Optional[str], optional
+        :param cwd_re: return execs which cwd matches given regex, defaults to None
+        :type cwd_re: Optional[str], optional
+        :param cmd_has_str: return execs which cmd contains given path, defaults to None
+        :type cmd_has_str: Optional[str], optional
+        :param cmd_wc: return execs which cmd matches given wildcard, defaults to None
+        :type cmd_wc: Optional[str], optional
+        :param cmd_re: return execs which cmd matches given regex, defaults to None
+        :type cmd_re: Optional[str], optional
+        :param bin_has_str: return execs which bin contains given path, defaults to None
+        :type bin_has_str: Optional[str], optional
+        :param bin_wc: return execs which bin matches given wildcard, defaults to None
+        :type bin_wc: Optional[str], optional
+        :param bin_re: return execs which bin matches given regex, defaults to None
+        :type bin_re: Optional[str], optional
+        :param has_ppid: return execs with given parent pids, defaults to None
+        :type has_ppid: Optional[int], optional
+        :param has_command: return execs that are generic commands, defaults to None
+        :type has_command: Optional[bool], optional
+        :param has_comp_info: return execs that are compilations, defaults to None
+        :type has_comp_info: Optional[bool], optional
+        :param has_linked_file: return execs that are linkers, defaults to None
+        :type has_linked_file: Optional[bool], optional
+        :param negate: negate global switches, defaults to None
+        :type negate: Optional[bool], optional
+        :param bin_at_source_root: return execs which bin starts with source root, defaults to None
+        :type bin_at_source_root: Optional[bool], optional
+        :param bin_not_at_source_root: return execs which bin does not starts with source root, defaults to None
+        :type bin_not_at_source_root: Optional[bool], optional
+        :param cwd_at_source_root: return execs which cwd starts with source root, defaults to None
+        :type cwd_at_source_root: Optional[bool], optional
+        :param cwd_not_at_source_root: return execs which cwd does not starts with source root, defaults to None
+        :type cwd_not_at_source_root: Optional[bool], optional
+        :return: execs objects iterator
+        :rtype: libetrace.nfsdbFilteredCommandsIter
+        """
+        return self.db.filtered_execs_iter(exec_filter=exec_filter, bins=bins, pids=pids, cwd_has_str=cwd_has_str, cwd_wc=cwd_wc, cwd_re=cwd_re,
+                                    cmd_has_str=cmd_has_str, cmd_wc=cmd_wc, cmd_re=cmd_re, bin_has_str=bin_has_str, bin_wc=bin_wc, bin_re=bin_re,
+                                    has_ppid=has_ppid, has_command=has_command, has_comp_info=has_comp_info, has_linked_file=has_linked_file,negate=negate,
+                                    bin_at_source_root=bin_at_source_root,bin_not_at_source_root=bin_not_at_source_root,
+                                    cwd_at_source_root=cwd_at_source_root,cwd_not_at_source_root=cwd_not_at_source_root)
+
+    def opens_num(self) -> int:
+        """
+        Function returns opens count.
+
+        :return: opens count
+        :rtype: int
+        """
+        return len(self.db.opens_iter())
 
     def execs_num(self):
+        """
+        Function returns execs count.
+
+        :return: execs count
+        :rtype: int
+        """
         return len(self.db)
 
-    def get_execs(self):
-        return self.db
+    def get_version(self) -> str:
+        """
+        Function returns version string (set in cache creation)
 
-    def get_version(self):
+        :return: version string
+        :rtype: str
+        """
         return self.db.dbversion
 
-    def get_opens_of_path(self, filename: str):
-        return self.db.filemap[filename]
+    def get_opens_of_path(self, file_path: str) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns opens objects with given path.
 
-    def get_execs_using_binary(self, binary: str):
+        :param file_path: file name
+        :type file_path: str
+        :return: list of opens objects
+        :rtype: List[libetrace.nfsdbEntryOpenfile]
+        """
+        return self.db.filemap[file_path]
+
+    def get_execs_using_binary(self, binary: str) -> List[libetrace.nfsdbEntry]:
+        """
+        Function returns execs objects with given binary path.
+
+        :param binary: binary path
+        :type binary: str
+        :return: list of execs objects
+        :rtype: List[libetrace.nfsdbEntry]
+        """
         ret = []
         try:
             ret = self.db[binary]
@@ -254,145 +676,67 @@ class CASDatabase:
             pass
         return ret
 
-    def get_execs_filtered(self, **kwargs) -> Iterator[libetrace.nfsdbEntry]:
-        return self.db.filtered(**kwargs)
-
     def get_compilations(self) -> Set[libetrace.nfsdbEntry]:
-        return set(self.db.filtered(has_comp_info=True))
-
-    def get_compilations_map(self) -> Dict[str, List[libetrace.nfsdbEntry]]:
-        ret:Dict[str, List[libetrace.nfsdbEntry]] = {}
-        for ent in self.db.filtered(has_comp_info=True):
-            if ent.compilation_info.file_paths[0] not in ret:
-                ret[ent.compilation_info.file_paths[0]] = []
-            ret[ent.compilation_info.file_paths[0]].append(ent)
-        return ret
-
-    def get_linked_files(self) -> Set[str]:
-        return {ent.linked_path for ent in self.db.filtered(has_linked_file=True)}
-
-    def get_reverse_dependencies(self, file_paths: "str | List[str]", recursive=False) -> List[str]:
-        return list(self.db.rdeps(file_paths, recursive=recursive))
-
-    def get_module_dependencies(self, module_path, direct=False) -> List[libetrace.nfsdbEntryOpenfile]:
         """
-        Function gets precomputed module dependencies for given module path.
+        Function returns compiler execs.
 
-        :param module_path: extended path or simple string path
-        :type module_path: DepsParam | str
-        :param direct: direct flag
-        :type direct: bool
+        :return: compiler execs objects
+        :rtype: Set[libetrace.nfsdbEntry]
         """
+        return set(self.db.filtered_execs_iter(has_comp_info=True))
 
-        if isinstance(module_path, DepsParam):
-            module_path = module_path.file
-        return self.db.mdeps(module_path, direct=direct)
-
-    def get_deps(self, epath: "DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
-                 wrap_deps=False, all_modules: Optional[List[str]] = None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
+    def get_compiled_files(self) -> Set[libetrace.nfsdbEntryOpenfile]:
         """
-        Function calculates dependencies of given file.
+        Function returns compiled opens.
 
-        :param epath: extended path or simple string path
-        :type epath: DepsParam | str
-        :param direct_global: global direct flag
-        :type direct_global: bool
-        :param dep_graph: generate dependency graph
-        :type dep_graph: bool
-        :param debug: enable debug info about dependency generation arguments
-        :type debug: bool
-        :param debug_fd: enable debug info about process of dependency generation
-        :type debug_fd: bool
-        :param use_pipes: relation between process pipe will be respected
-        :type use_pipes: bool
-        :param wrap_deps: process wrappers (like bash) will be respected
-        :type wrap_deps: bool
-        :param all_modules: list of all modules - needed in direct deps generation
-        :type all_modules: List[str]
+        :return: compiled opens objects
+        :rtype: Set[libetrace.nfsdbEntryOpenfile]
         """
+        return { cfile
+                for ent in self.get_compilations()
+                for cfile in ent.compilation_info.files }
 
-        direct = direct_global
-        if direct and all_modules is None:
-            all_modules = self.linked_modules_paths()
-
-        if isinstance(epath, str):  # simple path - no excludes
-            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath)
-            if all_modules is not None:
-                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
-                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
-                                     exclude_commands=excl_commands, exclude_commands_index=excl_commands_index, all_modules=all_modules)
-            else:
-                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
-                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
-                                     exclude_commands=excl_commands, exclude_commands_index=excl_commands_index)
-        else:
-            if epath.direct is not None:  # If extended path has direct it will overwrite global direct args
-                direct = epath.direct
-
-            if direct and all_modules is None:
-                all_modules = self.linked_modules_paths()
-
-            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath.file)
-
-            for e_c in epath.exclude_cmd:
-                excl_commands.append(e_c)
-
-            for e_p in epath.exclude_pattern:
-                excl_patterns.append(e_p)
-
-            if all_modules is not None:
-                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
-                    wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
-                    exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
-                    exclude_commands_index=excl_commands_index, all_modules=all_modules)
-            else:
-                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
-                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
-                                     exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
-                                     exclude_commands_index=excl_commands_index)
-
-    def get_multi_deps_cached(self, epaths: list, direct_global=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+    @lru_cache(maxsize=1)
+    def get_compiled_file_paths(self) -> Set[str]:
         """
-        Function returns cached list of open files that are dependencies of given file(s).
+        Function returns unique compiled file paths.
+
+        :return: compiled paths
+        :rtype: Set[str]
         """
-        ret = []
-        for epath in epaths:
-            ret += [self.get_module_dependencies(epath, direct=direct_global)]
-        return ret
+        return { cfile
+                for ent in self.get_compilations()
+                for cfile in ent.compilation_info.file_paths }
 
-    def get_multi_deps(self, epaths: list, direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+    def get_linkers(self) -> Set[libetrace.nfsdbEntry]:
         """
-        Function returns list of open files that are dependencies of given file(s).
+        Function returns linker execs.
+
+        :return: linker execs objects
+        :rtype: Set[libetrace.nfsdbEntry]
         """
-        ret = []
-        for epath in epaths:
-            ret += [self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]]
-        return ret
+        return set(self.db.filtered_execs_iter(has_linked_file=True))
 
-    def get_dependency_graph(self, epaths, direct_global=False, debug=False, debug_fd=False, use_pipes=False, wrap_deps=False):
-        ret = {}
+    def get_linked_files(self) -> Set[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns linked opens.
 
-        def add_cmds_to_pids(val):
-            for i, eid in enumerate(val[0]):
-                val[0][i] = val[0][i] + ([" ".join(exe.argv) for exe in self.get_pid(eid[0]) if len(exe.argv) > 0],)
-            return val
+        :return: linked opens objects
+        :rtype: Set[libetrace.nfsdbEntryOpenfile]
+        """
+        return { ent.linked_file for ent in self.get_linkers() }
 
-        for epath in epaths:
-            deps = self.get_deps(epath, direct_global=direct_global, dep_graph=True, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[3]
-            ret.update({k: add_cmds_to_pids(v) for k, v in deps.items()})
-        return [x for x in ret.items()]
+    @lru_cache(maxsize=1)
+    def get_linked_file_paths(self) -> Set[str]:
+        """
+        Function returns unique linked file paths.
 
-    def get_rdm(self, file_paths, recursive=False, sort=False, reverse=False):
-        ret = []
-        for dep_path in file_paths:
-            rdep = self.get_reverse_dependencies(dep_path, recursive)
-            if sort:
-                ret.append([dep_path, sorted(list(rdep), reverse=reverse)])
-            else:
-                ret.append([dep_path, list(rdep)])
-        return ret
+        :return: linked paths
+        :rtype: Set[str]
+        """
+        return { ent.linked_path for ent in self.get_linkers() }
 
-    def get_relative_path(self, file_path:str)-> str:
+    def get_relative_path(self, file_path: str) -> str:
         """
         Function removes source path from given file path.
 
@@ -421,33 +765,252 @@ class CASDatabase:
         else:
             return opn.original_path if original_path else opn.path
 
-    def get_cdm(self, file_paths, cdm_exclude_patterns=None, cdm_exclude_files=None, recursive=False, sort=False, reverse=False):
+    def get_reverse_dependencies(self, file_paths: "str | List[str]", recursive=False) -> List[str]:
+        """
+        Function returns reverse dependencies of given file paths.
 
+        :param file_paths: file paths
+        :type file_paths: str | List[str]
+        :param recursive: enable recursive processing, defaults to False
+        :type recursive: bool, optional
+        :return: reverse dependencies
+        :rtype: List[str]
+        """
+        return list(self.db.rdeps(file_paths, recursive=recursive))
+
+    def get_module_dependencies(self, module_path, direct=False) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function gets precomputed module dependencies for given module path.
+
+        :param module_path: extended path or simple string path
+        :type module_path: DepsParam | str
+        :param direct: direct flag
+        :type direct: bool
+        """
+
+        if isinstance(module_path, DepsParam):
+            module_path = module_path.file
+        return self.db.mdeps(module_path, direct=direct)
+
+    def get_deps(self, epath: "DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
+                wrap_deps=False, all_modules: Optional[List[str]] = None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
+        """
+        Function calculates dependencies of given file.
+
+        :param epath: extended path or simple string path
+        :type epath: DepsParam | str
+        :param direct_global: global direct flag
+        :type direct_global: bool
+        :param dep_graph: generate dependency graph
+        :type dep_graph: bool
+        :param debug: enable debug info about dependency generation arguments
+        :type debug: bool
+        :param debug_fd: enable debug info about process of dependency generation
+        :type debug_fd: bool
+        :param use_pipes: relation between process pipe will be respected
+        :type use_pipes: bool
+        :param wrap_deps: process wrappers (like bash) will be respected
+        :type wrap_deps: bool
+        :param all_modules: list of all modules - needed in direct deps generation
+        :type all_modules: List[str]
+        :return: Tuple with process id, list of paths, list of opens objects and optionaly dependency graph
+        :rtype: Tuple[List[int],List[str],List[nfsdbEntryOpenfile],Dict]
+        """
+
+        direct = direct_global
+        if direct and all_modules is None:
+            all_modules = self.linked_module_paths()
+
+        if isinstance(epath, str):  # simple path - no excludes
+            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath)
+            if all_modules is not None:
+                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                                    wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
+                                    exclude_commands=excl_commands, exclude_commands_index=excl_commands_index, all_modules=all_modules)
+            else:
+                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                                    wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
+                                    exclude_commands=excl_commands, exclude_commands_index=excl_commands_index)
+        else:
+            if epath.direct is not None:  # If extended path has direct it will overwrite global direct args
+                direct = epath.direct
+
+            if direct and all_modules is None:
+                all_modules = self.linked_module_paths()
+
+            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath.file)
+
+            for e_c in epath.exclude_cmd:
+                excl_commands.append(e_c)
+
+            for e_p in epath.exclude_pattern:
+                excl_patterns.append(e_p)
+
+            if all_modules is not None:
+                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                                    wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
+                                    exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
+                                    exclude_commands_index=excl_commands_index, all_modules=all_modules)
+            else:
+                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                                    wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
+                                    exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
+                                    exclude_commands_index=excl_commands_index)
+
+    def get_multi_deps_cached(self, epaths:"List[DepsParam] | List[str]", direct_global=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+        """
+        Function returns cached list of open files that are dependencies of given file(s).
+
+        :param epaths: extended path or simple string path
+        :type epaths: List[DepsParam] | List[str]
+        :param direct_global: global direct flag, defaults to False
+        :type direct_global: bool, optional
+        :return: list of dependency opens
+        :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
+        """
+        ret = []
+        for epath in epaths:
+            ret += [self.get_module_dependencies(epath, direct=direct_global)]
+        return ret
+
+    def get_multi_deps(self, epaths:"List[DepsParam] | List[str]", direct_global=False, dep_graph=False,
+                        debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+        """
+        Function returns list of open files that are dependencies of given file path(s).
+
+        :param epaths: extended path or simple string path
+        :type epaths: List[DepsParam] | List[str]
+        :param direct_global: global direct flag, defaults to False
+        :type direct_global: bool, optional
+        :param dep_graph: generate dependency graph, defaults to False
+        :type dep_graph: bool, optional
+        :param debug: enable debug info about dependency generation arguments
+        :type debug: bool
+        :param debug_fd: enable debug info about process of dependency generation
+        :type debug_fd: bool
+        :param use_pipes: relation between process pipe will be respected
+        :type use_pipes: bool
+        :param wrap_deps: process wrappers (like bash) will be respected
+        :type wrap_deps: bool
+        :return: list of dependency opens
+        :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
+        """
+        ret = []
+        for epath in epaths:
+            ret += [self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph,
+                                    debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]]
+        return ret
+
+    def get_dependency_graph(self, epaths:"List[DepsParam] | List[str]", direct_global=False,
+                                debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[Tuple]:
+        """
+        Function returns list of dependency graph of given file path(s).
+
+        :param epaths: extended path or simple string path
+        :type epaths: List[DepsParam] | List[str]
+        :param direct_global: global direct flag, defaults to False
+        :type direct_global: bool, optional
+        :param debug: enable debug info about dependency generation arguments
+        :type debug: bool
+        :param debug_fd: enable debug info about process of dependency generation
+        :type debug_fd: bool
+        :param use_pipes: relation between process pipe will be respected
+        :type use_pipes: bool
+        :param wrap_deps: process wrappers (like bash) will be respected
+        :type wrap_deps: bool
+        :return: dependency graph
+        :rtype: List[Tuple]
+        """
+        ret = {}
+
+        def add_cmds_to_pids(val):
+            for i, eid in enumerate(val[0]):
+                val[0][i] = val[0][i] + ([" ".join(exe.argv) for exe in self.get_entries_with_pid(eid[0]) if len(exe.argv) > 0],)
+            return val
+
+        for epath in epaths:
+            deps = self.get_deps(epath, direct_global=direct_global, dep_graph=True, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[3]
+            ret.update({k: add_cmds_to_pids(v) for k, v in deps.items()})
+        return [x for x in ret.items()]
+
+    def get_rdm(self, file_paths: List[str], recursive=False, sort=False, reverse=False) -> List:
+        """
+        Function returns list of reverse dependencies of given file path(s).
+
+        :param file_paths: path list
+        :type file_paths: List[str]
+        :param recursive: enable recursive processing, defaults to False
+        :type recursive: bool, optional
+        :param sort: sort returned values, defaults to False
+        :type sort: bool, optional
+        :param reverse: sort in reversed order, defaults to False
+        :type reverse: bool, optional
+        :return: reverse dependency list
+        :rtype: List
+        """
         ret = []
         for dep_path in file_paths:
-            excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(dep_path)
+            rdep = self.get_reverse_dependencies(dep_path, recursive)
+            if sort:
+                ret.append([dep_path, sorted(list(rdep), reverse=reverse)])
+            else:
+                ret.append([dep_path, list(rdep)])
+        return ret
 
-            if cdm_exclude_patterns is not None and isinstance(cdm_exclude_patterns, list):
-                for ex in cdm_exclude_patterns:
-                    excl_commands.append(ex)
 
-            if cdm_exclude_files is not None and isinstance(cdm_exclude_files, list):
-                for ex in cdm_exclude_files:
-                    excl_patterns.append(ex)
+    def get_cdm(self, file_paths: List[str], cdm_exclude_patterns:Optional[List]=None, cdm_exclude_files:Optional[List]=None,
+                recursive=False, sort=False, reverse=False) -> List:
+        """
+        Function returs compiled dependencies of given file path(s).
 
-            deps = self.db.fdeps(dep_path, exclude_patterns=excl_patterns,
-                exclude_commands=excl_commands, exclude_commands_index=excl_commands_index,
-                recursive=recursive)[2]
-            comps = [
-                d.path
-                for d in deps
-                if d.opaque is not None and d.opaque.compilation_info is not None
-                ]
-            if len(comps) > 0:
-                if sort:
-                    ret.append([dep_path, sorted(list(comps), reverse=reverse)])
+        :param file_paths: path list
+        :type file_paths: List[str]
+        :param cdm_exclude_patterns: patterns used to stop processing of deps generation , defaults to None
+        :type cdm_exclude_patterns: Optional[List], optional
+        :param cdm_exclude_files:  file path list used to stop processing of deps generation, defaults to None
+        :type cdm_exclude_files: Optional[List], optional
+        :param recursive: enable recursive processing, defaults to False
+        :type recursive: bool, optional
+        :param sort: sort returned values, defaults to False
+        :type sort: bool, optional
+        :param reverse: sort in reversed order, defaults to False
+        :type reverse: bool, optional
+        :return: list of compiled dependencies
+        :rtype: List
+        """
+        lm = self.linked_module_paths()
+        ret = []
+        for dep_path in file_paths:
+            if dep_path in lm:
+                excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(dep_path)
+
+                if cdm_exclude_patterns is not None and isinstance(cdm_exclude_patterns, list):
+                    for ex in cdm_exclude_patterns:
+                        excl_commands.append(ex)
+
+                if cdm_exclude_files is not None and isinstance(cdm_exclude_files, list):
+                    for ex in cdm_exclude_files:
+                        excl_patterns.append(ex)
+
+                if cdm_exclude_patterns or cdm_exclude_files:
+                    deps = [ dep for dep in self.db.fdeps(dep_path, exclude_patterns=excl_patterns,
+                                        exclude_commands=excl_commands, exclude_commands_index=excl_commands_index,
+                                        recursive=recursive)[2]
+                                        if dep.opaque is not None and dep.opaque.compilation_info is not None
+                            ]
                 else:
-                    ret.append([dep_path, list(comps)])
+                    deps = [ dep for dep in self.db.mdeps(dep_path)
+                                        if dep.opaque is not None and dep.opaque.compilation_info is not None
+                            ]
+                comps = {cf.path
+                        for d in deps
+                        for cf in d.opaque.compilation_info.files}
+
+                if len(comps) > 0:
+                    if sort:
+                        ret.append([dep_path, sorted(list(comps), reverse=reverse)])
+                    else:
+                        ret.append([dep_path, list(comps)])
         return ret
 
     @staticmethod
@@ -459,6 +1022,8 @@ class CASDatabase:
         :type tracer_db_filename: str
         :param json_db_filename: output json database file path
         :type json_db_filename: str
+        :param debug: enable debug info output
+        :type debug: bool
         """
         if debug:
             print("Before parse")
@@ -471,7 +1036,7 @@ class CASDatabase:
     @staticmethod
     def get_src_root_from_tracefile(filename):
         """
-        Function looks up for initial working directroy stored in first line of trace file.
+        Function looks up for initial working directory stored in first line of trace file.
 
         :param filename: tracer file path
         :type filename: str
@@ -491,61 +1056,79 @@ class CASDatabase:
             return None
 
     @staticmethod
-    def create_db_image(json_db_filename:str, src_root:str, set_version:str, exclude_command_patterns:"list[str]", cache_db_filename:str, debug=False) -> bool:
+    def create_db_image(json_db_filename: str, src_root: str, set_version: str, exclude_command_patterns: List[str], shared_argvs: List[str], cache_db_filename: str, debug=False) -> bool:
         """
         Function creates cached database image from json database.
 
         :param json_db_filename: json database file path
         :type json_db_filename: str
-        :param src_root: _description_
-        :type src_root: _type_
-        :param set_version: _description_
-        :type set_version: _type_
-        :param exclude_command_patterns: _description_
-        :type exclude_command_patterns: _type_
-        :param cache_db_filename: _description_
-        :type cache_db_filename: _type_
+        :param src_root: database source root - directory from where tracing process started
+        :type src_root: str
+        :param set_version: database version meta information
+        :type set_version: str
+        :param exclude_command_patterns: list of excluded command patterns
+        :type exclude_command_patterns: List[str]
+        :param shared_argvs: list of shared library generation switches to be searched in linking command
+        :type shared_argvs: List[str]
+        :param cache_db_filename: output database file name
+        :type cache_db_filename: str
+        :param debug: enable debug info output
+        :type debug: bool
+        :return: True if `libetrace.create_nfsdb` succeds otherwise False
+        :rtype: bool
         """
         with open(json_db_filename, "rb") as fil:
-            if debug:
-                print("Before load")
-                print_mem_usage()
+            print_mem_usage(debug, "Before load")
             json_db = json.load(fil)
-            if len(json_db)>0:
-                json_db[0]["r"]["p"] = 0 # fix parent process
-            if debug:
-                print("After load/ before create_nfsdb")
-                print_mem_usage()
-            r = libetrace.create_nfsdb(json_db, src_root, set_version, exclude_command_patterns, cache_db_filename)
-            if debug:
-                print("After create_nfsdb")
-                print_mem_usage()
+            if len(json_db) > 0:
+                json_db[0]["r"]["p"] = 0  # fix parent process
+            print_mem_usage(debug, "After load / before create_nfsdb")
+            r = libetrace.create_nfsdb(json_db, src_root, set_version, exclude_command_patterns, shared_argvs, cache_db_filename)
+            print_mem_usage(debug, "After create_nfsdb")
             return r
 
-    def create_deps_db_image(self, deps_cache_db_filename, depmap_filename, ddepmap_filename, jobs=multiprocessing.cpu_count(),deps_threshold= 90000, debug=False):
+    def create_deps_db_image(self, deps_cache_db_filename:str, depmap_filename:str, ddepmap_filename:str,
+                                jobs:int=multiprocessing.cpu_count(), deps_threshold:int=90000, debug:bool=False):
+        """
+        Function calculates all modules dependencies and create dependencies image.
 
-        all_modules = sorted([e.linked_path for e in self.get_execs_filtered(has_linked_file=True) if not e.linked_path.startswith("/dev/")])
+        :param deps_cache_db_filename: output dependencies image path
+        :type deps_cache_db_filename: str
+        :param depmap_filename: intermediate dependencies file path
+        :type depmap_filename: str
+        :param ddepmap_filename: intermediate direct dependencies file path
+        :type ddepmap_filename: str
+        :param jobs: number of multiprocessing threads, defaults to multiprocessing.cpu_count()
+        :type jobs: int, optional
+        :param deps_threshold: max dependencies count - used to detect dependency generation issues, defaults to 90000
+        :type deps_threshold: int, optional
+        :param debug: enable debug info about dependency generation arguments, defaults to False
+        :type debug: bool, optional
+        """
+
+        all_modules = sorted([e.linked_path for e in self.filtered_execs_iter(has_linked_file=True) if not e.linked_path.startswith("/dev/")])
 
         print("Number of all linked modules: %d" % (len(all_modules)))
 
         if len(all_modules) == 0:
-            print ("No linked modules found! Check linker patterns in config.")
+            print("No linked modules found! Check linker patterns in config.")
             exit(0)
 
         depmap = {}
 
-        def get_module_dependencies(module_path, depmap, done_modules, all_modules):
-            linked_modules = [x[2] for x in depmap[module_path] if x[2] in all_modules]
-            allm = set(linked_modules)
+        def get_module_dependencies(module_path, dm, done_modules, all_mods):
+            linked_modules = [x[2] for x in dm[module_path] if x[2] in all_mods]
+            ret = set(linked_modules)
             for module_path in linked_modules:
                 if module_path not in done_modules:
                     done_modules.add(module_path)
-                    allm|=get_module_dependencies(module_path, depmap, done_modules, all_modules)
-            return allm
+                    ret |= get_module_dependencies(module_path, dm, done_modules, all_mods)
+            return ret
 
         global calc_deps
-        def calc_deps(module_path, direct=True, allm=all_modules):
-            ret = self.get_deps(module_path, direct_global=direct, all_modules=allm)
+
+        def calc_deps(module_path, direct=True, all_mods=all_modules):
+            ret = self.get_deps(module_path, direct_global=direct, all_modules=all_mods)
             # print("[%d / %d] %s %s_deps(%d)" % (processed.value, len(allm), module_path, "direct" if direct is True else "full", len(ret[2])), flush=True)
             with processed.get_lock():
                 processed.value += 1
@@ -553,7 +1136,7 @@ class CASDatabase:
                 pbar.refresh()
             return module_path, [(x.ptr[0], x.ptr[1], x.path) for x in ret[2]]
 
-        pbar = Progressbar(total=len(all_modules), disable=None)
+        pbar = progressbar(total=len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 0)
         processed.value = 0
 
@@ -582,7 +1165,7 @@ class CASDatabase:
 
         global get_full_deps
         def get_full_deps(lm):
-            return calc_deps(lm, direct=False, allm=depmap_keys)
+            return calc_deps(lm, direct=False, all_mods=depmap_keys)
 
         if err_count > 0:
             print("ERROR: Exiting due dependency mismatch errors (%d errors)" % err_count)
@@ -591,15 +1174,14 @@ class CASDatabase:
         print("Saving {} ...".format(ddepmap_filename))
         with open(ddepmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
             json.dump(obj=depmap, fp=f, indent=4)
-        if debug:
-            print("DEBUG: written {}".format(ddepmap_filename))
+        printdbg("written {}".format(ddepmap_filename), debug)
 
         # Compute full dependency list for all modules
 
         print("")
         print("Computing full dependency list for all modules...")
 
-        pbar = Progressbar(total = len(all_modules), disable=None)
+        pbar = progressbar(total=len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 1)
         processed.value = 0
 
@@ -618,8 +1200,7 @@ class CASDatabase:
         print("Saving {} ...".format(depmap_filename))
         with open(depmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
             json.dump(obj=full_depmap, fp=f, indent=4)
-        if debug:
-            print("DEBUG: written {}".format(depmap_filename))
+        printdbg("Written {}".format(depmap_filename), debug)
 
         mismatch_list = list()
         for k, v in full_depmap.items():
@@ -634,18 +1215,40 @@ class CASDatabase:
 
         print("Writing {} ".format(deps_cache_db_filename))
         assert self.db.create_deps_cache(full_depmap, depmap, deps_cache_db_filename, True)
-        if debug: print("DEBUG: Written {} ".format(deps_cache_db_filename))
+        printdbg("Written {} ".format(deps_cache_db_filename), debug)
 
     @staticmethod
     @lru_cache(maxsize=1024)
     def is_integrated_clang_compiler(compiler_path: str, test_file: str) -> bool:
-        pn = subprocess.Popen(["%s" % compiler_path, "-c", "-Wall", "-o", "/dev/null", test_file, "-###"], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        """
+        Function checks if provided compiler is integrated clang compiler.
+
+        :param compiler_path: path to compiler binary
+        :type compiler_path: str
+        :param test_file: file path used for test
+        :type test_file: str
+        :return: True if compiler is intgrated otherwise False
+        :rtype: bool
+        """
+        pn = subprocess.Popen([compiler_path, "-c", "-Wall", "-o", "/dev/null", test_file, "-###"], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         out, err = pn.communicate()
         return " (in-process)" in out.decode("utf-8")
 
     @staticmethod
     @lru_cache(maxsize=1024)
     def have_integrated_cc1(compiler_path: str, is_integrated: bool, test_file: str) -> bool:
+        """
+        Function checks if provided compiler is integrated clang compiler and is_integrated parameter is True.
+
+        :param compiler_path: path to compiler binary
+        :type compiler_path: str
+        :param is_integrated: external check - usually checking if "-fno-integrated-cc1" is not patr of args
+        :type is_integrated: bool
+        :param test_file: file path used for test
+        :type test_file: str
+        :return: True if compiler is integrated and is_integrate are True otherwise False
+        :rtype: bool
+        """
         return CASDatabase.is_integrated_clang_compiler(compiler_path, test_file) and is_integrated
 
     @staticmethod
@@ -656,7 +1259,7 @@ class CASDatabase:
         return False
 
     @staticmethod
-    def clang_pp_input(cmds:List[str]) -> bool:
+    def clang_pp_input(cmds: List[str]) -> bool:
         if "-x" in cmds:
             if cmds[cmds.index("-x")+1] == "cpp-output":
                 return True
@@ -665,6 +1268,14 @@ class CASDatabase:
     @staticmethod
     @lru_cache(maxsize=1024)
     def maybe_compiler_binary(binary_path_or_link: str) -> str:
+        """
+        Function ensures that given binary path is realpath
+
+        :param binary_path_or_link: path to check
+        :type binary_path_or_link: str
+        :return: proper path
+        :rtype: str
+        """
         if binary_path_or_link.endswith("/cc") or binary_path_or_link.endswith("/c++"):
             return os.path.realpath(binary_path_or_link)
         else:
@@ -681,12 +1292,28 @@ class CASDatabase:
     @staticmethod
     @lru_cache(maxsize=1024)
     def is_elf_executable(path: str) -> bool:
+        """
+        Function check if given path is elf binary
+
+        :param path: path to check
+        :type path: str
+        :return: True if path leads to elf binary otherwise False
+        :rtype: bool
+        """
         r = CASDatabase.read_path_file_info(path)
         return "ELF" in r and "executable" in r
 
     @staticmethod
     @lru_cache(maxsize=1024)
     def is_elf_interpreter(path: str) -> bool:
+        """
+        Function check if given path is elf interpreter
+
+        :param path: path to check
+        :type path: str
+        :return: True if path leads to elf binary otherwise False
+        :rtype: bool
+        """
         r = CASDatabase.read_path_file_info(path)
         return "ELF" in r and "interpreter" in r
 
@@ -704,8 +1331,7 @@ class CASDatabase:
             print("NO intermediate database!")
             exit(2)
         self.load_db(intermediate_db, debug=False, quiet=True, mp_safe=True, no_map_memory=False)
-        if debug:
-            print_mem_usage()
+        print_mem_usage(debug, "Postprocess start")
         no_module_specified = (not process_pcp and not process_linking and not process_comp and not process_rbm)
         do_rbm = process_rbm or no_module_specified
         do_pcp = process_pcp or no_module_specified
@@ -718,6 +1344,7 @@ class CASDatabase:
                 with open(test_file, "w", encoding=sys.getfilesystemencoding()) as out_f:
                     out_f.write(";\n")
 
+        start_time = time.time()
         wr_map: Dict[int, List[str]] = {}
         allow_llvm_bc = True
         gcc_comp_pids: List[int] = []
@@ -751,7 +1378,7 @@ class CASDatabase:
 
                 def set_children_list(exe: libetrace.nfsdbEntry, ptree: Dict, ignore_binaries: Set[str]) -> None:
                     for chld in exe.childs:
-                        if not ignore_binaries or not set([u.binary for u in self.get_pid(exe.eid.pid)]) & ignore_binaries:
+                        if not ignore_binaries or not set([u.binary for u in self.get_entries_with_pid(exe.eid.pid)]) & ignore_binaries:
                             set_children_list(chld, ptree, ignore_binaries)
                     assert exe.eid.pid not in ptree, "process tree have entry for pid {}".format(exe.eid.pid)
                     if len(exe.childs) > 0:
@@ -770,7 +1397,7 @@ class CASDatabase:
                             if chld_pid in reverse_binary_mapping:
                                 assert reverse_binary_mapping[chld_pid] == pid, "reverse binary mapping contains: {} (root: {})".format(chld_pid, root_pid)
                             else:
-                                exelst = self.get_pid(chld_pid)
+                                exelst = self.get_entries_with_pid(chld_pid)
                                 if root_binary not in set([u.binary for u in exelst]):
                                     reverse_binary_mapping[chld_pid] = root_pid
                                 update_reverse_binary_mapping(reverse_binary_mapping, chld_pid, ptree, root_pid, root_binary)
@@ -789,30 +1416,29 @@ class CASDatabase:
                 if len(out_rbm) > 0:
                     with open(rbm_filename, "w", encoding=sys.getfilesystemencoding()) as f:
                         f.write(json.dumps(out_rbm, indent=4))
-                    if debug: print("DEBUG: written generated {}".format(rbm_filename))
+                    printdbg("Written generated {}".format(rbm_filename), debug)
                 else:
                     print("WARNING: rbm map is empty! len==0")
-                print("reverse binary mappings processed (%d binaries, %d entries)   [%.2fs]" % (len(wrapping_bin_list),len(out_rbm.keys()), time.time() - start_time))
+                print("reverse binary mappings processed (%d binaries, %d entries)   [%.2fs]" % (len(wrapping_bin_list), len(out_rbm.keys()), time.time() - start_time))
                 out_rbm = dict()
 
         if do_pcp:
             start_time = time.time()
-            import base64
             if new_database or not os.path.exists(pcp_filename):
                 os.system('setterm -cursor off')
                 pcp_map = self.db.precompute_command_patterns(self.config.string_table)
                 os.system('setterm -cursor on')
                 if pcp_map:
                     for k, v in pcp_map.items():
-                        eid_lst = self.get_eid((k[0],k[1]))
+                        eid_lst = self.get_eid((k[0], k[1]))
                         assert len(eid_lst) == 1
-                    out_pcp_map = {str(self.get_exec(k[0], k[1]).ptr): base64.b64encode(v).decode("utf-8") for k, v in pcp_map.items()} # Can we use only other than "AA=="
+                    out_pcp_map = {str(self.get_exec(k[0], k[1]).ptr): base64.b64encode(v).decode("utf-8") for k, v in pcp_map.items()}  # Can we use only other than "AA=="
                     del pcp_map
                 else:
                     out_pcp_map = {}
                 with open(pcp_filename, "w", encoding=sys.getfilesystemencoding()) as f:
                     f.write(json.dumps(out_pcp_map, indent=4))
-                if debug: print("DEBUG: written generated {}".format(pcp_filename))
+                printdbg("Written generated {}".format(pcp_filename), debug)
                 print("command patterns precomputed processed (%d patterns)  [%.2fs]" % (len(self.config.string_table), time.time()-start_time))
                 out_pcp_map = dict()
 
@@ -845,7 +1471,7 @@ class CASDatabase:
 
                 for e in self.db.iter():
                     if linked_pattern.match(e.binary):
-                        effective_args:List[str] = get_effective_args(e.argv, e.cwd)
+                        effective_args: List[str] = get_effective_args(e.argv, e.cwd)
                         if "-o" in effective_args:
                             outidx = effective_args.index("-o")
                             if outidx < len(effective_args)-1:
@@ -856,7 +1482,7 @@ class CASDatabase:
                                 if lnkm.startswith("/dev/"):
                                     continue
                                 assert e.ptr not in out_linked
-                                out_linked[e.ptr] = {"l":lnkm, "t":1}
+                                out_linked[e.ptr] = {"l": lnkm, "t": 1}
                                 l_size += 1
                         elif "--output" in effective_args:
                             outidx = effective_args.index("--output")
@@ -865,7 +1491,7 @@ class CASDatabase:
                                 out_linked[e.ptr] = {"l": os.path.normpath(os.path.join(e.cwd, effective_args[outidx+1])), "t": 1}
                                 l_size += 1
                     if ared_pattern.match(e.binary):
-                        effective_args:List[str] = get_effective_args(e.argv, e.cwd)
+                        effective_args: List[str] = get_effective_args(e.argv, e.cwd)
                         armod = next((x for x in effective_args if x.endswith(".a") or x.endswith(".a.tmp") or x.endswith(".lib") or x.endswith("built-in.o")), None)
                         if armod:
                             if not os.path.isabs(armod):
@@ -878,7 +1504,7 @@ class CASDatabase:
                                     we_l = [x for x in self.get_eids(pipes) if len(x.argv) > 0]
                                     if len(we_l) > 0:
                                         if e.ptr not in out_linked:
-                                            out_linked[we_l[0].ptr]= {"l": os.path.normpath(os.path.join(e.cwd, armod[:-4])), "t": 0}
+                                            out_linked[we_l[0].ptr] = {"l": os.path.normpath(os.path.join(e.cwd, armod[:-4])), "t": 0}
                                             a_size += 1
                             else:
                                 # Ignore potential linked files not opened for write (e.g. ar t <archive_file>)
@@ -890,7 +1516,7 @@ class CASDatabase:
 
                 with open(link_filename, "w", encoding=sys.getfilesystemencoding()) as f:
                     f.write(json.dumps(out_linked, indent=4))
-                if debug: print("DEBUG: written generated {}".format(link_filename))
+                printdbg("Written generated {}".format(link_filename), debug)
                 print("computed linked modules (linked: %d, ared: %d)  [%.2fs]" % (l_size, a_size, time.time() - start_time))
                 out_linked = dict()
 
@@ -901,18 +1527,18 @@ class CASDatabase:
             compilation_start_time = time.time()
 
             if new_database or not os.path.exists(comps_filename):
-                if debug: print_mem_usage()
+                print_mem_usage(debug, "Before processing compilations")
                 print("creating compilations input map ...")
 
-                fork_map:Dict[int,List[int]] = {}
-                clang_input_execs= []
-                clangpp_input_execs= []
+                fork_map: Dict[int, List[int]] = {}
+                clang_input_execs = []
+                clangpp_input_execs = []
                 gcc_input_execs = []
                 gpp_input_execs = []
 
-                clangxx_compilers:Set[str] = set()
+                clangxx_compilers: Set[str] = set()
 
-                for ex in self.db.filtered(has_command=True):
+                for ex in self.db.iter():
                     fns = [op.path for op in ex.opens if op.mode & 3 >= 1] + [os.path.normpath(op.path) for op in ex.opens if op.mode & 3 >= 1]
                     if ex.eid.pid in wr_map:
                         wr_map[ex.eid.pid] += list(set(wr_map[ex.eid.pid]+fns))
@@ -924,7 +1550,7 @@ class CASDatabase:
                         fork_map[ex.eid.pid] = [ch.eid.pid for ch in ex.childs]
                     if do_compilations and ex.binary != '':
                         b = os.path.realpath(ex.binary) if ex.binary.endswith("/cc") or ex.binary.endswith("/c++") else ex.binary
-                        effective_args:List[str] = get_effective_args(ex.argv, ex.cwd)
+                        effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                         if clangpp_spec_patterns.match(b):
                             clangpp_pattern_match_execs.append(ex.ptr)
                             if ("-cc1" in effective_args or ("-c" in effective_args and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
@@ -959,7 +1585,7 @@ class CASDatabase:
                 print("input map created in [%.2fs]" % (time.time()-start_time))
                 start_time = time.time()
 
-                rev_fork_map:Dict[int,int] = {}
+                rev_fork_map: Dict[int, int] = {}
 
                 for fork_pid in fork_map:
                     for child in fork_map[fork_pid]:
@@ -970,7 +1596,7 @@ class CASDatabase:
 
                 print("reverse fork map created in [%.2fs]" % (time.time()-start_time))
                 start_time = time.time()
-                if debug: print_mem_usage()
+                print_mem_usage(debug)
 
                 computation_finished = multiprocessing.Value("b")
                 computation_finished.value = False
@@ -978,9 +1604,9 @@ class CASDatabase:
                 write_queue = multiprocessing.Queue(maxsize=execs_to_process)
 
                 def writer():
-                    if debug: print( "Starting writer process...")
+                    printdbg("Starting writer process...", debug)
                     is_first = True
-                    with open (comps_filename, "w") as of:
+                    with open(comps_filename, "w") as of:
                         of.write("{\n")
                         while not computation_finished.value:
                             try:
@@ -998,12 +1624,12 @@ class CASDatabase:
                                     break
                         of.write("}")
                     os.sync()
-                    if debug: print( "Writer process ends")
+                    print("Writer process ends", debug)
 
                 writer_process = multiprocessing.Process(target=writer)
                 writer_process.start()
 
-                if True: # clang compilations section
+                if True:  # clang compilations section
                     start_time = time.time()
                     clang_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in clang_input_execs])) if self.is_elf_executable(u) or self.is_elf_interpreter(u)]
                     clangpp_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in clangpp_input_execs])) if self.is_elf_executable(u) or self.is_elf_interpreter(u)]
@@ -1022,7 +1648,7 @@ class CASDatabase:
                     for x in integrated_clang_compilers:
                         print("  %s" % x)
 
-                    clangxx_input_execs:List[Tuple] = [
+                    clangxx_input_execs: List[Tuple] = [
                         (xT[0].ptr, xT[1])
                         for xT in [(x, 1) for x in clang_input_execs] + [(x, 2) for x in clangpp_input_execs]
                         if os.path.join(xT[0].cwd, self.maybe_compiler_binary(xT[0].binary)) in clangxx_compilers
@@ -1042,7 +1668,7 @@ class CASDatabase:
                         def clang_executor(worker_idx):
                             worker = exec_worker.ExecWorker(os.path.join(libetrace_dir, "worker"))
 
-                            if debug: print ("Worker {} starting...".format(worker_idx))
+                            printdbg("Worker {} starting...".format(worker_idx), debug)
                             no_o_args = 0
                             not_exist = 0
                             empty_output = 0
@@ -1061,7 +1687,7 @@ class CASDatabase:
                                 ptr, compiler_type = clangxx_input_execs[pos]
                                 exe = self.get_exec_at_pos(ptr)
 
-                                argv:List[str] = exe.argv.copy()
+                                argv: List[str] = exe.argv.copy()
                                 bin = exe.binary
                                 cwd = exe.cwd
                                 have_int_cc1 = self.have_integrated_cc1(os.path.join(cwd, bin), "-fno-integrated-cc1" not in argv, test_file)
@@ -1071,10 +1697,10 @@ class CASDatabase:
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running -###")
-                                    print ("[%s] %s"%(cwd," ".join(argv[1:] + ["-###"])))
+                                    print ("[%s] %s" % (cwd, " ".join(argv[1:] + ["-###"])))
                                     continue
                                 lns = out.split("\n")
-                                idx = [k for k,u in enumerate(lns) if "(in-process)" in u]
+                                idx = [k for k, u in enumerate(lns) if "(in-process)" in u]
                                 if idx and len(lns) >= idx[0] + 2:
                                     ncmd = lns[idx[0] + 1]
                                     try:
@@ -1084,9 +1710,9 @@ class CASDatabase:
                                                 ]
                                         have_int_cc1 = 1
                                     except Exception:
-                                        print (exe.json(), flush=True)
-                                        print (lns, flush=True)
-                                        print (ncmd, flush=True)
+                                        print(exe.json(), flush=True)
+                                        print(lns, flush=True)
+                                        print(ncmd, flush=True)
 
                                 if "-cc1as" in argv:
                                     cc1as_skipped += 1
@@ -1097,31 +1723,31 @@ class CASDatabase:
                                 for i,u in enumerate(reversed(argv)):
                                     if u not in self.config.clang_tailopts:
                                         break
-                                    extra_arg_num+=1
+                                    extra_arg_num += 1
                                 fn = os.path.normpath(os.path.join(cwd, exe.argv[-1-i]))
                                 if not os.path.exists(fn):
                                     if "tmp" not in fn:
-                                        print ("Error: {} - does not exist".format(fn), flush=True)
-                                        print ("Original cmd: {}".format(exe.argv), flush=True)
+                                        print("Error: {} - does not exist".format(fn), flush=True)
+                                        print("Original cmd: {}".format(exe.argv), flush=True)
                                     not_exist += 1
                                     continue
                                 # fn - the path to the compiled file that exists
-                                output_arg_index = next((i for i,x in enumerate(argv) if x=="-o"), None)
+                                output_arg_index = next((i for i, x in enumerate(argv) if x == "-o"), None)
                                 if output_arg_index is None:
-                                    print ("****\nno -o arg \n{}\n{}\n****".format(argv, out), flush=True)
+                                    print("****\nno -o arg \n{}\n{}\n****".format(argv, out), flush=True)
                                     no_o_args += 1
                                     continue
-                                argv.insert(output_arg_index,"-dD")
-                                argv.insert(output_arg_index,"-E")
-                                argv.insert(output_arg_index,"-P")
-                                argv.insert(output_arg_index,"-v")
-                                if compiler_type==1:
-                                    argv.insert(output_arg_index,"c")
+                                argv.insert(output_arg_index, "-dD")
+                                argv.insert(output_arg_index, "-E")
+                                argv.insert(output_arg_index, "-P")
+                                argv.insert(output_arg_index, "-v")
+                                if compiler_type == 1:
+                                    argv.insert(output_arg_index, "c")
                                 else:
-                                    argv.insert(output_arg_index,"c++")
-                                argv.insert(output_arg_index,"-x")
+                                    argv.insert(output_arg_index, "c++")
+                                argv.insert(output_arg_index, "-x")
                                 argv[output_arg_index+7] = "-"
-                                if extra_arg_num>0:
+                                if extra_arg_num > 0:
                                     argv.pop(-1-extra_arg_num)
                                     argv.append("-")
                                 else:
@@ -1130,14 +1756,14 @@ class CASDatabase:
                                     output, ret_code = worker.runCmd(cwd, bin, argv[1:], "")  # last parameter is empty stdin for clang
                                 except exec_worker.ExecWorkerException as e:
                                     worker.initialize()
-                                    print (e)
-                                    print ("cwd  =  {}".format(cwd))
-                                    print ("bin  =  {}".format(bin))
-                                    print ("argv =  {}".format(" ".join(argv[1:])))
+                                    print(e)
+                                    print("cwd  =  {}".format(cwd))
+                                    print("bin  =  {}".format(bin))
+                                    print("argv =  {}".format(" ".join(argv[1:])))
                                     continue
                                 if output is None:
                                     empty_output += 1
-                                    print ("empty output", flush=True)
+                                    print("empty output", flush=True)
                                     continue
                                 if not clang_c.allow_pp_in_compilations and '-E' in exe.argv:
                                     # print ("not allow_pp_in_compilations and -E in args")
@@ -1163,8 +1789,8 @@ class CASDatabase:
                                             includes.append(u)
                                     ifiles = clang_c.parse_include_files(json_repr, includes)
                                 except Exception as e:
-                                    print (cwd, flush=True)
-                                    print (output, flush=True)
+                                    print(cwd, flush=True)
+                                    print(output, flush=True)
                                     parsing_fail += 1
                                     with open(".nfsdb.log.err", "a") as ef:
                                         ef.write("ERROR: Exception while processing compilation:\n%s\n" % (json_repr))
@@ -1172,17 +1798,17 @@ class CASDatabase:
                                     continue
 
                                 src_type = clang_c.get_source_type(argv, compiler_type, os.path.splitext(fn)[1])
-                                absfn = os.path.realpath(os.path.normpath( os.path.join(cwd, fn)))
+                                absfn = os.path.realpath(os.path.normpath(os.path.join(cwd, fn)))
 
                                 if absfn.startswith("/dev/"):
-                                    if debug: print("\nSkipping bogus file {} ".format(absfn))
+                                    printdbg("\nSkipping bogus file {} ".format(absfn), debug)
                                     continue
 
-                                write_queue.put({ ptr:{
+                                write_queue.put({ptr: {
                                         "f": [absfn],
                                         "i": includes,
-                                        "d": [{"n":di[0], "v":di[1]} for di in defs],
-                                        "u": [{"n":ui[0], "v":ui[1]} for ui in undefs],
+                                        "d": [{"n": di[0], "v":di[1]} for di in defs],
+                                        "u": [{"n": ui[0], "v":ui[1]} for ui in undefs],
                                         "h": ifiles,
                                         "s": src_type,
                                         "o": comp_objs,
@@ -1190,14 +1816,14 @@ class CASDatabase:
                                     }})
                                 found_comps.value += 1
 
-                            if debug: print ("Worker {} finished! ok={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
-                                worker_idx,processed.value,no_o_args,not_exist,empty_output,not_allow_pp,parsing_fail,cc1as_skipped), flush=True)
+                            printdbg("Worker {} finished! ok={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
+                                      worker_idx, processed.value, no_o_args, not_exist, empty_output, not_allow_pp, parsing_fail, cc1as_skipped), debug)
 
                         print("Searching for clang compilations ... (%d candidates; %d jobs)" % (len(clangxx_input_execs), jobs))
-                        if debug: print_mem_usage()
+                        print_mem_usage(debug)
                         print(flush=True)
 
-                        pbar = Progressbar(total = len(clangxx_input_execs), disable=None)
+                        pbar = progressbar(total=len(clangxx_input_execs), disable=None)
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
@@ -1218,20 +1844,20 @@ class CASDatabase:
 
                         print(flush=True)
                         print(f"Workers finished in [{time.time() - sstart:.2f}s] - found {found_comps.value} compilations.")
-                        if debug: print_mem_usage()
+                        print_mem_usage(debug)
 
                     print("finished searching for clang compilations [%.2fs]" % (time.time()-start_time))
 
-                if True: # gcc compilations section
+                if True:  # gcc compilations section
                     start_time = time.time()
                     gcc_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in gcc_input_execs])) if self.is_elf_executable(u)]
                     gpp_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in gpp_input_execs])) if self.is_elf_executable(u)]
                     gxx_compilers = set(gcc_compilers + gpp_compilers)
 
-                    gxx_input_execs:List[Tuple] = [ (xT[0].ptr, xT[1])
-                            for xT in [(x, 1) for x in gcc_input_execs] + [(x, 2) for x in gpp_input_execs]
-                            if os.path.join(xT[0].cwd, self.maybe_compiler_binary(xT[0].binary)) in gxx_compilers
-                        ]
+                    gxx_input_execs: List[Tuple] = [(xT[0].ptr, xT[1])
+                                                    for xT in [(x, 1) for x in gcc_input_execs] + [(x, 2) for x in gpp_input_execs]
+                                                    if os.path.join(xT[0].cwd, self.maybe_compiler_binary(xT[0].binary)) in gxx_compilers
+                                                    ]
 
                     print("gcc matches: %d" % (len(gcc_comp_pids)))
                     print("g++ matches: %d" % (len(gpp_comp_pids)))
@@ -1258,7 +1884,7 @@ class CASDatabase:
 
                         def gcc_executor(worker_idx):
                             worker = exec_worker.ExecWorker(os.path.join(libetrace_dir, "worker"))
-                            if debug: print ("Worker {} starting...".format(worker_idx))
+                            printdbg("Worker {} starting...".format(worker_idx),debug)
 
                             while not gcc_work_queue.empty():
                                 try:
@@ -1271,7 +1897,7 @@ class CASDatabase:
                                     pbar.refresh()
                                 ptr, compiler_type = gxx_input_execs[pos]
                                 exe = self.get_exec_at_pos(ptr)
-                                argv:List[str] = exe.argv.copy()
+                                argv: List[str] = exe.argv.copy()
                                 bin = exe.binary
                                 cwd = exe.cwd
 
@@ -1295,19 +1921,20 @@ class CASDatabase:
                                         "argv  = {}\n"\
                                         "**********************************".format(e,cwd,bin," ".join(argv[1:] + ["-###"])))
                                     continue
-                                # if ret != 0:
-                                #     print ("ret  =  {}:".format(ret))
-                                #     print ("cwd  =  {}".format(cwd))
-                                #     print ("bin  =  {}".format(bin))
-                                #     print ("argv =  {}".format(" ".join(argv[1:] + ["-###"])))
-                                #     print ("----------------------------------------")
-                                #     print (out)
-                                #     print ("----------------------------------------")
-                                #     continue
+                                if ret != 0:
+                                    if debug:
+                                        print ("ret  =  {}:".format(ret))
+                                        print ("cwd  =  {}".format(cwd))
+                                        print ("bin  =  {}".format(bin))
+                                        print ("argv =  {}".format(" ".join(argv[1:] + ["-###"])))
+                                        print ("----------------------------------------")
+                                        print (out)
+                                        print ("----------------------------------------")
+                                    continue
 
-                                lns = [ shlex.split(x)
-                                    for x in out.split("\n")
-                                    if x.startswith(" ") and re.match(cc1_patterns,x.split()[0])]
+                                lns = [shlex.split(x)
+                                       for x in out.split("\n")
+                                       if x.startswith(" ") and re.match(cc1_patterns, x.split()[0])]
 
                                 if len(lns) == 0:
                                     # print("No cc1 \n{}".format(lns))
@@ -1331,7 +1958,7 @@ class CASDatabase:
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running gcc -fplugin command:")
-                                    print ("[%s] %s"%(cwd," ".join(nargv)))
+                                    print ("[%s] %s" % (cwd, " ".join(nargv)))
                                     continue
                                 if ret != 0:
                                     if "Permission denied" in out:
@@ -1374,37 +2001,37 @@ class CASDatabase:
                                     i = nargv.index('-o')
                                     nargv[i] = '-E'
                                     nargv[i+1] = '-P'
-                                    nargv.insert(i+2,'-v')
-                                    nargv.insert(i+3,'-dD')
+                                    nargv.insert(i+2, '-v')
+                                    nargv.insert(i+3, '-dD')
                                 else:
-                                    nargv+=['-E','-P','-v','-dD']
+                                    nargv += ['-E', '-P', '-v', '-dD']
                                 for x in fns:
-                                    li = [i for i,u in enumerate(nargv) if u==x]
+                                    li = [i for i, u in enumerate(nargv) if u == x]
                                     if len(li):
                                         nargv.pop(li[-1])
                                     else:
-                                        print ("CAN'T POP FILENAME \n{}\n{}".format(fns,nargv))
+                                        print("CAN'T POP FILENAME \n{}\n{}".format(fns, nargv))
                                 nargv.append('-')
                                 try:
                                     out, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception")
-                                    print ("[%s] %s"%(cwd," ".join(nargv)))
+                                    print("[%s] %s" % (cwd, " ".join(nargv)))
                                     continue
 
                                 if ret != 0:
-                                    print ("Error getting compilation data (%d) with command\n  %s"%(ret," ".join(nargv)))
-                                    print ("----------------------------------------")
-                                    print (out)
-                                    print ("----------------------------------------")
+                                    print("Error getting compilation data (%d) with command\n  %s" % (ret, " ".join(nargv)))
+                                    print("----------------------------------------")
+                                    print(out)
+                                    print("----------------------------------------")
                                     continue
 
                                 compiler_path = os.path.join(cwd, self.maybe_compiler_binary(bin))
                                 exe_dct = exe.json()
                                 comp_objs = gcc_c.get_object_files(exe_dct, fork_map, rev_fork_map, wr_map)
 
-                                #try:
+                                #  try:
                                 includes, defs, undefs = gcc_c.parse_defs(out, exe_dct)
                                 includes = [os.path.realpath(os.path.normpath(os.path.join(cwd, x))) for x in includes]
                                 ipaths = gcc_c.compiler_include_paths(compiler_path)
@@ -1426,19 +2053,19 @@ class CASDatabase:
                                 src_type = None
                                 for fn in fns:
                                     src_type = gcc_c.get_source_type(nargv, compiler_type, os.path.splitext(fn)[1])
-                                    absfn = os.path.realpath(os.path.normpath( os.path.join(cwd, fn)))
+                                    absfn = os.path.realpath(os.path.normpath(os.path.join(cwd, fn)))
                                     if not absfn.startswith("/dev/"):
                                         out_fns.add(absfn)
 
                                 if len(out_fns) == 0:
-                                    if debug: print("Skipping empty src compilation (probably /dev/null file) ")
+                                    printdbg("Skipping empty src compilation (probably /dev/null file) ", debug)
                                     continue
 
                                 write_queue.put({ptr: {
                                         "f": list(out_fns),
                                         "i": includes,
-                                        "d": [{"n":di[0], "v":di[1]} for di in defs],
-                                        "u": [{"n":ui[0], "v":ui[1]} for ui in undefs],
+                                        "d": [{"n": di[0], "v": di[1]} for di in defs],
+                                        "u": [{"n": ui[0], "v": ui[1]} for ui in undefs],
                                         "h": ifiles,
                                         "s": src_type,
                                         "o": comp_objs,
@@ -1447,9 +2074,9 @@ class CASDatabase:
                                 found_comps.value += 1
 
                         print("Searching for gcc compilations ... (%d candidates; %d jobs)" % (len(gxx_input_execs), jobs))
-                        if debug: print_mem_usage()
+                        print_mem_usage(debug)
                         print(flush=True)
-                        pbar = Progressbar(total = len(gxx_input_execs), disable=None)
+                        pbar = progressbar(total=len(gxx_input_execs), disable=None)
                         processed = multiprocessing.Value("i")
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
@@ -1469,7 +2096,7 @@ class CASDatabase:
                         pbar.close()
                         print(flush=True)
                         print(f"Workers finished in {time.time() - sstart:.2f}s - found {found_comps.value} compilations.")
-                        if debug: print_mem_usage()
+                        print_mem_usage(debug)
 
                     print("finished searching for gcc compilations [%.2fs]" % (time.time() - start_time))
 
@@ -1480,33 +2107,33 @@ class CASDatabase:
 
         if not no_update:
             if len(out_linked.keys()) == 0 and os.path.exists(link_filename):
-                if debug:print ("Linked info empty - loading from file...")
+                printdbg("Linked info empty - loading from file...", debug)
                 with open(link_filename, "r") as input_json:
                     out_linked = json.load(input_json)
-                if debug: print("DEBUG: loaded pre-generated {}".format(link_filename))
+                printdbg("DEBUG: loaded pre-generated {}".format(link_filename), debug)
 
             if len(out_pcp_map.keys()) == 0 and os.path.exists(pcp_filename):
-                if debug:print ("PCP map empty - loading from file...")
+                printdbg("PCP map empty - loading from file...", debug)
                 with open(pcp_filename, "r") as input_json:
                     out_pcp_map = json.load(input_json)
-                if debug: print("DEBUG: loaded pre-generated {}".format(pcp_filename))
+                printdbg("DEBUG: loaded pre-generated {}".format(pcp_filename), debug)
 
             if len(out_rbm.keys()) == 0 and os.path.exists(rbm_filename):
-                if debug:print ("RBM info empty - loading from file...")
+                printdbg("RBM info empty - loading from file...", debug)
                 with open(rbm_filename, "r") as input_json:
                     out_rbm = json.load(input_json)
-                if debug: print("DEBUG: loaded pre-generated {}".format(rbm_filename))
+                printdbg("DEBUG: loaded pre-generated {}".format(rbm_filename), debug)
 
             if len(out_compilation_info.keys()) == 0 and os.path.exists(comps_filename):
-                if debug:print ("Compilation info empty - loading from file...")
+                printdbg("Compilation info empty - loading from file...", debug)
                 with open(comps_filename, "r") as input_json:
                     out_compilation_info = json.load(input_json)
-                if debug: print("DEBUG: loaded pre-generated {}".format(comps_filename))
+                printdbg("DEBUG: loaded pre-generated {}".format(comps_filename), debug)
             print("Rewriting {} ...".format(json_db_filename))
 
-            with open (json_db_filename + ".tmp", "wb") as ofile:
+            with open(json_db_filename + ".tmp", "wb") as ofile:
                 ofile.write(b"[")
-                pbar = Progressbar(total=len(self.db), disable=None)
+                pbar = progressbar(total=len(self.db), disable=None)
                 for i, ex in enumerate(self.db.iter()):
                     pbar.n += 1
                     pbar.refresh()
@@ -1530,7 +2157,7 @@ class CASDatabase:
                         u += " r"
                         r['m'] = wpid
                     if verbose and len(u) > 0:
-                        print("\n Updating {} {}".format(ptr,u))
+                        print("\n Updating {} {}".format(ptr, u))
 
                     if i > 0:
                         ofile.write(b",\n")
@@ -1548,3 +2175,29 @@ class CASDatabase:
             print("updated parsed entries  [%.2fs]" % (time.time()-start_time))
 
         print("Done [%.2fs]" % (time.time()-total_start_time))
+
+
+def print_mem_usage(debug: bool = False, message: Optional[str] = None):
+    # Check psutil._pslinux.Process.memory_info() for details
+    if debug:
+        import psutil
+        if message is not None:
+            print(message, flush=True)
+        mi = psutil.Process().memory_info()
+
+        def fmt(by):
+            return f"{by / (1024 * 1024):.2f} MB"
+
+        print(f"RAM || rss {fmt(mi.rss)} || vms {fmt(mi.vms)} || "
+                f"shared {fmt(mi.shared)} || text {fmt(mi.text)} || "
+                f"lib {fmt(mi.lib)} || data {fmt(mi.data)} "
+                f"|| dirty {fmt(mi.dirty)}", flush=True)
+
+
+def printdbg(msg, debug: bool = False, file=sys.stderr, flush=True):
+    if debug:
+        print("DEBUG: "+msg, file=file, flush=flush)
+
+
+def printerr(msg, file=sys.stderr, flush=True):
+    print("ERROR: "+msg, file=file, flush=flush)

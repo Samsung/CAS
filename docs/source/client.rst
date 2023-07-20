@@ -128,11 +128,3 @@ client.output\_renderers.output\_json module
    :members:
    :undoc-members:
    :show-inheritance:
-
-client.output\_renderers.output\_object module
-----------------------------------------------
-
-.. automodule:: client.output_renderers.output_object
-   :members:
-   :undoc-members:
-   :show-inheritance:

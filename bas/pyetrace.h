@@ -18,20 +18,115 @@ extern "C" {
 #include "ftdb_entry.h"
 
 #define LIBETRACE_EMPTY_STRING_HANDLE 0
-typedef int (*nfsdb_entry_filter_func)(const struct nfsdb_entry* entry);
+
+typedef int (*nfsdb_entry_openfile_filter_func)(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
 typedef struct {
-	const char* nfsdb_entry_filter_funcname;
-	nfsdb_entry_filter_func fp;
-} nfsdb_entry_filter_func_array_t;
+	const char* nfsdb_entry_openfile_filter_funcname;
+	nfsdb_entry_openfile_filter_func fp;
+} nfsdb_entry_openfile_filter_func_array_t;
 
-extern nfsdb_entry_filter_func_array_t nfsdb_entry_filter_func_array[];
+extern nfsdb_entry_openfile_filter_func_array_t nfsdb_entry_openfile_filter_func_array[];
 
-#define LIBETRACE_NFSDB_ENTRY_FILTER_FUNC_ARRAY_SIZE \
-		(sizeof(nfsdb_entry_filter_func_array)/sizeof(nfsdb_entry_filter_func_array_t))
+typedef int (*nfsdb_entry_command_filter_func)(void *self, const struct nfsdb_entry* data, const void* arg);
+typedef struct {
+	const char* nfsdb_entry_command_filter_funcname;
+	nfsdb_entry_command_filter_func fp;
+} nfsdb_entry_command_filter_func_array_t;
 
-int libetrace_nfsdb_entry_filter_has_comp_info(const struct nfsdb_entry* entry);
-int libetrace_nfsdb_entry_filter_has_linked_file(const struct nfsdb_entry* entry);
-int libetrace_nfsdb_entry_filter_has_command(const struct nfsdb_entry* entry);
+extern nfsdb_entry_command_filter_func_array_t nfsdb_entry_command_filter_func_array[];
+
+int libetrace_nfsdb_entry_openfile_filter_contains_path(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_matches_wc(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_matches_re(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_file_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_file_not_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_dir_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_has_access(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_at_source_root(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_not_at_source_root(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_source_type(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+int libetrace_nfsdb_entry_openfile_filter_in_path_list(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index);
+
+int libetrace_nfsdb_entry_command_filter_cwd_contains_path(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cwd_matches_wc(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cwd_matches_re(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cmd_has_string(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cmd_matches_wc(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cmd_matches_re(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_bin_contains_path(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_bin_matches_wc(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_bin_matches_re(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_has_ppid(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_is_class(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_bin_at_source_root(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_bin_not_at_source_root(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cwd_at_source_root(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_cwd_not_at_source_root(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_in_binaries_list(void *self, const struct nfsdb_entry* data, const void* arg);
+int libetrace_nfsdb_entry_command_filter_in_pids_list(void *self, const struct nfsdb_entry* data, const void* arg);
+
+
+#define LIBETRACE_NFSDB_ENTRY_OPENFILE_FILTER_FUNC_ARRAY_SIZE \
+		(sizeof(nfsdb_entry_openfile_filter_func_array)/sizeof(nfsdb_entry_openfile_filter_func_array_t))
+
+#define LIBETRACE_NFSDB_ENTRY_COMMAND_FILTER_FUNC_ARRAY_SIZE \
+		(sizeof(nfsdb_entry_command_filter_func_array)/sizeof(nfsdb_entry_command_filter_func_array_t))
+
+enum file_class {
+	FILE_CLASS_LINKED = 0x0001, /* 1 */
+	FILE_CLASS_LINKED_STATIC = 0x0002, /* 2 */
+	FILE_CLASS_LINKED_SHARED = 0x0004, /* 4 */
+	FILE_CLASS_LINKED_EXE = 0x0008, /* 8 */
+	FILE_CLASS_COMPILED = 0x0010, /* 16 */
+	FILE_CLASS_PLAIN = 0x0020, /* 32 */
+	FILE_CLASS_COMPILER = 0x0040, /* 64 */
+	FILE_CLASS_LINKER = 0x0080, /* 128 */
+	FILE_CLASS_BINARY = 0x0100, /* 256 */
+	FILE_CLASS_SYMLINK = 0x0200, /* 512 */
+	FILE_CLASS_NOSYMLINK = 0x0400, /* 1024 */
+};
+
+enum file_source_type {
+	FILE_SOURCE_TYPE_C = 0x0001, /* 1 */
+	FILE_SOURCE_TYPE_CPP = 0x0002, /* 2 */
+	FILE_SOURCE_TYPE_OTHER = 0x0004, /* 4 */
+};
+
+enum file_access {
+	ACCESS_READ,
+	ACCESS_WRITE,
+	ACCESS_RW,
+	GLOBAL_ACCESS_READ,
+	GLOBAL_ACCESS_WRITE,
+	GLOBAL_ACCESS_RW,
+};
+
+#define FILE_FILTER_SIZE 7
+
+struct file_filter {
+	struct {
+		nfsdb_entry_openfile_filter_func func;
+		const void* arg;
+	} filter_set [FILE_FILTER_SIZE];
+	int negate;
+};
+
+enum command_class {
+	FILE_CLASS_COMMAND = 0x0001, /* 1 */
+	FILE_CLASS_COMPILING = 0x0002, /* 2 */
+	FILE_CLASS_LINKING = 0x0004, /* 4 */
+};
+
+#define COMMAND_FILTER_SIZE 6
+
+struct command_filter {
+	struct {
+		nfsdb_entry_command_filter_func func;
+		const void* arg;
+	} filter_set [COMMAND_FILTER_SIZE];
+	int negate;
+};
 
 void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
 void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb, struct nfsdb_entry* entry);
@@ -49,6 +144,8 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args);
 
 unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb);
 int nfsdb_maps(struct nfsdb* nfsdb, int show_stats);
+int libetrace_nfsdb_entry_is_linking_internal(const struct nfsdb_entry * entry);
+int libetrace_nfsdb_entry_has_compilations_internal(const struct nfsdb_entry * entry);
 
 #ifdef __cplusplus
 }
@@ -92,7 +189,9 @@ typedef struct {
     int init_done;
     const struct nfsdb* nfsdb;
     const struct nfsdb_deps* nfsdb_deps;
-    PyObject* libetrace_nfsdb_entry_filterMap;
+    PyObject* libetrace_nfsdb_entry_openfile_filterMap;
+    PyObject* libetrace_nfsdb_entry_command_filterMap;
+    PyObject* reMatchFunction;
 } libetrace_nfsdb_object;
 
 void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self);
@@ -107,10 +206,15 @@ PyObject* libetrace_nfsdb_getiter(PyObject* self);
 PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_iter(libetrace_nfsdb_object *self, PyObject *args);
-PyObject* libetrace_nfsdb_filtered_iter(libetrace_nfsdb_object *self, PyObject* args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_opens_iter(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_opens_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_opens_paths(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_filtered_opens_paths(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filtered_opens_paths_iter(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filtered_opens(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filtered_opens_iter(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filtered_execs(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filtered_execs_iter(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_pcp_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
@@ -129,6 +233,8 @@ PyObject* libetrace_nfsdb_get_dbversion(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_module_dependencies_count(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_reverse_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
+PyObject* libetrace_nfsdb_filemap_has_path(libetrace_nfsdb_object *self, PyObject *args);
+int libetrace_nfsdb_entry_has_shared_argv(const struct nfsdb_entry * entry);
 
 #ifdef __cplusplus
 extern "C" {
@@ -143,10 +249,15 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"load",(PyCFunction)libetrace_nfsdb_load,METH_VARARGS|METH_KEYWORDS,"Load the database cache file"},
 	{"load_deps",(PyCFunction)libetrace_nfsdb_load_deps,METH_VARARGS|METH_KEYWORDS,"Load the dependency database cache file"},
 	{"iter",(PyCFunction)libetrace_nfsdb_iter,METH_VARARGS,"Returns the cache iterator"},
-	{"filtered",(PyCFunction)libetrace_nfsdb_filtered_iter,METH_VARARGS|METH_KEYWORDS,"Returns the cache iterator with some predefined filter for entries"},
 	{"opens_iter",(PyCFunction)libetrace_nfsdb_opens_iter,METH_VARARGS,"Returns the open files iterator across entire database"},
 	{"opens",(PyCFunction)libetrace_nfsdb_opens_list,METH_VARARGS,"Returns the list of all opened files across entire database"},
 	{"opens_paths",(PyCFunction)libetrace_nfsdb_opens_paths,METH_VARARGS,"Returns the list of all unique opened paths across entire database"},
+	{"filtered_paths",(PyCFunction)libetrace_nfsdb_filtered_opens_paths,METH_VARARGS|METH_KEYWORDS,"Returns the list of all unique opened paths across entire database filtered by a given set of filters"},
+	{"filtered_paths_iter",(PyCFunction)libetrace_nfsdb_filtered_opens_paths_iter,METH_VARARGS|METH_KEYWORDS,"Returns the iterator to the unique opened paths across entire database filtered by a given set of filters"},
+	{"filtered_opens",(PyCFunction)libetrace_nfsdb_filtered_opens,METH_VARARGS|METH_KEYWORDS,"Returns the list of all unique opened files across entire database filtered by a given set of filters"},
+	{"filtered_opens_iter",(PyCFunction)libetrace_nfsdb_filtered_opens_iter,METH_VARARGS|METH_KEYWORDS,"Returns the iterator to the unique opened files across entire database filtered by a given set of filters"},
+	{"filtered_execs",(PyCFunction)libetrace_nfsdb_filtered_execs,METH_VARARGS|METH_KEYWORDS,"Returns the list of all executions across entire database filtered by a given set of filters"},
+	{"filtered_execs_iter",(PyCFunction)libetrace_nfsdb_filtered_execs_iter,METH_VARARGS|METH_KEYWORDS,"Returns the iterator to the all executions across entire database filtered by a given set of filters"},
 	{"pcp_list",(PyCFunction)libetrace_nfsdb_pcp_list,METH_VARARGS,"Returns the list of command patterns to be precomputed"},
 	{"pids",(PyCFunction)libetrace_nfsdb_pid_list,METH_VARARGS,"Returns the list of all unique pids in the database"},
 	{"bpaths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
@@ -162,12 +273,13 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
 	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
 	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS,""},
-	{"precompute_command_patterns", (PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
+	{"precompute_command_patterns",(PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
+	{"filemap_has_path",(PyCFunction)libetrace_nfsdb_filemap_has_path,METH_VARARGS,"Returns True if a given opened path exists in the database"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
 static PyGetSetDef libetrace_nfsdb_getset[] = {
-	{"filemap",libetrace_nfsdb_get_filemap,0,"nfsdb filemap object",0},
+	{"filemap",libetrace_nfsdb_get_filemap,0,"nfsdb filemap object (maps a path to the corresponding openfile entry (or the nfsdb entry where the file was opened)",0},
 	{"source_root",libetrace_nfsdb_get_source_root,0,"nfsdb database source root",0},
 	{"dbversion",libetrace_nfsdb_get_dbversion,0,"nfsdb database version string",0},
 	{0,0,0,0,0},
@@ -387,38 +499,6 @@ typedef struct {
 	unsigned long start;
     unsigned long step;
     unsigned long end;
-    const struct nfsdb* nfsdb;
-    nfsdb_entry_filter_func* filters;
-    Py_ssize_t filters_count;
-
-} libetrace_nfsdb_filtered_iter_object;
-
-void libetrace_nfsdb_filtered_iter_dealloc(libetrace_nfsdb_filtered_iter_object* self);
-PyObject* libetrace_nfsdb_filtered_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
-Py_ssize_t libetrace_nfsdb_filtered_iter_sq_length(PyObject* self);
-PyObject* libetrace_nfsdb_filtered_iter_next(PyObject *self);
-
-static PySequenceMethods libetrace_nfsdbFilteredIter_sequence_methods = {
-		.sq_length = libetrace_nfsdb_filtered_iter_sq_length,
-};
-
-static PyTypeObject libetrace_nfsdbFilteredIterType = {
-	PyVarObject_HEAD_INIT(NULL, 0)
-	.tp_name = "libetrace.nfsdbFilteredIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbFilteredIterType),
-	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_iter_dealloc,
-	.tp_as_sequence = &libetrace_nfsdbFilteredIter_sequence_methods,
-	.tp_doc = "libetrace nfsdb filtered iterator",
-	.tp_iter = PyObject_SelfIter,
-	.tp_iternext = libetrace_nfsdb_filtered_iter_next,
-	.tp_new = libetrace_nfsdb_filtered_iter_new,
-};
-
-typedef struct {
-    PyObject_HEAD
-	unsigned long start;
-    unsigned long step;
-    unsigned long end;
     unsigned long open_index;
     const struct nfsdb* nfsdb;
 } libetrace_nfsdb_opens_iter_object;
@@ -442,6 +522,109 @@ static PyTypeObject libetrace_nfsdbOpensIterType = {
 	.tp_iter = PyObject_SelfIter,
 	.tp_iternext = libetrace_nfsdb_opens_iter_next,
 	.tp_new = libetrace_nfsdb_opens_iter_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+    libetrace_nfsdb_object* nfsdb;
+    unsigned long patch_size;
+    struct file_filter** cflts;
+    size_t* cflts_size;
+    struct file_filter* fflts[1];
+    size_t fflts_size[1];
+    struct file_filter* fast_filter;
+    Py_ssize_t filter_count;
+    struct rb_node* filemap_node;
+} libetrace_nfsdb_filtered_opens_paths_iter_object;
+
+void libetrace_nfsdb_filtered_opens_paths_iter_dealloc(libetrace_nfsdb_filtered_opens_paths_iter_object* self);
+PyObject* libetrace_nfsdb_filtered_opens_paths_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libetrace_nfsdb_filtered_opens_paths_iter_sq_length(PyObject* self);
+PyObject* libetrace_nfsdb_filtered_opens_paths_iter_next(PyObject *self);
+
+static PySequenceMethods libetrace_nfsdbFilteredOpensPathsIter_sequence_methods = {
+	.sq_length = libetrace_nfsdb_filtered_opens_paths_iter_sq_length,
+};
+
+static PyTypeObject libetrace_nfsdbFilteredOpensPathsIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbFilteredOpensPathsIter",
+	.tp_basicsize = sizeof(libetrace_nfsdbFilteredOpensPathsIterType),
+	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_opens_paths_iter_dealloc,
+	.tp_as_sequence = &libetrace_nfsdbFilteredOpensPathsIter_sequence_methods,
+	.tp_doc = "libetrace nfsdb filtered opens paths iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libetrace_nfsdb_filtered_opens_paths_iter_next,
+	.tp_new = libetrace_nfsdb_filtered_opens_paths_iter_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+    libetrace_nfsdb_object* nfsdb;
+    unsigned long patch_size;
+    unsigned long path_index;	/* Index of a nfsdbEntry in a given path to flush next */
+    struct file_filter** cflts;
+    size_t* cflts_size;
+    struct file_filter* fflts[1];
+    size_t fflts_size[1];
+    struct file_filter* fast_filter;
+    Py_ssize_t filter_count;
+    struct rb_node* filemap_node;
+} libetrace_nfsdb_filtered_opens_iter_object;
+
+void libetrace_nfsdb_filtered_opens_iter_dealloc(libetrace_nfsdb_filtered_opens_iter_object* self);
+PyObject* libetrace_nfsdb_filtered_opens_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libetrace_nfsdb_filtered_opens_iter_sq_length(PyObject* self);
+PyObject* libetrace_nfsdb_filtered_opens_iter_next(PyObject *self);
+
+static PySequenceMethods libetrace_nfsdbFilteredOpensIter_sequence_methods = {
+		.sq_length = libetrace_nfsdb_filtered_opens_iter_sq_length,
+};
+
+static PyTypeObject libetrace_nfsdbFilteredOpensIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbFilteredOpensIter",
+	.tp_basicsize = sizeof(libetrace_nfsdbFilteredOpensIterType),
+	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_opens_iter_dealloc,
+	.tp_as_sequence = &libetrace_nfsdbFilteredOpensIter_sequence_methods,
+	.tp_doc = "libetrace nfsdb filtered opens iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libetrace_nfsdb_filtered_opens_iter_next,
+	.tp_new = libetrace_nfsdb_filtered_opens_iter_new,
+};
+
+typedef struct {
+    PyObject_HEAD
+    libetrace_nfsdb_object* nfsdb;
+    unsigned long patch_size;
+    struct command_filter** cflts;
+    size_t* cflts_size;
+    struct command_filter* fflts[1];
+    size_t fflts_size[1];
+    struct command_filter* fast_filter;
+    Py_ssize_t filter_count;
+    unsigned long command_index;
+} libetrace_nfsdb_filtered_commands_iter_object;
+
+void libetrace_nfsdb_filtered_commands_iter_dealloc(libetrace_nfsdb_filtered_commands_iter_object* self);
+PyObject* libetrace_nfsdb_filtered_commands_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libetrace_nfsdb_filtered_commands_iter_sq_length(PyObject* self);
+PyObject* libetrace_nfsdb_filtered_commands_iter_next(PyObject *self);
+
+static PySequenceMethods libetrace_nfsdbFilteredCommandsIter_sequence_methods = {
+		.sq_length = libetrace_nfsdb_filtered_commands_iter_sq_length,
+};
+
+static PyTypeObject libetrace_nfsdbFilteredCommandsIterType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbFilteredCommandsIter",
+	.tp_basicsize = sizeof(libetrace_nfsdbFilteredCommandsIterType),
+	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_commands_iter_dealloc,
+	.tp_as_sequence = &libetrace_nfsdbFilteredCommandsIter_sequence_methods,
+	.tp_doc = "libetrace nfsdb filtered commands iterator",
+	.tp_iter = PyObject_SelfIter,
+	.tp_iternext = libetrace_nfsdb_filtered_commands_iter_next,
+	.tp_new = libetrace_nfsdb_filtered_commands_iter_new,
 };
 
 typedef struct {
@@ -523,6 +706,7 @@ typedef struct {
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self);
 PyObject* libetrace_nfsdb_entry_openfile_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 PyObject* libetrace_nfsdb_entry_openfile_json(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_repr(PyObject* self);
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closure);
@@ -538,6 +722,15 @@ PyObject* libetrace_nfsdb_entry_openfile_is_block(libetrace_nfsdb_entry_openfile
 PyObject* libetrace_nfsdb_entry_openfile_is_symlink(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_is_fifo(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_is_socket(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_compiled(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_linked(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_linked_static(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_linked_shared(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_linked_exe(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_plain(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_binary(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_compiler(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_entry_openfile_is_linker(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_exists(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_path_modified(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_openfile_has_opaque_entry(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
@@ -572,6 +765,15 @@ static PyMethodDef libetrace_nfsdbEntryOpenfile_methods[] = {
 	{"is_symlink",(PyCFunction)libetrace_nfsdb_entry_openfile_is_symlink,METH_VARARGS,"Returns true if the file is a symbolic link"},
 	{"is_fifo",(PyCFunction)libetrace_nfsdb_entry_openfile_is_fifo,METH_VARARGS,"Returns true if the file is a FIFO (named pipe)"},
 	{"is_socket",(PyCFunction)libetrace_nfsdb_entry_openfile_is_socket,METH_VARARGS,"Returns true if the file is a socket"},
+	{"is_compiled",(PyCFunction)libetrace_nfsdb_entry_openfile_is_compiled,METH_VARARGS,"Returns true if the file was compiled"},
+	{"is_linked",(PyCFunction)libetrace_nfsdb_entry_openfile_is_linked,METH_VARARGS,"Returns true if the file was linked"},
+	{"is_linked_static",(PyCFunction)libetrace_nfsdb_entry_openfile_is_linked_static,METH_VARARGS,"Returns true if the file was a archived static library"},
+	{"is_linked_shared",(PyCFunction)libetrace_nfsdb_entry_openfile_is_linked_shared,METH_VARARGS,"Returns true if the file was a linked shared library"},
+	{"is_linked_exe",(PyCFunction)libetrace_nfsdb_entry_openfile_is_linked_exe,METH_VARARGS,"Returns true if the file was linked executable"},
+	{"is_plain",(PyCFunction)libetrace_nfsdb_entry_openfile_is_plain,METH_VARARGS,"Returns true if the file is a plain file (not compiled nor linked nor binary nor symlink)"},
+	{"is_binary",(PyCFunction)libetrace_nfsdb_entry_openfile_is_binary,METH_VARARGS,"Returns true if the file is an executed binary"},
+	{"is_compiler",(PyCFunction)libetrace_nfsdb_entry_openfile_is_compiler,METH_VARARGS,"Returns true if the file is a compiler"},
+	{"is_linker",(PyCFunction)libetrace_nfsdb_entry_openfile_is_linker,METH_VARARGS,"Returns true if the file is a linker"},
 	{"exists",(PyCFunction)libetrace_nfsdb_entry_openfile_exists,METH_VARARGS,"Returns true if the file exists after the build"},
 	{"path_modified",(PyCFunction)libetrace_nfsdb_entry_openfile_path_modified,METH_VARARGS,"Returns true if the original and resolved paths differ"},
 	{"has_opaque_entry",(PyCFunction)libetrace_nfsdb_entry_openfile_has_opaque_entry,METH_VARARGS,"Returns true if the openfile has the opaque entry"},
@@ -583,6 +785,7 @@ static PyTypeObject libetrace_nfsdbEntryOpenfileType = {
 	.tp_name = "libetrace.nfsdbEntryOpenfile",
 	.tp_basicsize = sizeof(libetrace_nfsdbEntryOpenfileType),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_openfile_dealloc,
+	.tp_repr = (reprfunc)libetrace_nfsdb_entry_openfile_repr,
 	.tp_hash = (hashfunc)libetrace_nfsdb_entry_openfile_hash,
 	.tp_doc = "libetrace nfsdb entry openfile type",
 	.tp_richcompare = libetrace_nfsdb_entry_openfile_richcompare,

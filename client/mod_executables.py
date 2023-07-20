@@ -1,22 +1,16 @@
-import argparse
-from client.mod_base import Module, PipedModule
+from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argparser import add_args
 
-class Binaries(Module):
-    """
-    Module used to get list of binaries used during tracing.
-    """
+
+class Binaries(Module, FilterableModule):
+    """Binaries - returns binaries list or execs that use given binaries."""
+
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION")
-        arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
-            "filter", "select", "append",
-            "details", "commands"]
-            ,arg_group)
-        return module_parser
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
+            "details", "commands"], Binaries)
 
     def select_subject(self, ent) -> str:
         return ent.bpath
@@ -25,51 +19,50 @@ class Binaries(Module):
         return ent.bpath
 
     def subject(self, ent) -> str:
-        if isinstance(ent, str):
+        if self.args.details or self.args.show_commands:
+            return ent.bpath
+        else:
             return ent
-        return ent.bpath
+
+    def prepare_args(self) -> dict:
+        args: dict = {
+            "exec_filter": self.command_filter.libetrace_filter if self.command_filter else None,
+            "has_command": True
+        }
+        return args
 
     def get_data(self) -> tuple:
-        if self.args.details or self.args.show_commands:
-            data = list({
-                ex
-                for ex in self.nfsdb.get_execs_filtered(has_command=True)
-                if self.filter_exec(ex)}
-            )
 
+        args = self.prepare_args()
+
+        if self.args.details or self.args.show_commands:
+            data = self.nfsdb.filtered_execs_iter(**args)
             return data, DataTypes.commands_data, lambda x: x.bpath
         else:
             data = list({
-                ex.bpath if not self.args.relative else self.get_relative(ex.bpath)
-                for ex in self.nfsdb.get_execs_filtered(has_command=True)
-                if self.filter_exec(ex)}
-            ) if self.needs_open_filtering() else [
-                x if not self.args.relative else self.get_relative(x)
-                for x in self.nfsdb.db.bpaths() 
-                if len(x) > 0 
+                ex.bpath
+                for ex in self.nfsdb.filtered_execs_iter(**args)}
+            ) if self.needs_exec_filtering() else [
+                x
+                for x in self.nfsdb.db.bpaths()
+                if len(x) > 0
                 ]
 
-            return data, DataTypes.binary_data, None
+            return data, DataTypes.binary_data, lambda x: x
 
 
-class Commands(Module, PipedModule):
-    """
-    Module used to get list of commands invoked during tracing.
-    """
+class Commands(Module, PipedModule, FilterableModule):
+    """Commands - returns execs that are commands (bin is not empty)"""
+
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
-            "filter", "select", "append",
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
             "details", "commands",
             "pid", "binary",
             "extended",
-            "raw-command",
             "parent",
-            "filerefs", "cdb"]
-            ,arg_group)
-        return module_parser
+            "filerefs", "cdb"], Commands)
 
     def select_subject(self, ent) -> str:
         return " ".join(ent.argv)
@@ -84,25 +77,33 @@ class Commands(Module, PipedModule):
         if data_type == "str":
             printdbg("DEBUG: accepting {} as args.binary".format(data_type), self.args)
             self.args.binary = data
-        if data_type == "nfsdbEntryOpenfile":
+        elif data_type == "nfsdbEntryOpenfile":
             printdbg("DEBUG: accepting {} as args.binary".format(data_type), self.args)
             self.args.binary = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        elif data_type == "nfsdbEntry":
             printdbg("DEBUG: accepting {} as args.binary".format(data_type), self.args)
-            self.args.binary = list({ex.eid.pid for ex in data})
+            self.args.binary = list({ex.bpath for ex in data})
+
+    def prepare_args(self) -> dict:
+        args: dict = {}
+        if self.command_filter:
+            args["exec_filter"] = self.command_filter.libetrace_filter
+        if self.args.generate and not self.args.all:
+            args["has_comp_info"] = True
+        else:
+            args["has_command"] = True
+        if self.args.binary:
+            args["bins"] = self.args.binary
+        if self.args.pid:
+            args["pids"] = self.args.pid
+        return args
 
     def get_data(self) -> tuple:
-        data = list({
-            ent
-            for b in self.args.binary
-            for ent in self.nfsdb.get_execs_using_binary(b)
-            if self.filter_exec(ent)
-        } if self.args.binary else {
-            ent
-            for ent in self.nfsdb.get_execs_filtered(has_command=True)
-            if self.filter_exec(ent)
-        })
+        args = self.prepare_args()
+        data = self.nfsdb.filtered_execs(**args)
+
         if self.args.cdb:
             data = list(self.cdb_fix_multiple(data))
             return data, DataTypes.compilation_db_data, lambda x: x['filename']
+
         return data, DataTypes.commands_data, lambda x: x.argv

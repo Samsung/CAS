@@ -43,6 +43,10 @@ struct nfsdb_fileMap_node {
 	struct nfsdb_entry** rw_entry_list;
 	unsigned long* rw_entry_index;
 	unsigned long rw_entry_count;
+	struct nfsdb_entry** ga_entry_list;
+	unsigned long* ga_entry_index;
+	unsigned long ga_entry_count;
+	unsigned long global_access;
 };
 
 struct nfsdb_entryMap_node* nfsdb_entryMap_search(const struct rb_root* nfsdb_entryMap, unsigned long key);

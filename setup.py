@@ -42,4 +42,4 @@ setup(
 )
 
 # run it with 
-# m -r build/ build_release/ dist/ libcas.egg-info/ && python3 -m build -w --no-isolation
+# rm -r build/ build_release/ dist/ libcas.egg-info/ && python3 -m build -w --no-isolation

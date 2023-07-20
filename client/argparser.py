@@ -6,11 +6,11 @@ import argparse
 import os
 import sys
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 from client.misc import get_output_renderers
+from client.ide_generator.project_generator import add_params as ide_add_params
 
-
-def get_api_modules() -> Dict:
+def get_api_modules() -> Dict[str, Any]:
     """
     Function used to get api keyword-module mapping.
 
@@ -61,7 +61,7 @@ def get_api_keywords() -> List[str]:
     :return: api keyword list
     :rtype: list
     """
-    return [m for m in get_api_modules()]
+    return [mdl for mdl in get_api_modules()]
 
 
 def get_common_parser(args=None) -> argparse.ArgumentParser:
@@ -78,7 +78,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         args = sys.argv[1:]
     else:
         args = list(args)
-    parser = argparse.ArgumentParser(description="TODO DESCRIPTION ", add_help=False)
+    parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False)
     common_group = parser.add_argument_group("Common arguments")
 
     common_group.add_argument("--verbose", "-v", action="store_true", help="Verbalize action")
@@ -106,13 +106,13 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
             raise argparse.ArgumentTypeError("malformed value")
         return arg_value
 
-    common_group.add_argument('--range', type=range_type, default=None, help='Limit range of returned records - exact copy of python list index [idx] or slice [start:stop:step]')
-
+    common_group.add_argument('--range', type=range_type, default=None, help='Limit range of returned records - similar to python list index [idx] or slice [start:stop:step]')
     common_group.add_argument('--sorted', '--sort', '-s', action='store_true', default=False, help='Sort results')
     common_group.add_argument('--sorting-key', type=str, default=None, help='Sort results')
     common_group.add_argument('--reverse', action='store_true', default=False, help='Reverse sort')
     common_group.add_argument('--relative', '-R', action='store_true', default=False, help='Display file paths relative source root directory')
     common_group.add_argument('--original-path', action='store_true', default=False, help='Use original symlink path instead of target path.')
+    common_group.add_argument('--raw-command', action='store_true', default=False, help='Show command as list of arguments')
 
     view_group = parser.add_argument_group("View modifiers arguments")
 
@@ -131,6 +131,8 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         output_group.add_argument('--{}-output'.format(name), '--{}'.format(name), dest=name, action='store_true', default=False, help=module.Renderer.help)
         module.Renderer.append_args(parser)
 
+    ide_add_params(parser)
+
     will_run_api_key = len([x for x in get_api_keywords() if x in args]) > 0
     if not will_run_api_key:
         parser.add_argument('-h', '--help', action='help', help='show this help message and exit')
@@ -138,7 +140,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     return parser
 
 
-def get_argparser_pipeline(args: "List[str] | None" = None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
+def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
     Function takes args and splits them into common args and list of pipeline args.
 
@@ -147,10 +149,7 @@ def get_argparser_pipeline(args: "List[str] | None" = None) -> Tuple[argparse.Na
     :return: tuple with organized arguments
     :rtype: Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]
     """
-    if args is None:
-        args = sys.argv[1:]
-    else:
-        args = list(args)
+
     parser = get_common_parser(args)
     common_args, remaining_args = parser.parse_known_args(args)
 
@@ -171,17 +170,17 @@ def get_argparser_pipeline(args: "List[str] | None" = None) -> Tuple[argparse.Na
         pipelines.append(buff)
 
     pipeline_args: List[argparse.Namespace] = []
-    for p in pipelines:
-        module_name = p.pop(0).replace("--", "")
-        m = get_api_modules().get(module_name, None)
-        if m is None:
-            print("ERROR: unrecognized module '{}'.".format(m))
+    for pipeline in pipelines:
+        module_name = pipeline.pop(0).replace("--", "")
+        mdl = get_api_modules().get(module_name, None)
+        if mdl is None:
+            print("ERROR: unrecognized module '{}'.".format(mdl))
             sys.exit(2)
-        module_args, rest = m.get_argparser().parse_known_args(p)
+        module_args, rest = mdl.get_argparser().parse_known_args(pipeline)
         if len(rest) > 0:
             print("ERROR: commandline switches {} not recognized as arguments of module '{}'.".format(rest, module_name))
             sys.exit(2)
-        module_args.module = m
+        module_args.module = mdl
         module_args.name = module_name
         module_args.is_piped = True if len(pipeline_args) > 0 else False
         pipeline_args.append(module_args)
@@ -193,8 +192,18 @@ def get_argparser_pipeline(args: "List[str] | None" = None) -> Tuple[argparse.Na
 
     return common_args, pipeline_args, parser
 
+def fix_arg(argument:str)-> List[str]:
+    """
+    Function used to split ":" separated string into lists.
 
-def get_args(commandline:"str | List[str] | None"=None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
+    :param argument: parameter value
+    :type argument: str
+    :return: parameter values list
+    :rtype: List[str]
+    """
+    return sum([p.replace("'", "").replace('"', '').split(":") for p in argument], [])
+
+def get_args(commandline: "str | List[str] | None" = None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
     Function gets commandline from `sys.argv` or `commandline` parameter and splits it to common and pipeline args.
 
@@ -203,27 +212,30 @@ def get_args(commandline:"str | List[str] | None"=None) -> Tuple[argparse.Namesp
     :return: tuple with organized arguments
     :rtype: Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]
     """
-    if commandline:
-        common_args, pipeline_args, common_parser = get_argparser_pipeline(commandline if isinstance(commandline, list) else commandline.split())
-    else:
-        common_args, pipeline_args, common_parser = get_argparser_pipeline()
+    if commandline is None:
+        commandline = sys.argv[1:]
+    elif isinstance(commandline, str):
+        commandline = commandline.split()
+
+    common_args, pipeline_args, common_parser = get_argparser_pipeline(commandline)
 
     for args in pipeline_args:
         if "path" in args and args.path:
-            args.path = sum([p.replace("'", "").replace('"', '').split(":") for p in args.path], [])
+            args.path = fix_arg(args.path)
         if "select" in args and args.select:
-            args.select = sum([p.replace("'", "").replace('"', '').split(":") for p in args.select], [])
+            args.select = fix_arg(args.select)
         if "append" in args and args.append:
-            args.append = sum([p.replace("'", "").replace('"', '').split(":") for p in args.append], [])
+            args.append = fix_arg(args.append)
         if "pid" in args and args.pid:
-            args.pid = sum([p.replace("'", "").replace('"', '').split(",") for p in args.pid], [])
+            args.pid = fix_arg(args.pid)
             args.pid = [int(p) for p in args.pid]
         if "exclude" in args and args.exclude:
-            args.exclude = sum([p.replace("'", "").replace('"', '').split(":") for p in args.exclude], [])
+            args.exclude = fix_arg(args.exclude)
         if "cdm_exclude_patterns" in args and args.cdm_exclude_patterns:
-            args.cdm_exclude_patterns = sum([p.replace("'", "").replace('"', '').split(":") for p in args.cdm_exclude_patterns], [])
+            args.cdm_exclude_patterns = fix_arg(args.cdm_exclude_patterns)
         if "cdm_exclude_files" in args and args.cdm_exclude_files:
-            args.cdm_exclude_files = sum([p.replace("'", "").replace('"', '').split(":") for p in args.cdm_exclude_files], [])
+            args.cdm_exclude_files = fix_arg(args.cdm_exclude_files)
+
     return common_args, pipeline_args, common_parser
 
 
@@ -238,11 +250,9 @@ def get_bash_complete() -> str:
     common_actions = [name for x in get_common_parser()._actions for name in x.option_strings]
     actions = []
     if len(sys.argv) > 2:
-        try:
-            last_module = [x for x in reversed(sys.argv) if x in get_api_keywords()]
+        last_module = [x for x in reversed(sys.argv) if x in get_api_keywords()]
+        if  len(last_module) > 0:
             actions = [name for x in get_api_modules().get(last_module[0], Module).get_argparser()._actions for name in x.option_strings]
-        except Exception:
-            pass
     return "\n".join(get_api_keywords() + common_actions + actions)
 
 
@@ -259,7 +269,8 @@ def merge_args(arg1: argparse.Namespace, arg2: argparse.Namespace) -> argparse.N
     """
     return argparse.Namespace(**vars(arg1), **vars(arg2))
 
-args_mapping = {
+
+args_map = {
     "path": lambda x: x.add_argument(
         '--path',
         type=str,
@@ -291,8 +302,16 @@ args_mapping = {
     "filter": lambda x: x.add_argument(
         '--filter', '-f',
         type=str,
+        dest='open_filter',
         default=None,
-        help='Filter results'
+        help='Filter opens results'
+    ),
+    "command-filter": lambda x: x.add_argument(
+        '--command-filter', '-fc',
+        type=str,
+        dest='command_filter',
+        default=None,
+        help='Filter commands results'
     ),
     "commands": lambda x: x.add_argument(
         '--commands', '--show-commands',
@@ -351,13 +370,6 @@ args_mapping = {
         default=False,
         help='Include process child opened files in results'
     ),
-    "link-type": lambda x: x.add_argument(
-        '--link-type', '-T',
-        type=str,
-        default=None,
-        choices=['shared', 'static', 'exe'],
-        help='Specify linking type'
-    ),
     "direct": lambda x: x.add_argument(
         '--direct',
         action='store_true',
@@ -376,12 +388,6 @@ args_mapping = {
         action='append',
         default=None,
         help='Parameter binary(s) - can be used multiple times, or with ":" separator.'
-    ),
-    "raw-command": lambda x: x.add_argument(
-        '--raw-command', '-R',
-        action='store_true',
-        default=False,
-        help='Show command as list of arguments'
     ),
     "extended": lambda x: x.add_argument(
         '--extended', '-e',
@@ -455,7 +461,3 @@ args_mapping = {
         help='Output compilations as compilation database'
     )
 }
-
-def add_args(args: list, parser):
-    for arg in args:
-        args_mapping[arg](parser)

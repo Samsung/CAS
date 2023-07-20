@@ -1,21 +1,18 @@
-import argparse
 import sys
-from client.mod_base import Module, PipedModule
+from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argparser import add_args
 
 
-class Compiled(Module):
+class Compiled(Module, FilterableModule):
+    """Compiled - Returns compiled file list."""
+
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Compiled files arguments")
-        add_args([
-            "filter", "select", "append",
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
             "details", "commands",
-            "revdeps", "cdb"], arg_group)
-        return module_parser
+            "revdeps", "cdb"], Compiled)
 
     def select_subject(self, ent) -> str:
         if self.args.show_commands:
@@ -35,11 +32,11 @@ class Compiled(Module):
         else:
             return ent.original_path if self.args.original_path else ent.path
 
-    def get_data(self) -> tuple:
+    def get_data(self):
         if self.args.show_commands:
             data = list({
                 ent
-                for ent in self.nfsdb.get_execs_filtered(has_comp_info=True)
+                for ent in self.nfsdb.filtered_execs_iter(self.command_filter.libetrace_filter if self.command_filter else None, has_comp_info=True)
                 for o in ent.compilation_info.files
                 if self.filter_open(o)
             })
@@ -50,7 +47,7 @@ class Compiled(Module):
         elif self.args.details:
             data = list({
                 o
-                for ent in self.nfsdb.get_execs_filtered(has_comp_info=True)
+                for ent in self.nfsdb.filtered_execs_iter(self.command_filter.libetrace_filter if self.command_filter else None, has_comp_info=True)
                 for o in ent.compilation_info.files
                 if self.filter_open(o)
             })
@@ -58,7 +55,7 @@ class Compiled(Module):
         else:
             data = list({
                 o.path
-                for ent in self.nfsdb.get_execs_filtered(has_comp_info=True)
+                for ent in self.nfsdb.filtered_execs_iter(self.command_filter.libetrace_filter if self.command_filter else None, has_comp_info=True)
                 for o in ent.compilation_info.files
                 if self.filter_open(o)
             })
@@ -70,20 +67,19 @@ class Compiled(Module):
             return data, DataTypes.compiled_data, None
 
 
-class RevCompsFor(Module, PipedModule):
+class RevCompsFor(Module, PipedModule, FilterableModule):
+    """Reversed compilations - returns sources list used in compilation that in some point referenced given file."""
+
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Reverse compilation arguments")
-        add_args([
-            "filter", "select", "append",
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
             "details", "commands",
             "path",
             "revdeps",
-            "match", "cdb"], arg_group)
-        return module_parser
+            "match", "cdb"], RevCompsFor)
 
     def select_subject(self, ent) -> str:
         return ent.compilation_info.files[0].path
@@ -106,7 +102,6 @@ class RevCompsFor(Module, PipedModule):
             sys.exit(2)
 
     def get_data(self) -> tuple:
-
         if self.args.show_commands or self.args.details:
             data = list({
                 oo.opaque
@@ -114,8 +109,7 @@ class RevCompsFor(Module, PipedModule):
                 for oo in opn.parent.parent.opens_with_children
                 if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo)
             })
-
-            return data, DataTypes.compiled_data, lambda x: x.compilation_info.files[0]
+            return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0]
         else:
             data = list({
                 oo.opaque.compilation_info.files[0].path
@@ -130,15 +124,23 @@ class RevCompsFor(Module, PipedModule):
             return data, DataTypes.compiled_data, None
 
 
-class CompilationInfo(Module, PipedModule):
+class CompilationInfo(Module, PipedModule, FilterableModule):
+    """Compilation info - display extended compilation information."""
+
     required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="This module display extended compilation information.")
-        arg_group = module_parser.add_argument_group("Compilation info arguments")
-        add_args(["path", "details"], arg_group)
-        return module_parser
+        return Module.add_args(["command-filter", "path"], CompilationInfo)
+
+    def subject(self, ent):
+        pass
+
+    def select_subject(self, ent):
+        pass
+
+    def exclude_subject(self, ent):
+        pass
 
     def set_piped_arg(self, data, data_type):
         if data_type == "str":
@@ -148,14 +150,13 @@ class CompilationInfo(Module, PipedModule):
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
         if data_type == "nfsdbEntry":
-            print("ERROR: Wrong pipe input data {}.".format(data_type))
-            sys.exit(2)
+            printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
+            self.args.path = list({o.path for ent in data for o in ent.compilation_info.files if ent.compilation_info is not None})
 
     def get_data(self) -> tuple:
-        data = list({
-            ent
-            for ent in self.nfsdb.get_execs_filtered(has_comp_info=True)
-            if len(ent.compilation_info.files) > 0 and ent.compilation_info.files[0].path in self.args.path and self.filter_exec(ent)
-        })
+        data = list({opn
+                    for opn in self.nfsdb.get_opens_of_path(self.args.path)
+                    if opn.opaque is not None and opn.opaque.compilation_info is not None and self.filter_exec(opn.opaque)
+                    })
 
-        return data, DataTypes.compilation_info_data, lambda x: x.compilation_info.files[0].path
+        return data, DataTypes.compilation_info_data, lambda x: x.path

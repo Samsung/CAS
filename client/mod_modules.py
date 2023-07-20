@@ -1,25 +1,20 @@
-import argparse
-from client.mod_base import Module, PipedModule
+from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from client.argparser import add_args
 
 
-class LinkedModules(Module, PipedModule):
+class LinkedModules(Module, PipedModule, FilterableModule):
+    """Linked modules - returns list of files created by linker process."""
+
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="Linked modules displays list of linked files.")
-        arg_group = module_parser.add_argument_group("Module arguments")
-        add_args( [
-            "filter", "select", "append",
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
             "details", "commands",
             "cdm", "cdm-ex-pt", "cdm-ex-fl",
             "revdeps",
             "rdm",
-            "recursive",
-            "link-type"]
-            ,arg_group)
-        return module_parser
+            "recursive"], LinkedModules)
 
     def select_subject(self, ent) -> str:
         return ent.path
@@ -27,7 +22,7 @@ class LinkedModules(Module, PipedModule):
     def exclude_subject(self, ent) -> str:
         return ent.path
 
-    def subject(self, ent) -> str:
+    def subject(self, ent):
         if self.args.show_commands:
             return ent.parent
         else:
@@ -42,18 +37,17 @@ class LinkedModules(Module, PipedModule):
             self.args.pipe_path = list({o.path for o in data})
         if data_type == "nfsdbEntry":
             printdbg("DEBUG: accepting {} as args.pipe_path".format(data_type), self.args)
-            self.args.pipe_path = list({ex.linked_file for ex in data})
+            self.args.pipe_path = list({ex.linked_file for ex in data if ex.linked_file is not None})
 
     def get_data(self) -> tuple:
         if self.args.show_commands:
             data = list({
+                o.opaque
+                for o in self.nfsdb.linked_modules()
+                if o.opaque is not None and self.filter_open(o)
+            } if self.needs_open_filtering() else {
                 o.parent
                 for o in self.nfsdb.linked_modules()
-                if self.filter_open(o)
-            } if not self.args.generate else {
-                o.parent
-                for o in self.nfsdb.linked_modules()
-                if (o.parent.compilation_info is not None or self.args.all) and self.filter_open(o)
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid
@@ -87,41 +81,27 @@ class LinkedModules(Module, PipedModule):
             return data, DataTypes.linked_data, None
 
 
-class ModDepsFor(Module, PipedModule):
-    required_args = ["path:1+"]
+class ModDepsFor(Module, PipedModule, FilterableModule):
+    """Modules dependency - returns module dependency of given linked file(s)"""
 
-    def set_piped_arg(self, data, data_type):
-        if data_type == "str":
-            printdbg("DEBUG: accepting {} as args.pipe_path".format(data_type), self.args)
-            self.args.pipe_path = data
-        if data_type == "nfsdbEntryOpenfile":
-            printdbg("DEBUG: accepting {} as args.pipe_path".format(data_type), self.args)
-            self.args.pipe_path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
-            printdbg("DEBUG: accepting {} as args.pipe_path".format(data_type), self.args)
-            self.args.pipe_path = list({ex.linked_file for ex in data})
+    required_args = ["path:1+"]
 
     @staticmethod
     def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
-            "filter", "select", "append",
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
             "details", "commands",
             "pid", "binary", "path",
             "cdm", "cdm-ex-pt", "cdm-ex-fl",
             "revdeps",
             "rdm",
             "recursive",
-            "link-type",
             "match",
             "with-children",
             "extended",
             "direct",
             "parent",
-            "cached"]
-            ,arg_group)
-        return module_parser
+            "cached"], ModDepsFor)
 
     def select_subject(self, ent) -> str:
         return ent.path
@@ -131,6 +111,17 @@ class ModDepsFor(Module, PipedModule):
 
     def subject(self, ent) -> str:
         return ent.path if not self.args.show_commands else ent
+
+    def set_piped_arg(self, data, data_type):
+        if data_type == "str":
+            printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
+            self.args.path = data
+        if data_type == "nfsdbEntryOpenfile":
+            printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
+            self.args.path = list({o.path for o in data})
+        if data_type == "nfsdbEntry":
+            printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
+            self.args.path = list({ex.linked_file for ex in data})
 
     def get_data(self) -> tuple:
         linked_modules = {x.path for x in self.nfsdb.linked_modules()}
@@ -165,8 +156,34 @@ class ModDepsFor(Module, PipedModule):
             return data, DataTypes.file_data, None
 
 
-class RevModDepsFor(Module, PipedModule):
+class RevModDepsFor(Module, PipedModule, FilterableModule):
+    """Reverse modules dependency - returns list of files that depend on given linked file(s)"""
     required_args = ["path:1+"]
+
+    @staticmethod
+    def get_argparser():
+        return Module.add_args([
+            "filter", "command-filter", "select", "append",
+            "details", "commands",
+            "pid", "binary", "path",
+            "cdm", "cdm-ex-pt", "cdm-ex-fl",
+            "rdm",
+            "recursive",
+            "match",
+            "with-children",
+            "extended",
+            "direct",
+            "parent",
+            "cached"], RevModDepsFor)
+
+    def select_subject(self, ent) -> str:
+        return ent.path
+
+    def exclude_subject(self, ent) -> str:
+        return ent.path
+
+    def subject(self, ent) -> str:
+        return ent.path if not self.args.show_commands else ent
 
     def set_piped_arg(self, data, data_type):
         if data_type == "str":
@@ -178,36 +195,6 @@ class RevModDepsFor(Module, PipedModule):
         if data_type == "nfsdbEntry":
             printdbg("DEBUG: accepting {} as args.pipe_path".format(data_type), self.args)
             self.args.pipe_path = list({ex.linked_file for ex in data})
-
-    @staticmethod
-    def get_argparser():
-        module_parser = argparse.ArgumentParser(description="TODO DESCRIPTION ")
-        arg_group = module_parser.add_argument_group("Dependency generation arguments")
-        add_args( [
-            "filter", "select", "append",
-            "details", "commands",
-            "pid", "binary", "path",
-            "cdm", "cdm-ex-pt", "cdm-ex-fl",
-            "rdm",
-            "recursive",
-            "link-type",
-            "match",
-            "with-children",
-            "extended",
-            "direct",
-            "parent",
-            "cached"]
-            ,arg_group)
-        return module_parser
-
-    def select_subject(self, ent) -> str:
-        return ent.path
-
-    def exclude_subject(self, ent) -> str:
-        return ent.path
-
-    def subject(self, ent) -> str:
-        return ent.path if not self.args.show_commands else ent
 
     def get_data(self) -> tuple:
 

@@ -56,6 +56,13 @@
 		}	\
 	}
 
+#define ASSERT_CLEANUP_WITH_NFSDB_ERROR(__expr,__msg,...) do {	\
+		if (!(__expr)) {	\
+			PyErr_SetString(libetrace_nfsdbError, __msg);	\
+			goto cleanup_and_err;	\
+		}	\
+	} while(0)
+
 #define ASSERT_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,...) do {	\
 		if (!(__expr)) {	\
 			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
@@ -71,6 +78,14 @@
 			break;	\
 		}	\
 	}
+
+#define ASSERT_CLEANUP_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,...) do {	\
+		if (!(__expr)) {	\
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,__msg,__VA_ARGS__);	\
+			PyErr_SetString(libetrace_nfsdbError, errmsg);	\
+			goto cleanup_and_err;	\
+		}	\
+	} while(0)
 
 #define ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(__expr,__msg,__retcode,...) do {	\
 		if (!(__expr)) {	\
@@ -102,6 +117,53 @@
 			return __retcode;	\
 		}	\
 	} while(0)
+
+#define CHECK_ASSIGN_FILE_FILTER_FUNC_WITH_FTDB_FORMAT_ERROR(__fltkey,...) do {	\
+		if (PyDict_Contains(self->libetrace_nfsdb_entry_openfile_filterMap,__fltkey)) {	\
+			PyObject* py_fp = PyDict_GetItem(self->libetrace_nfsdb_entry_openfile_filterMap,__fltkey);	\
+			nfsdb_entry_openfile_filter_func __func = (nfsdb_entry_openfile_filter_func)PyLong_AsUnsignedLong(py_fp);	\
+			__VA_ARGS__		\
+		}	\
+		else {	\
+			const char* __fltkey_s__ = PyString_get_c_str(__fltkey);	\
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid built-in file filter specification: %s",__fltkey_s__);	\
+			PYASSTR_DECREF(__fltkey_s__);	\
+			PyErr_SetString(libetrace_nfsdbError, errmsg);	\
+			goto cleanup_and_err;	\
+		}	\
+	} while(0)
+
+#define CHECK_ASSIGN_COMMAND_FILTER_FUNC_WITH_FTDB_FORMAT_ERROR(__fltkey,...) do {	\
+		if (PyDict_Contains(self->libetrace_nfsdb_entry_command_filterMap,__fltkey)) {	\
+			PyObject* py_fp = PyDict_GetItem(self->libetrace_nfsdb_entry_command_filterMap,__fltkey);	\
+			nfsdb_entry_command_filter_func __func = (nfsdb_entry_command_filter_func)PyLong_AsUnsignedLong(py_fp);	\
+			__VA_ARGS__		\
+		}	\
+		else {	\
+			const char* __fltkey_s__ = PyString_get_c_str(__fltkey);	\
+			snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid built-in command filter specification: %s",__fltkey_s__);	\
+			PYASSTR_DECREF(__fltkey_s__);	\
+			PyErr_SetString(libetrace_nfsdbError, errmsg);	\
+			goto cleanup_and_err;	\
+		}	\
+	} while(0)
+
+#define KWARGS_HAVE(__kwargs__,__kwarg_s__)	({	\
+												int __have__ = 0;	\
+												if (__kwargs__) {	\
+													PyObject* __key__ = PyUnicode_FromString(__kwarg_s__);	\
+													__have__ = PyDict_Contains(__kwargs__,__key__);	\
+													Py_DecRef(__key__);	\
+												}	\
+												__have__;	\
+											})
+
+#define KWARGS_GET(__kwargs__,__kwarg_s__)	({	\
+												PyObject* __key__ = PyUnicode_FromString(__kwarg_s__);	\
+												PyObject* __item__ = PyDict_GetItem(__kwargs__,__key__);	\
+												Py_DecRef(__key__);	\
+												__item__;	\
+											})
 
 #define DBG(n,...)		do { if (n)	printf(__VA_ARGS__); } while(0)
 #ifndef DBGC

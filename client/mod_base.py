@@ -2,25 +2,26 @@ import fnmatch
 from functools import lru_cache
 import sys
 from abc import abstractmethod
-from typing import List, Dict, Tuple
-from os import path
+from types import LambdaType
+from typing import Any, List, Dict, Tuple, Optional, Generator, Type
 import argparse
 import libetrace
 import libcas
-from client.filtering import Filter, FilterException
+from client.filtering import CommandFilter, OpenFilter, FilterException
 from client.misc import get_output_renderers, printdbg, printerr, fix_cmd
+from client.output_renderers.output import DataTypes
 
 
 class ModulePipeline:
     def __init__(self, modules: list) -> None:
-        self.modules = modules
+        self.modules: List[Module] = modules
         self.last_module = None
 
     def subject(self, ent) -> "str | None":
         return self.last_module.subject(ent) if self.last_module is not None else None
 
     def render(self):
-        last_data_type = None
+        last_data_type: Optional[Type] = None
         data = []
         renderer = None
         sort_lambda = None
@@ -29,14 +30,16 @@ class ModulePipeline:
 
             if mdl.args.is_piped and self.last_module is not None and last_data_type is not None:
                 printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, last_data_type.__name__, mdl.args.module.__name__), mdl.args)
-                if len(data) == 0:
-                    print("Input data is empty - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
+                if not isinstance(data, list):
+                    print("ERROR: Input data is not list - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
                     sys.exit(0)
-
-                if hasattr(mdl, "set_piped_arg"):
+                elif len(data) == 0:
+                    print("ERROR: Input data is empty - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
+                    sys.exit(0)
+                if isinstance(mdl, PipedModule):
                     mdl.set_piped_arg(data, last_data_type.__name__)
                 else:
-                    print("ERROR: Can't pipe to {} - this module is not accepting any input data. Implement 'set_piped_arg' method.".format(mdl.args.module.__class__.__name__))
+                    print("ERROR: Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__))
                     sys.exit(2)
 
             try:
@@ -44,9 +47,15 @@ class ModulePipeline:
             except ArgumentException as err:
                 return "ERROR: {}".format(err.message)
 
-            if "filter" in mdl.args and mdl.args.filter:
+            if "open_filter" in mdl.args and mdl.args.open_filter:
                 try:
-                    mdl.filter = Filter(mdl.args.filter, mdl, mdl.config, mdl.source_root)
+                    mdl.open_filter = OpenFilter(mdl.args.open_filter, mdl, mdl.config, mdl.source_root)
+                except FilterException as err:
+                    return "ERROR: {}".format(err.message)
+
+            if "command_filter" in mdl.args and mdl.args.command_filter:
+                try:
+                    mdl.command_filter = CommandFilter(mdl.args.command_filter, mdl, mdl.config, mdl.source_root)
                 except FilterException as err:
                     return "ERROR: {}".format(err.message)
 
@@ -55,8 +64,19 @@ class ModulePipeline:
                 data, renderer, sort_lambda = mdl.get_data()
                 if isinstance(data, list):
                     printdbg("DEBUG:   data len == {}".format(len(data)), mdl.args)
-                last_data_type = type(data[0]) if isinstance(data, list) and len(data) > 0 else type(data)
-                printdbg("DEBUG:   data type == {}".format(last_data_type.__name__), mdl.args)
+                    printdbg("DEBUG:   data renderer == {}".format(renderer.name), mdl.args)
+
+                if isinstance(data, list):
+                    last_data_type = type(data[0]) if len(data) > 0 else None
+                elif isinstance(data, libetrace.nfsdbOpensIter) or isinstance(data, libetrace.nfsdbFilteredOpensIter):
+                    last_data_type = libetrace.nfsdbEntryOpenfile
+                elif isinstance(data, libetrace.nfsdbFilteredOpensPathsIter):
+                    last_data_type = str
+                elif isinstance(data, libetrace.nfsdbFilteredCommandsIter):
+                    last_data_type = libetrace.nfsdbEntry
+                else:
+                    last_data_type = type(data)
+                printdbg("DEBUG:   entry data type == {}".format(last_data_type.__name__ if last_data_type else None), mdl.args)
             except ParameterException as exc:
                 return exc.message
             except libetrace.error as exc:
@@ -64,26 +84,28 @@ class ModulePipeline:
             self.last_module = mdl
             printdbg("DEBUG: END pipeline step {}".format(mdl.args.module.__name__), mdl.args)
         if self.last_module is not None:
+            if self.last_module.args.ide:
+                return data
             output_engine = self.last_module.get_output_engine()(data, self.last_module.args, self.last_module, renderer, sort_lambda)
             return output_engine.render_data()
         return None
 
 
 class Module:
-    """
-    Abstract class of all API modules.
-    """
+    """Abstract class of all API modules."""
     required_args: List[str] = []
-    filter = None
+    open_filter = None
+    command_filter = None
 
-    def __init__(self, args, nfsdb: libcas.CASDatabase, config) -> None:
-        self.args = args
+    def __init__(self, args: argparse.Namespace, nfsdb: libcas.CASDatabase, config) -> None:
+        self.args: argparse.Namespace = args
         self.config = config
         self.nfsdb = nfsdb
         self.source_root = nfsdb.source_root if hasattr(nfsdb, "source_root") else ""
 
         self.has_pipe_path = True if "pipe_path" in self.args and self.args.pipe_path and len(self.args.pipe_path) > 0 else False
-        self.has_filter = True if "filter" in self.args and self.args.filter else False
+        self.has_open_filter = True if "open_filter" in self.args and self.args.open_filter else False
+        self.has_command_filter = True if "command_filter" in self.args and self.args.command_filter else False
         self.has_select = True if "select" in self.args and self.args.select and len(self.args.select) > 0 else False
         self.has_append = True if "append" in self.args and self.args.append and len(self.args.append) > 0 else False
         self.has_exclude = True if "exclude" in self.args and self.args.exclude and len(self.args.exclude) > 0 else False
@@ -93,15 +115,6 @@ class Module:
         self.has_all = True if "all" in self.args and self.args.all else False
         self.relative_path = True if "relative" in self.args and self.args.relative else False
         self.original_path = True if "original_path" in self.args and self.args.original_path else False
-
-    @staticmethod
-    def get_argparser() -> argparse.ArgumentParser:
-        """
-        Function returns class customized argument parser.
-
-        :return: argument parser
-        :rtype: argparse.ArgumentParser
-        """
 
     @abstractmethod
     def subject(self, ent) -> str:
@@ -136,8 +149,27 @@ class Module:
         :rtype: Any
         """
 
+    @staticmethod
+    def add_args(args: List, mod):
+        from client.argparser import args_map
+        parser = argparse.ArgumentParser(description=mod.__doc__)
+        arg_group = parser.add_argument_group("Module specific arguments")
+        for arg in args:
+            args_map[arg](arg_group)
+        return parser
+
+    @staticmethod
     @abstractmethod
-    def get_data(self) -> Tuple:
+    def get_argparser() -> argparse.ArgumentParser:
+        """
+        Function returns class customized argument parser.
+
+        :return: argument parser
+        :rtype: argparse.ArgumentParser
+        """
+
+    @abstractmethod
+    def get_data(self) -> Tuple[Any, DataTypes, LambdaType]:
         """
         Function returns `data` records with `DataType` and optional sorting lambda.
 
@@ -203,7 +235,7 @@ class Module:
         :return: `True` if filtering is needed otherwise `False`
         :rtype: bool
         """
-        return self.has_pipe_path or self.has_exclude or self.has_filter or self.has_select or self.has_append
+        return self.has_pipe_path or self.has_exclude or self.has_open_filter or self.has_select or self.has_append
 
     def filter_open(self, opn: libetrace.nfsdbEntryOpenfile) -> bool:
         """
@@ -222,8 +254,8 @@ class Module:
         if self.has_exclude:
             ret = ret and (not self.filename_matcher(self.exclude_subject(opn), self.args.exclude))
 
-        if self.has_filter and self.filter is not None:
-            ret = ret and self.filter.resolve_opens_filters(opn)
+        if self.has_open_filter and self.open_filter is not None:
+            ret = ret and self.open_filter.resolve_filters(opn)
 
         if self.has_select:
             ret = ret and (opn.path in self.args.select)
@@ -238,7 +270,7 @@ class Module:
         :return: True if filtering is needed otherwise False
         :rtype: bool
         """
-        return self.has_exclude or self.has_pid or self.has_filter or self.has_select
+        return self.has_exclude or self.has_pid or self.has_command_filter or self.has_select
 
     def filter_exec(self, ent: libetrace.nfsdbEntry) -> bool:
         """
@@ -261,46 +293,94 @@ class Module:
         if self.has_pid:
             ret = ret and (ent.eid.pid in self.args.pid)
 
-        if self.has_filter and self.filter is not None:
-            ret = ret and self.filter.resolve_exec_filters(ent)
+        if self.has_command_filter and self.command_filter is not None:
+            ret = ret and self.command_filter.resolve_filters(ent)
 
         if self.has_select:
             ret = ret and (self.filename_matcher(self.select_subject(ent), self.args.select))
 
         return ret
 
-    def get_reverse_dependencies_opens(self, file_paths: "str | list[str]", recursive: bool = False) -> List[libetrace.nfsdbEntryOpenfile]:
+    def get_reverse_dependencies_opens(self, file_paths: "str | List[str]", recursive: bool = False) -> List[libetrace.nfsdbEntryOpenfile]:
+        """
+        Function returns reverse dependencies of given paths.
+
+        :param file_paths: path(s)
+        :type file_paths: str | List[str]
+        :param recursive: look for dependencies in whole tree not only direct modules, defaults to False
+        :type recursive: bool, optional
+        :return: list of reverse dependencies opens object
+        :rtype: List[libetrace.nfsdbEntryOpenfile]
+        """
         lm_map = {lm.path: lm for lm in self.nfsdb.linked_modules()}
         return [lm_map[r] for r in list(self.nfsdb.get_reverse_dependencies(file_paths, recursive=recursive))]
 
-    @lru_cache(maxsize=1)  # this one is optimization for filter source_type
+    @lru_cache(maxsize=1)
     def get_src_types(self) -> Dict[str, int]:
+        """
+        Function returns compiled_file:compilation_type dictionary.
+
+        :return: dictionary with compiled file types.
+        :rtype: Dict[str, int]
+        """
         return {ent.compilation_info.files[0].path: ent.compilation_info.type for ent in self.nfsdb.get_compilations()}
 
-    def yield_path_from_pid(self, pids):
-        for ent in self.nfsdb.get_pids(pids):
+    def yield_path_from_pid(self, pids: "List[Tuple[int, int]] | List[Tuple[int,]]") -> Generator:
+        """
+        Function yields open paths of process with given pid(s)
+
+        :param pids: pids
+        :type pids: List[Tuple[int, int]] | List[Tuple[int,]]
+        :yield: opens paths  of given process pids
+        :rtype: Generator
+        """
+        for ent in self.nfsdb.get_entries_with_pids(pids):
             for o in (ent.opens_with_children if self.args.with_children else ent.opens):
                 if self.filter_open(o):
                     yield o.path
 
-    def yield_open_from_pid(self, pids):
-        for ent in self.nfsdb.get_pids(pids):
+    def yield_open_from_pid(self, pids: "List[Tuple[int, int]] | List[Tuple[int,]]") -> Generator:
+        """
+        Function yields opens of process with given pid(s)
+
+        :param pids: pids
+        :type pids: List[Tuple[int, int]] | List[Tuple[int,]]
+        :yield: opens of given process pids
+        :rtype: Generator
+        """
+        for ent in self.nfsdb.get_entries_with_pids(pids):
             for o in (ent.opens_with_children if self.args.with_children else ent.opens):
                 if self.filter_open(o):
                     yield o
 
-    def get_multi_deps(self, paths):
-        if self.args.cached:
-            return self.nfsdb.get_multi_deps_cached(paths, direct_global=self.args.direct_global)
-        else:
-            return self.nfsdb.get_multi_deps(paths, direct_global=self.args.direct_global, dep_graph=self.args.dep_graph,
-                                             debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
-                                             wrap_deps=self.args.wrap_deps)
+    def get_multi_deps(self, epaths:"List[libcas.DepsParam] | List[str]") -> List[List[libetrace.nfsdbEntryOpenfile]]:
+        """
+        Function runs proper dependency generation function based on --cache argument.
 
-    def get_dependency_graph(self, epaths):
+        :param paths: list of extended deps parameters or single path
+        :type paths: List[libcas.DepsParam] | List[str]
+        :return: list of opens objects
+        :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
+        """
+        if self.args.cached:
+            return self.nfsdb.get_multi_deps_cached(epaths, direct_global=self.args.direct_global)
+        else:
+            return self.nfsdb.get_multi_deps(epaths, direct_global=self.args.direct_global, dep_graph=self.args.dep_graph,
+                                            debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
+                                            wrap_deps=self.args.wrap_deps)
+
+    def get_dependency_graph(self, epaths:"List[libcas.DepsParam] | List[str]"):
+        """
+        Function returns dependency graph of given file list
+
+        :param epaths: list of extended deps parameters or single path
+        :type epaths: List[libcas.DepsParam] | List[str]
+        :return: dependency graph
+        :rtype: List[Tuple]
+        """
         return self.nfsdb.get_dependency_graph(epaths, direct_global=self.args.direct_global, debug=self.args.debug,
-                                               debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
-                                               wrap_deps=self.args.wrap_deps)
+                                                debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
+                                                wrap_deps=self.args.wrap_deps)
 
     def get_revdeps(self, file_paths):
         return self.nfsdb.get_reverse_dependencies(file_paths, recursive=self.args.recursive)
@@ -309,16 +389,18 @@ class Module:
         return self.nfsdb.get_rdm(file_paths, recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
 
     def get_cdm(self, file_paths):
-        cdm_exclude_patterns = []
+        cdm_exclude_patterns = None
         if self.args.cdm_exclude_patterns is not None:
+            cdm_exclude_patterns = []
             if isinstance(self.args.cdm_exclude_patterns, list):
                 for ex in self.args.cdm_exclude_patterns:
                     cdm_exclude_patterns.append(ex)
             else:
                 cdm_exclude_patterns.append(self.args.cdm_exclude_patterns)
 
-        cdm_exclude_files = []
+        cdm_exclude_files = None
         if self.args.cdm_exclude_files is not None:
+            cdm_exclude_files = []
             if isinstance(self.args.cdm_exclude_files, list):
                 for ex in self.args.cdm_exclude_files:
                     cdm_exclude_files.append(ex)
@@ -326,9 +408,9 @@ class Module:
                 cdm_exclude_files.append(self.args.cdm_exclude_files)
 
         return self.nfsdb.get_cdm(file_paths, cdm_exclude_files=cdm_exclude_files, cdm_exclude_patterns=cdm_exclude_patterns,
-                                  recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
+                                recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
 
-    def cdb_fix_multiple(self, data: List[libetrace.nfsdbEntry]) -> List[Dict[str, str]]:
+    def cdb_fix_multiple(self, data: List[libetrace.nfsdbEntry]) -> Generator:
         for exe in data:
             if exe.compilation_info is not None:
                 if len(exe.compilation_info.file_paths) > 1:
@@ -386,12 +468,17 @@ class Module:
         return paths
 
     @staticmethod
-    def check_required(required_args, args):
+    def check_required(required_args:List[str], args: argparse.Namespace):
         """
         Function check if required parameters are valid.
 
-        :raises ArgumentException: if required args are missing, have wrong count
+        :param required_args: list of required args 
+        :type required_args: List[str]
+        :param args: parsed commandline args
+        :type args: argparse.Namespace
+        :raises ArgumentException: if required args are missing, or have wrong count
         """
+
         if len(required_args) > 0:
             missing_args = [k.split(":")[0] for k in required_args if not getattr(args, k.split(":")[0])]
             if len(missing_args) > 0:
@@ -423,15 +510,21 @@ class Module:
             printerr("ERROR: {}".format(err.message))
             sys.exit(1)
 
-        if self.args.filter:
+        if self.args.open_filter:
             try:
-                self.filter = Filter(self.args.filter, self, self.config, self.source_root)
+                self.open_filter = OpenFilter(self.args.open_filter, self, self.config, self.source_root)
+            except FilterException as err:
+                printerr("ERROR: {}".format(err.message))
+                sys.exit(1)
+        if self.args.command_filter:
+            try:
+                self.command_filter = CommandFilter(self.args.command_filter, self, self.config, self.source_root)
             except FilterException as err:
                 printerr("ERROR: {}".format(err.message))
                 sys.exit(1)
 
         try:
-            data, renderer, sort_lambda = self.get_data()
+            data, output_type, sort_lambda = self.get_data()
         except ParameterException as exc:
             printerr("ERROR: {}".format(exc.message))
             sys.exit(1)
@@ -439,7 +532,7 @@ class Module:
             printerr("ERROR: libetrace.error : {}".format(str(exc)))
             sys.exit(1)
 
-        output_engine = self.get_output_engine()(data, self.args, self, renderer, sort_lambda)
+        output_engine = self.get_output_engine()(data, self.args, self, output_type, sort_lambda)
         return output_engine.render_data()
 
     def get_output_engine(self):
@@ -460,8 +553,11 @@ class Module:
             return True
 
     def get_exec_of_open(self, ent: libetrace.nfsdbEntryOpenfile) -> libetrace.nfsdbEntry:
-        return ent.opaque if ent.opaque is not None else ent.parent
+        return ent.opaque if self.args.generate and ent.opaque is not None else ent.parent
 
+
+class FilterableModule:
+    pass
 
 class PipedModule:
     @abstractmethod
@@ -469,7 +565,6 @@ class PipedModule:
         """
         Function modifies input path argument considering previous data.
         """
-
 
 class UnknownModule(Module):
     def render(self):

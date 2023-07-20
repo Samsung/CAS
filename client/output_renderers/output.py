@@ -1,9 +1,11 @@
 from abc import abstractmethod
+import itertools
 from enum import Enum
 from types import LambdaType
+from typing import Iterator
 
 import libetrace
-
+from client.misc import fix_cmd_makefile
 
 class DataTypes(Enum):
     # List values
@@ -38,7 +40,8 @@ class OutputRenderer:
     def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: LambdaType) -> None:
         self.args = args
         self.data = data
-        self.num_entries = len(data) if isinstance(data, list) else -1
+        if not self.args.plain or self.args.count:
+            self.num_entries = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
         self.sort_lambda = self.get_sorting_lambda(sort_lambda)
 
         if self.args.entries_per_page is None:
@@ -72,7 +75,7 @@ class OutputRenderer:
         }[self.output_type]
 
     def get_sorting_lambda(self, original_sort_lambda):
-        if self.args.sorted and isinstance(self.data, list) and len(self.data) > 0:
+        if self.args.sorted and isinstance(self.data, list) and self.num_entries > 0:
             if isinstance(self.data[0], libetrace.nfsdbEntry):
                 if self.args.sorting_key is not None:
                     if self.args.sorting_key == "bin":
@@ -101,25 +104,49 @@ class OutputRenderer:
     def render_data(self):
         if not self.args.count and self.args.sorted and self.output_type.value < DataTypes.config_data.value:
             self.data = sorted(self.data, key=self.sort_lambda, reverse=self.args.reverse)
+
         if self.args.range:
             parts = self.args.range.replace("[", "").replace("]", "").split(":")
-            if len(parts) == 1:
-                self.data = [self.data[int(parts[0])]]
-            elif len(parts) == 2:
-                self.data = self.data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None]
-            elif len(parts) == 3:
-                self.data = self.data[int(parts[0]) if parts[0] != '' else None:int(parts[1]) if parts[1] != '' else None:int(parts[2]) if parts[2] != '' else None]
-            else:
-                assert False, "Wrong range!"
-        else:
-            if isinstance(self.data, list) and self.args.entries_per_page != 0:
-                if len(self.data) < (self.args.page * self.args.entries_per_page):
-                    self.args.page = int(len(self.data)/self.args.entries_per_page)
-                self.data = self.data[self.args.page * self.args.entries_per_page:(self.args.page + 1) * self.args.entries_per_page]
-            else:
-                self.data = self.data
+            start = None
+            stop = None
+            step = None
+            if len(parts) > 0:
+                start = int(parts[0]) if parts[0] != '' else 0
+            if len(parts) > 1:
+                stop = int(parts[1]) if parts[1] != '' else None
+            if len(parts) > 2:
+                step = int(parts[2]) if parts[2] != '' else None
 
-        self.count = len(self.data) if isinstance(self.data, list) else -1
+            if isinstance(self.data, list):
+                if len(parts) == 1 and start is not None:
+                    self.data = [self.data[start]]
+                elif len(parts) == 2:
+                    self.data = self.data[start: stop]
+                elif len(parts) == 3:
+                    self.data = self.data[start:stop:step]
+                else:
+                    assert False, "Wrong range!"
+            elif isinstance(self.data, Iterator):
+                if len(parts) == 1:
+                    self.data = list(itertools.islice(self.data, start, start))
+                elif len(parts) == 2:
+                    self.data = list(itertools.islice(self.data, start, stop))
+                elif len(parts) == 3:
+                    self.data = list(itertools.islice(self.data, start, stop, step))
+                else:
+                    assert False, "Wrong range!"
+        elif self.args.entries_per_page != 0:
+            if (isinstance(self.data, list) or isinstance(self.data, Iterator)):
+                if self.num_entries < (self.args.page * self.args.entries_per_page):
+                    self.args.page = int(self.num_entries/self.args.entries_per_page)
+
+                if isinstance(self.data, list):
+                    self.data = self.data[self.args.page * self.args.entries_per_page: (self.args.page + 1) * self.args.entries_per_page]
+                elif isinstance(self.data, Iterator):
+                    self.data = list(itertools.islice(self.data, self.args.page * self.args.entries_per_page,(self.args.page + 1) * self.args.entries_per_page))
+
+        if not self.args.plain:
+            self.count = len(self.data) if isinstance(self.data, list) or isinstance(self.data, Iterator) else -1
         if self.args.count:
             return self.count_renderer()
         return self.output_renderer()
@@ -194,6 +221,30 @@ class OutputRenderer:
 
     def null_data_renderer(self):
         pass
+
+    def makefile_data_renderer(self):
+        if not self.args.all or self.args.static:
+            yield ".PHONY: all"
+            for i in range(0, len(self.data)):
+                yield f".PHONY: comp_{i}"
+            yield "all: {}".format(" ".join([f"comp_{i}" for i in range(0, len(self.data))]))
+            yield "\t@echo Done!"
+            for i, exe in enumerate(self.data):
+                yield f"comp_{i}:"
+                yield "\t@echo \"{} {}\"".format("CC" if exe.compilation_info.type == 1 else "CXX", exe.compilation_info.objects[0].path if len(exe.compilation_info.objects) > 0 else "--")
+                cmd = ("$(CC) {}" if exe.compilation_info.type == 1 else "$(CXX) {}").format(fix_cmd_makefile(exe.argv, self.args.static))
+                yield f"\t@(cd {exe.cwd} && {cmd})"
+        elif self.args.all and not self.args.static:
+            yield ".PHONY: all"
+            yield "ADDITIONAL_OPTS_PREFIX:="
+            yield "ADDITIONAL_OPTS_POSTFIX:="
+            for i in range(0, len(self.data)):
+                yield ".PHONY: cmd_%d" % i
+            yield "all: {}\n\t@echo Done!\n".format(" ".join(["cmd_%d" % i for i in range(0, len(self.data))]))
+            for i, exe in enumerate(self.data):
+                yield "cmd_%d:" % i
+                yield "\t@echo \"%s %d\"" % ("CMD", i)
+                yield "\t@(cd %s && $(ADDITIONAL_OPTS_PREFIX)%s)" % (exe.cwd, fix_cmd_makefile(exe.argv)+" $(ADDITIONAL_OPTS_POSTFIX)")
 
     def assert_not_implemented(self):
         assert False, "This view is not implemented in target output!"

@@ -75,6 +75,7 @@ struct nfsdb_entry {
 	unsigned long* linked_file;
 	struct nfsdb_entry_file_index linked_index;
 	int linked_type;
+	int has_shared_argv;
 };
 
 struct nfsdb_deps {
@@ -88,6 +89,7 @@ struct nfsdb {
 	struct nfsdb_entry* nfsdb;
 	unsigned long nfsdb_count;
 	const char* source_root;
+	unsigned long source_root_size;
 	const char* dbversion;
 	const char** string_table;
 	uint32_t* string_size_table;
@@ -95,6 +97,8 @@ struct nfsdb {
 	unsigned long string_count;
 	const char** pcp_pattern_list;
 	unsigned long pcp_pattern_list_size;
+	unsigned long* shared_argv_list;
+	unsigned long shared_argv_list_size;
 	struct rb_root procmap;
 	struct rb_root bmap;
 	struct rb_root forkmap;

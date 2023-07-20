@@ -1,12 +1,16 @@
-import json
-from client.output_renderers.output import OutputRenderer
-from client.misc import access_from_code, fix_cmd_makefile, get_file_info, stat_from_code
 import os
+import json
 import libetrace
 import libcas
 
+from client.output_renderers.output import OutputRenderer
+from client.misc import access_from_code, get_file_info, stat_from_code
+
 
 class Renderer(OutputRenderer):
+    """
+    Plain output - targeted for using in terminal.
+    """
 
     help = 'Prints output line-by-line (generated from output_renderers dir)'
     default_entries_count = 0
@@ -62,28 +66,60 @@ class Renderer(OutputRenderer):
         return str(self.num_entries)
 
     def formatter(self, fmt, entry_fmt):
-        if len(self.data) > 0:
-            if isinstance(self.data[0], str):
+        if self.count > 0:
+            if isinstance(self.data, libetrace.nfsdbFilteredOpensPathsIter):
                 if "{S}" in fmt:
-                    yield len(self.data)
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
+                if "{L}" in fmt:
+                    for row in self.data:
+                        yield self.origin_module.get_path(row)
+            elif isinstance(self.data, libetrace.nfsdbFilteredOpensIter) or isinstance(self.data, libetrace.nfsdbOpensIter):
+                if "{S}" in fmt:
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
+                if "{L}" in fmt:
+                    for row in self.data:
+                        yield self._file_entry_format(row, entry_fmt)
+            elif isinstance(self.data, libetrace.nfsdbFilteredCommandsIter):
+                if "{S}" in fmt:
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
+                if "{L}" in fmt:
+                    for row in self.data:
+                        yield self._command_entry_format(row, entry_fmt)
+            elif isinstance(self.data[0], str):
+                if "{S}" in fmt:
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
                 if "{L}" in fmt:
                     for row in self.data:
                         yield self.origin_module.get_path(row) if self.args.relative else row
             elif isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
                 if "{S}" in fmt:
-                    yield len(self.data)
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
                 if "{L}" in fmt:
                     for row in self.data:
                         yield self._file_entry_format(row, entry_fmt)
             elif isinstance(self.data[0], libetrace.nfsdbEntry):
                 if "{S}" in fmt:
-                    yield len(self.data)
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
                 if "{L}" in fmt:
                     for row in self.data:
                         yield self._command_entry_format(row, entry_fmt)
             elif isinstance(self.data[0], tuple):
                 if "{S}" in fmt:
-                    yield len(self.data)
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
                 if "{L}" in fmt:
                     for row in self.data:
                         yield self._process_entry_format(row, entry_fmt)
@@ -133,7 +169,7 @@ class Renderer(OutputRenderer):
             t="compilation" if row.compilation_info is not None else "linker" if row.linked_file is not None else "command",
             p=row.eid.pid,
             x=row.eid.index,
-            r="{}:{}".format(row.parent_eid.pid, row.parent_eid.index),
+            r=f"{row.parent_eid.pid}:{row.parent_eid.index}",
             b=row.bpath,
             w=row.cwd,
             e=row.etime,
@@ -176,6 +212,7 @@ class Renderer(OutputRenderer):
 
     def compilation_info_data_renderer(self):
         for row in self.data:
+            row = row.opaque
             yield "COMPILATION:"
             yield "  PID: {}, {}".format(row.eid.pid, row.eid.index)
             yield "  PARENT_PID: {}, {}".format(row.parent_eid.pid, row.parent_eid.index)
@@ -219,8 +256,10 @@ class Renderer(OutputRenderer):
             yield " - commands:    {:>10}".format(self.data['execs_commands'])
             yield " - compilations:{:>10}".format(self.data['execs_compilations'])
             yield " - linking:     {:>10}".format(self.data['execs_linking'])
+            yield "Binaries:       {:>10}".format(self.data['binaries'])
             yield "Opens:          {:>10}".format(self.data['opens'])
-            yield "Linked modules: {:>10}".format(self.data['linked_modules'])
+            yield " - linked:      {:>10} (unique paths {})".format(self.data['linked'] , self.data['linked_paths'])
+            yield " - compiled:    {:>10} (unique paths {})".format(self.data['compiled'], self.data['compiled_paths'])
 
     def config_data_renderer(self):
         if isinstance(self.data, libcas.CASConfig):
@@ -233,45 +272,17 @@ class Renderer(OutputRenderer):
     def config_part_data_renderer(self):
         return json.dumps(self.data, indent=4)
 
-    def makefile_data_renderer(self):
-        if not self.args.all or self.args.static:
-            yield ".PHONY: all"
-            for i in range(0, len(self.data)):
-                yield f".PHONY: comp_{i}"
-            yield "all: {}".format(" ".join([f"comp_{i}" for i in range(0, len(self.data))]))
-            yield "\t@echo Done!"
-            for i, exe in enumerate(self.data):
-                yield f"comp_{i}:"
-                yield "\t@echo \"{} {}\"".format("CC" if exe.compilation_info.type == 1 else "CXX", exe.compilation_info.objects[0].path if len(exe.compilation_info.objects) > 0 else "--")
-                cmd = ("$(CC) {}" if exe.compilation_info.type == 1 else "$(CXX) {}").format(fix_cmd_makefile(exe.argv, self.args.static))
-                yield f"\t@(cd {exe.cwd} && {cmd})"
-        elif self.args.all and not self.args.static:
-            yield ".PHONY: all"
-            yield "ADDITIONAL_OPTS_PREFIX:="
-            yield "ADDITIONAL_OPTS_POSTFIX:="
-            for i in range(0, len(self.data)):
-                yield ".PHONY: cmd_%d" % i
-            yield "all: {}\n\t@echo Done!\n".format(" ".join(["cmd_%d" % i for i in range(0, len(self.data))]))
-            for i, exe in enumerate(self.data):
-                yield "cmd_%d:" % i
-                yield "\t@echo \"%s %d\"" % ("CMD", i)
-                yield "\t@(cd %s && $(ADDITIONAL_OPTS_PREFIX)%s)" % (exe.cwd, fix_cmd_makefile(exe.argv)+" $(ADDITIONAL_OPTS_POSTFIX)")
-
     def dep_graph_data_renderer(self):
         for row in self.data:
-            yield row[0]
-            yield "  WRITING_PIDS:"
-            for ent in row[1][0]:
-                yield "    {}".format(ent[0])
-                yield "      OPENS:"
-                for opn in ent[1]:
-                    yield "        {}".format(opn)
-                yield "      CMD:"
-                for cmd in ent[2]:
-                    yield "        {}".format(cmd.replace("\n", "\\n"))
-            yield "  ALL_PROCESS_WRITES:"
-            for wrt in row[1][1]:
-                yield "    {}".format(wrt)
+            yield row[0] + "\n  WRITING_PIDS:"
+            for ent in (sorted(row[1][0]) if self.args.sorted else row[1][0]):
+                yield "    " + str(ent[0]) + \
+                    "\n      OPENS:" + \
+                    ( "\n" if len(ent[1]) else "") + "\n".join([ "        " + opn for opn in ent[1]]) + \
+                    "\n      CMD:" + \
+                    ( "\n" if len(ent[2]) else "")  + "\n".join([ "        " + cmd.replace("\n", "\\n") for cmd in ent[2]])
+            yield "  ALL_PROCESS_WRITES:" + \
+                ( "\n" if len(row[1][1])else "")  + "\n".join([ "    " + wrt for wrt in (sorted(row[1][1]) if self.args.sorted else row[1][1])])
 
     def rdm_data_renderer(self):
         if self.args.sorted:
