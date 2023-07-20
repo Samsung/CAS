@@ -137,11 +137,12 @@ struct OpenFile {
 
         this->size = 0;
 
-        if (!access(absolute_path.c_str(), F_OK))
+        if (access(absolute_path.c_str(), F_OK))
             return;
 
         ret = statx(-1, original_path.c_str(), AT_SYMLINK_NOFOLLOW,
-                    STATX_MODE | STATX_SIZE, &stat_buf);
+                    STATX_TYPE | STATX_SIZE, &stat_buf);
+
         if (ret)
             return;
 
@@ -158,7 +159,7 @@ struct OpenFile {
          *
          * A bits are access mode bits, used in the open() syscall.
          */
-        this->mode |= 0x40 | ((stat_buf.stx_mode & S_IFMT) >> 10);
+        this->mode |= 0x40 | ((stat_buf.stx_mode) >> 10);
     };
 };
 
