@@ -1,7 +1,7 @@
 ## Syscalls tracing kernel module
 A linux kernel module for tracing selected syscalls. Inspired by https://github.com/ilammy/ftrace-hook.
 
-### Build & Installation:
+### Build & Installation
 1. Get packages needed for module build.
 ```bash
 $ sudo apt install build-essential linux-headers-$(uname -r)
@@ -12,6 +12,37 @@ $ make
 $ sudo make modules_install
 ```
 Some kernel configurations may require modules to be signed. To do so, follow the instructions in [kernel module signing docs](https://www.kernel.org/doc/html/latest/admin-guide/module-signing.html).
+
+### WSL build
+1. Check kernel version:
+```bash
+$ uname -r
+5.15.90.1-microsoft-standard-WSL2
+```
+2. Find and download proper kernel sources version from: [WSL2-Linux-Kernel](https://github.com/microsoft/WSL2-Linux-Kernel/tags)
+```bash
+$ wget https://github.com/microsoft/WSL2-Linux-Kernel/archive/refs/tags/linux-msft-wsl-5.15.90.1.tar.gz
+$ tar -xzf linux-msft-wsl-5.15.90.1
+$ cd WSL2-Linux-Kernel-linux-msft-wsl-5.15.90.1
+```
+3. Create directories for kernel modules
+```bash
+$ sudo mkdir -p /lib/modules/`uname -r`
+$ ln -s `pwd` /lib/modules/`uname -r`/build
+```
+4. Compile kernel and prepare kernel build enviroment for compiling modules
+```bash
+$ zcat /proc/config.gz > Microsoft/current-config # This command gets the config of running kernel (it should be same as Microsoft/config-wsl)
+$ sudo apt install make gcc git bc build-essential flex bison libssl-dev libelf-dev pahole
+$ make KCONFIG_CONFIG=Microsoft/config-wsl -j $(nproc)
+$ make KCONFIG_CONFIG=Microsoft/config-wsl prepare_modules
+$ cp /sys/kernel/btf/vmlinux .
+```
+5. Proceed normal module compilation steps [Build & Installation](#build--installation)
+6. Remember to mount debugfs before using etrace to be sure trace\_pipe exists
+```bash
+$ sudo mount -t debugfs none /sys/kernel/debug
+```
 
 ### Usage
 **Note**: commands described here are useful mostly for BAS developers. For end-user usage, see [README](../README.md) of main BAS project.

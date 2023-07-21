@@ -47,7 +47,11 @@ elif [ "$1" = "-i" ]; then
 	fi
 
 	# install module
-	/sbin/modprobe execve_trace root_pid="$2" "${@:3}"
+    echo "Trying to support wsl"
+    SUPPORT_NS_PID=""
+	uname -r | grep WSL > /dev/null && SUPPORT_NS_PID="support_ns_pid=1"
+    echo SUPPORT_NS_PID=$SUPPORT_NS_PID
+	/sbin/modprobe execve_trace root_pid="$2" "$SUPPORT_NS_PID" "${@:3}"
 	exit "$?"
 
 elif [ "$1" = "-r" ]; then

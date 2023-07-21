@@ -126,6 +126,8 @@ static int root_pid = 0;
 module_param(root_pid, int, 0 /* don't expose it to sysfs */);
 static int ignore_repeated_opens = 0;
 module_param(ignore_repeated_opens, int, 0);
+static int support_ns_pid = 0;
+module_param(support_ns_pid, int, 0);
 
 // amount of bits occupied by process' real PID in unique PID value.
 // If set to zero, the unique PID will consist only of our own upid.
@@ -218,7 +220,7 @@ static bool should_trace(struct traced_pid **tpid)
 	return retval;
 }
 
-static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, bool force)
+static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, pid_t nspid, bool force)
 {
 	struct traced_pid *new_pid;
 	bool should_add = false;
@@ -229,7 +231,7 @@ static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, bool force)
 		should_add = true;
 	else
 		// check if parent pid is tracked
-		should_add = is_pid_on_list_locked(ppid, NULL);
+		should_add = is_pid_on_list_locked(ppid, NULL) || (nspid == (pid_t) root_pid);
 
 	if (!should_add)
 		return INVALID_UPID;
@@ -300,11 +302,11 @@ static void clear_pids_list_locked(void)
 	}
 }
 
-static u64 maybe_add_pid_to_list(pid_t pid, pid_t ppid, bool force)
+static u64 maybe_add_pid_to_list(pid_t pid, pid_t ppid, pid_t nspid, bool force)
 {
 	u64 upid = INVALID_UPID;
 	mutex_lock(&list_mutex);
-	upid = maybe_add_pid_to_list_locked(pid, ppid, force);
+	upid = maybe_add_pid_to_list_locked(pid, ppid, nspid, force);
 	mutex_unlock(&list_mutex);
 	return upid;
 }
@@ -639,6 +641,10 @@ static char* get_pathstr_from_path(struct path* p, char** tmp_buf)
 	return retbuf;
 }
 
+static pid_t get_ns_parrent_pid(struct task_struct *self)
+{
+	return support_ns_pid ? task_pid_vnr(self) : (pid_t) 0; // root_pid != 0, so never equal
+}
 
 // ########## TRACING FUNCTIONS ##########
 
@@ -654,7 +660,7 @@ static void __tracepoint_probe_fork(void* data, struct task_struct* self,
 	}
 
 	pr_debug("fork pid: %d, ppid: %d\n",(int) task->pid,(int) self->pid);
-	upid = maybe_add_pid_to_list(task->pid, self->pid, false);
+	upid = maybe_add_pid_to_list(task->pid, self->pid, get_ns_parrent_pid(self), false);
 
 	if (!should_trace(&tppid))
 		return;
@@ -1632,13 +1638,17 @@ static int et_init(void)
 		return -EINVAL;
 	}
 
+	if (support_ns_pid) {
+		pr_info("Trying to support namespace pid");
+	}
+
 	// read root pid from parameter
 
 	if (!root_pid) {
 		pr_err("Invalid root_pid value (pass root_pid=<pid> when insmod'ing)\n");
 		return -EINVAL;
 	}
-	maybe_add_pid_to_list((pid_t) root_pid, (pid_t) 0/* don't care */, true);
+	maybe_add_pid_to_list((pid_t) root_pid, (pid_t) 0/* don't care */, (pid_t) 0/* don't care */, true);
 
 	// set up tracepoints for tracing forks/exits
 
