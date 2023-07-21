@@ -164,7 +164,7 @@ class StoreCache(Module):
         arg_group.add_argument('--deps-threshold', '-DT', type=int, default=90000, help='Maximum allowed dependency count for single module - used to detect dependency generation issues.')
         arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
         arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
-        arg_group.add_argument('--shared_argvs', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
+        arg_group.add_argument('--shared-argvs', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
         return module_parser
 
     def get_data(self) -> tuple:
@@ -191,7 +191,8 @@ class StoreCache(Module):
 
             start_time = time.time()
             print("creating cache from json database ...")
-            libcas.CASDatabase.create_db_image(json_db_filename, src_root, self.args.set_version, self.args.exclude_command_patterns, self.args.shared_argvs.split(":"), cache_db_filename, self.args.debug)
+            shared_args = self.args.shared_argvs.split(":") if self.args.shared_argvs else []
+            libcas.CASDatabase.create_db_image(json_db_filename, src_root, self.args.set_version, self.args.exclude_command_patterns, shared_args, cache_db_filename, self.args.debug)
             print("cache stored [%.2fs]" % (time.time() - start_time))
 
         if self.args.deps_create or (not self.args.deps_create and not self.args.create):
