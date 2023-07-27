@@ -1724,7 +1724,7 @@ class CASDatabase:
                                     if u not in self.config.clang_tailopts:
                                         break
                                     extra_arg_num += 1
-                                fn = os.path.normpath(os.path.join(cwd, exe.argv[-1-i]))
+                                fn = os.path.normpath(os.path.join(cwd, argv[-1-i]))
                                 if not os.path.exists(fn):
                                     if "tmp" not in fn:
                                         print("Error: {} - does not exist".format(fn), flush=True)
@@ -1766,7 +1766,6 @@ class CASDatabase:
                                     print("empty output", flush=True)
                                     continue
                                 if not clang_c.allow_pp_in_compilations and '-E' in exe.argv:
-                                    # print ("not allow_pp_in_compilations and -E in args")
                                     not_allow_pp += 1
                                     continue
 
