@@ -3367,6 +3367,117 @@ PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *a
 	return 0;
 }
 
+PyObject* libetrace_nfsdb_path_symlinked(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		if (node->rd_entry_count>0) {
+			struct nfsdb_entry* entry = node->rd_entry_list[0];
+			unsigned long index = node->rd_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+		}
+		else if (node->rw_entry_count>0) {
+			struct nfsdb_entry* entry = node->rw_entry_list[0];
+			unsigned long index = node->rw_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+		}
+		else if (node->wr_entry_count>0) {
+			struct nfsdb_entry* entry = node->wr_entry_list[0];
+			unsigned long index = node->wr_entry_index[0];
+			unsigned long mode = entry->open_files[index].mode;
+			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+		}
+		Py_RETURN_FALSE;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
+PyObject* libetrace_nfsdb_symlink_paths(libetrace_nfsdb_object *self, PyObject *args) {
+
+	static char errmsg[ERRMSG_BUFFER_SIZE];
+
+	PyObject* path_symlinked = libetrace_nfsdb_path_symlinked(self,args);
+	if (!path_symlinked) {
+		return 0;
+	}
+
+	if (!PyObject_IsTrue(path_symlinked)) {
+		PyErr_SetString(libetrace_nfsdbError, "The provided path has not been resolved from a symlink");
+		return 0;
+	}
+
+	PyObject* path = PyTuple_GetItem(args,0);
+
+	if (PyUnicode_Check(path)) {
+		const char* fpath = PyString_get_c_str(path);
+		struct stringRefMap_node* srefnode = stringRefMap_search(&self->nfsdb->revstringmap, fpath);
+		PYASSTR_DECREF(fpath);
+		if (!srefnode) {
+			Py_RETURN_FALSE;
+		}
+		unsigned long hfpath = srefnode->value;
+		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
+		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
+		PyObject* pset = PySet_New(0);
+		if (node->rd_entry_count>0) {
+			struct nfsdb_entry* entry = node->rd_entry_list[0];
+			unsigned long index = node->rd_entry_index[0];
+			struct openfile* openfile = &entry->open_files[index];
+			if (((openfile->mode&0x40)!=0)&&(((openfile->mode&0x3C)>>2)==0xA)) {
+				if (openfile->original_path) {
+					PySet_Add(pset,PyUnicode_FromString(self->nfsdb->string_table[*openfile->original_path]));
+				}
+			}
+		}
+		else if (node->rw_entry_count>0) {
+			struct nfsdb_entry* entry = node->rw_entry_list[0];
+			unsigned long index = node->rw_entry_index[0];
+			struct openfile* openfile = &entry->open_files[index];
+			if (((openfile->mode&0x40)!=0)&&(((openfile->mode&0x3C)>>2)==0xA)) {
+				if (openfile->original_path) {
+					PySet_Add(pset,PyUnicode_FromString(self->nfsdb->string_table[*openfile->original_path]));
+				}
+			}
+		}
+		else if (node->wr_entry_count>0) {
+			struct nfsdb_entry* entry = node->wr_entry_list[0];
+			unsigned long index = node->wr_entry_index[0];
+			struct openfile* openfile = &entry->open_files[index];
+			if (((openfile->mode&0x40)!=0)&&(((openfile->mode&0x3C)>>2)==0xA)) {
+				if (openfile->original_path) {
+					PySet_Add(pset,PyUnicode_FromString(self->nfsdb->string_table[*openfile->original_path]));
+				}
+			}
+		}
+		PyObject* argv = PyList_New(0);
+		while(PySet_Size(pset)>0) {
+			PyObject* p = PySet_Pop(pset);
+			PyList_Append(argv,p);
+		}
+		Py_DecRef(pset);
+		return argv;
+	}
+
+	PyErr_SetString(libetrace_nfsdbError, "Invalid argument type (not a string)");
+	return 0;
+}
+
 PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];

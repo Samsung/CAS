@@ -225,6 +225,8 @@ PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *ar
 PyObject* libetrace_nfsdb_path_read(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_path_symlinked(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_symlink_paths(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
@@ -272,6 +274,8 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"path_read",(PyCFunction)libetrace_nfsdb_path_read,METH_VARARGS,"Returns True if a given path was opened for read during the build"},
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
 	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
+	{"path_symlinked",(PyCFunction)libetrace_nfsdb_path_symlinked,METH_VARARGS,"Returns True if a given path was reached through a symbolic link"},
+	{"symlink_paths",(PyCFunction)libetrace_nfsdb_symlink_paths,METH_VARARGS,"Returns list of original symlink paths for a given resolved path"},
 	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS,""},
 	{"precompute_command_patterns",(PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
 	{"filemap_has_path",(PyCFunction)libetrace_nfsdb_filemap_has_path,METH_VARARGS,"Returns True if a given opened path exists in the database"},
