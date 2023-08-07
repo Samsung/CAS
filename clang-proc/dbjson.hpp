@@ -857,7 +857,7 @@ public:
   struct callfunc_info_t {
 	  bool funcproto;
 	  void* FunctionDeclOrProtoType;
-	  const CompoundStmt* CS;
+	  size_t csid;
 	  const CallExpr* CE;
 	  void* refObj; // ptr
 	  QualType classType;
@@ -1662,7 +1662,7 @@ public:
       }
 private:
   void printCallInfo(const DbJSONClassVisitor::callfunc_info_t&, std::stringstream& ss, clang::SourceManager& SM, std::vector<const CallExpr*>& CEv);
-  void printCallInfo(const CallExpr* CE, std::stringstream& ss, clang::SourceManager& SM, size_t ord, std::vector<const CallExpr*>& CEv);
+  void printCallInfo(const DbJSONClassVisitor::callfunc_info_t&, std::stringstream& ss, clang::SourceManager& SM, size_t ord, std::vector<const CallExpr*>& CEv);
 
 
   void getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig);

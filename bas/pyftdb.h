@@ -641,6 +641,7 @@ PyObject* libftdb_ftdb_func_callinfo_entry_get_end(PyObject* self, void* closure
 PyObject* libftdb_ftdb_func_callinfo_entry_get_ord(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_get_expr(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_get_loc(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_func_callinfo_entry_get_csid(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_get_args(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_callinfo_entry_sq_contains(PyObject* self, PyObject* key);
@@ -667,6 +668,7 @@ static PyGetSetDef libftdb_ftdbFuncCallInfoEntry_getset[] = {
 	{"ord",libftdb_ftdb_func_callinfo_entry_get_ord,0,"ftdb func callinfo entry ord value",0},
 	{"expr",libftdb_ftdb_func_callinfo_entry_get_expr,0,"ftdb func callinfo entry expr value",0},
 	{"loc",libftdb_ftdb_func_callinfo_entry_get_loc,0,"ftdb func callinfo entry loc value",0},
+	{"csid",libftdb_ftdb_func_callinfo_entry_get_csid,0,"ftdb func callinfo entry csid value",0},
 	{"args",libftdb_ftdb_func_callinfo_entry_get_args,0,"ftdb func callinfo entry args values",0},
 	{0,0,0,0,0},
 };

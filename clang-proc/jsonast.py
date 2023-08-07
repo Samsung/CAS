@@ -1034,7 +1034,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
         JDB["module_info"] = [{"name":list(srcD.keys())[0],"id":list(srcD.values())[0]} for srcD in JDB["modules"]]
     # Now save the final JSON
     with open(output,"w") as f:
-        f.write(json.dumps(JDB,indent=4))
+        f.write(json.dumps(JDB,indent="\t"))
     print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
     if mrrs+rv > 0:
         print("WARNING: Encountered some ERRORS!")

@@ -390,6 +390,7 @@ struct call_info {
 	unsigned long ord;
 	const char* expr;
 	const char* loc;
+	int64_t csid;
 	unsigned long* args;
 	unsigned long args_count;
 };

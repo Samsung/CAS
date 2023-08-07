@@ -171,6 +171,7 @@ for i,f in enumerate(db["funcs"]):
 		assert ci["ord"]==ftdb.funcs[f["id"]].call_info[i].ord
 		assert ci["expr"]==ftdb.funcs[f["id"]].call_info[i].expr
 		assert ci["loc"]==ftdb.funcs[f["id"]].call_info[i].loc
+		assert ci["csid"]==ftdb.funcs[f["id"]].call_info[i].csid
 		assert ci["args"]==ftdb.funcs[f["id"]].call_info[i].args
 	assert f["callrefs"]==ftdb.funcs[f["id"]].callrefs,"%s vs %s"%(f["callrefs"],ftdb.funcs[f["id"]].callrefs)
 	assert f["refcalls"]==ftdb.funcs[f["id"]].refcalls,"%s vs %s"%(f["refcalls"],ftdb.funcs[f["id"]].refcalls)
@@ -179,6 +180,7 @@ for i,f in enumerate(db["funcs"]):
 		assert ci["end"]==ftdb.funcs[f["id"]].refcall_info[i].end
 		assert ci["ord"]==ftdb.funcs[f["id"]].refcall_info[i].ord
 		assert ci["expr"]==ftdb.funcs[f["id"]].refcall_info[i].expr
+		assert ci["csid"]==ftdb.funcs[f["id"]].refcall_info[i].csid
 		if "loc" in ci:
 			assert ci["loc"]==ftdb.funcs[f["id"]].refcall_info[i].loc
 		assert ci["args"]==ftdb.funcs[f["id"]].refcall_info[i].args
@@ -346,6 +348,8 @@ for i,f in enumerate(db["funcs"]):
 		assert ci["expr"]==ftdb["funcs"][f["id"]]["call_info"][i]["expr"]
 		assert "loc" in ftdb["funcs"][f["id"]]["call_info"][i]
 		assert ci["loc"]==ftdb["funcs"][f["id"]]["call_info"][i]["loc"]
+		assert "csid" in ftdb["funcs"][f["id"]]["call_info"][i]
+		assert ci["csid"]==ftdb["funcs"][f["id"]]["call_info"][i]["csid"]
 		assert "args" in ftdb["funcs"][f["id"]]["call_info"][i]
 		assert ci["args"]==ftdb["funcs"][f["id"]]["call_info"][i]["args"]
 	assert "callrefs" in ftdb["funcs"][f["id"]]
@@ -358,6 +362,7 @@ for i,f in enumerate(db["funcs"]):
 		assert ci["end"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["end"]
 		assert ci["ord"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["ord"]
 		assert ci["expr"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["expr"]
+		assert ci["csid"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["csid"]
 		if "loc" in ci:
 			assert ci["loc"]==ftdb["funcs"][f["id"]].refcall_info[i]["loc"]
 		assert ci["args"]==ftdb["funcs"][f["id"]].refcall_info[i]["args"]

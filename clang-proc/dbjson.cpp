@@ -505,6 +505,7 @@ const DbJSONClassVisitor::callfunc_info_t* DbJSONClassVisitor::handleCallMemberE
 		nfo.ord = exprOrd++;
 		/* We might have member function call from implicit (e.g. operator()) function */
 		if (lastFunctionDef) {
+			nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
 			std::pair<std::set<callfunc_info_t>::iterator,bool> rv = lastFunctionDef->funcinfo.insert(nfo);
 			for(unsigned long i=0; i<proto->getNumParams(); i++) {
 				QualType T = proto->getParamType(i);
@@ -564,6 +565,7 @@ const DbJSONClassVisitor::callfunc_info_t* DbJSONClassVisitor::handleCallVarDecl
 	nfo.ord = exprOrd++;
 	/* We might have pfunction call through pointer from implicit (e.g. operator()) function */
 	if (lastFunctionDef) {
+		nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
 		std::pair<std::set<callfunc_info_t>::iterator,bool> rv = lastFunctionDef->funcinfo.insert(nfo);
 		for(unsigned long i=0; i<proto->getNumParams(); i++) {
 			QualType T = proto->getParamType(i);
@@ -609,6 +611,7 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 	nfo.ord = exprOrd++;
 	/* We might have pfunction call through pointer from implicit (e.g. operator()) function */
 	if (lastFunctionDef) {
+		nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
 		lastFunctionDef->funcinfo.insert(nfo);
 		for(unsigned long i=0; i<proto->getNumParams(); i++) {
 			QualType T = proto->getParamType(i);
@@ -718,6 +721,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 					nfo.literalRefs = literalRefs;
 					nfo.CE = CE;
 					nfo.ord = exprOrd++;
+					nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
 					lastFunctionDef->funcinfo.insert(nfo);
 					/* If we used '*' operator on direct function name place it into the derefs array */
 					VarRef_t VR;
@@ -2034,7 +2038,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  refcall << "[ " << fid << ", " << cid << ", " << (*u).fieldIndex << " ]";
 					  refcalls.push_back(refcall.str());
 					  std::stringstream refcallinfo;
-					  printCallInfo((*u).CE,refcallinfo,SM,exprOrd++,refcall_info_CE_v);
+					  printCallInfo((*u),refcallinfo,SM,exprOrd++,refcall_info_CE_v);
 					  refcall_info_items.push_back(refcallinfo.str());
 					  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
 					  refcallrefs_v.push_back(callvarList);
@@ -2051,7 +2055,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  refcall << "[ " << fid << " ]";
 					  refcalls.push_back(refcall.str());
 					  std::stringstream refcallinfo;
-					  printCallInfo((*u).CE,refcallinfo,SM,exprOrd++,refcall_info_CE_v);
+					  printCallInfo((*u),refcallinfo,SM,exprOrd++,refcall_info_CE_v);
 					  refcall_info_items.push_back(refcallinfo.str());
 					  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
 					  refcallrefs_v.push_back(callvarList);
@@ -3081,15 +3085,16 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	exprstream.flush();
 	ss << ",\n\t\t\t\t\t\t\"expr\": \"" << json::json_escape(Expr) << "\"";
 	ss << ",\n\t\t\t\t\t\t\"loc\": \"" << location << "\"";
+	ss << ",\n\t\t\t\t\t\t\"csid\": " << cfi.csid;
 	ss << "\n\t\t\t\t\t}";
   }
 
-  void DbJSONClassConsumer::printCallInfo(const CallExpr* CE, std::stringstream& ss, clang::SourceManager& SM, size_t ord,
+  void DbJSONClassConsumer::printCallInfo(const DbJSONClassVisitor::callfunc_info_t& cfi, std::stringstream& ss, clang::SourceManager& SM, size_t ord,
 		  std::vector<const CallExpr*>& CEv)
   {
-	std::string location = getAbsoluteLocation(CE->getBeginLoc());
+	std::string location = getAbsoluteLocation(cfi.CE->getBeginLoc());
 	std::string startString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
-	location = getAbsoluteLocation(CE->getEndLoc());
+	location = getAbsoluteLocation(cfi.CE->getEndLoc());
 	std::string endString = location.substr(location.find_last_of(':', location.find_last_of(':') - 1) + 1);
 
 	ss << "\n\t\t\t\t\t{";
@@ -3100,13 +3105,14 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	ss << "\",\n\t\t\t\t\t\t\"ord\":";
 	ss << ord;
 	ss << ",\n\t\t\t\t\t\t\"args\": [ " << ARGeplacementToken << " ]";
-	CEv.push_back(CE);
+	CEv.push_back(cfi.CE);
 	std::string Expr;
 	llvm::raw_string_ostream exprstream(Expr);
-	CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+	cfi.CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
 	exprstream.flush();
 	ss << ",\n\t\t\t\t\t\t\"expr\": \"" << json::json_escape(Expr) << "\"";
 	ss << ",\n\t\t\t\t\t\t\"loc\": \"" << location << "\"";
+	ss << ",\n\t\t\t\t\t\t\"csid\": " << cfi.csid;
 	ss << "\n\t\t\t\t\t}";
   }
 
