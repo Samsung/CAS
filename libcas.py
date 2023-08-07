@@ -1553,7 +1553,7 @@ class CASDatabase:
                         effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                         if clangpp_spec_patterns.match(b):
                             clangpp_pattern_match_execs.append(ex.ptr)
-                            if ("-cc1" in effective_args or ("-c" in effective_args and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
+                            if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
                                 and not self.clang_ir_generation(effective_args) and not self.clang_pp_input(effective_args) \
                                 and "-analyze" not in effective_args and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
@@ -1564,7 +1564,7 @@ class CASDatabase:
                                     integrated_clang_compilers.add(ex.binary)
                         elif clang_spec_patterns.match(b):
                             clang_pattern_match_execs.append(ex.ptr)
-                            if ("-cc1" in effective_args or ("-c" in effective_args and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
+                            if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
                                 and not self.clang_ir_generation(effective_args) and not self.clang_pp_input(effective_args) \
                                 and "-analyze" not in effective_args and ex.eid.pid not in comp_pids and comp_pids.add(ex.eid.pid) is None:
