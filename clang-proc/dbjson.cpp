@@ -629,14 +629,16 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 		vVR.push_back(VR);
 		CEVR.VDCAMUAS.setRefCall(CE,Addr,valuecast);
 
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-		CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		exprstream.flush();
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+			[CE,this](const DereferenceInfo_t *d){
+				llvm::raw_string_ostream exprstream(d->Expr);
+				exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
+				CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+				exprstream.flush();
+			};
 
 		return true;
 	}
@@ -733,14 +735,16 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 						vVR.push_back(VR);
 						CEVR.VDCAMUAS.setCall(CE);
 						if (lastFunctionDef) {
-							std::string Expr;
-							llvm::raw_string_ostream exprstream(Expr);
-							exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-							CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-							exprstream.flush();
 							std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
+									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
+							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+								[CE,this](const DereferenceInfo_t *d){
+									llvm::raw_string_ostream exprstream(d->Expr);
+									exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
+									CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+									exprstream.flush();
+								};
 							return true;
 						}
 					}
@@ -776,14 +780,16 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 				}
 
 				if (lastFunctionDef) {
-					std::string Expr;
-					llvm::raw_string_ostream exprstream(Expr);
-					exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-					CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-					exprstream.flush();
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,Expr,getCurrentCSPtr(),DereferenceFunction));
+							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo->ord);
+					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+						[CE,this](const DereferenceInfo_t *d){
+							llvm::raw_string_ostream exprstream(d->Expr);
+							exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
+							CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+							exprstream.flush();
+						};
 					return true;
 				}
 			}
@@ -810,16 +816,16 @@ bool DbJSONClassVisitor::handleCallConditionalOperator(const ConditionalOperator
 			&& ERHS && (handleCallDeclRefOrMemberExpr(ERHS,callrefs,literalRefs,baseType,CE)));
 }
 
-size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
+size_t DbJSONClassVisitor::getFunctionDeclId(const FunctionDecl *FD) {
 
 	if (FuncMap.find(FD)!=FuncMap.end()) {
 		return FuncMap.at(FD).id;
 	}
 	else if (getFuncDeclMap().find(FD->getCanonicalDecl())!=getFuncDeclMap().end()) {
-		return getFuncDeclMap()[FD->getCanonicalDecl()];
+		return getFuncDeclMap().at(FD->getCanonicalDecl());
 	}
-	else if (_opts.assert&&(CTAList.find(FD)!=CTAList.end())) {
-		return getFuncDeclMap()[CTA];
+	else if (_opts.assert&&(CTAList.find(FD->getCanonicalDecl())!=CTAList.end())) {
+		return getFuncDeclMap().at(CTA);
 	}
 	else {
 		// This might be a declaration of function with definition
@@ -827,7 +833,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 		if ((!DD) || (FuncMap.find(DD)==FuncMap.end())) {
 			// This might be an instantiated function template
 			if (functionTemplateMap.find(DD)!=functionTemplateMap.end()) {
-			  const FunctionTemplateDecl *CD = functionTemplateMap[DD];
+			  const FunctionTemplateDecl *CD = functionTemplateMap.at(DD);
 			  // Find primary pattern for this function template
 			  for (auto i = CD->redecls_begin(); i!=CD->redecls_end(); ++i) {
 				  const FunctionTemplateDecl* FTD = static_cast<FunctionTemplateDecl*>(*i);
@@ -846,6 +852,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 			else {
 				// Calling function (no function template) without definition and declaration;
 				//   probably some compiler builtin...
+
 				std::string unresolvedName;
 				if (DD) {
 					unresolvedName = DD->getName().str();
@@ -854,7 +861,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 					unresolvedName = FD->getName().str();
 				}
 				if (UnresolvedFuncMap.find(unresolvedName)!=UnresolvedFuncMap.end()) {
-					return UnresolvedFuncMap[unresolvedName];
+					return UnresolvedFuncMap.at(unresolvedName);
 				}
 				else {
 					UnresolvedFuncMap.insert(std::pair<std::string,size_t>(unresolvedName,FuncNum));
@@ -867,7 +874,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 				return FuncMap.at(DD).id;
 			}
 			else {
-				return SIZE_MAX;
+				assert(0 && "Called function not in function maps\n");
 			}
 		}
 	}
@@ -880,7 +887,7 @@ size_t DbJSONClassVisitor::ExtractFunctionId(const FunctionDecl *FD) {
 	  if (!DC) return id;
 	  if (isa<FunctionDecl>(DC) || isa<CXXMethodDecl>(DC)) {
 		const FunctionDecl* FD = static_cast<const FunctionDecl*>(DC);
-		id = ExtractFunctionId(FD);
+		id = getFunctionDeclId(FD);
 	  }
 	  return id;
   }
@@ -1133,7 +1140,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  std::stringstream funrefs;
 		  funrefs << "[ ";
 		  for (auto u = var_data.g_refFuncs.begin(); u!=var_data.g_refFuncs.end();) {
-				size_t rid = Visitor.ExtractFunctionId(*u);
+				size_t rid = Visitor.getFunctionDeclId(*u);
 				if (rid==SIZE_MAX) {
 					(*u)->dump(llvm::errs());
 					llvm::errs() << "@parent:\n";
@@ -1239,49 +1246,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		unsigned pos = (*ri).getPos();
 		  if (VD->getKind()==Decl::Function) {
 			  const FunctionDecl* FD = static_cast<const FunctionDecl*>(VD);
-
-				if (FD->hasBody()) {
-					if (getFuncMap().find(FD->getDefinition())!=getFuncMap().end()) {
-						refvarList.push_back(refvarinfo_t(getFuncMap().at(FD->getDefinition()).id,
-								refvarinfo_t::CALLVAR_FUNCTION,pos));
-					}
-					else {
-                               			if (_opts.exit_on_error) {
-                                                    // In C++ we might use class operator functions which aren't currently supported in function maps
-                                                    if (!isCXXTU(Context)) {
-                                                        llvm::outs() << "\nERROR: Cannot find function definition in map for:\n";
-						        FD->getDefinition()->dump(llvm::outs());
-						        exit(EXIT_FAILURE);
-                                                    }
-                                                }
-						else {
-						    refvarList.push_back(refvarinfo_t(-1,refvarinfo_t::CALLVAR_FUNCTION,pos));
-						}
-					}
-				}
-				else {
-					if (getFuncDeclMap().find(FD->getCanonicalDecl())!=getFuncDeclMap().end()) {
-						refvarList.push_back(refvarinfo_t(getFuncDeclMap()[FD->getCanonicalDecl()],
-								refvarinfo_t::CALLVAR_FUNCTION,pos));
-					}
-					else if (_opts.assert&&(CTAList.find(FD->getCanonicalDecl())!=CTAList.end())) {
-						refvarList.push_back(refvarinfo_t(getFuncDeclMap()[CTA],
-								refvarinfo_t::CALLVAR_FUNCTION,pos));
-					}
-					else {
-                                                if (_opts.exit_on_error) {
-                                                    // In C++ we might use class operator functions which aren't currently supported in function maps
-                                                    if (!isCXXTU(Context)) {
-						        llvm::outs() << "\nERROR: Cannot find function declaration in map for:\n";
-						        FD->getCanonicalDecl()->dump(llvm::outs());
-						        exit(EXIT_FAILURE);
-                                                    }
-                                                }
-						else {
-    						    refvarList.push_back(refvarinfo_t(-1,refvarinfo_t::CALLVAR_FUNCTION,pos));
-					        }
-					}
-				}
+			  refvarList.push_back(refvarinfo_t(getFunctionDeclId(FD),refvarinfo_t::CALLVAR_FUNCTION,pos));
 		  }
 		  else if (VD->getKind()==Decl::Var) {
 			  const VarDecl* VrD = static_cast<const VarDecl*>(VD);
@@ -1458,46 +1423,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  }
 	  else if (VR.VDCAMUAS.getValue()->getKind()==Decl::Function) {
 		  const FunctionDecl* FD = static_cast<const FunctionDecl*>(VR.VDCAMUAS.getValue());
-
-			if (FD->hasBody()) {
-				if (getFuncMap().find(FD->getDefinition())!=getFuncMap().end()) {
-					refvar.set(getFuncMap().at(FD->getDefinition()).id,refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
-				}
-				else {
-					if (_opts.exit_on_error) {
-						// In C++ we might use class operator functions which aren't currently supported in function maps
-						if (!isCXXTU(Context)) {
-							llvm::outs() << "\nERROR: Cannot find function definition in map for:\n";
-							FD->getDefinition()->dump(llvm::outs());
-							exit(EXIT_FAILURE);
-						}
-					}
-					else {
-						refvar.set(-1,refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
-					}
-				}
-			}
-			else {
-				if (getFuncDeclMap().find(FD->getCanonicalDecl())!=getFuncDeclMap().end()) {
-					refvar.set(getFuncDeclMap()[FD->getCanonicalDecl()],refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
-				}
-				else if (_opts.assert&&(CTAList.find(FD->getCanonicalDecl())!=CTAList.end())) {
-					refvar.set(getFuncDeclMap()[CTA],refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
-				}
-				else {
-					if (_opts.exit_on_error) {
-						// In C++ we might use class operator functions which aren't currently supported in function maps
-						if (!isCXXTU(Context)) {
-							llvm::outs() << "\nERROR: Cannot find function declaration in map for:\n";
-					        FD->getCanonicalDecl()->dump(llvm::outs());
-					        exit(EXIT_FAILURE);
-						}
-					}
-					else {
-						refvar.set(-1,refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
-					}
-				}
-			}
+		  refvar.set(getFunctionDeclId(FD),refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
 	  }
 	  else {
 		  if (_opts.exit_on_error) {
@@ -1938,85 +1864,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  ++u;
 					  continue;
 				  }
-				  if (Visitor.getFuncMap().find(static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType))!=Visitor.getFuncMap().end()) {
-					  if (!next_item) { calls << " "; call_info << " ";}
-					  else { calls << ", "; call_info << ", ";}
-					  calls << Visitor.getFuncMap()[static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType)].id;
-					  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
-					  printCallInfo(*u, call_info, SM, call_info_CE_v);
-				  }
-				  else if (Visitor.getFuncDeclMap().find(static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType)->getCanonicalDecl())
-						  !=Visitor.getFuncDeclMap().end()) {
-					  if (!next_item) { calls << " "; call_info << " ";}
-					  else { calls << ", "; call_info << ", ";}
-					  calls << Visitor.getFuncDeclMap()[static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType)->getCanonicalDecl()];
-					  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
-					  printCallInfo(*u, call_info, SM, call_info_CE_v);
-				  }
-				  else if (_opts.assert&&(Visitor.CTAList.find(static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType)->getCanonicalDecl())
-						  !=Visitor.CTAList.end())) {
-					  if (!next_item) { calls << " "; call_info << " ";}
-					  else { calls << ", "; call_info << ", ";}
-					  calls << Visitor.getFuncDeclMap()[Visitor.CTA];
-					  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
-					  printCallInfo(*u, call_info, SM, call_info_CE_v);
-				  }
-				  else {
-					  // This might be a declaration of function with definition
-					  const FunctionDecl * DD = static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType)->getDefinition();
-					  if ((!DD) || (Visitor.getFuncMap().find(DD)==Visitor.getFuncMap().end())) {
-						  if (!next_item) { calls << " "; call_info << " ";}
-						  else { calls << ", "; call_info << ", ";}
-						  // This might be an instantiated function template
-						  if (Visitor.functionTemplateMap.find(DD)!=Visitor.functionTemplateMap.end()) {
-							  const FunctionTemplateDecl *CD = Visitor.functionTemplateMap[DD];
-							  // Find primary pattern for this function template
-							  for (auto i = CD->redecls_begin(); i!=CD->redecls_end(); ++i) {
-								  const FunctionTemplateDecl* FTD = static_cast<FunctionTemplateDecl*>(*i);
-								  if (FTD->isThisDeclarationADefinition()) {
-									  CD = FTD;
-								  }
-							  }
-							  const FunctionDecl* FD = CD->getTemplatedDecl();
-							  if (Visitor.getFuncMap().find(FD)!=Visitor.getFuncMap().end()) {
-								  calls << Visitor.getFuncMap()[FD].id;
-							  }
-							  else {
-								  assert(0 && "No primary template function declaration in function maps\n");
-							  }
-						  }
-						  else {
-							  // Calling function (no function template) without definition and declaration;
-							  //   probably some compiler builtin...
-							  std::string unresolvedName;
-							  if (DD) { unresolvedName = DD->getName().str(); }
-							  else {
-								const FunctionDecl* UFD = static_cast<const FunctionDecl*>((*u).FunctionDeclOrProtoType);
-								unresolvedName = UFD->getName().str();
-							  }
-							  if (Visitor.getUnresolvedFuncMap().find(unresolvedName)!=Visitor.getUnresolvedFuncMap().end()) {
-								  calls << Visitor.getUnresolvedFuncMap()[unresolvedName];
-							  }
-							  else {
-								  Visitor.getUnresolvedFuncMap().insert(std::pair<std::string,size_t>(unresolvedName,Visitor.FuncNum));
-								  calls << Visitor.FuncNum++;
-							  }
-						  }
-						  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
-						  printCallInfo(*u, call_info, SM, call_info_CE_v);
-					  }
-					  else {
-					  	  if (DD) {
-					  	  	if (!next_item) { calls << " "; }
-							else { calls << ", "; }
-							calls << Visitor.getFuncMap()[DD].id;
-							Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
-					  	  }
-					  	  else {
-						  	assert(0 && "Called function not in function maps\n");
-						  }
-					  }
-				  }
+				  const FunctionDecl *CF = static_cast<const FunctionDecl*>(u->FunctionDeclOrProtoType);
+				  if (!next_item) { calls << " "; call_info << " ";}
+				  else { calls << ", "; call_info << ", ";}
+				  calls << Visitor.getFunctionDeclId(CF);
+				  Visitor.varInfoForRefs(func_data,(*u).callrefs,(*u).literalRefs,callvarList);
+				  printCallInfo(*u, call_info, SM, call_info_CE_v);
 				  callrefs_v.push_back(callvarList);
 				  CEIdxMap.insert(std::pair<const CallExpr*,unsigned long>((*u).CE,call_array_index));
 				  call_array_index++;
@@ -2172,7 +2025,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  DbJSONClassVisitor::DereferenceInfo_t DI = *u;
 			  int64_t offset = DI.i;
 			  std::vector<DbJSONClassVisitor::VarRef_t>& vVR = DI.vVR;
-			  std::string& Expr = DI.Expr;
 			  long csid = func_data.csIdMap[DI.CSPtr];
 			  if ((DI.Kind==DbJSONClassVisitor::DereferenceMember)||(DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf)) {
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceMember) {
@@ -2338,7 +2190,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (DI.Kind==DbJSONClassVisitor::DereferenceArray || DI.Kind==DbJSONClassVisitor::DereferenceLogic) {
 				  deref_core << Indent << "\t\t\t\t\"basecnt\" : " << DI.baseCnt << ",\n";
 			  }
-			  const char* exprstr = Expr.c_str();
 			  deref_core << Indent << "\t\t\t\t\"offsetrefs\" : [";
 			  bool ideref_first = true;
 			  std::stringstream deref_core_subst;
@@ -2402,7 +2253,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  deref_core << " ],\n";
 			  deref_core_subst << " ],\n";
 
-			  deref_expr << Indent << "\t\t\t\t\"expr\" : \"" << json::json_escape(Expr) << "\",\n";
+			  deref_expr << Indent << "\t\t\t\t\"expr\" : \"" << json::json_escape(DI.Expr) << "\",\n";
 			  deref_expr << Indent << "\t\t\t\t\"csid\" : " << csid << "\n";
 			  /* Currently when some dereference entry is referenced by other it is not deduplicated,
 			   *  even though it is the same as other entry encountered before
@@ -2430,7 +2281,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 						if (parmReprMap.find(deref_core_subst.str())==parmReprMap.end()) {
 							llvm::errs() << "ERROR: Missing 'parm' deref entry representation:\n";
 							llvm::errs() << deref_core_subst.str() << "\n";
-							llvm::errs() << "Expr: " << json::json_escape(Expr) << "\n";
+							llvm::errs() << "Expr: " << json::json_escape(DI.Expr) << "\n";
 							llvm::errs() << "Function: " << func_data.this_func->getName().str() << "\n";
 							llvm::errs() << "Body:\n" << json::json_escape(fbody) << "\n";
 							llvm::errs() << "upBody:\n" << json::json_escape(upBody) << "\n";
@@ -2518,7 +2369,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  std::stringstream funrefs;
 		  funrefs << "[ ";
 		  for (auto u = func_data.refFuncs.begin(); u!=func_data.refFuncs.end();) {
-		  		size_t rid = Visitor.ExtractFunctionId(*u);
+		  		size_t rid = Visitor.getFunctionDeclId(*u);
 		  		if (rid==SIZE_MAX) {
 		  			(*u)->dump(llvm::errs());
 		  			llvm::errs() << "@parent:\n";
@@ -3292,31 +3143,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Decl::CXXMethod:
 		  {
 			  CXXMethodDecl* innerD = cast<CXXMethodDecl>(D);
-			  if (innerD->hasBody()) {
-				  FunctionDecl* FD = innerD->getDefinition();
-				  if (Visitor.FuncMap.find(FD)!=Visitor.FuncMap.end()) {
-					  int idFD = Visitor.FuncMap.at(FD).id;
-					  extraArg.first = EXTRA_METHODDECL;
-					  return idFD;
-				  }
-				  else {
-					  if (!FD->isOverloadedOperator()) {
-						  FD->dumpColor();
-						  assert(0 && "Cannot find method definition in Function Map");
-					  }
-				  }
-			  }
-			  else {
-				  if (Visitor.FuncDeclMap.find(innerD)!=Visitor.FuncDeclMap.end()) {
-					  int idFD = Visitor.FuncDeclMap[innerD];
-					  extraArg.first = EXTRA_METHODDECL;
-					  return idFD;
-				  }
-				  else {
-					  innerD->dumpColor();
-					  assert(0 && "Cannot find method declaration in FunctionDecl Map");
-				  }
-			  }
+			  extraArg.first = EXTRA_METHODDECL;
+			  return Visitor.getFunctionDeclId(innerD);
 		  }
 		  break;
 		  case Decl::FunctionTemplate:
@@ -3914,71 +3742,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  llvm::outs() << ",";
 	  }
 	  llvm::outs() << "\n";
-  }
-
-  size_t DbJSONClassVisitor::getFunctionDeclId(const FunctionDecl* FD) {
-
-	  if (getFuncMap().find(FD)!=getFuncMap().end()) {
-		  return getFuncMap()[FD].id;
-	  }
-	  else if (getFuncDeclMap().find(FD->getCanonicalDecl())
-			  !=getFuncDeclMap().end()) {
-		  return getFuncDeclMap()[FD->getCanonicalDecl()];
-	  }
-	  else if (_opts.assert&&(CTAList.find(FD->getCanonicalDecl())
-			  !=CTAList.end())) {
-		  return getFuncDeclMap()[CTA];
-	  }
-	  else {
-		  // This might be a declaration of function with definition
-		  const FunctionDecl * DD = FD->getDefinition();
-		  if ((!DD) || (getFuncMap().find(DD)==getFuncMap().end())) {
-			  // This might be an instantiated function template
-			  if (functionTemplateMap.find(DD)!=functionTemplateMap.end()) {
-				  const FunctionTemplateDecl *CD = functionTemplateMap[DD];
-				  // Find primary pattern for this function template
-				  for (auto i = CD->redecls_begin(); i!=CD->redecls_end(); ++i) {
-					  const FunctionTemplateDecl* FTD = static_cast<FunctionTemplateDecl*>(*i);
-					  if (FTD->isThisDeclarationADefinition()) {
-						  CD = FTD;
-					  }
-				  }
-				  const FunctionDecl* nFD = CD->getTemplatedDecl();
-				  if (getFuncMap().find(nFD)!=getFuncMap().end()) {
-					  return getFuncMap()[nFD].id;
-				  }
-				  else {
-					  assert(0 && "No primary template function declaration in function maps\n");
-				  }
-			  }
-			  else {
-				  // Calling function (no function template) without definition and declaration;
-				  //   probably some compiler builtin...
-				  std::string unresolvedName;
-				  if (DD) { unresolvedName = DD->getName().str(); }
-				  else {
-					const FunctionDecl* UFD = FD;
-					unresolvedName = UFD->getName().str();
-				  }
-				  if (getUnresolvedFuncMap().find(unresolvedName)!=getUnresolvedFuncMap().end()) {
-					  return getUnresolvedFuncMap()[unresolvedName];
-				  }
-				  else {
-					  getUnresolvedFuncMap().insert(std::pair<std::string,size_t>(unresolvedName,FuncNum));
-					  return FuncNum++;
-				  }
-			  }
-		  }
-		  else {
-		  	  if (DD) {
-				return getFuncMap()[DD].id;
-		  	  }
-		  	  else {
-			  	assert(0 && "Called function not in function maps\n");
-			  }
-		  }
-	  }
-
   }
 
   void DbJSONClassConsumer::printTypeInternal(QualType T,const std::string& Indent) {

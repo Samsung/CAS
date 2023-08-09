@@ -163,12 +163,6 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 					0,&MECnt,0,true,false,false,castType);
 		}
 
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << getAbsoluteLocation(D->getBeginLoc()) << "]: ";
-		D->print(exprstream);
-		exprstream.flush();
-
 		VarRef_t VR;
 		VR.VDCAMUAS.setValue(D);
 		std::vector<VarRef_t> vVR;
@@ -183,9 +177,16 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		if (!D->isDefinedOutsideFunctionOrMethod()) {
 			if (lastFunctionDef) {
 				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,NumInitializedElements(D->getInit()),vVR,Expr,
+						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,NumInitializedElements(D->getInit()),vVR,"",
 								getCurrentCSPtr(),DereferenceInit));
 				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+					[D,this](const DereferenceInfo_t *d){
+						llvm::raw_string_ostream exprstream(d->Expr);
+						exprstream << "[" << getAbsoluteLocation(D->getBeginLoc()) << "]: ";
+						D->print(exprstream);
+						exprstream.flush();
+					};
 			}
 		}
 	}
@@ -660,6 +661,13 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
   
 bool DbJSONClassVisitor::VisitFunctionDeclComplete(const FunctionDecl *D) {
 
+	// get deref expr strings
+	if(lastFunctionDef){
+		for(auto &deref : lastFunctionDef->derefList){
+			deref.evalExpr();
+		}
+	}
+
 	if (!D->getIdentifier()) {
 		return true;
 	}
@@ -816,12 +824,6 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 	std::vector<VarRef_t> vVR;
 	DbJSONClassVisitor::DREMap_t DREMap;
 
-	std::string Expr;
-	llvm::raw_string_ostream exprstream(Expr);
-	exprstream << "[" << getAbsoluteLocation(Cond->getBeginLoc()) << "]: ";
-	Cond->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-	exprstream.flush();
-
 	std::vector<CStyleCastOrType> castVec;
 	const class Expr* E = stripCastsEx(Cond,castVec);
 	bool isAddress = false;
@@ -883,8 +885,15 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 	}
 
 	std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,cf_id,vVR,Expr,getCurrentCSPtr(),DereferenceCond));
+			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,cf_id,vVR,"",getCurrentCSPtr(),DereferenceCond));
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+		[Cond,this](const DereferenceInfo_t *d){
+			llvm::raw_string_ostream exprstream(d->Expr);
+			exprstream << "[" << getAbsoluteLocation(Cond->getBeginLoc()) << "]: ";
+			Cond->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+			exprstream.flush();
+		};
 }
 
 bool DbJSONClassVisitor::VisitSwitchStmt(SwitchStmt *S){
@@ -1178,12 +1187,6 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					VR.VDCAMUAS.setParm(argE);
 					std::vector<VarRef_t> vVR;
 					DbJSONClassVisitor::DREMap_t DREMap;
-					std::string Expr;
-					llvm::raw_string_ostream exprstream(Expr);
-					exprstream << "[" << getAbsoluteLocation(argE->getBeginLoc()) << "]: ";
-					argE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-					exprstream.flush();
-
 					std::vector<CStyleCastOrType> castVec;
 					const class Expr* E = stripCastsEx(argE,castVec);
 					bool isAddress = false;
@@ -1245,8 +1248,15 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 						vVR.push_back(iVR);
 					}
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-							lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,Expr,getCurrentCSPtr(),DereferenceParm));
-					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);					
+							lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,"",getCurrentCSPtr(),DereferenceParm));
+					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+						[argE,this](const DereferenceInfo_t *d){
+							llvm::raw_string_ostream exprstream(d->Expr);
+							exprstream << "[" << getAbsoluteLocation(argE->getBeginLoc()) << "]: ";
+							argE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+							exprstream.flush();
+						};
 				}
 			}
 		}
@@ -1401,12 +1411,6 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 			lookForDeclRefWithMemberExprsInternal(RHS,RHS,RDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
 		}
 
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
-		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		exprstream.flush();
-
 		VarRef_t VR;
 		VR.VDCAMUAS.setLogic(BO);
 		std::vector<VarRef_t> vVR;
@@ -1424,8 +1428,15 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		}
 
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),Lsize,vVR,Expr,getCurrentCSPtr(),DereferenceLogic));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),Lsize,vVR,"",getCurrentCSPtr(),DereferenceLogic));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+			[BO,this](const DereferenceInfo_t *d){
+				llvm::raw_string_ostream exprstream(d->Expr);
+				exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
+				BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+				exprstream.flush();
+			};
 	}
 
 	// assignment operators
@@ -1506,12 +1517,6 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 			lookForDeclRefWithMemberExprsInternal(RHS,RHS,RDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
 		}
 
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
-		BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		exprstream.flush();
-
 		VarRef_t VR;
 		VR.VDCAMUAS.setCAO(BO);
 		std::vector<VarRef_t> vVR;
@@ -1537,8 +1542,15 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		}
 
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),vVR,Expr,getCurrentCSPtr(),DereferenceAssign));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),vVR,"",getCurrentCSPtr(),DereferenceAssign));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+			[BO,this](const DereferenceInfo_t *d){
+				llvm::raw_string_ostream exprstream(d->Expr);
+				exprstream << "[" << getAbsoluteLocation(BO->getBeginLoc()) << "]: ";
+				BO->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+				exprstream.flush();
+			};
 	}
 
 	return true;
@@ -1585,14 +1597,16 @@ bool DbJSONClassVisitor::VisitUnaryOperator(UnaryOperator *E) {
 			VarRef_t VR;
 			VR.VDCAMUAS.setUnary(E);
 			if (lastFunctionDef) {
-				std::string Expr;
-				llvm::raw_string_ostream exprstream(Expr);
-				exprstream << "[" << getAbsoluteLocation(E->getBeginLoc()) << "]: ";
-				E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-				exprstream.flush();
 				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,Expr,getCurrentCSPtr(),DereferenceUnary));
+						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,"",getCurrentCSPtr(),DereferenceUnary));
 				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+					[E,this](const DereferenceInfo_t *d){
+						llvm::raw_string_ostream exprstream(d->Expr);
+						exprstream << "[" << getAbsoluteLocation(E->getBeginLoc()) << "]: ";
+						E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+						exprstream.flush();
+					};
 			}
 		}
 	}
@@ -1648,14 +1662,16 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 		VarRef_t VR;
 		VR.VDCAMUAS.setAS(Node);
 		if (lastFunctionDef) {
-			std::string Expr;
-			llvm::raw_string_ostream exprstream(Expr);
-			exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
-			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-			exprstream.flush();
 			std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-					lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,idx_i,base_size,vVR,Expr,getCurrentCSPtr(),DereferenceArray));
+					lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,idx_i,base_size,vVR,"",getCurrentCSPtr(),DereferenceArray));
 			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+				[Node,this](const DereferenceInfo_t *d){
+					llvm::raw_string_ostream exprstream(d->Expr);
+					exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
+					Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+					exprstream.flush();
+				};
 		}
 	}
 
@@ -1775,12 +1791,6 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		offsetof_offset = computedOffset/8;
 	}
 
-	std::string Expr;
-    llvm::raw_string_ostream exprstream(Expr);
-    exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
-	Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-    exprstream.flush();
-
     for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
         VarRef_t iVR;
         iVR.VDCAMUAS = (*i).first;
@@ -1788,8 +1798,15 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
     }
 
     std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-    		lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,offsetof_offset,vVR,Expr,getCurrentCSPtr(),DereferenceOffsetOf));
+    		lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,offsetof_offset,vVR,"",getCurrentCSPtr(),DereferenceOffsetOf));
     const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+		[Node,this](const DereferenceInfo_t *d){
+			llvm::raw_string_ostream exprstream(d->Expr);
+			exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
+			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+			exprstream.flush();
+		};
 
 	return true;
 }
@@ -1812,13 +1829,6 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	VR.VDCAMUAS.setRET(S);
 	std::vector<VarRef_t> vVR;
 	DbJSONClassVisitor::DREMap_t DREMap;
-
-	std::string Expr;
-	llvm::raw_string_ostream exprstream(Expr);
-	exprstream << "[" << getAbsoluteLocation(S->getBeginLoc()) << "]: ";
-	S->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-	exprstream.flush();
-
 	std::vector<CStyleCastOrType> castVec;
 	const class Expr* E = stripCastsEx(RVE,castVec);
 	bool isAddress = false;
@@ -1880,8 +1890,15 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	}
 
 	std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,Expr,getCurrentCSPtr(),DereferenceReturn));
+			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,"",getCurrentCSPtr(),DereferenceReturn));
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+		[S,this](const DereferenceInfo_t *d){
+			llvm::raw_string_ostream exprstream(d->Expr);
+			exprstream << "[" << getAbsoluteLocation(S->getBeginLoc()) << "]: ";
+			S->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+			exprstream.flush();
+		};
 
 	return true;
 }
@@ -2010,20 +2027,21 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 	}
 
 	if (lastFunctionDef&&(hasPtrME||!(_opts.ptrMEonly))) {
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		if (CE) {
-			exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-			CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		}
-		else {
-			exprstream << "[" << getAbsoluteLocation(Node->getBeginLoc()) << "]: ";
-			Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		}
-		exprstream.flush();
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,Expr,getCurrentCSPtr(),DereferenceMember));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,"",getCurrentCSPtr(),DereferenceMember));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+				[CE,Node,this](const DereferenceInfo_t *d){
+					const Expr *E;
+					if(CE)
+						E = CE;
+					else
+						E = Node;
+					llvm::raw_string_ostream exprstream(d->Expr);
+					exprstream << "[" << getAbsoluteLocation(E->getBeginLoc()) << "]: ";
+					E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+					exprstream.flush();
+				};
 	}
 
 	return true;

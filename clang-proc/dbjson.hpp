@@ -86,6 +86,8 @@ public:
   explicit DbJSONClassVisitor(ASTContext &Context, const struct main_opts& opts)
     : TypeNum(0), VarNum(0), FuncNum(0), lastFunctionDef(0), CTA(0), missingRefsCount(0), Context(Context), _opts(opts) {}
 
+    // bool shouldVisitImplicitCode() const {return true;}
+
   static QualType getDeclType(Decl* D) {
     if (TypedefNameDecl* TDD = dyn_cast<TypedefNameDecl>(D))
       return TDD->getUnderlyingType();
@@ -1123,7 +1125,8 @@ public:
     VarRef_t VR;
     int64_t i;
     std::vector<VarRef_t> vVR;
-    std::string Expr;
+    mutable std::string Expr;
+    std::function<void(const DereferenceInfo_t*)> evalExprInner;
     const CompoundStmt* CSPtr;
     DereferenceKind Kind;
     unsigned baseCnt;
@@ -1134,8 +1137,9 @@ public:
     		DereferenceKind Kind):
           VR(VR), i(i), vVR(vVR), Expr(Expr), CSPtr(CSPtr), Kind(Kind), baseCnt(baseCnt) {}
     void addOrd(size_t __ord) {
-		ord.push_back(__ord);
-	}
+      ord.push_back(__ord);
+    }
+    void evalExpr() const {evalExprInner(this);}
     bool operator <(const DereferenceInfo_t & otherDI) const {
       if (VR<otherDI.VR) return true;
       if (VR>otherDI.VR) return false;
@@ -1347,7 +1351,6 @@ public:
   const UnaryOperator* lookForUnaryOperatorInCallExpr(const Expr* E);
   bool verifyMemberExprBaseType(QualType T);
   const ArraySubscriptExpr* lookForArraySubscriptExprInCallExpr(const Expr* E);
-  size_t ExtractFunctionId(const FunctionDecl *FD);
   bool VisitExpr(const Expr *Node);
   bool VisitClassTemplateDecl(const ClassTemplateDecl *D);
   bool VisitClassTemplateSpecializationDecl(const ClassTemplateSpecializationDecl *D);
