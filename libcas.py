@@ -494,7 +494,7 @@ class CASDatabase:
                                         no_symlink=no_symlink, file_exists=file_exists, file_not_exists=file_not_exists, dir_exists=dir_exists,
                                         has_access=has_access, negate=negate, at_source_root=at_source_root, not_at_source_root=not_at_source_root, source_type=source_type)
 
-    def filtered_execs(self, exec_filter:Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]] = None,
+    def filtered_execs(self, exec_filter: Optional[List]=None, bins: Optional[List[str]] = None, pids: Optional[List[int]] = None,
                         cwd_has_str: Optional[str] = None, cwd_wc: Optional[str] = None, cwd_re: Optional[str] = None,
                         cmd_has_str: Optional[str] = None, cmd_wc: Optional[str] = None, cmd_re: Optional[str] = None,
                         bin_has_str: Optional[str] = None, bin_wc: Optional[str] = None, bin_re: Optional[str] = None,

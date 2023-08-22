@@ -1,0 +1,292 @@
+{% extends "layout.html" %}
+{% block title %}Proc Tree{% endblock %}
+{% block head %}
+{{ super() }}
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="{{url_for('static', filename = 'main.js')}}"></script>
+{% endblock %}
+{% block content %}
+<div class="sticky">
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/proc_tree">Process Tree</a>
+      <form class="container-fluid justify-content-start">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="nonChildFilter" name="nonChildFilter" onchange="deleteElements('nested', 'child_len', this)">
+        <label class="form-check-label" for="nonChildFilter"> Hide empty proc</label>
+      </div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="etimeSorting" name="etimeSorting" onchange="sortTree('nested', 'etime', this)">
+        <label class="form-check-label" for="etimeSorting"> Sort children based on etime</label>
+      </div>
+      </form>
+      {% if not diable_search %}
+      <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <button class="btn btn-outline-success" type="button"
+        data-bs-toggle="modal" data-bs-target="#search_modal">Search</button>
+      </div>
+      {%endif%}
+    </div>
+  </nav>
+</div>
+
+<div class="modal fade" id="proc_info_modal" tabindex="-1" aria-labelledby="proc_info_modalLabel" aria-hidden="true"  data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="proc_info_modalLabel"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <h5>Process details</h5>
+        <div class="process_details">
+          <div class="row">
+            <div class="col-1">Process:</div><div class="col-2 proc_id"></div>
+            <div class="col-1">Duration:</div><div class="col-2 proc_duration"></div>
+            <div class="col-1">Parent:</div><div class="col-2 proc_parent"></div>
+            <div class="col-1">Childrens:</div><div class="col-2 proc_child_count"></div>
+        </div>
+        <div class="row">
+          <div class="col-1">CWD:</div><div class="col-11 proc_cwd"></div>
+        </div>
+        <div class="row">
+          <div class="col-1">BIN:</div><div class="col-11 proc_bin"></div>
+        </div>
+        <div class="row">
+          <div class="col-1">CMD:</div><div class="col-11 proc_cmd"></div>
+        </div>
+        </div>
+        <hr>
+        <div class="accordion" id="accordionExample">
+          <div class="accordion-item" id="compilerModal" style="display: none;">
+            <h5 class="accordion-header" id="headingCompiler">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCompiler" aria-expanded="true" aria-controls="collapseCompiler">
+                Compiler info
+              </button>
+              </h5>
+            <div id="collapseCompiler" class="accordion-collapse collapse" aria-labelledby="headingCompiler">
+              <div class="accordion-body">
+                <div class="row">
+                  <div class="col-1">SourceType:</div><div class="col-2 src_type"></div>
+                </div>
+                <hr>
+                <h5>Compiled</h5>
+                <div class="compiled_list">
+                </div>
+                <hr>
+                <h5>Objects</h5>
+                <div class="objects_list">
+                </div>
+                <hr>
+                <div class="accordion" id="accordionExample2">
+                  <div class="accordion-item">
+                    <h5 class="accordion-header" id="headingHeaders">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHeaders" aria-expanded="false" aria-controls="collapseHeaders">
+                        Headers
+                      </button>
+                      </h5>
+                    <div id="collapseHeaders" class="accordion-collapse collapse" aria-labelledby="headingHeaders">
+                      <div class="accordion-body">
+                        <div class="headers_list">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="accordion-item">
+                    <h5 class="accordion-header" id="headingIpaths">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseIpaths" aria-expanded="false" aria-controls="collapseIpaths">
+                        Ipaths
+                      </button>
+                      </h5>
+                    <div id="collapseIpaths" class="accordion-collapse collapse" aria-labelledby="headingIpaths">
+                      <div class="accordion-body">
+                        <div class="ipaths_list">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="accordion-item">
+                    <h5 class="accordion-header" id="headingDefs">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDefs" aria-expanded="false" aria-controls="collapseDefs">
+                        Defs
+                      </button>
+                      </h5>
+                    <div id="collapseDefs" class="accordion-collapse collapse" aria-labelledby="headingDefs">
+                      <div class="accordion-body">
+                        <div class="defs_list">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="accordion-item">
+                    <h5 class="accordion-header" id="headingUndefs">
+                      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseUndefs" aria-expanded="false" aria-controls="collapseUndefs">
+                        Undefs
+                      </button>
+                      </h5>
+                    <div id="collapseUndefs" class="accordion-collapse collapse" aria-labelledby="headingUndefs">
+                      <div class="accordion-body">
+                        <div class="undefs_list">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item" id="linkerModal" style="display: none;">
+            <h5 class="accordion-header" id="headingLinker">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLinker" aria-expanded="true" aria-controls="collapseLinker">
+                Linked Modules
+              </button>
+              </h5>
+            <div id="collapseLinker" class="accordion-collapse collapse" aria-labelledby="headingLinker">
+              <div class="accordion-body">
+                <div class="linked_list">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item" id="openModal" style="display: none;">
+            <h5 class="accordion-header" id="headingFiles">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFiles" aria-expanded="true" aria-controls="collapseFiles">
+                Opened files
+              </button>
+              </h5>
+            <div id="collapseFiles" class="accordion-collapse collapse" aria-labelledby="headingFiles">
+              <div class="accordion-body">
+              <button class="btn btn-sm btn-success" id="prevFilesButton" onclick="prevFiles()" disabled>Prev</button>
+              <button class="btn btn-sm btn-success" id="nextFilesButton" onclick="nextFiles()" >Next</button>
+              <span>Page </span><span class="files_page_numbers">1/1</span>
+              <div class="file_contents">
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{{url_for('static', filename = 'modal.js')}}"></script>
+
+<div class="modal fade" id="search_modal" tabindex="-1" aria-labelledby="search_modalLabel" aria-hidden="true"  data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="search_modalLabel">Advanced Search</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="styleSearch">
+
+        <div class="input-group mb-3">
+          <span class="input-group-text col-2">Filter</span>
+            <input type="radio" class="btn-check" name="filter_subject" id="btn_bin" value="bin" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="btn_bin">bin</label>
+          
+            <input type="radio" class="btn-check" name="filter_subject" id="btn_cwd" value="cwd" autocomplete="off">
+            <label class="btn btn-outline-primary" for="btn_cwd">cwd</label>
+          
+            <input type="radio" class="btn-check" name="filter_subject" id="btn_cmd" value="cmd" autocomplete="off">
+            <label class="btn btn-outline-primary" for="btn_cmd">cmd</label>
+
+            <input class="form-control" type="search" id="search_text" placeholder=" input wildcard regex or path" onchange="reset_e()">
+            
+            <input type="radio" class="btn-check" name="filter_type" id="btn_wc" value="wc" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="btn_wc">wildcard</label>
+          
+            <input type="radio" class="btn-check" name="filter_type" id="btn_re" value="re" autocomplete="off">
+            <label class="btn btn-outline-primary" for="btn_re">regex</label>
+          
+            <input type="radio" class="btn-check" name="filter_type" id="btn_m" value="m" autocomplete="off">
+            <label class="btn btn-outline-primary" for="btn_m">match</label>
+        </div>
+
+        <div class="input-group mb-3">
+          <span class="input-group-text col-2">Opened path</span>
+          <input class="form-control" type="search" id="path_text" placeholder=" input absolute file path" aria-label="File Path" onchange="reset_e()">
+        </div>
+        <div class="input-group mb-3">
+          <span class="input-group-text col-2">Class</span>
+          <input type="radio" class="btn-check" name="filter_class" id="btnall" value="*" autocomplete="off" checked>
+          <label class="btn btn-outline-primary" for="btnall">*</label>
+          <input type="radio" class="btn-check" name="filter_class" id="btncommand" value="command" autocomplete="off">
+          <label class="btn btn-outline-primary" for="btncommand">Command</label>
+          <input type="radio" class="btn-check" name="filter_class" id="btnlinker" value="linker" autocomplete="off">
+          <label class="btn btn-outline-primary" for="btnlinker">Linker</label>
+          <input type="radio" class="btn-check" name="filter_class" id="btncompiler" value="compiler" autocomplete="off">
+          <label class="btn btn-outline-primary" for="btncompiler">Compiler</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <label class="form-check-label" for="filter_src_root">Source root</label>
+          <input class="form-check-input" type="checkbox" role="switch" id="filter_src_root">
+        </div>
+        <div class="form-check form-switch">
+          <label class="form-check-label" for="filter_negate">Negate filter</label>
+          <input class="form-check-input" type="checkbox" role="switch" id="filter_negate">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-outline-success" onclick="search();return false" data-bs-dismiss="modal">Search</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="searchNumbers" style="display: none;">
+  <span id="data-idx">0</span>/<span id="data-len">0</span>
+</div>
+
+<div id="tree_pagination" class="row  align-middle ml-10"></div>
+
+{% if exe and exe["num_entries"] > exe["count"] %}
+<script>
+  render_pagination("tree_pagination", {{exe['page'] | int}}, {{exe['page_max'] | int}}, {{ exe['num_entries'] | int}}, {{exe['entries_per_page'] | int}}, "{{exe['origin_url']}}")
+</script>
+{% endif %}
+<!--<div>origin_url = {{ exe["origin_url"]}}</div>-->
+<!--<div>count = {{ exe["count"]}}</div>-->
+<!--<div>page_max = {{ exe["page_max"]}}</div>-->
+<!--<div>page = {{ exe["page"]}}</div>-->
+<!--<div>num_entries = {{ exe["num_entries"]}}</div>-->
+<!--<div>entries_per_page = {{ exe["entries_per_page"]}}</div>-->
+<div class="tree">
+  <ul class="treeview-animated-list mb-3 nested">
+
+{%for i in range(0, exe['count'])%}
+      <li>
+        <div class="no-before" >
+          {% if exe['entries'][i]['ppid']!=0 %}
+          <a onclick="upperParent(this)" data-value="{{exe['entries'][i]['ppid']}}:{{exe['entries'][i]['pidx']}}" class="upper_parent">⇖</a>
+          {% endif %}
+          <button class="pid col-1 btn btn-sm me-1 {{ 'btn-primary caret' if exe['entries'][i]['children'] > 0 else 'btn-outline-primary nonCaret' }}" id="{{exe['entries'][i]['pid']}}:{{exe['entries'][i]['idx']}}" {{"" if exe['entries'][i]['children'] else "disabled" }}>
+            {{exe['entries'][i]['pid']}}:{{exe['entries'][i]['idx']}}
+            {% if exe['entries'][i]['children'] %}
+            <span class="badge rounded-pill bg-danger child_len">{{exe['entries'][i]['children']}}</span>
+            {% endif %}
+            <span class="badge rounded-pill bg-success open_len">{{exe['entries'][i]['open_len']}}</span>
+          </button>
+          {% if exe['entries'][i]['bin'] %}
+          {% else %}
+          {% endif %}
+          <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#proc_info_modal" data-len="{{exe['entries'][i]['open_len']}}" data-bs-pid="{{exe['entries'][i]['pid']}}:{{exe['entries'][i]['idx']}}">i</button>
+          <span class="etime" style="display:none" data-value="{{exe['entries'][i]['etime']}}">{{exe['entries'][i]['etime']}}</span>
+          {%if exe['entries'][i]['bin'] %}
+            <span class="me-1">bin:</span>
+            <span class="bin {{exe['entries'][i]['class']}}">{{exe['entries'][i]['bin']}}</span>
+          {%endif%}
+          {%if exe['entries'][i]['children'] %}
+            <span>
+              <a href="/proc_tree?pid={{exe['entries'][i]['pid']}}&idx={{exe['entries'][i]['idx']}}" title="Start from this process" style="text-decoration:none" target="_blank">^</a>
+            </span>
+          {%endif%}
+        </div>
+      </li>
+{%endfor%}
+  </ul>
+</div>
+{% endblock %}

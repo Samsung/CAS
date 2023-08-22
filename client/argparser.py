@@ -124,7 +124,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
 
     output_renderers = get_output_renderers()
     output_group = parser.add_argument_group("Output selection arguments")
-
+    output_group.add_argument('--proc-tree', action='store_true', default=False, help='')
     output_group.add_argument('--output-file', '-o', type=str, default=None, help='Store results to file')
     output_group.add_argument('--generate-zip', '-z', type=str, default=None, help='Generate zip archive with results')
     for name, module in output_renderers.items():
@@ -284,6 +284,13 @@ args_map = {
         action='append',
         default=None,
         help='Parameter pid(s) - can be used multiple times, or with ":" separator.'
+    ),
+    "idx": lambda x: x.add_argument(
+        '--idx',
+        type=str,
+        action='append',
+        default=None,
+        help='Parameter idx(s) - can be used multiple times, or with ":" separator.'
     ),
     "select": lambda x: x.add_argument(
         '--select', '-S',

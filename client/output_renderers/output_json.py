@@ -97,6 +97,15 @@ class Renderer(OutputRenderer):
                     else:
                         return "[\n" + ',\n'.join([(self._command_generate_openrefs_entry_format(row) if self.args.openrefs else self._command_generate_entry_format(row)) for row in self.data]) + "\n]"
                 else:
+                    if self.args.proc_tree:
+                        return {
+                                "count": self.count,
+                                "page": 0 if not self.args.page else self.args.page,
+                                "page_max": int(self.num_entries / self.args.entries_per_page),
+                                "entries_per_page": self.args.entries_per_page,
+                                "num_entries": self.num_entries,
+                                "entries": [self._command_entry_format_proc_tree(row) for row in self.data]
+                        }
                     return self.entries_format.format(
                         count=self.count,
                         page=0 if not self.args.page else self.args.page,
@@ -149,6 +158,30 @@ class Renderer(OutputRenderer):
     def compilation_info_data_renderer(self):
         return self.formatter(self._compilation_info_entry_format)
 
+    # def _str_entry_format(self, row, escaped):
+    #     if escaped:
+    #         return '        {}'.format(self.origin_module.get_path(row) if self.args.relative else row)
+    #     else:
+    #         return '        "{}"'.format(self.origin_module.get_path(row) if self.args.relative else row)
+    def _command_entry_format_proc_tree(self, row):
+        return {
+                "class": "compiler" if row.compilation_info is not None 
+                    else "linker" if row.linked_file is not None
+                    else "command",
+                "pid": row.eid.pid,
+                "idx": row.eid.index,
+                "ppid": row.parent_eid.pid if hasattr(row, "parent_eid") else -1,
+                "pidx": row.parent_eid.index if hasattr(row, "parent_eid") else -1,
+                "bin": row.bpath,
+                "cmd": row.argv,
+                "cwd": row.cwd,
+                "pipe_eids": [f'[{o.pid},{o.index}]' for o in row.pipe_eids],
+                "etime": row.etime,
+                "children": len(self.origin_module.nfsdb.get_entries_with_pids([(c.pid,) for c in row.child_cids])),
+                "wpid": row.wpid if row.wpid else "",
+                "open_len": len(row.opens),
+            }
+    
     def _command_entry_format(self, row: libetrace.nfsdbEntry):
         return '''        {{
             "class": "{cls}",

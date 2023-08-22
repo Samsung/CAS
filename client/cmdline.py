@@ -2,14 +2,14 @@ import sys
 import os
 import io
 import zipfile
-from typing import Generator, Iterator, List
+from typing import Generator, Iterator, Dict, List
 import libcas
 from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
 
 
-def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None):
+def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None) -> "str | Dict | None":
     """
     Main function used to process commandline execution.
     By default it feeds arguments from sys.argv but can be overwritten by optional commandline value

@@ -406,7 +406,7 @@ class CommandFilter(Filter):
     """
     typed_keywords = ['bin','cwd','cmd']
     parameters_schema: Dict[str, Optional[List[str]]] = {
-            "class": ["compiler", "linker", "file"],
+            "class": ["compiler", "linker", "command"],
             "type": ["re", "wc", "sp"],
             "cwd": None,
             "bin": None,
@@ -456,6 +456,8 @@ class CommandFilter(Filter):
                 ret = ret and exe.compilation_info is not None
             elif filter_part["class"] == "linker":
                 ret = ret and exe.linked_file is not None
+            elif filter_part["class"] == "command":
+                ret = ret and (exe.bpath is not None)
 
         if filter_part["filter_source_root"]:
             if filter_part["source_root"] == "1":
@@ -489,7 +491,7 @@ class CommandFilter(Filter):
         # [ [(STR,PPID,CLASS,NEGATE,SRCROOT),(...),...], ... ]
 
         command_class = {
-            "file" : 0x0001,
+            "command" : 0x0001,
             "compiler" : 0x0002,
             "linker" : 0x0004,
         }
