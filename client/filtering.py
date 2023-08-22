@@ -510,7 +510,7 @@ class CommandFilter(Filter):
                 elif "type"  in flt and flt['type'] == "re":
                     f_type = "cmd_matches_re"
                 else:
-                    f_type = "cmd_contains_path"
+                    f_type = "cmd_has_string"
 
                 return (f_type, flt['cmd'])
             if "cwd" in flt:
