@@ -40,18 +40,18 @@ def translate_to_cmdline(req: Request) -> List[str]:
     Function translates url request to client argument list.
     """
     ret = [req.path.replace("/", "")]
-
-    for key, val in req.args.items(multi=True):
-        if key in bool_args:
-            if "true" in val:
-                ret.append(f"--{key}" if len(key) > 1 else f"-{key}")
-        elif key in allowed_modules:
-            ret.append(key)                
-        else:
-            ret.append(f"--{key}={val}" if len(key) > 1 else f"-{key}={val}")
+    for parts in req.query_string.split(b"&"):
+        k_v = parts.decode().split("=",maxsplit=1)
+        if len(k_v) == 2:
+            ret.append(f"--{k_v[0]}={k_v[1]}" if len(k_v[0]) > 1 else f"-{k_v[0]}={k_v[1]}")
+        elif len(k_v) == 1:
+            if k_v[0] in bool_args:
+                if "true" in k_v[1]:
+                    ret.append(f"--{k_v[0]}" if len(k_v[0]) > 1 else f"-{k_v[0]}")
+            elif k_v[0] in allowed_modules:
+                ret.append(k_v[0])
 
     ret.append("--json")
-    print(ret)
     return ret
 
 
