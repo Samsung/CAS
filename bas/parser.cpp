@@ -50,7 +50,7 @@ Errorable<void> StreamParser::parse_line(const char *line, size_t size, uint64_t
     auto ret = parse_generic_args(line + 3, line_number);
 
     if (ret.is_error())
-        return std::move(ret);
+        return ret;
 
     event_tuple = ret.value();
 
@@ -704,7 +704,6 @@ size_t StreamParser::parse_long_argument(std::vector<eventTuple_t>::iterator &it
         const std::vector<eventTuple_t>::iterator &end_it, Tag begin, Tag extended, Tag end,
         std::string &result)
 {
-    ssize_t last_argument = NOT_INDEXED;
     size_t size = 0;
 
     for (;;) {
@@ -739,9 +738,6 @@ size_t StreamParser::parse_long_argument(std::vector<eventTuple_t>::iterator &it
             it++;
             continue;
         }
-
-        if (event.tag == extended)
-            last_argument = event.argument_index;
 
         result.append(json_escape(event.event_arguments));
         size += event.event_arguments.size();

@@ -137,9 +137,6 @@ struct OpenFile {
 
         this->size = 0;
 
-        if (access(absolute_path.c_str(), F_OK))
-            return;
-
         ret = statx(-1, original_path.c_str(), AT_SYMLINK_NOFOLLOW,
                     STATX_TYPE | STATX_SIZE, &stat_buf);
 

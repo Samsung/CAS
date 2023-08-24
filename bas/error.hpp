@@ -170,7 +170,6 @@ public:
 
 template <>
 class Errorable<void> {
-    friend Errorable;
 private:
     std::unique_ptr<AbstractError> m_error_ptr;
     bool m_error;
