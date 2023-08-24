@@ -472,7 +472,7 @@ class Module:
         """
         Function check if required parameters are valid.
 
-        :param required_args: list of required args 
+        :param required_args: list of required args
         :type required_args: List[str]
         :param args: parsed commandline args
         :type args: argparse.Namespace

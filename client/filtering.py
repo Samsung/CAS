@@ -88,7 +88,7 @@ class Filter:
                     assert False, "DEBUG! Some wildcards not cached to re! - this should never happen! {}".format(f_and)
 
                 if 'class' in f_and and f_and['class'] == 'compiler':
-                    self.comp_re = "|".join([x+"$" for x in self.config.config_info["gcc_spec"] + self.config.config_info["gpp_spec"] 
+                    self.comp_re = "|".join([x+"$" for x in self.config.config_info["gcc_spec"] + self.config.config_info["gpp_spec"]
                                             + self.config.config_info["clang_spec"] + self.config.config_info["clangpp_spec"] + self.config.config_info["armcc_spec"]])
                     self.comp_re = self.comp_re.replace('+', r'\+').replace('.', r'\.').replace('/', r'\/').replace('*', '.*')
                     self.comp_re = re.compile(self.comp_re)
@@ -278,7 +278,7 @@ class OpenFilter(Filter):
 
     def resolve_filters(self, opn: libetrace.nfsdbEntryOpenfile) -> bool:
         """
-        Function check if open should pass all filters. 
+        Function check if open should pass all filters.
 
         :param opn: open file object
         :type opn: libetrace.nfsdbEntryOpenfile

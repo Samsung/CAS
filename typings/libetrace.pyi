@@ -680,7 +680,7 @@ class nfsdbEntry:
     openpaths_with_children: List[str]
     """List of opens paths referenced by this process and its children"""
     pcp: list
-    wpid: list
+    wpid: int
     pipe_eids: List[nfsdbEntryEid]
     linked_file: nfsdbEntryOpenfile
     linked_path: str

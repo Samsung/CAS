@@ -55,7 +55,11 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
 
         if common_args.ide:
             from client.ide_generator.project_generator import project_generator_map, ProjectGenerator
-            project_generator:ProjectGenerator = project_generator_map[common_args.ide](args=common_args, cas_db=cas_db)
+            project_generator: ProjectGenerator = project_generator_map[common_args.ide](args=common_args, cas_db=cas_db)
+            latest_module = module_pipeline.modules[-1]
+
+            if not latest_module.args.show_commands and not latest_module.args.details:
+                latest_module.args.details = True
             project_generator.generate(data=module_pipeline.render())
             return None
 

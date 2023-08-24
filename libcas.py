@@ -1,7 +1,7 @@
 """
 Module contains set of useful libetrace binding functions.
 """
-from typing import List, Dict, Set, Tuple, Optional, Iterator
+from typing import List, Dict, Set, Tuple, Optional, Iterable
 import fnmatch
 import multiprocessing
 import json
@@ -23,15 +23,20 @@ try:
     # If tqdm is available use it for nice progressbar
     from tqdm import tqdm as progressbar
 except ModuleNotFoundError:
+    # Fallback if tqdm is not installed
     class progressbar:
         n = 0
         x = None
 
-        def __init__(self, x=None, total=0, disable=None):
+        def __init__(self, data:Optional[Iterable]=None, x=None, total=0, disable=None):
+            self.data = data
             self.x = x
             self.total = total
             if disable is None:
                 self.disable = not sys.stdout.isatty()
+
+        def __iter__(self):
+            return iter(self.data) if self.data else iter([])
 
         def refresh(self):
             if not self.disable:
@@ -233,6 +238,20 @@ class CASDatabase:
         """
 
         return list({x[0] for x in self.db.linked_module_paths()})
+
+    @lru_cache(maxsize=1)
+    def object_files_paths(self) -> List[str]:
+        """
+        Function returns objects file paths.
+        This function uses cache.
+
+        :return: List of object files paths
+        :rtype: List[str]
+        """
+
+        return list({ obj_p
+                     for x in self.db.filtered_execs(has_comp_info=True)
+                     for obj_p in x.compilation_info.object_paths })
 
     @lru_cache(maxsize=1)
     def linked_modules(self) -> List[libetrace.nfsdbEntryOpenfile]:
@@ -1550,8 +1569,8 @@ class CASDatabase:
                         fork_map[ex.eid.pid] = [ch.eid.pid for ch in ex.childs]
                     if do_compilations and ex.binary != '':
                         b = os.path.realpath(ex.binary) if ex.binary.endswith("/cc") or ex.binary.endswith("/c++") else ex.binary
-                        effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                         if clangpp_spec_patterns.match(b):
+                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                             clangpp_pattern_match_execs.append(ex.ptr)
                             if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
@@ -1563,6 +1582,7 @@ class CASDatabase:
                                 if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif clang_spec_patterns.match(b):
+                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                             clang_pattern_match_execs.append(ex.ptr)
                             if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
@@ -1574,10 +1594,12 @@ class CASDatabase:
                                 if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif gcc_spec_patterns.match(b):
+                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                             gcc_comp_pids.append(ex.ptr)
                             if "-" not in effective_args:
                                 gcc_input_execs.append(ex)
                         elif gpp_spec_patterns.match(b):
+                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
                             gpp_comp_pids.append(ex.ptr)
                             if "-" not in effective_args:
                                 gpp_input_execs.append(ex)

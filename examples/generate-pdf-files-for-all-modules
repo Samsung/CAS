@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+
+import sys
+import libetrace
+import os
+from bas.ide import *
+
+nfsdb = libetrace.nfsdb()
+nfsdb.load("%s/.nfsdb.img"%(sys.argv[1]),quiet=True)
+
+# Run it as:
+# python3 <PATH TO>/examples/generate-pdf-files-for-ot <PATH_TO>/<OT_ROOT> [ <NEW_SOURCE_ROOT> ] [add_project_source:<int>]
+
+# Getting file dependencies for all linked modules in the project
+dep_pids = set()
+dep_paths = set()
+linked_modules = [e.linked_file for e in nfsdb if e.is_linking()]
+for lm in linked_modules:
+	r = nfsdb.fdeps(lm.path)
+	dep_pids |= set(r[0])
+	dep_paths |= set(r[1])
+print ("Total dependencies: %d"%(len(dep_paths)))
+print ("Total compiled dependencies: %d"%(len([x for x in r[2] if x.is_compiled()])))
+
+apgn = APGN(nfsdb)
+source_root = sys.argv[1].rstrip("/")
+outdir = os.path.join(source_root,".eclipse")
+project_name = source_root.split(os.sep)[-1]
+remap_source_root = None
+if len(sys.argv)>2:
+	remap_source_root = [(source_root,sys.argv[2])]
+add_project_source = False
+if len(sys.argv)>3:
+	add_project_source = int(sys.argv)!=0
+apgn.generate_project_description_files(list(dep_paths),project_name,list(dep_pids),source_root,outdir,add_project_source=add_project_source,remap_source_root=remap_source_root)
