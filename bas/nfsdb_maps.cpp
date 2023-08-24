@@ -207,6 +207,15 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		}
 	}
 
+	/* Populate the return value of the last execution in a process to all other executions */
+	for (std::map<unsigned long,vexecs_t>::iterator i=processMap.begin(); i!=processMap.end(); ++i) {
+		vexecs_t& execs = (*i).second;
+		struct nfsdb_entry* last_entry = execs.back();
+		for (vexecs_t::iterator j=execs.begin(); j!=execs.end(); ++j) {
+			(*j)->return_code = last_entry->return_code;
+		}
+	}
+
 	std::map<unsigned long,unsigned long> revforkMap;
 	for (forkMap_t::iterator i=forkMap.begin(); i!=forkMap.end(); ++i) {
 		auto vc = (*i).second;

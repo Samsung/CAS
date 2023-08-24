@@ -76,6 +76,7 @@ struct nfsdb_entry {
 	struct nfsdb_entry_file_index linked_index;
 	int linked_type;
 	int has_shared_argv;
+	int return_code;
 };
 
 struct nfsdb_deps {

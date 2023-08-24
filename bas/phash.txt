@@ -43,6 +43,7 @@ SysCloneFailed
 Dup
 oldfd
 newfd
+status
 A[
 PI
 PP

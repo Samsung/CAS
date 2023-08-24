@@ -459,6 +459,31 @@ Errorable<LinkArguments> StreamParser::parse_link_short_arguments(const eventTup
     return arguments;
 }
 
+Errorable<ExitArguments> StreamParser::parse_exit_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    ShortArguments tag;
+    ExitArguments arguments;
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    if (tag != ShortArguments::Status)
+        return UnexpectedTagError(event.line_number, tag);
+
+    errno = 0;
+    arguments.status = std::strtol(++separator, &endptr, 10);
+    if (errno) [[unlikely]]
+        return IntegerParseError(event.line_number, separator, errno);
+    else if (*endptr != 0) [[unlikely]]
+        return BadSeparatorError(event.line_number, separator);
+
+    return arguments;
+}
+
 Errorable<RenameArguments> StreamParser::parse_rename2_short_arguments(const eventTuple_t &event) {
     char *endptr;
     char *separator;
@@ -1258,9 +1283,14 @@ Errorable<void> StreamParser::process_events(Process &process) {
             _stats_collector.increment_symlink();
         } break;
         case Tag::Exit: {
-            // Nothing to get from it right now (later we might get process return code)
             if (first_event_time() == 0)
                 set_first_event_time(evln.timestamp);
+            auto result = parse_exit_short_arguments(evln);
+            if (result.is_error())
+                return result;
+            auto args = result.value();
+            Execution &e = process.executions.back();
+            e.exit_code = args.status;
             n_processed++;
             _stats_collector.increment_exit();
             append_syscall(syscall_raw(process.pid, syscall_raw::SYS_EXIT, evln.timestamp - first_event_time()));

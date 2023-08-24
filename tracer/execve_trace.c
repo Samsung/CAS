@@ -681,7 +681,8 @@ static void __tracepoint_probe_exit(void* data, struct task_struct *task)
 	}
 
 	if (should_trace(&tpid)) {
-		PRINT_TRACE_TASK(tpid->upid, task, "!Exit|");
+		PRINT_TRACE_TASK(tpid->upid, task, "!Exit|status=%d",
+				 (task->exit_code >> 8) & 0xff);
 	}
 
 	pr_debug("exit: %d\n", (int) task->pid);
@@ -1703,4 +1704,3 @@ static void et_exit(void)
 	pr_info("Module unloaded\n");
 }
 module_exit(et_exit);
-

@@ -4,11 +4,11 @@
 
 /* Perfect hash values for selected strings */
 enum class Tag {
-    NewProc = 93,
-    SchedFork = 59,
-    SysClone = 88,
-    SysCloneFailed = 94,
-    Close = 60,
+    NewProc = 98,
+    SchedFork = 74,
+    SysClone = 93,
+    SysCloneFailed = 99,
+    Close = 105,
     Pipe = 29,
     Dup = 108,
     Open = 149,
@@ -20,12 +20,12 @@ enum class Tag {
     LinkTo = 26,
     LinkatFrom = 45,
     LinkFrom = 28,
-    Symlink = 87,
-    Exit = 14,
+    Symlink = 97,
+    Exit = 19,
 
-    ProgramInterpreter = 137,               // PI
+    ProgramInterpreter = 147,               // PI
     ProgramPath = 77,                       // PP
-    CurrentWorkingDirectory = 112,          // CW
+    CurrentWorkingDirectory = 107,          // CW
     AbsolutePath = 132,                     // FN
     OriginalPath = 92,                      // FO
     RenameFromPath = 2,                     // RF
@@ -36,10 +36,10 @@ enum class Tag {
     SymlinkTargetPath = 32,                 // SR
     SymlinkPath = 42,                       // SL
 
-    ArrayedArguments = 37,                  // A[
-    ProgramInterpreterExtended = 83,        // PI[
+    ArrayedArguments = 47,                  // A[
+    ProgramInterpreterExtended = 88,        // PI[
     ProgramPathExtended = 53,               // PP[
-    CurrentWorkingDirectoryExtended = 78,   // CW[
+    CurrentWorkingDirectoryExtended = 83,   // CW[
     AbsolutePathExtended = 68,              // FN[
     OriginalPathExtended = 48,              // FO[
     RenameFromPathExtended = 3,             // RF[
@@ -50,9 +50,9 @@ enum class Tag {
     SymlinkTargetPathExtended = 33,         // SR[
     SymlinkPathExtended = 38,               // SL[
 
-    ProgramInterpreterEnd = 86,             // PI_end
+    ProgramInterpreterEnd = 91,             // PI_end
     ProgramPathEnd = 56,                    // PP_end
-    CurrentWorkingDirectoryEnd = 81,        // CW_end
+    CurrentWorkingDirectoryEnd = 86,        // CW_end
     AbsolutePathEnd = 71,                   // FN_end
     OriginalPathEnd = 51,                   // FO_end
     RenameFromPathEnd = 6,                  // RF_end
@@ -63,30 +63,31 @@ enum class Tag {
     SymlinkTargetPathEnd = 36,              // SR_end
     SymlinkPathEnd = 41,                    // SL_end
 
-    EndOfArgs = 91,
-    Cont = 64,
-    ContEnd = 63,
+    EndOfArgs = 96,
+    Cont = 79,
+    ContEnd = 78,
     None = -1,
 };
 
 enum class ShortArguments {
     Pid = 58,
-    ArgSize = 62,
+    ArgSize = 37,
     Prognameisize = 73,
     Prognamepsize = 128,
-    CwdSize = 102,
+    CwdSize = 67,
     Fd = 17,
     Fd1 = 118,
     Fd2 = 113,
-    Oldfd = 35,
+    Oldfd = 65,
     Newfd = 50,
-    Flags = 65,
+    Flags = 90,
     Mode = 34,
     Fnamesize = 69,
     Forigsize = 39,
-    Targetnamesize = 84,
-    Linknamesize = 57,
+    Targetnamesize = 59,
+    Linknamesize = 82,
     Resolvednamesize = 66,
+    Status = 61,
 };
 
 

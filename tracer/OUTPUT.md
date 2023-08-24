@@ -172,8 +172,13 @@ Arguments:
 #### exit
 Syntax:
 ```
-Exit|
+Exit|status=nn
 ```
+Arguments:
+
+| Argument | Description |
+|---|---|
+| status | status passed to exit() |
 
 -----
 #### open, openat

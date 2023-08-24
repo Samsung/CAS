@@ -145,6 +145,8 @@ void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& 
             auto& execution = process.executions[i];
 
             print_entry(execution);
+            if (i == process.executions.size() - 1)
+                output << ",\"!\":" << +execution.exit_code;
             print_files(execution);
 
             if (std::next(it) != results.process_map.end()

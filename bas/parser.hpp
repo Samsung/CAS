@@ -108,7 +108,9 @@ struct SymlinkArguments {
     unsigned long linknamesize;
 };
 
-struct ExitArguments {};
+struct ExitArguments {
+    char status;
+};
 
 typedef struct eventTuple {
     upid_t pid;
@@ -187,6 +189,7 @@ struct Execution {
     std::string current_working_directory;
     std::vector<std::string> arguments;
     std::vector<Child> children;
+    uint8_t exit_code = 0;
 
     void add_open_file(std::string &path, OpenFile &file) {
         auto lookup = opened_files.find(path);
@@ -449,6 +452,7 @@ protected:
     static Errorable<PipeArguments> parse_pipe_short_arguments(const eventTuple_t &);
     static Errorable<RenameArguments> parse_rename_short_arguments(const eventTuple_t &);
     static Errorable<LinkArguments> parse_link_short_arguments(const eventTuple_t &);
+    static Errorable<ExitArguments> parse_exit_short_arguments(const eventTuple_t &);
     static Errorable<RenameArguments> parse_rename2_short_arguments(const eventTuple_t &);
     static Errorable<LinkArguments> parse_linkat_short_arguments(const eventTuple_t &);
     static Errorable<DupArguments> parse_dup_short_arguments(const eventTuple_t &);

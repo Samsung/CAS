@@ -394,6 +394,7 @@ PyObject* libetrace_nfsdb_entry_get_cwd(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_bpath(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_argv(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_command(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_return_code(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openpaths(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_openfiles_with_children(PyObject* self, void* closure);
@@ -438,6 +439,7 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"bpath",libetrace_nfsdb_entry_get_bpath,0,"nfsdb entry binary path value",0},
 	{"argv",libetrace_nfsdb_entry_get_argv,0,"nfsdb entry argv list",0},
 	{"cmd",libetrace_nfsdb_entry_get_command,0,"nfsdb entry command string",0},
+	{"return_code",libetrace_nfsdb_entry_get_return_code,0,"return code of the entire process this nfsdb entry is a part of",0},
 	{"opens",libetrace_nfsdb_entry_get_openfiles,0,"nfsdb entry open files list",0},
 	{"openpaths",libetrace_nfsdb_entry_get_openpaths,0,"nfsdb entry open file paths list",0},
 	{"opens_with_children",libetrace_nfsdb_entry_get_openfiles_with_children,0,"nfsdb entry open files list in the current process and all its children",0},

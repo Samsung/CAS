@@ -864,6 +864,10 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 		for (ssize_t u=0; u<PyList_Size(argvEntryList); ++u) {
 			new_entry->argv[u] = string_table_add(&nfsdb, PyList_GetItem(argvEntryList,u), stringMap);
 		}
+		/* return code */
+		if (PyDict_Contains(item, PyUnicode_FromString("!"))) {
+			new_entry->return_code = PyLong_AsLong(PyDict_GetItem(item, PyUnicode_FromString("!")));
+		}
 		/* Open files */
 		PyObject* openEntryList = PyDict_GetItem(item, PyUnicode_FromString("o"));
 		new_entry->open_files_count = PyList_Size(openEntryList);
@@ -4415,6 +4419,12 @@ PyObject* libetrace_nfsdb_entry_get_command(PyObject* self, void* closure) {
 	PyObject* cmd = PyUnicode_FromString(cmdstr);
 	free((void*)cmdstr);
 	return cmd;
+}
+
+PyObject* libetrace_nfsdb_entry_get_return_code(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	return PyLong_FromLong(__self->entry->return_code);
 }
 
 PyObject* libetrace_nfsdb_entry_get_openfiles(PyObject* self, void* closure) {
