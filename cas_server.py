@@ -43,11 +43,15 @@ def translate_to_cmdline(req: Request) -> List[str]:
     for parts in req.query_string.split(b"&"):
         k_v = parts.decode().split("=",maxsplit=1)
         if len(k_v) == 2:
-            ret.append(f"--{k_v[0]}={k_v[1]}" if len(k_v[0]) > 1 else f"-{k_v[0]}={k_v[1]}")
-        elif len(k_v) == 1:
             if k_v[0] in bool_args:
                 if "true" in k_v[1]:
                     ret.append(f"--{k_v[0]}" if len(k_v[0]) > 1 else f"-{k_v[0]}")
+            else:
+                ret.append(f"--{k_v[0]}={k_v[1]}" if len(k_v[0]) > 1 else f"-{k_v[0]}={k_v[1]}")
+
+        elif len(k_v) == 1:
+            if k_v[0] in bool_args:
+                ret.append(f"--{k_v[0]}" if len(k_v[0]) > 1 else f"-{k_v[0]}")
             elif k_v[0] in allowed_modules:
                 ret.append(k_v[0])
 
