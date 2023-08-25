@@ -293,7 +293,8 @@ class OpenFilter(Filter):
             return all([self._match_filter(opn, f) for f in self.filter_dict[0]])
 
     @staticmethod
-    def filter_to_libetrace(filter_dict: Optional[List]) -> List:
+    def filter_to_libetrace(filter_dict: "List | str") -> List:
+        filter_dict = filter_dict if isinstance(filter_dict, list) else Filter._filter_str_to_dict(filter_dict)
         # [ [(PATH,CLASS,EXISTS,ACCESS,NEGATE,SRCROOT,SRCTYPE),(...),...], ... ]
 
         file_class = {
@@ -348,7 +349,7 @@ class OpenFilter(Filter):
 
         def get_access(flt: Dict) -> Optional[Tuple[str, int]]:
             if "access" in flt and "global_access" in flt:
-                raise
+                raise FilterException("Can't use access and global_access in same time!")
             if "access" in flt:
                 if flt["access"] == "r":
                     return "has_access", 0
@@ -487,7 +488,8 @@ class CommandFilter(Filter):
             return all([self._match_filter(exe, f) for f in self.filter_dict[0]])
 
     @staticmethod
-    def filter_to_libetrace(filter_dict: Optional[List]) -> List:
+    def filter_to_libetrace(filter_dict: "List | str") -> List:
+        filter_dict = filter_dict if isinstance(filter_dict, list) else Filter._filter_str_to_dict(filter_dict)
         # [ [(STR,PPID,CLASS,NEGATE,SRCROOT),(...),...], ... ]
 
         command_class = {

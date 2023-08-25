@@ -503,15 +503,15 @@ class TestGeneric:
         fil = self.get_parsed_cmd_filter([
             "linked_modules",
             "--command-filter=[bin=/abc,type=wc,class=linker]"
-            "and[cwd=/123,type=re,cwd_source_root=1,negate=1,class=file]"
+            "and[cwd=/123,type=re,cwd_source_root=1,negate=1,class=command]"
             "or[cmd=comm,type=wc,class=compiler]"
             "and[bin=/ghi,type=wc,class=linker,negate=1]"
-            "and[ppid=123,class=file,bin_source_root=0]"
+            "and[ppid=123,class=command,bin_source_root=0]"
             "and[bin=/bash]"])
 
         # (STR,PPID,CLASS,NEGATE,SRCROOT)
 
-        # "file" : 0x0001,
+        # "command" : 0x0001,
         # "compiler" : 0x0002,
         # "linker" : 0x0004,
 

@@ -137,7 +137,16 @@ class nfsdb:
         Returns iterator over executables
         """
 
-    def filtered_paths(self, flt: List) -> List[str]:
+    def filtered_paths(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path:Optional[str]=None, wc:Optional[str]=None, re:Optional[str]=None,
+                        compiled:Optional[bool]=None, linked:Optional[bool]=None, linked_static:Optional[bool]=None,
+                        linked_shared:Optional[bool]=None, linked_exe:Optional[bool]=None, plain:Optional[bool]=None,
+                        compiler:Optional[bool]=None, linker:Optional[bool]=None, binary:Optional[bool]=None,
+                        symlink:Optional[bool]=None, no_symlink:Optional[bool]=None,
+                        file_exists:Optional[bool]=None,file_not_exists:Optional[bool]=None,dir_exists:Optional[bool]=None,
+                        has_access:Optional[int]=None,negate:Optional[bool]=None,
+                        at_source_root:Optional[bool]=None,not_at_source_root:Optional[bool]=None,
+                        source_type:Optional[int]=None) -> List[str]:
         """
         Filter opens depends on given filter parameter.
 
@@ -145,7 +154,16 @@ class nfsdb:
         :return: list of filtered open paths
         """
 
-    def filtered_paths_iter(self, flt: List) -> nfsdbFilteredOpensPathsIter:
+    def filtered_paths_iter(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path:Optional[str]=None, wc:Optional[str]=None, re:Optional[str]=None,
+                        compiled:Optional[bool]=None, linked:Optional[bool]=None, linked_static:Optional[bool]=None,
+                        linked_shared:Optional[bool]=None, linked_exe:Optional[bool]=None, plain:Optional[bool]=None,
+                        compiler:Optional[bool]=None, linker:Optional[bool]=None, binary:Optional[bool]=None,
+                        symlink:Optional[bool]=None, no_symlink:Optional[bool]=None,
+                        file_exists:Optional[bool]=None,file_not_exists:Optional[bool]=None,dir_exists:Optional[bool]=None,
+                        has_access:Optional[int]=None,negate:Optional[bool]=None,
+                        at_source_root:Optional[bool]=None,not_at_source_root:Optional[bool]=None,
+                        source_type:Optional[int]=None) -> nfsdbFilteredOpensPathsIter:
         """
         Filter opens depends on given filter parameter and returns iterator.
 

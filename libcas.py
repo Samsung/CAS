@@ -362,11 +362,37 @@ class CASDatabase:
         """
         return self.db.opens_paths()
 
-    def filtered_paths(self, flt: List) -> List[str]:
-        return self.db.filtered_paths(flt)
+    def filtered_paths(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path: Optional[str] = None, wc: Optional[str] = None, re: Optional[str] = None,
+                        compiled: Optional[bool] = None, linked: Optional[bool] = None, linked_static: Optional[bool] = None,
+                        linked_shared: Optional[bool] = None, linked_exe: Optional[bool] = None, plain: Optional[bool] = None,
+                        compiler: Optional[bool] = None, linker: Optional[bool] = None, binary: Optional[bool] = None,
+                        symlink: Optional[bool] = None, no_symlink: Optional[bool] = None,
+                        file_exists: Optional[bool] = None, file_not_exists: Optional[bool] = None, dir_exists: Optional[bool] = None,
+                        has_access: Optional[int] = None, negate: Optional[bool] = None,
+                        at_source_root: Optional[bool] = None, not_at_source_root: Optional[bool] = None,
+                        source_type: Optional[int] = None) -> List[str]:
+        return self.db.filtered_paths(file_filter=file_filter, path=path, has_path=has_path, wc=wc, re=re, compiled=compiled,
+                                        linked=linked, linked_static=linked_static, linked_shared=linked_shared,
+                                        linked_exe=linked_exe, plain=plain, compiler=compiler,linker=linker, binary=binary, symlink=symlink,
+                                        no_symlink=no_symlink, file_exists=file_exists, file_not_exists=file_not_exists, dir_exists=dir_exists,
+                                        has_access=has_access, negate=negate, at_source_root=at_source_root, not_at_source_root=not_at_source_root, source_type=source_type)
 
-    def filtered_paths_iter(self, flt: List) -> libetrace.nfsdbFilteredOpensPathsIter:
-        return self.db.filtered_paths_iter(flt)
+    def filtered_paths_iter(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,
+                        has_path: Optional[str] = None, wc: Optional[str] = None, re: Optional[str] = None,
+                        compiled: Optional[bool] = None, linked: Optional[bool] = None, linked_static: Optional[bool] = None,
+                        linked_shared: Optional[bool] = None, linked_exe: Optional[bool] = None, plain: Optional[bool] = None,
+                        compiler: Optional[bool] = None, linker: Optional[bool] = None, binary: Optional[bool] = None,
+                        symlink: Optional[bool] = None, no_symlink: Optional[bool] = None,
+                        file_exists: Optional[bool] = None, file_not_exists: Optional[bool] = None, dir_exists: Optional[bool] = None,
+                        has_access: Optional[int] = None, negate: Optional[bool] = None,
+                        at_source_root: Optional[bool] = None, not_at_source_root: Optional[bool] = None,
+                        source_type: Optional[int] = None) -> libetrace.nfsdbFilteredOpensPathsIter:
+        return self.db.filtered_paths_iter(file_filter=file_filter, path=path, has_path=has_path, wc=wc, re=re, compiled=compiled,
+                                        linked=linked, linked_static=linked_static, linked_shared=linked_shared,
+                                        linked_exe=linked_exe, plain=plain, compiler=compiler,linker=linker, binary=binary, symlink=symlink,
+                                        no_symlink=no_symlink, file_exists=file_exists, file_not_exists=file_not_exists, dir_exists=dir_exists,
+                                        has_access=has_access, negate=negate, at_source_root=at_source_root, not_at_source_root=not_at_source_root, source_type=source_type)
 
 
     def filtered_opens(self, file_filter:Optional[List]=None, path: Optional[List[str]] = None,

@@ -194,7 +194,7 @@ class RefFiles(Module, FilterableModule):
 
         else:
             if self.open_filter:
-                data = self.nfsdb.filtered_paths_iter(self.open_filter.libetrace_filter)
+                data = self.nfsdb.filtered_paths_iter(file_filter=self.open_filter.libetrace_filter)
             else:
                 data = self.nfsdb.opens_paths()
 
