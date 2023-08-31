@@ -1,0 +1,3 @@
+[submodule "kflat"]
+	path = kflat
+	url = https://github.com/Samsung/kflat

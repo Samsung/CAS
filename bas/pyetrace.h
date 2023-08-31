@@ -10,12 +10,22 @@ extern "C" {
 #include <signal.h>
 #include <fnmatch.h>
 #include <time.h>
+#include <stdbool.h>
 #include <string.h>
+
+// Necessary to use "rbtree.h" library
+#ifndef container_of
+#define container_of(ptr, type, member) ({			\
+  	const __typeof__( ((type *)0)->member ) *__mptr = (ptr);	\
+  	(type *)( (char *)__mptr - offsetof(type,member) );})
+#endif
 
 #include "rbtree.h"
 #include "utils.h"
 #include "nfsdb.h"
 #include "ftdb_entry.h"
+
+#include <unflatten.hpp>
 
 #define LIBETRACE_EMPTY_STRING_HANDLE 0
 
@@ -140,7 +150,7 @@ PyObject * libetrace_is_ELF_file(PyObject *self, PyObject *args);
 PyObject * libetrace_pytools_is_ELF_or_LLVM_BC_file(PyObject *self, PyObject *args);
 PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args, PyObject* kwargs);
 PyObject * libetrace_parse_compiler_triple_hash(PyObject *self, PyObject *args);
-PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args);
+PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args, PyObject* kwargs);
 
 unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb);
 int nfsdb_maps(struct nfsdb* nfsdb, int show_stats);
@@ -155,7 +165,7 @@ typedef int64_t upid_t;
 #define GENERIC_ARG_PID_FMT "%" PRId64
 #define PY_ARG_PID_FMT "l"
 
-PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args);
+PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args, PyObject* kwargs);
 PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args);
 extern PyObject *libetrace_nfsdbError;
 
@@ -165,7 +175,7 @@ static PyMethodDef libetrace_methods[] = {
 	{"is_ELF_or_LLVM_BC_file", (PyCFunction)libetrace_pytools_is_ELF_or_LLVM_BC_file, METH_VARARGS,"Checks whether the given file has a proper ELF or LLVM bitcode header"},
 	{"precompute_command_patterns", (PyCFunction)libetrace_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
 	{"parse_compiler_triple_hash", (PyCFunction)libetrace_parse_compiler_triple_hash, METH_VARARGS,"Parse compiler -### output for clang"},
-	{"create_nfsdb", (PyCFunction)libetrace_create_nfsdb, METH_VARARGS,""},
+	{"create_nfsdb", (PyCFunction)libetrace_create_nfsdb, METH_VARARGS | METH_KEYWORDS,""},
 	{"parse_nfsdb", (PyCFunction)libetrace_parse_nfsdb, METH_VARARGS,""},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
@@ -187,6 +197,10 @@ typedef struct {
 	int verbose;
     int debug;
     int init_done;
+
+	CUnflatten unflatten;
+	CUnflatten unflatten_deps;
+
     const struct nfsdb* nfsdb;
     const struct nfsdb_deps* nfsdb_deps;
     PyObject* libetrace_nfsdb_entry_openfile_filterMap;
@@ -227,7 +241,7 @@ PyObject* libetrace_nfsdb_path_write(libetrace_nfsdb_object *self, PyObject *arg
 PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_symlinked(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_symlink_paths(libetrace_nfsdb_object *self, PyObject *args);
-PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_get_filemap(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_get_source_root(PyObject* self, void* closure);
@@ -276,7 +290,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
 	{"path_symlinked",(PyCFunction)libetrace_nfsdb_path_symlinked,METH_VARARGS,"Returns True if a given path was reached through a symbolic link"},
 	{"symlink_paths",(PyCFunction)libetrace_nfsdb_symlink_paths,METH_VARARGS,"Returns list of original symlink paths for a given resolved path"},
-	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS,""},
+	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS | METH_KEYWORDS,""},
 	{"precompute_command_patterns",(PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
 	{"filemap_has_path",(PyCFunction)libetrace_nfsdb_filemap_has_path,METH_VARARGS,"Returns True if a given opened path exists in the database"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */

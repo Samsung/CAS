@@ -1,11 +1,12 @@
 #include "pyetrace.h"
-#include "libflat.h"
 #include "compiler.h"
 
 #include <fcntl.h>
 #include <stdbool.h>
 #include <spawn.h>
 #include <sys/wait.h>
+
+#include "uflat.h"
 
 DEFINE_COMPILER(gcc);
 DEFINE_COMPILER(clang);
@@ -383,172 +384,138 @@ const char* joinpath(const char* cwd, const char* path) {
 	}
 }
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(eid);
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(cid);
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(pp_def);
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_entry_file_index);
+FUNCTION_DEFINE_FLATTEN_STRUCT(eid);
+FUNCTION_DEFINE_FLATTEN_STRUCT(cid);
+FUNCTION_DEFINE_FLATTEN_STRUCT(pp_def);
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb_entry_file_index);
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(nfsdb_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(nfsdb_entry);
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(openfile,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,original_path,1);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry,opaque_entry,1);
+FUNCTION_DEFINE_FLATTEN_STRUCT(openfile,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,original_path,1);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(nfsdb_entry,opaque_entry,1);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(compilation_info,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,compiled_list,ATTR(compiled_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry_file_index,compiled_index,ATTR(compiled_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,include_paths,ATTR(include_paths_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(pp_def,pp_defs,ATTR(pp_defs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(pp_def,pp_udefs,ATTR(pp_udefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,header_list,ATTR(header_list_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry_file_index,header_index,ATTR(header_list_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,object_list,ATTR(object_list_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry_file_index,object_index,ATTR(object_list_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(compilation_info,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,compiled_list,ATTR(compiled_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(nfsdb_entry_file_index,compiled_index,ATTR(compiled_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,include_paths,ATTR(include_paths_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(pp_def,pp_defs,ATTR(pp_defs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(pp_def,pp_udefs,ATTR(pp_udefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,header_list,ATTR(header_list_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(nfsdb_entry_file_index,header_index,ATTR(header_list_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,object_list,ATTR(object_list_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(nfsdb_entry_file_index,object_index,ATTR(object_list_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_entry,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(cid,child_ids,ATTR(child_ids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,argv,ATTR(argv_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(openfile,open_files,ATTR(open_files_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned char,pcp,ATTR(pcp_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(eid,pipe_eids,ATTR(pipe_eids_count));
-	AGGREGATE_FLATTEN_STRUCT2_ITER(compilation_info,compilation_info);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,linked_file,1);
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb_entry,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(cid,child_ids,ATTR(child_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,argv,ATTR(argv_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(openfile,open_files,ATTR(open_files_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned char,pcp,ATTR(pcp_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(eid,pipe_eids,ATTR(pipe_eids_count));
+	AGGREGATE_FLATTEN_STRUCT(compilation_info,compilation_info);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,linked_file,1);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node);
+FUNCTION_DECLARE_FLATTEN_STRUCT(nfsdb_entryMap_node);
 
-static inline const struct nfsdb_entryMap_node* nfsdb_entryMap_remove_color(const struct nfsdb_entryMap_node* ptr) {
-	return (const struct nfsdb_entryMap_node*)( (uintptr_t)ptr & ~3 );
-}
-
-static inline struct flatten_pointer* nfsdb_entryMap_add_color(struct flatten_pointer* fptr, const struct nfsdb_entryMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb_entryMap_node,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT2_MIXED_POINTER_ITER(nfsdb_entryMap_node,node.__rb_parent_color,
-			nfsdb_entryMap_remove_color,nfsdb_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,node.rb_left);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,entry_list,ATTR(entry_count));
+	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(nfsdb_entryMap_node,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_entryMap_node,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_entryMap_node,node.rb_left);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(struct nfsdb_entry*,entry_list,ATTR(entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(entry_list),ATTR(entry_count),
-		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
+		FLATTEN_STRUCT(nfsdb_entry,entry);
 	);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ulongMap_node);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ulongMap_node);
 
-static inline const struct ulongMap_node* ulongMap_remove_color(const struct ulongMap_node* ptr) {
-	return (const struct ulongMap_node*)( (uintptr_t)ptr & ~3 );
-}
 
-static inline struct flatten_pointer* ulongMap_add_color(struct flatten_pointer* fptr, const struct ulongMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ulongMap_node,
+FUNCTION_DEFINE_FLATTEN_STRUCT(ulongMap_node,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT2_MIXED_POINTER_ITER(ulongMap_node,node.__rb_parent_color,
-			ulongMap_remove_color,ulongMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,node.rb_left);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,value_list,ATTR(value_count));
+	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(ulongMap_node,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,node.rb_left);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,value_list,ATTR(value_count));
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(stringRefMap_node);
+FUNCTION_DECLARE_FLATTEN_STRUCT(stringRefMap_node);
 
-static inline const struct stringRefMap_node* stringMap_remove_color(const struct stringRefMap_node* ptr) {
-	return (const struct stringRefMap_node*)( (uintptr_t)ptr & ~3 );
-}
-
-static inline struct flatten_pointer* stringMap_add_color(struct flatten_pointer* fptr, const struct stringRefMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(stringRefMap_node,
+FUNCTION_DEFINE_FLATTEN_STRUCT(stringRefMap_node,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT2_MIXED_POINTER_ITER(stringRefMap_node,node.__rb_parent_color,
-			stringMap_remove_color,stringMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
+	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(stringRefMap_node,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node);
+FUNCTION_DECLARE_FLATTEN_STRUCT(nfsdb_fileMap_node);
 
-static inline const struct nfsdb_fileMap_node* nfsdb_fileMap_remove_color(const struct nfsdb_fileMap_node* ptr) {
-	return (const struct nfsdb_fileMap_node*)( (uintptr_t)ptr & ~3 );
-}
 
-static inline struct flatten_pointer* nfsdb_fileMap_add_color(struct flatten_pointer* fptr, const struct nfsdb_fileMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb_fileMap_node,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT2_MIXED_POINTER_ITER(nfsdb_fileMap_node,node.__rb_parent_color,
-			nfsdb_fileMap_remove_color,nfsdb_fileMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,node.rb_left);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,rd_entry_list,ATTR(rd_entry_count));
+	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(nfsdb_fileMap_node,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_fileMap_node,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_fileMap_node,node.rb_left);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(struct nfsdb_entry*,rd_entry_list,ATTR(rd_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(rd_entry_list),ATTR(rd_entry_count),
-		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
+		FLATTEN_STRUCT(nfsdb_entry,entry);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,rd_entry_index,ATTR(rd_entry_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,wr_entry_list,ATTR(wr_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,rd_entry_index,ATTR(rd_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(struct nfsdb_entry*,wr_entry_list,ATTR(wr_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(wr_entry_list),ATTR(wr_entry_count),
-		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
+		FLATTEN_STRUCT(nfsdb_entry,entry);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,wr_entry_index,ATTR(wr_entry_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,rw_entry_list,ATTR(rw_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,wr_entry_index,ATTR(wr_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(struct nfsdb_entry*,rw_entry_list,ATTR(rw_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(rw_entry_list),ATTR(rw_entry_count),
-		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
+		FLATTEN_STRUCT(nfsdb_entry,entry);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,rw_entry_index,ATTR(rw_entry_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(struct nfsdb_entry*,ga_entry_list,ATTR(ga_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,rw_entry_index,ATTR(rw_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(struct nfsdb_entry*,ga_entry_list,ATTR(ga_entry_count));
 	FOREACH_POINTER(struct nfsdb_entry*,entry,ATTR(ga_entry_list),ATTR(ga_entry_count),
-		FLATTEN_STRUCT2_ITER(nfsdb_entry,entry);
+		FLATTEN_STRUCT(nfsdb_entry,entry);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,ga_entry_index,ATTR(ga_entry_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,ga_entry_index,ATTR(ga_entry_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(nfsdb_entry,nfsdb,ATTR(nfsdb_count));
-	AGGREGATE_FLATTEN_STRING2(source_root);
-	AGGREGATE_FLATTEN_STRING2(dbversion);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,string_table,ATTR(string_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(nfsdb_entry,nfsdb,ATTR(nfsdb_count));
+	AGGREGATE_FLATTEN_STRING(source_root);
+	AGGREGATE_FLATTEN_STRING(dbversion);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,string_table,ATTR(string_count));
 	FOREACH_POINTER(const char*,s,ATTR(string_table),ATTR(string_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(uint32_t,string_size_table,ATTR(string_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,pcp_pattern_list,ATTR(pcp_pattern_list_size));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(uint32_t,string_size_table,ATTR(string_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,pcp_pattern_list,ATTR(pcp_pattern_list_size));
 	FOREACH_POINTER(const char*,s,ATTR(pcp_pattern_list),ATTR(pcp_pattern_list_size),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,procmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,bmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,forkmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,revforkmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,pipemap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,wrmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,rdmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,revstringmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_fileMap_node,filemap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(nfsdb_entryMap_node,linkedmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_entryMap_node,procmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_entryMap_node,bmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,forkmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,revforkmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,pipemap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,wrmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,rdmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,revstringmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_fileMap_node,filemap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(nfsdb_entryMap_node,linkedmap.rb_node);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(nfsdb_deps,
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,depmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,ddepmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,revdepmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ulongMap_node,revddepmap.rb_node);
+FUNCTION_DEFINE_FLATTEN_STRUCT(nfsdb_deps,
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,depmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,ddepmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,revdepmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(ulongMap_node,revddepmap.rb_node);
 );
 
 unsigned long string_table_add(struct nfsdb* nfsdb, PyObject* s, PyObject* stringMap) {
@@ -775,7 +742,7 @@ void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfs
 	}
 }
 
-PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
+PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args, PyObject* kwargs) {
 
 	PyObject* stringMap = PyDict_New();
 	PyObject* nfsdbJSON = PyTuple_GetItem(args,0);
@@ -784,13 +751,24 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 	PyObject* pcp_patterns = PyTuple_GetItem(args,3);
 	PyObject* shared_argvs = PyTuple_GetItem(args,4);
 	PyObject* dbfn = PyTuple_GetItem(args,5);
-	int show_stats = 0;
+	int show_stats = 0, verbose_mode = 0, debug_mode = 0;
 	if (PyTuple_Size(args)>6) {
 		PyObject* show_stats_arg = PyTuple_GetItem(args,6);
 		if (show_stats_arg==Py_True) {
 			show_stats = 1;
 		}
 	}
+
+	PyObject* py_debug = PyUnicode_FromString("verbose");
+	PyObject* py_quiet = PyUnicode_FromString("debug");
+	if (kwargs) {
+		if (PyDict_Contains(kwargs, py_debug))
+			verbose_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_debug));
+		if (PyDict_Contains(kwargs, py_quiet))
+			debug_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_quiet));
+	}
+	Py_DecRef(py_debug);
+	Py_DecRef(py_quiet);
 
 	PyObject* osModuleString = PyUnicode_FromString((char*)"os.path");
 	PyObject* osModule = PyImport_Import(osModuleString);
@@ -1046,37 +1024,60 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args) {
 		p = rb_next(p);
 	}
 
-	FILE* out;
-flatten_start:
-	out = fopen(PyString_get_c_str(dbfn), "w");
-	if (!out) {
-		printf("Couldn't create flatten image file: %s\n",PyString_get_c_str(dbfn));
-		Py_RETURN_FALSE;
+flatten_start: ;
+	const char* dbfn_s =  PyString_get_c_str(dbfn);
+	struct uflat* uflat = uflat_init(dbfn_s);
+	PYASSTR_DECREF(dbfn_s);
+	if(uflat == NULL) {
+		printf("uflat_init(): failed\n");
+		goto uflat_error_exit;
 	}
 
-	flatten_init();
+	int rv = uflat_set_option(uflat, UFLAT_OPT_OUTPUT_SIZE, 50ULL * 1024 * 1024 * 1024);
+	if(rv) {
+		printf("uflat_set_option(OUTPUT_SIZE): %d\n", rv);
+		goto uflat_error_exit;
+	}
+
+	rv = uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_FRAGMENTS, 1);
+	if(rv) {
+		printf("uflat_set_option(SKIP_MEM_FRAGMENTS)\n");
+		goto uflat_error_exit;
+	}
+
+	if(verbose_mode)
+		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
+	if(debug_mode)
+		uflat_set_option(uflat, UFLAT_OPT_DEBUG, 1);
+
 	FOR_ROOT_POINTER(&nfsdb,
-		UNDER_ITER_HARNESS2(
-			FLATTEN_STRUCT2_ITER(nfsdb,&nfsdb);
-		);
+		FLATTEN_STRUCT(nfsdb, &nfsdb);
 	);
 
-	int err;
-	if ((err = flatten_write(out)) != 0) {
-		printf("flatten_write(): %d\n",err);
-		Py_RETURN_FALSE;
+	int err = uflat_write(uflat);
+	if (err != 0) {
+		printf("flatten_write(): %d\n", err);
+		goto uflat_error_exit;
 	}
 
-	flatten_fini();
-	fclose(out);
+	uflat_fini(uflat);
+	destroy_nfsdb(&nfsdb);
 
 	Py_DECREF(pathJoinFunction);
 	Py_DECREF(osModule);
 	Py_DECREF(osModuleString);
 
+	Py_RETURN_TRUE;
+
+uflat_error_exit:
+	if(uflat != NULL)
+		uflat_fini(uflat);
 	destroy_nfsdb(&nfsdb);
 
-	Py_RETURN_TRUE;
+	Py_DECREF(pathJoinFunction);
+	Py_DECREF(osModule);
+	Py_DECREF(osModuleString);
+	Py_RETURN_FALSE;
 }
 
 static void destroy_nfsdb_deps(struct nfsdb_deps* nfsdb_deps) {
@@ -1084,18 +1085,30 @@ static void destroy_nfsdb_deps(struct nfsdb_deps* nfsdb_deps) {
 	// TODO
 }
 
-PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args) {
+PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
 
 	PyObject* depmap = PyTuple_GetItem(args,0);
 	PyObject* ddepmap = PyTuple_GetItem(args,1);
 	PyObject* dbfn = PyTuple_GetItem(args,2);
-	int show_stats = 0;
+	int show_stats = 0, verbose_mode = 0, debug_mode = 0;
 	if (PyTuple_Size(args)>3) {
 		PyObject* show_stats_arg = PyTuple_GetItem(args,3);
 		if (show_stats_arg==Py_True) {
 			show_stats = 1;
 		}
 	}
+
+	PyObject* py_debug = PyUnicode_FromString("verbose");
+	PyObject* py_quiet = PyUnicode_FromString("debug");
+	if (kwargs) {
+		if (PyDict_Contains(kwargs, py_debug))
+			verbose_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_debug));
+		if (PyDict_Contains(kwargs, py_quiet))
+			debug_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_quiet));
+	}
+	Py_DecRef(py_debug);
+	Py_DecRef(py_quiet);
+
 	struct nfsdb_deps nfsdb_deps = {};
 
 	/* Make a cache string table object */
@@ -1212,33 +1225,53 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 	}
 	Py_DecRef(ddepmap_keys);
 
-	FILE* out = fopen(PyString_get_c_str(dbfn), "w");
-	if (!out) {
-		printf("Couldn't create flatten image file: %s\n",PyString_get_c_str(dbfn));
+	const char* dbfn_s =  PyString_get_c_str(dbfn);
+	struct uflat* uflat = uflat_init(dbfn_s);
+	PYASSTR_DECREF(dbfn_s);
+	if(uflat == NULL) {
+		printf("uflat_init(): failed\n");
 		Py_RETURN_FALSE;
 	}
 
-	flatten_init();
+	int rv = uflat_set_option(uflat, UFLAT_OPT_OUTPUT_SIZE, 50ULL * 1024 * 1024 * 1024);
+	if(rv) {
+		printf("uflat_set_option(OUTPUT_SIZE): %d\n", rv);
+		goto uflat_error_exit;
+	}
+
+	rv = uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_FRAGMENTS, 1);
+	if(rv) {
+		printf("uflat_set_option(SKIP_MEM_FRAGMENTS)\n");
+		goto uflat_error_exit;
+	}
+
+	if(verbose_mode)
+		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
+	if(debug_mode)
+		uflat_set_option(uflat, UFLAT_OPT_DEBUG, 1);
+	
 	FOR_ROOT_POINTER(&nfsdb_deps,
-		UNDER_ITER_HARNESS2(
-			FLATTEN_STRUCT2_ITER(nfsdb_deps,&nfsdb_deps);
-		);
+		FLATTEN_STRUCT(nfsdb_deps,&nfsdb_deps);
 	);
 
-	int err;
-	if ((err = flatten_write(out)) != 0) {
-		printf("flatten_write(): %d\n",err);
-		Py_RETURN_FALSE;
+	int err = uflat_write(uflat);
+	if (err != 0) {
+		printf("flatten_write(): %d\n", err);
+		goto uflat_error_exit;
 	}
 
-	flatten_fini();
-	fclose(out);
-
-
+	uflat_fini(uflat);
 	destroy_nfsdb_deps(&nfsdb_deps);
 
 	Py_DecRef(stringTable);
 	Py_RETURN_TRUE;
+
+uflat_error_exit:
+	if(uflat != NULL)
+		uflat_fini(uflat);
+	destroy_nfsdb_deps(&nfsdb_deps);
+	Py_DecRef(stringTable);
+	Py_RETURN_FALSE;
 }
 
 PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs) {
@@ -1385,7 +1418,8 @@ void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self) {
 
 	PyTypeObject *tp = Py_TYPE(self);
 	if (self->init_done) {
-		unflatten_fini();
+		unflatten_deinit(self->unflatten);
+		unflatten_deinit(self->unflatten_deps);
 	}
 	Py_DecRef(self->libetrace_nfsdb_entry_openfile_filterMap);
 	Py_DecRef(self->libetrace_nfsdb_entry_command_filterMap);
@@ -3568,14 +3602,10 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 
     PyObject* py_debug = PyUnicode_FromString("debug");
     PyObject* py_quiet = PyUnicode_FromString("quiet");
-    PyObject* py_no_map_memory = PyUnicode_FromString("no_map_memory");
-    PyObject* py_mp_safe = PyUnicode_FromString("mp_safe");
 
     int debug = self->debug;
     int quiet = 0;
-    int no_map_memory = 0;
-    int mp_safe = 0;
-    int err=0;
+    bool err = true;
 
     if (kwargs) {
     	if (PyDict_Contains(kwargs,py_debug)) {
@@ -3583,12 +3613,6 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
     	}
     	if (PyDict_Contains(kwargs,py_quiet)) {
 			quiet = PyLong_AsLong(PyDict_GetItem(kwargs,py_quiet));
-		}
-    	if (PyDict_Contains(kwargs,py_no_map_memory)) {
-    		no_map_memory = PyLong_AsLong(PyDict_GetItem(kwargs,py_no_map_memory));
-		}
-    	if (PyDict_Contains(kwargs,py_mp_safe)) {
-    		mp_safe = PyLong_AsLong(PyDict_GetItem(kwargs,py_mp_safe));
 		}
     }
 
@@ -3599,63 +3623,46 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
     	goto done;
 	}
 
-    if (no_map_memory) {
-    	FILE* in = fopen(cache_filename, "rb");
-		if (!in) {
+	FILE* in = fopen(cache_filename, "r+b");
+	if (!in) {
+		in = fopen(cache_filename, "rb");
+		if(!in) {
 			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
 			goto done;
 		}
-		unflatten_init();
-		if (quiet)
-			flatten_set_option(option_silent);
-		if (unflatten_read(in)) {
-			PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
-			goto done;
-		}
-		fclose(in);
-    }
-    else {
-    	int map_fd = open(cache_filename,O_RDWR);
-    	if (map_fd<0) {
-    		PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
-    		goto done;
-    	}
-    	unflatten_init();
-    	if (quiet)
-    		flatten_set_option(option_silent);
-    	int map_err;
-    	if (!mp_safe) {
-    		/* Try to map the cache file to the previously used address
-    		 * When it fails map to new address and update all the pointers in the file
-    		 * (we're not going concurrently here)
-    		 */
-    		map_err = unflatten_map(map_fd,0);
-    	}
-    	else {
-    		/* Try to map the cache file to the previously used address
-			 * When it fails map to new address privately (do not update the pointers in the file)
-			 * (this can save us some trouble when running concurrently)
-			 */
-    		map_err = unflatten_map_private(map_fd,0);
-    	}
-    	close(map_fd);
-    	if (map_err) {
-    		PyErr_SetString(libetrace_nfsdbError, "Failed to map cache file");
-    		goto done;
-    	}
-    }
+	}
 
-    self->nfsdb = ROOT_POINTER_NEXT(const struct nfsdb*);
+	int debug_level = 0;
+	if(debug)
+		debug_level = 2;
+	else if (!quiet)
+		debug_level = 1;
+
+	self->unflatten = unflatten_init(debug_level);
+	if(self->unflatten == NULL) {
+		PyErr_SetString(libetrace_nfsdbError, "Failed to intialize unflatten library");
+		goto done;
+	}
+
+	if (unflatten_load_continuous(self->unflatten, in, NULL)) {
+		PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
+		unflatten_deinit(self->unflatten);
+		fclose(in);
+		goto done;
+	}
+
+	fclose(in);
+
+    self->nfsdb = (const struct nfsdb*) unflatten_root_pointer_next(self->unflatten);
 	self->init_done = 1;
-	err = 1;
+	err = false;
 
 done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
-	Py_DecRef(py_no_map_memory);
-	Py_DecRef(py_mp_safe);
 	PYASSTR_DECREF(cache_filename);
-	if (!err) Py_RETURN_FALSE;
+	if (err) 
+		return NULL;	/* Indicate that an error has occurred */
 	Py_RETURN_TRUE;
 }
 
@@ -3669,13 +3676,9 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 
 	PyObject* py_debug = PyUnicode_FromString("debug");
 	PyObject* py_quiet = PyUnicode_FromString("quiet");
-	PyObject* py_no_map_memory = PyUnicode_FromString("no_map_memory");
-	PyObject* py_mp_safe = PyUnicode_FromString("mp_safe");
 
 	int debug = self->debug;
 	int quiet = 0;
-	int no_map_memory = 0;
-	int mp_safe = 0;
 	int err=0;
 
 	if (kwargs) {
@@ -3684,12 +3687,6 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 		}
 		if (PyDict_Contains(kwargs,py_quiet)) {
 			quiet = PyLong_AsLong(PyDict_GetItem(kwargs,py_quiet));
-		}
-		if (PyDict_Contains(kwargs,py_no_map_memory)) {
-			no_map_memory = PyLong_AsLong(PyDict_GetItem(kwargs,py_no_map_memory));
-		}
-		if (PyDict_Contains(kwargs,py_mp_safe)) {
-			mp_safe = PyLong_AsLong(PyDict_GetItem(kwargs,py_mp_safe));
 		}
 	}
 
@@ -3700,60 +3697,42 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 		goto done;
 	}
 
-	if (no_map_memory) {
-		FILE* in = fopen(cache_filename, "rb");
-		if (!in) {
+	FILE* in = fopen(cache_filename, "r+b");
+	if (!in) {
+		in = fopen(cache_filename, "rb");
+		if(!in) {
 			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
-			goto done;
-		}
-		unflatten_init();
-		if (quiet)
-			flatten_set_option(option_silent);
-		if (unflatten_read(in)) {
-			PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
-			goto done;
-		}
-		fclose(in);
-	}
-	else {
-		int map_fd = open(cache_filename,O_RDWR);
-		if (map_fd<0) {
-			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
-			goto done;
-		}
-		unflatten_init();
-		if (quiet)
-			flatten_set_option(option_silent);
-		int map_err;
-		if (!mp_safe) {
-			/* Try to map the cache file to the previously used address
-			 * When it fails map to new address and update the file address
-			 * (we're not going concurrently here)
-			 */
-			map_err = unflatten_map(map_fd,0);
-		}
-		else {
-			/* Try to map the cache file to the previously used address
-			 * When it fails map to new address privately
-			 * (this will incur a small penalty on updating all the image pointers
-			 *  but can save us some trouble when running concurrently)
-			 */
-			map_err = unflatten_map_private(map_fd,0);
-		}
-		close(map_fd);
-		if (map_err) {
-			PyErr_SetString(libetrace_nfsdbError, "Failed to map cache file");
 			goto done;
 		}
 	}
 
-	self->nfsdb_deps = ROOT_POINTER_NEXT(const struct nfsdb_deps*);
+	int debug_level = 0;
+	if(debug)
+		debug_level = 2;
+	else if (!quiet)
+		debug_level = 1;
+
+	self->unflatten_deps = unflatten_init(debug_level);
+	if(self->unflatten_deps == NULL) {
+		PyErr_SetString(libetrace_nfsdbError, "Failed to intialize unflatten library");
+		goto done;
+	}
+
+	if (unflatten_load_continuous(self->unflatten_deps, in, NULL)) {
+		PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
+		unflatten_deinit(self->unflatten_deps);
+		fclose(in);
+		goto done;
+	}
+
+	fclose(in);
+
+	self->nfsdb_deps = (const struct nfsdb_deps*) unflatten_root_pointer_next(self->unflatten_deps);
 	err = 1;
 
 done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
-	Py_DecRef(py_no_map_memory);
 	PYASSTR_DECREF(cache_filename);
 	if (!err) Py_RETURN_FALSE;
 	Py_RETURN_TRUE;
@@ -4315,7 +4294,13 @@ PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure) {
 	ASSERT_WITH_NFSDB_FORMAT_ERROR(__self->entry->parent_eid.exeidx<node->entry_count,
 			"nfsdb entry index [%ld] out of range",__self->entry->parent_eid.exeidx);
 	struct nfsdb_entry* entry = node->entry_list[__self->entry->parent_eid.exeidx];
-	return libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+
+	PyObject* args = PyTuple_New(2);
+	PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
+	PYTUPLE_SET_ULONG(args,1,entry->nfsdb_index);
+	PyObject *entryObj = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryType, args);
+	Py_DECREF(args);
+	return entryObj;
 }
 
 PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure) {
@@ -4345,7 +4330,13 @@ PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,__self->entry->child_ids[i].pid);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",__self->entry->child_ids[i].pid);
 		struct nfsdb_entry* entry = node->entry_list[0];
-		PyObject* child_entry =  libetrace_nfsdb_sq_item(self,entry->nfsdb_index);
+
+		PyObject* args = PyTuple_New(2);
+		PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
+		PYTUPLE_SET_ULONG(args,1,entry->nfsdb_index);
+		PyObject *child_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryType, args);
+		Py_DECREF(args);
+
 		PYLIST_ADD_PYOBJECT(cL,child_entry);
 	}
 

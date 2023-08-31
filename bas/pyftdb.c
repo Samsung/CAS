@@ -1,7 +1,7 @@
 #include "pyftdb.h"
-#include "libflat.h"
 
-#include <fcntl.h>
+#include <stdbool.h>
+#include "uflat.h"
 
 static const char* PyString_get_c_str(PyObject* s) {
 
@@ -25,7 +25,7 @@ void libftdb_ftdb_dealloc(libftdb_ftdb_object* self) {
 
     PyTypeObject *tp = Py_TYPE(self);
     if (self->init_done) {
-    	unflatten_fini();
+    	unflatten_deinit(self->unflatten);
     }
     tp->tp_free(self);
 }
@@ -102,14 +102,10 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
 
     PyObject* py_debug = PyUnicode_FromString("debug");
     PyObject* py_quiet = PyUnicode_FromString("quiet");
-    PyObject* py_no_map_memory = PyUnicode_FromString("no_map_memory");
-    PyObject* py_mp_safe = PyUnicode_FromString("mp_safe");
 
     int debug = self->debug;
     int quiet = 0;
-    int no_map_memory = 0;
-    int mp_safe = 0;
-    int err=0;
+    bool err = true;
 
     if (kwargs) {
     	if (PyDict_Contains(kwargs,py_debug)) {
@@ -117,12 +113,6 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
     	}
     	if (PyDict_Contains(kwargs,py_quiet)) {
 			quiet = PyLong_AsLong(PyDict_GetItem(kwargs,py_quiet));
-		}
-    	if (PyDict_Contains(kwargs,py_no_map_memory)) {
-    		no_map_memory = PyLong_AsLong(PyDict_GetItem(kwargs,py_no_map_memory));
-		}
-    	if (PyDict_Contains(kwargs,py_mp_safe)) {
-    		mp_safe = PyLong_AsLong(PyDict_GetItem(kwargs,py_mp_safe));
 		}
     }
 
@@ -133,63 +123,42 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
     	goto done;
 	}
 
-    if (no_map_memory) {
-    	FILE* in = fopen(cache_filename, "rb");
-		if (!in) {
+	FILE* in = fopen(cache_filename, "r+b");
+	if(!in) {
+		in = fopen(cache_filename, "rb");
+		if(!in) {
 			PyErr_SetString(libftdb_ftdbError, "Cannot open cache file");
 			goto done;
 		}
-		unflatten_init();
-		if (quiet)
-			flatten_set_option(option_silent);
-		if (unflatten_read(in)) {
-			PyErr_SetString(libftdb_ftdbError, "Failed to read cache file");
-			goto done;
-		}
-		fclose(in);
-    }
-    else {
-    	int map_fd = open(cache_filename,O_RDWR);
-    	if (map_fd<0) {
-    		PyErr_SetString(libftdb_ftdbError, "Cannot open cache file");
-    		goto done;
-    	}
-    	unflatten_init();
-    	if (quiet)
-    		flatten_set_option(option_silent);
-    	int map_err;
-    	if (!mp_safe) {
-    		/* Try to map the cache file to the previously used address
-    		 * When it fails map to new address and update all the pointers in the file
-    		 * (we're not going concurrently here)
-    		 */
-    		map_err = unflatten_map(map_fd,0);
-    	}
-    	else {
-    		/* Try to map the cache file to the previously used address
-			 * When it fails map to new address privately (do not update the pointers in the file)
-			 * (this can save us some trouble when running concurrently)
-			 */
-    		map_err = unflatten_map_private(map_fd,0);
-    	}
-    	close(map_fd);
-    	if (map_err) {
-    		PyErr_SetString(libftdb_ftdbError, "Failed to map cache file");
-    		goto done;
-    	}
-    }
+	}
 
-    self->ftdb = ROOT_POINTER_NEXT(const struct ftdb*);
+	int debug_level = 0;
+	if(debug) debug_level = 2;
+	else if(!quiet) debug_level = 1;
+
+	self->unflatten = unflatten_init(debug_level);
+	if(self->unflatten == NULL) {
+		PyErr_SetString(libftdb_ftdbError, "Failed to intialize unflatten library");
+		goto done;
+	}
+
+	if (unflatten_load_continuous(self->unflatten, in, NULL)) {
+		PyErr_SetString(libftdb_ftdbError, "Failed to read cache file");
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+	fclose(in);
+
+    self->ftdb = (const struct ftdb*) unflatten_root_pointer_next(self->unflatten);
 	self->init_done = 1;
-	err = 1;
+	err = false;
 
 done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
-	Py_DecRef(py_no_map_memory);
-	Py_DecRef(py_mp_safe);
 	PYASSTR_DECREF(cache_filename);
-	if (!err) Py_RETURN_FALSE;
+	if (err) 
+		return NULL;	/* Indicate that exception has been set */
 	Py_RETURN_TRUE;
 }
 
@@ -7661,567 +7630,533 @@ PyObject* libftdb_ftdb_fops_entry_deepcopy(PyObject* self, PyObject* memo) {
     return (PyObject *)self;
 }
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(stringRefMap_node);
+FUNCTION_DECLARE_FLATTEN_STRUCT(stringRefMap_node);
 
-static inline const struct stringRefMap_node* stringMap_remove_color(const struct stringRefMap_node* ptr) {
-	return (const struct stringRefMap_node*)( (uintptr_t)ptr & ~3 );
-}
-
-static inline struct flatten_pointer* stringMap_add_color(struct flatten_pointer* fptr, const struct stringRefMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(stringRefMap_node,
+FUNCTION_DEFINE_FLATTEN_STRUCT(stringRefMap_node,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT2_MIXED_POINTER_ITER(stringRefMap_node,node.__rb_parent_color,
-			stringMap_remove_color,stringMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
+	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(stringRefMap_node,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_func_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_funcdecl_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_unresolvedfunc_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(taint_element);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(taint_data);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(call_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(callref_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(callref_data);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(refcall);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(switch_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(case_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(case_data);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(csitem);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(mexp_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(local_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(deref_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(offsetref_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(if_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ifref_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(asm_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(globalref_data);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(globalref_info);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_global_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_type_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(bitfield);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(ftdb_fops_var_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT2_ITER(fops_member_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_func_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_funcdecl_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_unresolvedfunc_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(taint_element);
+FUNCTION_DECLARE_FLATTEN_STRUCT(taint_data);
+FUNCTION_DECLARE_FLATTEN_STRUCT(call_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(callref_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(callref_data);
+FUNCTION_DECLARE_FLATTEN_STRUCT(refcall);
+FUNCTION_DECLARE_FLATTEN_STRUCT(switch_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(case_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(case_data);
+FUNCTION_DECLARE_FLATTEN_STRUCT(csitem);
+FUNCTION_DECLARE_FLATTEN_STRUCT(mexp_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(local_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(deref_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(offsetref_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(if_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ifref_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(asm_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(globalref_data);
+FUNCTION_DECLARE_FLATTEN_STRUCT(globalref_info);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_global_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_type_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(bitfield);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_var_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(fops_member_info);
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(taint_data,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(taint_element,taint_list,ATTR(taint_list_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(taint_data,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(taint_element,taint_list,ATTR(taint_list_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(taint_element,
+FUNCTION_DEFINE_FLATTEN_STRUCT(taint_element,
 	/* No recipes needed */
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(call_info,
-	AGGREGATE_FLATTEN_STRING2(start);
-	AGGREGATE_FLATTEN_STRING2(end);
-	AGGREGATE_FLATTEN_STRING2(expr);
-	AGGREGATE_FLATTEN_STRING2(loc);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,args,ATTR(args_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(call_info,
+	AGGREGATE_FLATTEN_STRING(start);
+	AGGREGATE_FLATTEN_STRING(end);
+	AGGREGATE_FLATTEN_STRING(expr);
+	AGGREGATE_FLATTEN_STRING(loc);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,args,ATTR(args_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(callref_info,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(callref_data,callarg,ATTR(callarg_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(callref_info,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(callref_data,callarg,ATTR(callarg_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(callref_data,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,id,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literal,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,character_literal,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(double,floating_literal,1);
-	AGGREGATE_FLATTEN_STRING2(string_literal);
+FUNCTION_DEFINE_FLATTEN_STRUCT(callref_data,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,id,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,integer_literal,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,character_literal,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(double,floating_literal,1);
+	AGGREGATE_FLATTEN_STRING(string_literal);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(refcall,
+FUNCTION_DEFINE_FLATTEN_STRUCT(refcall,
 	/* No recipes needed */
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(switch_info,
-	AGGREGATE_FLATTEN_STRING2(condition);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(case_info,cases,ATTR(cases_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(switch_info,
+	AGGREGATE_FLATTEN_STRING(condition);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(case_info,cases,ATTR(cases_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(case_info,
-	AGGREGATE_FLATTEN_STRING2(lhs.enum_code);
-	AGGREGATE_FLATTEN_STRING2(lhs.macro_code);
-	AGGREGATE_FLATTEN_STRING2(lhs.raw_code);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(case_data,rhs,1);
+FUNCTION_DEFINE_FLATTEN_STRUCT(case_info,
+	AGGREGATE_FLATTEN_STRING(lhs.enum_code);
+	AGGREGATE_FLATTEN_STRING(lhs.macro_code);
+	AGGREGATE_FLATTEN_STRING(lhs.raw_code);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(case_data,rhs,1);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(case_data,
-	AGGREGATE_FLATTEN_STRING2(enum_code);
-	AGGREGATE_FLATTEN_STRING2(macro_code);
-	AGGREGATE_FLATTEN_STRING2(raw_code);
+FUNCTION_DEFINE_FLATTEN_STRUCT(case_data,
+	AGGREGATE_FLATTEN_STRING(enum_code);
+	AGGREGATE_FLATTEN_STRING(macro_code);
+	AGGREGATE_FLATTEN_STRING(raw_code);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(csitem,
-		AGGREGATE_FLATTEN_STRING2(cf);
+FUNCTION_DEFINE_FLATTEN_STRUCT(csitem,
+		AGGREGATE_FLATTEN_STRING(cf);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(mexp_info,
-		AGGREGATE_FLATTEN_STRING2(text);
+FUNCTION_DEFINE_FLATTEN_STRUCT(mexp_info,
+		AGGREGATE_FLATTEN_STRING(text);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(local_info,
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,csid,1);
-	AGGREGATE_FLATTEN_STRING2(location);
+FUNCTION_DEFINE_FLATTEN_STRUCT(local_info,
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,csid,1);
+	AGGREGATE_FLATTEN_STRING(location);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(deref_info,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,offset,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,basecnt,1);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(offsetref_info,offsetrefs,ATTR(offsetrefs_count));
-	AGGREGATE_FLATTEN_STRING2(expr);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,ord,ATTR(ord_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,member,ATTR(member_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,type,ATTR(type_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,access,ATTR(access_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,shift,ATTR(shift_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,mcall,ATTR(mcall_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(deref_info,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,offset,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,basecnt,1);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(offsetref_info,offsetrefs,ATTR(offsetrefs_count));
+	AGGREGATE_FLATTEN_STRING(expr);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,ord,ATTR(ord_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,member,ATTR(member_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,type,ATTR(type_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,access,ATTR(access_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,shift,ATTR(shift_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,mcall,ATTR(mcall_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(offsetref_info,
+FUNCTION_DEFINE_FLATTEN_STRUCT(offsetref_info,
 	if (ATTR(kind)==EXPR_STRING) {
-		AGGREGATE_FLATTEN_STRING2(id_string);
+		AGGREGATE_FLATTEN_STRING(id_string);
 	}
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mi,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,di,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,cast,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,mi,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,di,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,cast,1);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(if_info,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ifref_info,refs,ATTR(refs_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(if_info,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ifref_info,refs,ATTR(refs_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ifref_info,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,id,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literal,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,character_literal,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(double,floating_literal,1);
-	AGGREGATE_FLATTEN_STRING2(string_literal);
+FUNCTION_DEFINE_FLATTEN_STRUCT(ifref_info,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,id,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,integer_literal,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,character_literal,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(double,floating_literal,1);
+	AGGREGATE_FLATTEN_STRING(string_literal);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(asm_info,
-	AGGREGATE_FLATTEN_STRING2(str);
+FUNCTION_DEFINE_FLATTEN_STRUCT(asm_info,
+	AGGREGATE_FLATTEN_STRING(str);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(globalref_data,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(globalref_info,refs,ATTR(refs_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(globalref_data,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(globalref_info,refs,ATTR(refs_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(globalref_info,
-	AGGREGATE_FLATTEN_STRING2(start);
-	AGGREGATE_FLATTEN_STRING2(end);
+FUNCTION_DEFINE_FLATTEN_STRUCT(globalref_info,
+	AGGREGATE_FLATTEN_STRING(start);
+	AGGREGATE_FLATTEN_STRING(end);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_type_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_func_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap);
 
-static inline const struct ulong_entryMap_node* ulong_entryMap_remove_color(const struct ulong_entryMap_node* ptr) {
-	return (const struct ulong_entryMap_node*)( (uintptr_t)ptr & ~3 );
-}
 
-static inline struct flatten_pointer* ulong_entryMap_add_color(struct flatten_pointer* fptr, const struct ulong_entryMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_type_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_ulong_type_entryMap,node.__rb_parent_color,
-			ulong_entryMap_remove_color,ulong_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_type_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_type_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_type_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_type_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_type_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_func_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,
 	STRUCT_ALIGN(4);
-AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_ulong_func_entryMap,node.__rb_parent_color,
-			ulong_entryMap_remove_color,ulong_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_func_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_func_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_func_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_func_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,
 	STRUCT_ALIGN(4);
-AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_ulong_func_entryMap,node.__rb_parent_color,
-			ulong_entryMap_remove_color,ulong_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_funcdecl_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_funcdecl_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_funcdecl_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,
 	STRUCT_ALIGN(4);
-AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_ulong_func_entryMap,node.__rb_parent_color,
-			ulong_entryMap_remove_color,ulong_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_global_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_global_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_global_entry,entry);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_type_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap);
 
-static inline const struct stringRef_entryMap_node* stringRef_entryMap_remove_color(const struct stringRef_entryMap_node* ptr) {
-	return (const struct stringRef_entryMap_node*)( (uintptr_t)ptr & ~3 );
-}
 
-static inline struct flatten_pointer* stringRef_entryMap_add_color(struct flatten_pointer* fptr, const struct stringRef_entryMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_type_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_type_entryMap,node.__rb_parent_color,
-			stringRef_entryMap_remove_color,stringRef_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_type_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_type_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_type_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_type_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_type_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_func_entryMap,node.__rb_parent_color,
-			stringRef_entryMap_remove_color,stringRef_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_func_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_func_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_funcdecl_entryMap,node.__rb_parent_color,
-			stringRef_entryMap_remove_color,stringRef_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_funcdecl_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_funcdecl_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_funcdecl_entry,entry);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_global_entryMap,node.__rb_parent_color,
-			stringRef_entryMap_remove_color,stringRef_entryMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(ftdb_global_entry,entry);
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_global_entryMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_STRUCT(ftdb_global_entry,entry);
 );
 
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap);
-FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap);
 
-static inline const struct stringRef_entryListMap_node* stringRef_entryListMap_remove_color(const struct stringRef_entryListMap_node* ptr) {
-	return (const struct stringRef_entryListMap_node*)( (uintptr_t)ptr & ~3 );
-}
-
-static inline struct flatten_pointer* stringRef_entryListMap_add_color(struct flatten_pointer* fptr, const struct stringRef_entryListMap_node* ptr) {
-	fptr->offset |= (size_t)((uintptr_t)ptr & 3);
-	return fptr;
-}
-
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_func_entryListMap,node.__rb_parent_color,
-			stringRef_entryListMap_remove_color,stringRef_entryListMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(void*,entry_list,ATTR(entry_count));
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_func_entryListMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(void*,entry_list,ATTR(entry_count));
 	FOREACH_POINTER(void*,entry,ATTR(entry_list),ATTR(entry_count),
-		FLATTEN_STRUCT2_ITER(ftdb_func_entry,entry);
+		FLATTEN_STRUCT(ftdb_func_entry,entry);
 	);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap,
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,
 	STRUCT_ALIGN(4);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_MIXED_POINTER_ITER(ftdb_stringRef_global_entryListMap,node.__rb_parent_color,
-			stringRef_entryListMap_remove_color,stringRef_entryListMap_add_color);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap,node.rb_right);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap,node.rb_left);
-	AGGREGATE_FLATTEN_STRING2(key);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(void*,entry_list,ATTR(entry_count));
+	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_global_entryListMap,node.__rb_parent_color,
+			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,node.rb_right);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,node.rb_left);
+	AGGREGATE_FLATTEN_STRING(key);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(void*,entry_list,ATTR(entry_count));
 	FOREACH_POINTER(void*,entry,ATTR(entry_list),ATTR(entry_count),
-		FLATTEN_STRUCT2_ITER(ftdb_global_entry,entry);
+		FLATTEN_STRUCT(ftdb_global_entry,entry);
 	);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(matrix_data,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,data,ATTR(data_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,row_ind,ATTR(row_ind_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,col_ind,ATTR(col_ind_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(matrix_data,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,data,ATTR(data_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,row_ind,ATTR(row_ind_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,col_ind,ATTR(col_ind_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(func_map_entry,
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,fids,ATTR(fids_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(func_map_entry,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,fids,ATTR(fids_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(size_dep_item,
+FUNCTION_DEFINE_FLATTEN_STRUCT(size_dep_item,
     // No recipes needed
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(init_data_item,
-        AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,id,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,name,ATTR(name_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_item,
+        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,id,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,name,ATTR(name_count));
 	FOREACH_POINTER(const char*,s,ATTR(name),ATTR(name_count),
 		FLATTEN_STRING(s);
 	);
-        AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,size,1);
-        AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(size_dep_item,size_dep,1);
-        AGGREGATE_FLATTEN_STRING2(nullterminated);
-        AGGREGATE_FLATTEN_STRING2(tagged);
-        AGGREGATE_FLATTEN_STRING2(fuzz);
-        AGGREGATE_FLATTEN_STRING2(pointer);
-        AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,min_value,1);
-        AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,max_value,1);
-        AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,value,1);
-        AGGREGATE_FLATTEN_STRING2(user_name);
+        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,size,1);
+        AGGREGATE_FLATTEN_STRUCT_ARRAY(size_dep_item,size_dep,1);
+        AGGREGATE_FLATTEN_STRING(nullterminated);
+        AGGREGATE_FLATTEN_STRING(tagged);
+        AGGREGATE_FLATTEN_STRING(fuzz);
+        AGGREGATE_FLATTEN_STRING(pointer);
+        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,min_value,1);
+        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,max_value,1);
+        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,value,1);
+        AGGREGATE_FLATTEN_STRING(user_name);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(init_data_entry,
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,order,ATTR(order_count));
-	AGGREGATE_FLATTEN_STRING2(interface);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(init_data_item,items,ATTR(items_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_entry,
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,order,ATTR(order_count));
+	AGGREGATE_FLATTEN_STRING(interface);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(init_data_item,items,ATTR(items_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(known_data_entry,
-	AGGREGATE_FLATTEN_STRING2(version);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,func_ids,ATTR(func_ids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,builtin_ids,ATTR(builtin_ids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,asm_ids,ATTR(asm_ids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,lib_funcs,ATTR(lib_funcs_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(known_data_entry,
+	AGGREGATE_FLATTEN_STRING(version);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,func_ids,ATTR(func_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,builtin_ids,ATTR(builtin_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,asm_ids,ATTR(asm_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,lib_funcs,ATTR(lib_funcs_count));
 	FOREACH_POINTER(const char*,s,ATTR(lib_funcs),ATTR(lib_funcs_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,lib_funcs_ids,ATTR(lib_funcs_ids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,always_inc_funcs_ids,ATTR(always_inc_funcs_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,lib_funcs_ids,ATTR(lib_funcs_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,always_inc_funcs_ids,ATTR(always_inc_funcs_ids_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(BAS_item,
-	AGGREGATE_FLATTEN_STRING2(loc);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,entries,ATTR(entries_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(BAS_item,
+	AGGREGATE_FLATTEN_STRING(loc);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,entries,ATTR(entries_count));
 	FOREACH_POINTER(const char*,s,ATTR(entries),ATTR(entries_count),
 		FLATTEN_STRING(s);
 	);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb,
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_func_entry,funcs,ATTR(funcs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_funcdecl_entry,funcdecls,ATTR(funcdecls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_unresolvedfunc_entry,unresolvedfuncs,ATTR(unresolvedfuncs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_global_entry,globals,ATTR(globals_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_type_entry,types,ATTR(types_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(ftdb_fops_var_entry,fops.vars,ATTR(fops.vars_count));
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,sourcemap.rb_node);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,sourceindex_table,ATTR(sourceindex_table_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb,
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_func_entry,funcs,ATTR(funcs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_funcdecl_entry,funcdecls,ATTR(funcdecls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_unresolvedfunc_entry,unresolvedfuncs,ATTR(unresolvedfuncs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_global_entry,globals,ATTR(globals_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_type_entry,types,ATTR(types_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_fops_var_entry,fops.vars,ATTR(fops.vars_count));
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,sourcemap.rb_node);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,sourceindex_table,ATTR(sourceindex_table_count));
 	FOREACH_POINTER(const char*,s,ATTR(sourceindex_table),ATTR(sourceindex_table_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,modulemap.rb_node);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,moduleindex_table,ATTR(moduleindex_table_count));
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,modulemap.rb_node);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,moduleindex_table,ATTR(moduleindex_table_count));
 	FOREACH_POINTER(const char*,s,ATTR(moduleindex_table),ATTR(moduleindex_table_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(stringRefMap_node,macromap.rb_node);
-	AGGREGATE_FLATTEN_STRING2(version);
-	AGGREGATE_FLATTEN_STRING2(module);
-	AGGREGATE_FLATTEN_STRING2(directory);
-	AGGREGATE_FLATTEN_STRING2(release);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_type_entryMap,refmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_type_entryMap,hrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_func_entryMap,frefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryMap,fhrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,fnrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_funcdecl_entryMap,fdrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_funcdecl_entryMap,fdhrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_func_entryListMap,fdnrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_ulong_global_entryMap,grefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryMap,ghrefmap.rb_node);
-	AGGREGATE_FLATTEN_STRUCT_TYPE2_ITER(ftdb_stringRef_global_entryListMap,gnrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,macromap.rb_node);
+	AGGREGATE_FLATTEN_STRING(version);
+	AGGREGATE_FLATTEN_STRING(module);
+	AGGREGATE_FLATTEN_STRING(directory);
+	AGGREGATE_FLATTEN_STRING(release);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,refmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,hrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,frefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,fhrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,fnrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,fdrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,fdhrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,fdnrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,grefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,ghrefmap.rb_node);
+	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,gnrefmap.rb_node);
 
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_calls_no_asm);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_calls_no_known);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_calls_no_known_no_asm);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_func_calls);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_func_refs);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_funrefs_no_asm);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_funrefs_no_known);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,funcs_tree_funrefs_no_known_no_asm);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,globs_tree_globalrefs);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,types_tree_refs);
-	AGGREGATE_FLATTEN_STRUCT2_ITER(matrix_data,types_tree_usedrefs);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(func_map_entry,static_funcs_map,ATTR(static_funcs_map_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(init_data_entry,init_data,ATTR(init_data_count));
-	AGGREGATE_FLATTEN_STRUCT2_ITER(known_data_entry,known_data);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(BAS_item,BAS_data,ATTR(BAS_data_count));
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_calls_no_asm);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_calls_no_known);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_calls_no_known_no_asm);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_func_calls);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_func_refs);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_funrefs_no_asm);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_funrefs_no_known);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,funcs_tree_funrefs_no_known_no_asm);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,globs_tree_globalrefs);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,types_tree_refs);
+	AGGREGATE_FLATTEN_STRUCT(matrix_data,types_tree_usedrefs);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(func_map_entry,static_funcs_map,ATTR(static_funcs_map_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(init_data_entry,init_data,ATTR(init_data_count));
+	AGGREGATE_FLATTEN_STRUCT(known_data_entry,known_data);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(BAS_item,BAS_data,ATTR(BAS_data_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_func_entry,
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_STRING2(__namespace);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,fids,ATTR(fids_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mids,ATTR(mids_count));
-	AGGREGATE_FLATTEN_STRING2(firstNonDeclStmt);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isinline,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,istemplate,1);
-	AGGREGATE_FLATTEN_STRING2(classOuterFn);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,ismember,1);
-	AGGREGATE_FLATTEN_STRING2(__class);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,classid,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,attributes,ATTR(attributes_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_func_entry,
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_STRING(__namespace);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,fids,ATTR(fids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,mids,ATTR(mids_count));
+	AGGREGATE_FLATTEN_STRING(firstNonDeclStmt);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,isinline,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,istemplate,1);
+	AGGREGATE_FLATTEN_STRING(classOuterFn);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,ismember,1);
+	AGGREGATE_FLATTEN_STRING(__class);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,classid,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,attributes,ATTR(attributes_count));
 	FOREACH_POINTER(const char*,s,ATTR(attributes),ATTR(attributes_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRING2(hash);
-	AGGREGATE_FLATTEN_STRING2(cshash);
-	AGGREGATE_FLATTEN_STRING2(template_parameters);
-	AGGREGATE_FLATTEN_STRING2(body);
-	AGGREGATE_FLATTEN_STRING2(unpreprocessed_body);
-	AGGREGATE_FLATTEN_STRING2(declbody);
-	AGGREGATE_FLATTEN_STRING2(signature);
-	AGGREGATE_FLATTEN_STRING2(declhash);
-	AGGREGATE_FLATTEN_STRING2(location);
-	AGGREGATE_FLATTEN_STRING2(start_loc);
-	AGGREGATE_FLATTEN_STRING2(end_loc);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,character_literals,ATTR(character_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(double,floating_literals,ATTR(floating_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,string_literals,ATTR(string_literals_count));
+	AGGREGATE_FLATTEN_STRING(hash);
+	AGGREGATE_FLATTEN_STRING(cshash);
+	AGGREGATE_FLATTEN_STRING(template_parameters);
+	AGGREGATE_FLATTEN_STRING(body);
+	AGGREGATE_FLATTEN_STRING(unpreprocessed_body);
+	AGGREGATE_FLATTEN_STRING(declbody);
+	AGGREGATE_FLATTEN_STRING(signature);
+	AGGREGATE_FLATTEN_STRING(declhash);
+	AGGREGATE_FLATTEN_STRING(location);
+	AGGREGATE_FLATTEN_STRING(start_loc);
+	AGGREGATE_FLATTEN_STRING(end_loc);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,character_literals,ATTR(character_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(double,floating_literals,ATTR(floating_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,string_literals,ATTR(string_literals_count));
 	FOREACH_POINTER(const char*,s,ATTR(string_literals),ATTR(string_literals_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(taint_data,taint,ATTR(taint_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,calls,ATTR(calls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(call_info,call_info,ATTR(calls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(callref_info,callrefs,ATTR(calls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(refcall,refcalls,ATTR(refcalls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(call_info,refcall_info,ATTR(refcalls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(callref_info,refcallrefs,ATTR(refcalls_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(switch_info,switches,ATTR(switches_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(csitem,csmap,ATTR(csmap_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(mexp_info,macro_expansions,ATTR(macro_expansions_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(local_info,locals,ATTR(locals_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(deref_info,derefs,ATTR(derefs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(if_info,ifs,ATTR(ifs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(asm_info,asms,ATTR(asms_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(globalref_data,globalrefInfo,ATTR(globalrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,refs,ATTR(refs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,decls,ATTR(decls_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,types,ATTR(types_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(taint_data,taint,ATTR(taint_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,calls,ATTR(calls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(call_info,call_info,ATTR(calls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(callref_info,callrefs,ATTR(calls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(refcall,refcalls,ATTR(refcalls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(call_info,refcall_info,ATTR(refcalls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(callref_info,refcallrefs,ATTR(refcalls_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(switch_info,switches,ATTR(switches_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(csitem,csmap,ATTR(csmap_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(mexp_info,macro_expansions,ATTR(macro_expansions_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(local_info,locals,ATTR(locals_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(deref_info,derefs,ATTR(derefs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(if_info,ifs,ATTR(ifs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(asm_info,asms,ATTR(asms_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(globalref_data,globalrefInfo,ATTR(globalrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,refs,ATTR(refs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,decls,ATTR(decls_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,types,ATTR(types_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_funcdecl_entry,
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_STRING2(__namespace);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,istemplate,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,ismember,1);
-	AGGREGATE_FLATTEN_STRING2(__class);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,classid,1);
-	AGGREGATE_FLATTEN_STRING2(template_parameters);
-	AGGREGATE_FLATTEN_STRING2(decl);
-	AGGREGATE_FLATTEN_STRING2(signature);
-	AGGREGATE_FLATTEN_STRING2(declhash);
-	AGGREGATE_FLATTEN_STRING2(location);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,types,ATTR(types_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_funcdecl_entry,
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_STRING(__namespace);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,istemplate,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,ismember,1);
+	AGGREGATE_FLATTEN_STRING(__class);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,classid,1);
+	AGGREGATE_FLATTEN_STRING(template_parameters);
+	AGGREGATE_FLATTEN_STRING(decl);
+	AGGREGATE_FLATTEN_STRING(signature);
+	AGGREGATE_FLATTEN_STRING(declhash);
+	AGGREGATE_FLATTEN_STRING(location);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,types,ATTR(types_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_unresolvedfunc_entry,
-	AGGREGATE_FLATTEN_STRING2(name);
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_unresolvedfunc_entry,
+	AGGREGATE_FLATTEN_STRING(name);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_global_entry,
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_STRING2(hash);
-	AGGREGATE_FLATTEN_STRING2(def);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,refs,ATTR(refs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,decls,ATTR(decls_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,mids,ATTR(mids_count));
-	AGGREGATE_FLATTEN_STRING2(location);
-	AGGREGATE_FLATTEN_STRING2(init);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,character_literals,ATTR(character_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(double,floating_literals,ATTR(floating_literals_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,string_literals,ATTR(string_literals_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_global_entry,
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_STRING(hash);
+	AGGREGATE_FLATTEN_STRING(def);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,refs,ATTR(refs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,decls,ATTR(decls_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,mids,ATTR(mids_count));
+	AGGREGATE_FLATTEN_STRING(location);
+	AGGREGATE_FLATTEN_STRING(init);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,integer_literals,ATTR(integer_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,character_literals,ATTR(character_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(double,floating_literals,ATTR(floating_literals_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,string_literals,ATTR(string_literals_count));
 	FOREACH_POINTER(const char*,s,ATTR(string_literals),ATTR(string_literals_count),
 		FLATTEN_STRING(s);
 	);
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(bitfield,
+FUNCTION_DEFINE_FLATTEN_STRUCT(bitfield,
 	/* No recipes needed */
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_type_entry,
-	AGGREGATE_FLATTEN_STRING2(hash);
-	AGGREGATE_FLATTEN_STRING2(class_name);
-	AGGREGATE_FLATTEN_STRING2(qualifiers);
-	AGGREGATE_FLATTEN_STRING2(str);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,refs,ATTR(refs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,usedrefs,ATTR(usedrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,decls,ATTR(decls_count));
-	AGGREGATE_FLATTEN_STRING2(def);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,memberoffsets,ATTR(memberoffsets_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,attrrefs,ATTR(attrrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,attrnum,1);
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isdependent,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int64_t,enumvalues,ATTR(enumvalues_count));
-	AGGREGATE_FLATTEN_STRING2(outerfn);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,outerfnid,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isimplicit,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isunion,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,refnames,ATTR(refnames_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_type_entry,
+	AGGREGATE_FLATTEN_STRING(hash);
+	AGGREGATE_FLATTEN_STRING(class_name);
+	AGGREGATE_FLATTEN_STRING(qualifiers);
+	AGGREGATE_FLATTEN_STRING(str);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,refs,ATTR(refs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,usedrefs,ATTR(usedrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,decls,ATTR(decls_count));
+	AGGREGATE_FLATTEN_STRING(def);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,memberoffsets,ATTR(memberoffsets_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,attrrefs,ATTR(attrrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,attrnum,1);
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,isdependent,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,globalrefs,ATTR(globalrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,enumvalues,ATTR(enumvalues_count));
+	AGGREGATE_FLATTEN_STRING(outerfn);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,outerfnid,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,isimplicit,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,isunion,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,refnames,ATTR(refnames_count));
 	FOREACH_POINTER(const char*,s,ATTR(refnames),ATTR(refnames_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRING2(location);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(int,isvariadic,1);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,useddef,ATTR(useddef_count));
+	AGGREGATE_FLATTEN_STRING(location);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int,isvariadic,1);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,funrefs,ATTR(funrefs_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,useddef,ATTR(useddef_count));
 	FOREACH_POINTER(const char*,s,ATTR(useddef),ATTR(useddef_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_STRING2(defhead);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(const char*,identifiers,ATTR(identifiers_count));
+	AGGREGATE_FLATTEN_STRING(defhead);
+	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,identifiers,ATTR(identifiers_count));
 	FOREACH_POINTER(const char*,s,ATTR(identifiers),ATTR(identifiers_count),
 		FLATTEN_STRING(s);
 	);
-	AGGREGATE_FLATTEN_TYPE2_ARRAY(unsigned long,methods,ATTR(methods_count));
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(bitfield,bitfields,ATTR(bitfields_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,methods,ATTR(methods_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(bitfield,bitfields,ATTR(bitfields_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(fops_member_info,
+FUNCTION_DEFINE_FLATTEN_STRUCT(fops_member_info,
 	/* No recipes needed */
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT2_ITER(ftdb_fops_var_entry,
-	AGGREGATE_FLATTEN_STRING2(type);
-	AGGREGATE_FLATTEN_STRING2(name);
-	AGGREGATE_FLATTEN_STRUCT2_ARRAY_ITER(fops_member_info,members,ATTR(members_count));
-	AGGREGATE_FLATTEN_STRING2(location);
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_var_entry,
+	AGGREGATE_FLATTEN_STRING(type);
+	AGGREGATE_FLATTEN_STRING(name);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(fops_member_info,members,ATTR(members_count));
+	AGGREGATE_FLATTEN_STRING(location);
 );
 
 /* TODO: memory leaks */
@@ -8886,17 +8821,29 @@ static void destroy_ftdb(struct ftdb* ftdb) {
 	// TODO
 }
 
-PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
+PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs) {
 
 	PyObject* dbJSON = PyTuple_GetItem(args,0);
 	PyObject* dbfn = PyTuple_GetItem(args,1);
-	int show_stats = 0;
+	int show_stats = 0, verbose_mode = 0, debug_mode = 0;
 	if (PyTuple_Size(args)>2) {
 		PyObject* show_stats_arg = PyTuple_GetItem(args,2);
 		if (show_stats_arg==Py_True) {
 			show_stats = 1;
 		}
 	}
+
+	PyObject* py_debug = PyUnicode_FromString("verbose");
+	PyObject* py_quiet = PyUnicode_FromString("debug");
+	if (kwargs) {
+		if (PyDict_Contains(kwargs, py_debug))
+			verbose_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_debug));
+		if (PyDict_Contains(kwargs, py_quiet))
+			debug_mode = !!PyLong_AsLong(PyDict_GetItem(kwargs, py_quiet));
+	}
+	Py_DecRef(py_debug);
+	Py_DecRef(py_quiet);
+
 	struct ftdb ftdb = {};
 
 	VALIDATE_FTDB_ENTRY(dbJSON,funcs);
@@ -9105,33 +9052,48 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args) {
 	if (ftdb.BAS_data) printf("BAS_data [%lu]: OK\n",ftdb.BAS_data_count);
 
 	const char* dbfn_s =  PyString_get_c_str(dbfn);
-	FILE* out = fopen(dbfn_s, "w");
-	if (!out) {
-		printf("Couldn't create flatten image file: %s\n",dbfn_s);
-		PYASSTR_DECREF(dbfn_s);
+	struct uflat* uflat = uflat_init(dbfn_s);
+	PYASSTR_DECREF(dbfn_s);
+	if(uflat == NULL) {
+		printf("uflat_init(): failed\n");
 		Py_RETURN_FALSE;
 	}
-	PYASSTR_DECREF(dbfn_s);
 
-	flatten_init();
+	int rv = uflat_set_option(uflat, UFLAT_OPT_OUTPUT_SIZE, 50ULL * 1024 * 1024 * 1024);
+	if(rv) {
+		printf("uflat_set_option(OUTPUT_SIZE): %d\n", rv);
+		goto uflat_error_exit;
+	}
+
+	rv = uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_FRAGMENTS, 1);
+	if(rv) {
+		printf("uflat_set_option(SKIP_MEM_FRAGMENTS): %d\n", rv);
+		goto uflat_error_exit;
+	}
+
+	if(verbose_mode)
+		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
+	if(debug_mode)
+		uflat_set_option(uflat, UFLAT_OPT_DEBUG, 1);
+
 	FOR_ROOT_POINTER(&ftdb,
-		UNDER_ITER_HARNESS2(
-			FLATTEN_STRUCT2_ITER(ftdb,&ftdb);
-		);
+		FLATTEN_STRUCT(ftdb,&ftdb);
 	);
 
-	int err;
-	if ((err = flatten_write(out)) != 0) {
-		printf("flatten_write(): %d\n",err);
-		Py_RETURN_FALSE;
+	int err = uflat_write(uflat);
+	if (err != 0) {
+		printf("flatten_write(): %d\n", err);
+		goto uflat_error_exit;
 	}
 
-	flatten_fini();
-	fclose(out);
-
+	uflat_fini(uflat);
 	destroy_ftdb(&ftdb);
-
 	Py_RETURN_NONE;
+
+uflat_error_exit:
+	uflat_fini(uflat);
+	destroy_ftdb(&ftdb);
+	Py_RETURN_FALSE;
 }
 
 PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args) {
@@ -9282,9 +9244,9 @@ PyInit_libftdb(void)
     	return 0;
     }
 
-    libftdb_ftdbError = PyErr_NewException("libftdb.error",0,0);
+    libftdb_ftdbError = PyErr_NewException("libftdb.FtdbError",0,0);
     Py_XINCREF(libftdb_ftdbError);
-    if (PyModule_AddObject(m, "error", libftdb_ftdbError) < 0) {
+    if (PyModule_AddObject(m, "FtdbError", libftdb_ftdbError) < 0) {
     	Py_XDECREF(libftdb_ftdbError);
 		Py_CLEAR(libftdb_ftdbError);
 		Py_DECREF(m);

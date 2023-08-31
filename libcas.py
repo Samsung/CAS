@@ -182,7 +182,7 @@ class CASDatabase:
         """
         self.config = config
 
-    def load_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
+    def load_db(self, db_file:str, debug: bool=False, quiet: bool=True) -> bool:
         """
         Function uses libetrace.load to load database and applies config.
 
@@ -192,15 +192,11 @@ class CASDatabase:
         :type debug: bool, optional
         :param quiet: suppress verbose prints, defaults to True
         :type quiet: bool, optional
-        :param mp_safe: load database in read-only mode slower but safer when using multiprocessing, defaults to True
-        :type mp_safe: bool, optional
-        :param no_map_memory: prevents memory mapping, defaults to False
-        :type no_map_memory: bool, optional
         :return: True if load succed otherwise False
         :rtype: bool
         """
 
-        self.db_loaded = self.db.load(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe, no_map_memory=no_map_memory)
+        self.db_loaded = self.db.load(db_file, debug=debug, quiet=quiet)
         self.source_root = self.db.source_root
         assert self.config is not None, "Please set config first. Use CASDatabase.set_config()"
         self.config.apply_source_root(self.source_root)
@@ -1375,7 +1371,7 @@ class CASDatabase:
         if not os.path.exists(intermediate_db):
             print("NO intermediate database!")
             exit(2)
-        self.load_db(intermediate_db, debug=False, quiet=True, mp_safe=True, no_map_memory=False)
+        self.load_db(intermediate_db, debug=False, quiet=False)
         print_mem_usage(debug, "Postprocess start")
         no_module_specified = (not process_pcp and not process_linking and not process_comp and not process_rbm)
         do_rbm = process_rbm or no_module_specified

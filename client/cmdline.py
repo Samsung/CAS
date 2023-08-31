@@ -33,7 +33,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
         if not cas_db.db_loaded:
             try:
                 if db_required:
-                    cas_db.load_db(os.path.join(common_args.dbdir, common_args.database), debug=common_args.debug, quiet=True, mp_safe=common_args.mp_safe)
+                    cas_db.load_db(os.path.join(common_args.dbdir, common_args.database), debug=common_args.debug)
             except SystemError:
                 printerr("ERROR: Failed to load database. Check if {} is proper database file path.".format(os.path.join(common_args.dbdir, common_args.database)))
                 sys.exit(2)
@@ -43,7 +43,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             else:
                 try:
                     if db_required and cas_db is not None:
-                        cas_db.load_deps_db(os.path.join(common_args.dbdir, common_args.deps_database), debug=common_args.debug, quiet=True, mp_safe=common_args.mp_safe)
+                        cas_db.load_deps_db(os.path.join(common_args.dbdir, common_args.deps_database), debug=common_args.debug)
                 except SystemError:
                     print("ERROR: Failed to load deps database. Check if {} is proper database file path.".format(os.path.join(common_args.dbdir, common_args.deps_database)))
                     sys.exit(2)

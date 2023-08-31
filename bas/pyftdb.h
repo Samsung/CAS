@@ -11,11 +11,14 @@ extern "C" {
 #include <fnmatch.h>
 #include <time.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "rbtree.h"
 #include "utils.h"
 #include "ftdb.h"
 #include "ftdb_entry.h"
+
+#include <unflatten.hpp>
 
 int ftdb_maps(struct ftdb* ftdb, int show_stats);
 
@@ -23,12 +26,12 @@ int ftdb_maps(struct ftdb* ftdb, int show_stats);
 }
 #endif
 
-PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args);
+PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject *kwargs);
 PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args);
 extern PyObject *libftdb_ftdbError;
 
 static PyMethodDef libftdb_methods[] = {
-    {"create_ftdb",  libftdb_create_ftdb, METH_VARARGS, "Create cached version of Function/Type database file"},
+    {"create_ftdb",  (PyCFunction)libftdb_create_ftdb, METH_VARARGS | METH_KEYWORDS, "Create cached version of Function/Type database file"},
 	{"parse_c_fmt_string",  libftdb_parse_c_fmt_string, METH_VARARGS, "Parse C format string and returns a list of types of detected parameters"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
@@ -51,6 +54,8 @@ typedef struct {
     int debug;
     int init_done;
     const struct ftdb* ftdb;
+	
+	CUnflatten unflatten;
 } libftdb_ftdb_object;
 
 void libftdb_ftdb_dealloc(libftdb_ftdb_object* self);

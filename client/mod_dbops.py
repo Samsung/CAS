@@ -203,7 +203,7 @@ class StoreCache(Module):
 
             db = libcas.CASDatabase()
             db.set_config(self.config)
-            db.load_db(cache_db_filename, debug=self.args.debug, quiet=True, mp_safe=True, no_map_memory=False)
+            db.load_db(cache_db_filename, debug=self.args.debug, quiet=True)
             db.create_deps_db_image(deps_cache_db_filename=deps_cache_db_filename, depmap_filename=depmap_filename,
                                     ddepmap_filename=ddepmap_filename, jobs=self.args.jobs, deps_threshold=self.args.deps_threshold,
                                     debug=self.args.debug)

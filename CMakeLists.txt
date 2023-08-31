@@ -309,9 +309,6 @@ add_library(etrace SHARED
         bas/compiler_clang.c
         bas/compiler_armcc.c
         bas/pyetrace.c
-        bas/libflat.c
-        bas/rbtree.c
-        bas/interval_tree.c
         bas/maps.c
         bas/utils.c
         bas/filedeps.cpp
@@ -327,12 +324,14 @@ target_compile_options(etrace PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-register>)
 target_compile_options(etrace PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-attributes>)
 target_compile_options(etrace PRIVATE "-DLIBRARY_BUILD=1")
+target_include_directories(etrace PRIVATE "kflat/lib")
+target_include_directories(etrace PRIVATE "kflat/include")
+target_include_directories(etrace PRIVATE "kflat/lib/include_priv")
+target_link_libraries(etrace PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
+add_dependencies(etrace uflat_library)
 
 add_library(ftdb SHARED
         bas/pyftdb.c
-        bas/libflat.c
-        bas/rbtree.c
-        bas/interval_tree.c
         bas/maps.c
         bas/utils.c
         bas/ftdbmaps.cpp
@@ -398,8 +397,44 @@ target_include_directories(etrace PRIVATE ${PYTHON3_INCLUDES})
 target_link_libraries(etrace PRIVATE "-lrt")
 install(TARGETS etrace DESTINATION .)
 
+find_package(Git REQUIRED)
+
+if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/kflat/Makefile)
+    message(STATUS "Initializing missing KFLAT submodule")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} submodule update --init
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    )
+else()
+    execute_process(
+        COMMAND sh -c "${GIT_EXECUTABLE} status | grep '(new commits)' -q"
+        RESULT_VARIABLE GREP_NOT_MATCHED
+    )
+
+    if (NOT GREP_NOT_MATCHED)
+        message(STATUS "Pulling in submodules updates")
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} submodule update --remote
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        )
+    endif()
+endif()
+
+add_custom_command(OUTPUT libuflat_x86_64.a PRE_LINK
+                    COMMAND make -j8 uflat
+                    COMMAND ${CMAKE_COMMAND} -E copy lib/libuflat_x86_64.a ${PROJECT_BINARY_DIR}/.
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/kflat
+)
+add_custom_target(uflat_library DEPENDS libuflat_x86_64.a)
+
+
+
 target_include_directories(ftdb PRIVATE ${PYTHON3_INCLUDES})
-target_link_libraries(ftdb PRIVATE "-lrt")
+target_include_directories(ftdb PRIVATE "kflat/lib")
+target_include_directories(ftdb PRIVATE "kflat/include")
+target_include_directories(ftdb PRIVATE "kflat/lib/include_priv")
+target_link_libraries(ftdb PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
+add_dependencies(ftdb uflat_library)
 install(TARGETS ftdb DESTINATION .)
 
 add_library(gcc_input_name SHARED
