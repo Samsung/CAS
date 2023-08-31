@@ -1,10 +1,341 @@
 #!/usr/bin/env python3
+import argparse
+import gc
+import json
+import os
+import random
+import re
+import sys
+import time
+import traceback
 
 import libftdb
-import json
-import sys
-import argparse
-import os
+
+##############
+# Utilities
+##############
+samplesSize = 2000
+stressSize = 30000
+
+def getMemUsage() -> int:
+	with open("/proc/self/status", "r") as f:
+		content = f.readlines()
+		content = next(filter(lambda line: line.startswith('VmRSS:'), content), '')
+		return int(re.findall(r'\d+', content)[0]) * 1024
+
+
+##############
+# Test cases
+##############
+# Step 1: Compare top-level fields
+def testTopLevelFields():
+	print("checking top level fields", end='')
+	topLevelFields = [
+		"source_info", "modules", "module_info", "funcs_tree_calls_no_asm",
+		"funcs_tree_calls_no_known", "funcs_tree_calls_no_known_no_asm", "funcs_tree_func_calls", 
+		"funcs_tree_func_refs", "funcs_tree_funrefs_no_asm", "funcs_tree_funrefs_no_known", 
+		"funcs_tree_funrefs_no_known_no_asm", "globs_tree_globalrefs", "types_tree_refs", 
+		"types_tree_usedrefs", "static_funcs_map", "init_data", "known_data", "BAS",
+		"version", "module", "directory", "release", 
+		# TODO: "funcdecln", "typen", "sourcen", "globaln", "unresolvedfuncn", "funcn"
+	]
+
+	for field in topLevelFields:
+		if field not in db:
+			continue
+		assert(field in ftdb)
+		assert(db[field] == ftdb[field])
+		assert db[field] == getattr(ftdb, field), f'Field "{field}" content mismatch - {db[field]} vs {getattr(ftdb, field)}'
+	
+	# Manually check some special files
+	assert(db['sources'] == ftdb['sources'])
+	assert(len(db['sources']) == len(ftdb.sources))
+	assert(db['unresolvedfuncs'] == ftdb['unresolvedfuncs'])
+	assert(len(db['unresolvedfuncs']) == len(ftdb.unresolvedfuncs))
+
+
+# Step 2: Test functions
+def testFuncs():
+	if args.skip_function_tests or args.skip_function_member_tests:
+		return
+	
+	print("checking function entries in FTDB", end='')
+	for i, f in enumerate(random.sample(db["funcs"], k=samplesSize)):
+
+		func_id = f["id"]
+		for field in f:
+			if type(f[field]) is list or type(f[field]) is dict:
+				continue
+			attrName = {'class': 'classname', 'linkage': 'linkage_string'}.get(field, field)
+			assert(field in ftdb.funcs[func_id])
+			assert f[field] == ftdb.funcs[func_id][field], f'Field "{field}" content mismatch in function fid={func_id}'
+			assert f[field] == getattr(ftdb.funcs[func_id], attrName), f'Field "{field} content mismatch in function fid={func_id} - {f[field]} vs {getattr(ftdb.funcs[func_id], attrName)}'
+
+		assert f["calls"]==ftdb.funcs[f["id"]].calls
+		assert(f["callrefs"] == ftdb.funcs[func_id].callrefs)
+		assert(f["refcalls"] == ftdb.funcs[func_id].refcalls)
+		assert(f["refcallrefs"] == ftdb.funcs[func_id].refcallrefs)
+		assert(f["csmap"] == ftdb.funcs[func_id].csmap)
+		assert sorted(f["taint"].items()) == sorted(ftdb.funcs[f["id"]].taint.items())
+		
+		for i, ci in enumerate(f["call_info"]):
+			for field in ci:
+				assert(field in ftdb.funcs[func_id].call_info[i])
+				assert(ci[field] == getattr(ftdb.funcs[func_id].call_info[i], field))
+				assert(ci[field] == ftdb.funcs[func_id].call_info[i][field])
+		for i, ci in enumerate(f["refcall_info"]):
+			for field in ci:
+				assert(field in ftdb.funcs[func_id].refcall_info[i])
+				assert(ci[field] == getattr(ftdb.funcs[func_id].refcall_info[i], field))
+				assert(ci[field] == ftdb.funcs[func_id].refcall_info[i][field])
+
+		for u,S in enumerate(f["switches"]):
+			assert(S["cases"] == ftdb.funcs[func_id].switches[u].cases)
+			assert(S["condition"]==ftdb.funcs[f["id"]].switches[u].condition)
+
+		for u,L in enumerate(f["locals"]):
+			for field in L:
+				assert(field in ftdb.funcs[func_id].locals[u])
+				assert(L[field] == getattr(ftdb.funcs[func_id].locals[u], field))
+				assert(L[field] == ftdb.funcs[func_id].locals[u][field])
+		
+		for u,D in enumerate(f["derefs"]):
+			for field in filter(lambda x: x != 'offsetrefs', D):
+				attrname = field if field != 'kind' else 'kindname'
+				assert(field in ftdb.funcs[f["id"]].derefs[u])
+				assert(D[field] == getattr(ftdb.funcs[f["id"]].derefs[u], attrname))
+				assert(D[field] == ftdb.funcs[f["id"]].derefs[u][field])
+			
+			for n,oref in enumerate(D["offsetrefs"]):
+				assert oref["kind"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].kindname
+				assert oref["id"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].id
+				if "mi" in oref:
+					assert oref["mi"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].mi
+				if "di" in oref:
+					assert oref["di"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].di
+				if "cast" in oref:
+					assert oref["cast"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].cast
+		for u,F in enumerate(f["ifs"]):
+			assert F["refs"]==ftdb.funcs[f["id"]].ifs[u].refs
+			assert F["csid"]==ftdb.funcs[f["id"]].ifs[u].csid
+		assert f["asm"]==ftdb.funcs[f["id"]].asms
+		assert f["globalrefs"]==ftdb.funcs[f["id"]].globalrefs
+		assert f["globalrefInfo"]==ftdb.funcs[f["id"]].globalrefInfo
+		assert f["funrefs"]==ftdb.funcs[f["id"]].funrefs
+		assert f["refs"]==ftdb.funcs[f["id"]].refs
+		assert f["decls"]==ftdb.funcs[f["id"]].decls
+		assert f["types"]==ftdb.funcs[f["id"]].types
+
+
+# Step 3: Test types entries
+def testTypes():
+	print("checking type entries in FTDB", end='')
+
+	for i,T in enumerate(random.sample(db["types"], k=samplesSize)):
+		for field in T:
+			type_id = T["id"]
+			attrName = {'class': 'classname', 'def': 'defstring'}.get(field, field)
+			assert(field in ftdb.types[type_id])
+			assert(T[field] == ftdb.types[type_id][field])
+			assert(T[field] == getattr(ftdb.types[type_id], attrName))
+
+# Step 4: Test globals entries
+def testGlobals():
+	print("checking global entries in FTDB", end='')
+	for g in random.sample(db["globals"], k=samplesSize):
+		for field in g:
+			attrName = {'class': 'classname', 'def': 'defstring', 'linkage': 'linkage_string'}.get(field, field)
+			assert(field in ftdb.globals[g['id']])
+			assert(g[field] == ftdb.globals[g['id']][field])
+			assert g[field] == getattr(ftdb.globals[g['id']], attrName), f'Field "{attrName}" content mismatch - {g[field]} vs {getattr(ftdb.globals[g["id"]], attrName)}'
+
+# Step 5: Test funcdecls
+def testFuncdecls():
+	print("checking function declarations", end='')
+
+	for fd in random.sample(db["funcdecls"], k=samplesSize):
+		for field in fd:
+			attrName = {'linkage': 'linkage_string'}.get(field, field)
+			assert(field in ftdb.funcdecls[fd['id']])
+			assert(fd[field] == ftdb.funcdecls[fd['id']][field])
+			assert fd[field] == getattr(ftdb.funcdecls[fd['id']], attrName), f'Field "{field}" content mismatch - {fd[field]} vs {getattr(ftdb.funcdecls[fd["id"]], attrName)}'
+
+# Step 6: Test fops
+def testFops():
+	print("checking fops entries in FTDB", end='')
+	assert db["fops"]["varn"] == ftdb.fops.varn
+	assert db["fops"]["membern"] == ftdb.fops.membern
+
+	for i,v in enumerate(db["fops"]["vars"]):
+		assert v["type"]==ftdb.fops[i].type
+		assert v["name"]==ftdb.fops[i].name
+		assert sorted(v["members"].items()) == sorted(ftdb.fops[i].members.items())
+		assert v["location"]==ftdb.fops[i].location
+
+# Step 7:
+def testFTDBApi():
+	print("testing FTDB API functions", end='')
+	for test_func in random.sample(db['funcs'], k=samplesSize):
+		# Test getters
+		assert ftdb.funcs.contains_id(test_func['id'])
+		assert ftdb.funcs.entry_by_id(test_func['id'])['hash'] == test_func['hash']
+
+		assert ftdb.funcs.contains_hash(test_func['hash'])
+		assert ftdb.funcs.entry_by_hash(test_func['hash'])['hash'] == test_func['hash']
+
+		assert ftdb.funcs.contains_name(test_func['name'])
+		assert len(ftdb.funcs.entry_by_name(test_func['name'])) > 0
+
+		# Test ftdbFuncEntry object
+		ftdbFunc = ftdb.funcs.entry_by_id(test_func['id'])
+		assert set(ftdbFunc.json().keys()) == set(test_func.keys()), f'Missing fields in JSON representation of ftdbFuncEntry - {ftdbFunc.json().keys()} vs {test_func.keys()}'
+		assert ftdbFunc.has_namespace() == ('namespace' in test_func), f'Method "has_namespace" returned {ftdbFunc.has_namespace()} vs {"namespace" in test_func}({test_func.get("namespace")})'
+		assert ftdbFunc.has_classOuterFn() == ('namespace' in test_func)
+		assert ftdbFunc.has_class() == ('classOuterFn' in test_func)
+
+	for test_decl in random.sample(db['funcdecls'], k=samplesSize):
+		# Test getters
+		assert ftdb.funcdecls.contains_id(test_decl['id'])
+		assert ftdb.funcdecls.entry_by_id(test_decl['id'])['declhash'] == test_decl['declhash']
+
+		assert ftdb.funcdecls.contains_hash(test_decl['declhash'])
+		assert ftdb.funcdecls.entry_by_hash(test_decl['declhash'])['declhash'] == test_decl['declhash']
+
+		assert ftdb.funcdecls.contains_name(test_decl['name'])
+		assert len(ftdb.funcdecls.entry_by_name(test_decl['name'])) > 0
+
+		# Test ftdbFuncdeclEntry object
+		ftdbFuncDecl = ftdb.funcdecls.entry_by_id(test_decl['id'])
+		assert ftdbFuncDecl.has_namespace() == ('namespace' in test_decl)
+		assert ftdbFuncDecl.has_class() == ('class' in test_decl)
+		assert set(ftdbFuncDecl.json().keys()) == set(test_decl.keys())
+
+	for glob in random.sample(db['globals'], k=samplesSize):
+		# Test getters
+		assert ftdb.globals.contains_id(glob['id'])
+		assert ftdb.globals.entry_by_id(glob['id'])['hash'] == glob['hash']
+
+		assert ftdb.globals.contains_hash(glob['hash'])
+		assert ftdb.globals.entry_by_hash(glob['hash'])['hash'] == glob['hash']
+
+		assert ftdb.globals.contains_name(glob['name'])
+		assert len(ftdb.globals.entry_by_name(glob['name'])) > 0
+
+		# Test ftdbGlobalEntry object
+		ftdbGlobal = ftdb.globals.entry_by_id(glob['id'])
+		assert ftdbGlobal.has_init() == ('hasinit' in glob and glob['hasinit'])
+		assert set(ftdbGlobal.json().keys()) == set(glob.keys())
+
+	for typeEntry in random.sample(db['types'], k=samplesSize):
+		# Test getters
+		assert ftdb.types.contains_id(typeEntry['id'])
+		assert ftdb.types.entry_by_id(typeEntry['id'])['hash'] == typeEntry['hash']
+
+		assert ftdb.types.contains_hash(typeEntry['hash'])
+		assert ftdb.types.entry_by_hash(typeEntry['hash'])['hash'] == typeEntry['hash']
+
+		# Test ftdbTypeEntry object
+		ftdbType = ftdb.types.entry_by_id(typeEntry['id'])
+		assert set(ftdbType.json().keys()) == set(typeEntry.keys())
+		assert ftdbType.has_usedrefs() == ('usedrefs' in typeEntry)
+		assert ftdbType.has_decls() == ('decls' in typeEntry)
+		assert ftdbType.has_attrs() == ('attrnum' in typeEntry and typeEntry['attrnum'] > 0)
+		assert ftdbType.has_outerfn() == ('outerfn' in typeEntry)
+		assert ftdbType.has_location() == ('location' in typeEntry)
+		assert ftdbType.isConst() is not None
+		assert ftdbType.toNonConst() is not None
+
+# Step 8: Stress / memory test
+def stressTest():
+	print("stress testing FTDB methods", end='')
+
+	# Stress ftdb
+	def stressRun():
+		for i in range(stressSize // 2):
+			if not ftdb.funcs.contains_id(i):
+				continue
+			func = ftdb.funcs.entry_by_id(i)
+			func.json()
+			func.hash
+			if len(func.derefs) > 0:
+				func.derefs[0].json()
+			
+			func.declbody
+			func.refcallrefs
+			func.body
+
+			if not ftdb.types.contains_id(i):
+				continue
+			type = ftdb.types.entry_by_id(i)
+			type.json()
+			type.hash
+			type.isConst()
+			type.toNonConst()
+			type.str
+
+			del func
+			del type
+
+	# 1st run to preallocate memory
+	gc.collect()
+	stressRun()
+	gc.collect()
+
+	# 2nd run
+	preTestMemory = getMemUsage()
+	stressRun()
+	gc.collect()
+	postTestMemory = getMemUsage()
+	memDiffMB = (postTestMemory - preTestMemory) // 1024 // 1024
+	if memDiffMB > 100:
+		raise RuntimeError(f"Test failed - leaked more than 100MB of memory ({memDiffMB}MB)")
+
+
+# Step 9: Test input validation
+def testAPIErrors():
+	print('testing API for errors handling', end='')
+	try:
+		ftdb.load(1)
+	except:
+		pass
+
+	try:
+		ftdb.load()
+	except:
+		pass
+
+	try:
+		ftdb.load(ftdb)
+	except:
+		pass
+
+
+##############
+# Test code
+##############
+def setupTest():
+	global ftdb, db
+	print("Loading input DB.JSON")
+	with open(args.db_path,"rb") as f:
+		db = json.loads(f.read())
+
+	base, _ = os.path.splitext(args.db_path)
+	dbimg_path = base + ".img"
+
+	if args.do_ftdb_create or args.only_ftdb_create:
+		print("Creating ftdb")
+		libftdb.create_ftdb(db,dbimg_path,True)
+		if args.only_ftdb_create:
+			sys.exit(0)
+
+	print("Loading FTDB")
+	ftdb = libftdb.ftdb()
+	ftdb.load(dbimg_path, quiet=True)
+
+	fids = [f["id"] for f in db["funcs"]]
+	assert(len(fids)==len(set(fids))),"%d vs %d"%(len(fids),len(set(fids)))
+	assert len(fids) > 0
+
 
 parser = argparse.ArgumentParser(description="MAIN_DESCRIPTION", formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument("--do-ftdb-create", action="store_true", help="Do create the ftdb cache along the way")
@@ -15,839 +346,48 @@ parser.add_argument("--only-ftdb-create", action="store_true", help="Only create
 parser.add_argument('db_path', action="store")
 args = parser.parse_args()
 
-with open(args.db_path,"rb") as f:
-	db = json.loads(f.read())
+# Allow for easier reproduction
+seed = random.randint(0, 100000)
+random.seed(seed)
+print(f'Initial random seed: {seed}')
 
-base, ext = os.path.splitext(args.db_path)
-dbimg_path = base+".img"
+setupTest()
 
-if args.do_ftdb_create or args.only_ftdb_create:
-	libftdb.create_ftdb(db,dbimg_path,True)
-	if args.only_ftdb_create:
-		sys.exit(0)
+gc.collect()
+preTestsMemoryUse = getMemUsage()
 
-ftdb = libftdb.ftdb()
-ftdb.load(dbimg_path)
+# Run tests
+failures = 0
+tests = [
+	testTopLevelFields, testFuncs, testTypes,
+	testGlobals, testFuncdecls, testFops,
+	testFTDBApi, stressTest, testAPIErrors
+]
 
-fids = [f["id"] for f in db["funcs"]]
-assert(len(fids)==len(set(fids))),"%d vs %d"%(len(fids),len(set(fids)))
-
-if "sources" in db:
-	assert db["sources"]==ftdb["sources"]
-if "source_info" in db:
-	assert db["source_info"]==ftdb["source_info"]
-if "modules" in db:
-	assert db["modules"]==ftdb["modules"]
-if "module_info" in db:
-	assert db["module_info"]==ftdb["module_info"]
-assert db["unresolvedfuncs"]==ftdb["unresolvedfuncs"]
-if "funcs_tree_calls_no_asm" in db:
-	assert db["funcs_tree_calls_no_asm"]==ftdb.funcs_tree_calls_no_asm
-if "funcs_tree_calls_no_known" in db:
-	assert db["funcs_tree_calls_no_known"]==ftdb.funcs_tree_calls_no_known
-if "funcs_tree_calls_no_known_no_asm" in db:
-	assert db["funcs_tree_calls_no_known_no_asm"]==ftdb.funcs_tree_calls_no_known_no_asm
-if "funcs_tree_func_calls" in db:
-	assert db["funcs_tree_func_calls"]==ftdb.funcs_tree_func_calls
-if "funcs_tree_func_refs" in db:
-	assert db["funcs_tree_func_refs"]==ftdb.funcs_tree_func_refs
-if "funcs_tree_funrefs_no_asm" in db:
-	assert db["funcs_tree_funrefs_no_asm"]==ftdb.funcs_tree_funrefs_no_asm
-if "funcs_tree_funrefs_no_known" in db:
-	assert db["funcs_tree_funrefs_no_known"]==ftdb.funcs_tree_funrefs_no_known
-if "funcs_tree_funrefs_no_known_no_asm" in db:
-	assert db["funcs_tree_funrefs_no_known_no_asm"]==ftdb.funcs_tree_funrefs_no_known_no_asm
-if "globs_tree_globalrefs" in db:
-	assert db["globs_tree_globalrefs"]==ftdb.globs_tree_globalrefs
-if "types_tree_refs" in db:
-	assert db["types_tree_refs"]==ftdb.types_tree_refs
-if "types_tree_usedrefs" in db:
-	assert db["types_tree_usedrefs"]==ftdb.types_tree_usedrefs
-if "static_funcs_map" in db:
-	assert db["static_funcs_map"]==ftdb.static_funcs_map
-if "init_data" in db:
-	assert db["init_data"]==ftdb.init_data
-if "known_data" in db:
-	assert db["known_data"]==ftdb.known_data
-if "BAS" in db:
-	assert db["BAS"]==ftdb.BAS
-if "funcs_tree_calls_no_asm" in db:
-	assert db["funcs_tree_calls_no_asm"]==ftdb["funcs_tree_calls_no_asm"]
-if "funcs_tree_calls_no_known" in db:
-	assert db["funcs_tree_calls_no_known"]==ftdb["funcs_tree_calls_no_known"]
-if "funcs_tree_calls_no_known_no_asm" in db:
-	assert db["funcs_tree_calls_no_known_no_asm"]==ftdb["funcs_tree_calls_no_known_no_asm"]
-if "funcs_tree_func_calls" in db:
-	assert db["funcs_tree_func_calls"]==ftdb["funcs_tree_func_calls"]
-if "funcs_tree_func_refs" in db:
-	assert db["funcs_tree_func_refs"]==ftdb["funcs_tree_func_refs"]
-if "funcs_tree_funrefs_no_asm" in db:
-	assert db["funcs_tree_funrefs_no_asm"]==ftdb["funcs_tree_funrefs_no_asm"]
-if "funcs_tree_funrefs_no_known" in db:
-	assert db["funcs_tree_funrefs_no_known"]==ftdb["funcs_tree_funrefs_no_known"]
-if "funcs_tree_funrefs_no_known_no_asm" in db:
-	assert db["funcs_tree_funrefs_no_known_no_asm"]==ftdb["funcs_tree_funrefs_no_known_no_asm"]
-if "globs_tree_globalrefs" in db:
-	assert db["globs_tree_globalrefs"]==ftdb["globs_tree_globalrefs"]
-if "types_tree_refs" in db:
-	assert db["types_tree_refs"]==ftdb["types_tree_refs"]
-if "types_tree_usedrefs" in db:
-	assert db["types_tree_usedrefs"]==ftdb["types_tree_usedrefs"]
-if "static_funcs_map" in db:
-	assert db["static_funcs_map"]==ftdb["static_funcs_map"]
-if "init_data" in db:
-	assert db["init_data"]==ftdb["init_data"]
-if "known_data" in db:
-	assert db["known_data"]==ftdb["known_data"]
-if "BAS" in db:
-	assert db["BAS"]==ftdb["BAS"]
-
-assert db["version"]==ftdb.version
-assert db["module"]==ftdb.module
-assert db["directory"]==ftdb.directory
-assert db["release"]==ftdb.release
-assert db["version"]==ftdb["version"]
-assert db["module"]==ftdb["module"]
-assert db["directory"]==ftdb["directory"]
-assert db["release"]==ftdb["release"]
-
-assert db["funcdecln"]==ftdb["funcdecln"]
-assert db["typen"]==ftdb["typen"]
-assert db["sourcen"]==ftdb["sourcen"]
-assert db["globaln"]==ftdb["globaln"]
-assert db["unresolvedfuncn"]==ftdb["unresolvedfuncn"]
-assert db["funcn"]==ftdb["funcn"]
-
-for i,f in enumerate(db["funcs"]):
-	if args.skip_function_tests: break
-	if args.skip_function_member_tests: break
-	sys.stdout.write("\rChecking functions [member interface]: %d/%d"%(i+1,len(db["funcs"])))
+for i, test in enumerate(tests):
+	print(f"\033[0;33m[{i+1}/{len(tests)}]\033[0m Running {test.__name__} - ", end='')
 	sys.stdout.flush()
-	assert f["id"]==ftdb.funcs[f["id"]].id
-	assert f["hash"]==ftdb.funcs[f["id"]].hash
-	assert f["name"]==ftdb.funcs[f["id"]].name
-	if "namespace" in f:
-		assert f["namespace"]==ftdb.funcs[f["id"]].namespace
-	assert f["fid"]==ftdb.funcs[f["id"]].fid
-	assert f["fids"]==ftdb.funcs[f["id"]].fids
-	assert f["nargs"]==ftdb.funcs[f["id"]].nargs
-	assert f["variadic"]==ftdb.funcs[f["id"]].variadic
-	assert f["firstNonDeclStmt"]==ftdb.funcs[f["id"]].firstNonDeclStmt
-	if "inline" in f:
-		assert f["inline"]==ftdb.funcs[f["id"]].inline,"%s vs %s"%(f["inline"],ftdb.funcs[f["id"]].inline)
-	if "template" in f:
-		assert f["template"]==ftdb.funcs[f["id"]].template
-	if "classOuterFn" in f:
-		assert f["classOuterFn"]==ftdb.funcs[f["id"]].classOuterFn
-	assert f["linkage"]==ftdb.funcs[f["id"]].linkage_string,"%s vs %s"%(f["linkage"],ftdb.funcs[f["id"]].linkage_string)
-	if "member" in f:
-		assert f["member"]==ftdb.funcs[f["id"]].member
-	if "class" in f:
-		assert f["class"]==ftdb.funcs[f["id"]].classname
-	if "classid" in f:
-		assert f["classid"]==ftdb.funcs[f["id"]].classid
-	assert f["attributes"]==ftdb.funcs[f["id"]].attributes
-	assert f["cshash"]==ftdb.funcs[f["id"]].cshash
-	if "template_parameters" in f:
-		assert f["template_parameters"]==ftdb.funcs[f["id"]].template_parameters
-	assert f["body"]==ftdb.funcs[f["id"]].body
-	assert f["unpreprocessed_body"]==ftdb.funcs[f["id"]].unpreprocessed_body
-	assert f["declbody"]==ftdb.funcs[f["id"]].declbody
-	assert f["signature"]==ftdb.funcs[f["id"]].signature
-	assert f["declhash"]==ftdb.funcs[f["id"]].declhash
-	assert f["location"]==ftdb.funcs[f["id"]].location
-	if "abs_location" in f:
-		assert f["abs_location"]==ftdb.funcs[f["id"]].abs_location
-	assert f["start_loc"]==ftdb.funcs[f["id"]].start_loc
-	assert f["end_loc"]==ftdb.funcs[f["id"]].end_loc
-	assert f["refcount"]==ftdb.funcs[f["id"]].refcount
-	assert f["declcount"]==ftdb.funcs[f["id"]].declcount
-	assert f["literals"]==ftdb.funcs[f["id"]].literals,"%s vs %s"%(f["literals"],ftdb.funcs[f["id"]].literals)
-	assert sorted(f["taint"].items())==sorted(ftdb.funcs[f["id"]].taint.items()),"%s vs %s"%(sorted(f["taint"].items()),sorted(ftdb.funcs[f["id"]].taint.items()))
-	assert f["calls"]==ftdb.funcs[f["id"]].calls
-	for i,ci in enumerate(f["call_info"]):
-		assert ci["start"]==ftdb.funcs[f["id"]].call_info[i].start
-		assert ci["end"]==ftdb.funcs[f["id"]].call_info[i].end
-		assert ci["ord"]==ftdb.funcs[f["id"]].call_info[i].ord
-		assert ci["expr"]==ftdb.funcs[f["id"]].call_info[i].expr
-		assert ci["loc"]==ftdb.funcs[f["id"]].call_info[i].loc
-		assert ci["csid"]==ftdb.funcs[f["id"]].call_info[i].csid
-		assert ci["args"]==ftdb.funcs[f["id"]].call_info[i].args
-	assert f["callrefs"]==ftdb.funcs[f["id"]].callrefs,"%s vs %s"%(f["callrefs"],ftdb.funcs[f["id"]].callrefs)
-	assert f["refcalls"]==ftdb.funcs[f["id"]].refcalls,"%s vs %s"%(f["refcalls"],ftdb.funcs[f["id"]].refcalls)
-	for i,ci in enumerate(f["refcall_info"]):
-		assert ci["start"]==ftdb.funcs[f["id"]].refcall_info[i].start
-		assert ci["end"]==ftdb.funcs[f["id"]].refcall_info[i].end
-		assert ci["ord"]==ftdb.funcs[f["id"]].refcall_info[i].ord
-		assert ci["expr"]==ftdb.funcs[f["id"]].refcall_info[i].expr
-		assert ci["csid"]==ftdb.funcs[f["id"]].refcall_info[i].csid
-		if "loc" in ci:
-			assert ci["loc"]==ftdb.funcs[f["id"]].refcall_info[i].loc
-		assert ci["args"]==ftdb.funcs[f["id"]].refcall_info[i].args
-	assert f["refcallrefs"]==ftdb.funcs[f["id"]].refcallrefs,"%s vs %s"%(f["refcallrefs"],ftdb.funcs[f["id"]].refcallrefs)
-	for u,S in enumerate(f["switches"]):
-		assert S["cases"]==ftdb.funcs[f["id"]].switches[u].cases,"%s vs %s"%(S["cases"],ftdb.funcs[f["id"]].switches[u].cases)
-		assert S["condition"]==ftdb.funcs[f["id"]].switches[u].condition
-	assert f["csmap"]==ftdb.funcs[f["id"]].csmap,"%s vs %s"%(f["csmap"],ftdb.funcs[f["id"]].csmap)
-	for u,L in enumerate(f["locals"]):
-		assert L["id"]==ftdb.funcs[f["id"]].locals[u].id
-		assert L["used"]==ftdb.funcs[f["id"]].locals[u].used
-		assert L["name"]==ftdb.funcs[f["id"]].locals[u].name
-		assert L["parm"]==ftdb.funcs[f["id"]].locals[u].parm
-		assert L["static"]==ftdb.funcs[f["id"]].locals[u].static
-		assert L["location"]==ftdb.funcs[f["id"]].locals[u].location
-		assert L["type"]==ftdb.funcs[f["id"]].locals[u].type
-		if "csid" in L:
-			assert L["csid"]==ftdb.funcs[f["id"]].locals[u].csid
-	for u,D in enumerate(f["derefs"]):
-		assert D["kind"]==ftdb.funcs[f["id"]].derefs[u].kindname
-		if "offset" in D:
-			assert D["offset"]==ftdb.funcs[f["id"]].derefs[u].offset
-		if "basecnt" in D:
-			assert D["basecnt"]==ftdb.funcs[f["id"]].derefs[u].basecnt
-		for n,oref in enumerate(D["offsetrefs"]):
-			assert oref["kind"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].kindname
-			assert oref["id"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].id
-			if "mi" in oref:
-				assert oref["mi"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].mi
-			if "di" in oref:
-				assert oref["di"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].di
-			if "cast" in oref:
-				assert oref["cast"]==ftdb.funcs[f["id"]].derefs[u].offsetrefs[n].cast
-		assert D["expr"]==ftdb.funcs[f["id"]].derefs[u].expr
-		assert D["csid"]==ftdb.funcs[f["id"]].derefs[u].csid
-		assert D["ord"]==ftdb.funcs[f["id"]].derefs[u].ords
-		if "member" in D:
-			assert D["member"]==ftdb.funcs[f["id"]].derefs[u].member
-		if "type" in D:
-			assert D["type"]==ftdb.funcs[f["id"]].derefs[u].type
-		if "access" in D:
-			assert D["access"]==ftdb.funcs[f["id"]].derefs[u].access
-		if "shift" in D:
-			assert D["shift"]==ftdb.funcs[f["id"]].derefs[u].shift
-		if "mcall" in D:
-			assert D["mcall"]==ftdb.funcs[f["id"]].derefs[u].mcall
-	for u,F in enumerate(f["ifs"]):
-		assert F["refs"]==ftdb.funcs[f["id"]].ifs[u].refs,"%s vs %s"%(F["refs"],ftdb.funcs[f["id"]].ifs[u].refs)
-		assert F["csid"]==ftdb.funcs[f["id"]].ifs[u].csid
-	assert f["asm"]==ftdb.funcs[f["id"]].asms,"%s vs %s"%(f["asm"],ftdb.funcs[f["id"]].asms)
-	assert f["globalrefs"]==ftdb.funcs[f["id"]].globalrefs
-	assert f["globalrefInfo"]==ftdb.funcs[f["id"]].globalrefInfo,"%s vs %s"%(f["globalrefInfo"],ftdb.funcs[f["id"]].globalrefInfo)
-	assert f["funrefs"]==ftdb.funcs[f["id"]].funrefs
-	assert f["refs"]==ftdb.funcs[f["id"]].refs
-	assert f["decls"]==ftdb.funcs[f["id"]].decls
-	assert f["types"]==ftdb.funcs[f["id"]].types
-sys.stdout.write("\n")
+	timeStart = time.time()
+	try:
+		test()
+		print(f'\033[80D\033[70C- \033[0;32mSUCCESS\033[0m \033[0;36m[{round(time.time() - timeStart, 2):5}s]\033[0m')
+	except BaseException as e:
+		print(f'\033[80D\033[70C- \033[0;31mFAILED\033[0m  \033[0;36m[{round(time.time() - timeStart, 2):5}s]\033[0m')
+		failures += 1
+		traceback.print_exc()
 
-for i,f in enumerate(db["funcs"]):
-	if args.skip_function_tests: break
-	if args.skip_function_mapping_tests: break
-	sys.stdout.write("\rChecking functions [mapping interface]: %d/%d"%(i+1,len(db["funcs"])))
-	sys.stdout.flush()
-	assert f["id"]==ftdb["funcs"][f["id"]]["id"]
-	assert "hash" in ftdb["funcs"][f["id"]]
-	assert f["hash"]==ftdb["funcs"][f["id"]]["hash"]
-	assert "name" in ftdb["funcs"][f["id"]]
-	assert f["name"]==ftdb["funcs"][f["id"]]["name"]
-	if "namespace" in f:
-		assert "namespace" in ftdb["funcs"][f["id"]]
-		assert f["namespace"]==ftdb["funcs"][f["id"]]["namespace"]
-	else:
-		assert "namespace" not in ftdb["funcs"][f["id"]]
-	assert "fid" in ftdb["funcs"][f["id"]]
-	assert f["fid"]==ftdb["funcs"][f["id"]]["fid"]
-	assert "fids" in ftdb["funcs"][f["id"]]
-	assert f["fids"]==ftdb["funcs"][f["id"]]["fids"]
-	assert "nargs" in ftdb["funcs"][f["id"]]
-	assert f["nargs"]==ftdb["funcs"][f["id"]]["nargs"]
-	assert "variadic" in ftdb["funcs"][f["id"]]
-	assert f["variadic"]==ftdb["funcs"][f["id"]]["variadic"]
-	assert "firstNonDeclStmt" in ftdb["funcs"][f["id"]]
-	assert f["firstNonDeclStmt"]==ftdb["funcs"][f["id"]]["firstNonDeclStmt"]
-	if "inline" in f:
-		assert "inline" in ftdb["funcs"][f["id"]]
-		assert f["inline"]==ftdb["funcs"][f["id"]]["inline"],"%s vs %s"%(f["inline"],ftdb["funcs"][f["id"]]["inline"])
-	else:
-		assert "inline" not in ftdb["funcs"][f["id"]]
-	if "template" in f:
-		assert "template" in ftdb["funcs"][f["id"]]
-		assert f["template"]==ftdb["funcs"][f["id"]]["template"]
-	else:
-		assert "template" not in ftdb["funcs"][f["id"]]
-	if "classOuterFn" in f:
-		assert "classOuterFn" in ftdb["funcs"][f["id"]]
-		assert f["classOuterFn"]==ftdb["funcs"][f["id"]]["classOuterFn"]
-	else:
-		assert "classOuterFn" not in ftdb["funcs"][f["id"]]
-	assert "linkage" in ftdb["funcs"][f["id"]]
-	assert f["linkage"]==ftdb["funcs"][f["id"]]["linkage"],"%s vs %s"%(f["linkage"],ftdb["funcs"][f["id"]]["linkage"])
-	if "member" in f:
-		assert "member" in ftdb["funcs"][f["id"]]
-		assert f["member"]==ftdb["funcs"][f["id"]]["member"]
-	else:
-		assert "member" not in ftdb["funcs"][f["id"]]
-	if "class" in f:
-		assert "class" in ftdb["funcs"][f["id"]]
-		assert f["class"]==ftdb["funcs"][f["id"]]["class"]
-	else:
-		assert "class" not in ftdb["funcs"][f["id"]]
-	if "classid" in f:
-		assert "classid" in ftdb["funcs"][f["id"]]
-		assert f["classid"]==ftdb["funcs"][f["id"]]["classid"]
-	else:
-		assert "classid" not in ftdb["funcs"][f["id"]]
-	assert "attributes" in ftdb["funcs"][f["id"]]
-	assert f["attributes"]==ftdb["funcs"][f["id"]]["attributes"]
-	assert "cshash" in ftdb["funcs"][f["id"]]
-	assert f["cshash"]==ftdb["funcs"][f["id"]]["cshash"]
-	if "template_parameters" in f:
-		assert "template_parameters" in ftdb["funcs"][f["id"]]
-		assert f["template_parameters"]==ftdb["funcs"][f["id"]]["template_parameters"]
-	else:
-		assert "template_parameters" not in ftdb["funcs"][f["id"]]
-	assert "body" in ftdb["funcs"][f["id"]]
-	assert f["body"]==ftdb["funcs"][f["id"]]["body"]
-	assert "unpreprocessed_body" in ftdb["funcs"][f["id"]]
-	assert f["unpreprocessed_body"]==ftdb["funcs"][f["id"]]["unpreprocessed_body"]
-	assert "declbody" in ftdb["funcs"][f["id"]]
-	assert f["declbody"]==ftdb["funcs"][f["id"]]["declbody"]
-	assert "signature" in ftdb["funcs"][f["id"]]
-	assert f["signature"]==ftdb["funcs"][f["id"]]["signature"]
-	assert "declhash" in ftdb["funcs"][f["id"]]
-	assert f["declhash"]==ftdb["funcs"][f["id"]]["declhash"]
-	assert "location" in ftdb["funcs"][f["id"]]
-	assert f["location"]==ftdb["funcs"][f["id"]]["location"]
-	if "abs_location" in f:
-		assert "abs_location" in ftdb["funcs"][f["id"]]
-		assert f["abs_location"]==ftdb["funcs"][f["id"]]["abs_location"]
-	else:
-		assert "abs_location" not in ftdb["funcs"][f["id"]]
-	assert "start_loc" in ftdb["funcs"][f["id"]]
-	assert f["start_loc"]==ftdb["funcs"][f["id"]]["start_loc"]
-	assert "end_loc" in ftdb["funcs"][f["id"]]
-	assert f["end_loc"]==ftdb["funcs"][f["id"]]["end_loc"]
-	assert "refcount" in ftdb["funcs"][f["id"]]
-	assert f["refcount"]==ftdb["funcs"][f["id"]]["refcount"]
-	assert "declcount" in ftdb["funcs"][f["id"]]
-	assert f["declcount"]==ftdb["funcs"][f["id"]]["declcount"]
-	assert "literals" in ftdb["funcs"][f["id"]]
-	assert f["literals"]==ftdb["funcs"][f["id"]]["literals"],"%s vs %s"%(f["literals"],ftdb["funcs"][f["id"]]["literals"])
-	assert "taint" in ftdb["funcs"][f["id"]]
-	assert sorted(f["taint"].items())==sorted(ftdb["funcs"][f["id"]]["taint"].items()),"%s vs %s"%(sorted(f["taint"].items()),sorted(ftdb["funcs"][f["id"]]["taint"].items()))
-	assert "calls" in ftdb["funcs"][f["id"]]
-	assert f["calls"]==ftdb["funcs"][f["id"]]["calls"]
-	assert "call_info" in ftdb["funcs"][f["id"]]
-	for i,ci in enumerate(f["call_info"]):
-		assert "start" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["start"]==ftdb["funcs"][f["id"]]["call_info"][i]["start"]
-		assert "end" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["end"]==ftdb["funcs"][f["id"]]["call_info"][i]["end"]
-		assert "ord" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["ord"]==ftdb["funcs"][f["id"]]["call_info"][i]["ord"]
-		assert "expr" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["expr"]==ftdb["funcs"][f["id"]]["call_info"][i]["expr"]
-		assert "loc" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["loc"]==ftdb["funcs"][f["id"]]["call_info"][i]["loc"]
-		assert "csid" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["csid"]==ftdb["funcs"][f["id"]]["call_info"][i]["csid"]
-		assert "args" in ftdb["funcs"][f["id"]]["call_info"][i]
-		assert ci["args"]==ftdb["funcs"][f["id"]]["call_info"][i]["args"]
-	assert "callrefs" in ftdb["funcs"][f["id"]]
-	assert f["callrefs"]==ftdb["funcs"][f["id"]]["callrefs"],"%s vs %s"%(f["callrefs"],ftdb["funcs"][f["id"]]["callrefs"])
-	assert "refcalls" in ftdb["funcs"][f["id"]]
-	assert f["refcalls"]==ftdb["funcs"][f["id"]]["refcalls"],"%s vs %s"%(f["refcalls"],ftdb["funcs"][f["id"]]["refcalls"])
-	assert "refcall_info" in ftdb["funcs"][f["id"]]
-	for i,ci in enumerate(f["refcall_info"]):
-		assert ci["start"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["start"]
-		assert ci["end"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["end"]
-		assert ci["ord"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["ord"]
-		assert ci["expr"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["expr"]
-		assert ci["csid"]==ftdb["funcs"][f["id"]]["refcall_info"][i]["csid"]
-		if "loc" in ci:
-			assert ci["loc"]==ftdb["funcs"][f["id"]].refcall_info[i]["loc"]
-		assert ci["args"]==ftdb["funcs"][f["id"]].refcall_info[i]["args"]
-	assert "refcallrefs" in ftdb["funcs"][f["id"]]
-	assert f["refcallrefs"]==ftdb["funcs"][f["id"]]["refcallrefs"],"%s vs %s"%(f["refcallrefs"],ftdb["funcs"][f["id"]]["refcallrefs"])
-	assert "switches" in ftdb["funcs"][f["id"]]
-	for u,S in enumerate(f["switches"]):
-		assert "cases" in ftdb["funcs"][f["id"]]["switches"][u]
-		assert S["cases"]==ftdb["funcs"][f["id"]]["switches"][u]["cases"],"%s vs %s"%(S["cases"],ftdb["funcs"][f["id"]]["switches"][u]["cases"])
-		assert "condition" in ftdb["funcs"][f["id"]]["switches"][u]
-		assert S["condition"]==ftdb["funcs"][f["id"]]["switches"][u]["condition"]
-	assert "csmap" in ftdb["funcs"][f["id"]]
-	assert f["csmap"]==ftdb["funcs"][f["id"]]["csmap"],"%s vs %s"%(f["csmap"],ftdb["funcs"][f["id"]]["csmap"])
-	assert "locals" in ftdb["funcs"][f["id"]]
-	for u,L in enumerate(f["locals"]):
-		assert "id" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["id"]==ftdb["funcs"][f["id"]]["locals"][u]["id"]
-		assert "used" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["used"]==ftdb["funcs"][f["id"]]["locals"][u]["used"]
-		assert "name" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["name"]==ftdb["funcs"][f["id"]]["locals"][u]["name"]
-		assert "parm" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["parm"]==ftdb["funcs"][f["id"]]["locals"][u]["parm"]
-		assert "static" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["static"]==ftdb["funcs"][f["id"]]["locals"][u]["static"]
-		assert "location" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["location"]==ftdb["funcs"][f["id"]]["locals"][u]["location"]
-		assert "type" in ftdb["funcs"][f["id"]]["locals"][u]
-		assert L["type"]==ftdb["funcs"][f["id"]]["locals"][u]["type"]
-		if "csid" in L:
-			assert "csid" in ftdb["funcs"][f["id"]]["locals"][u]
-			assert L["csid"]==ftdb["funcs"][f["id"]]["locals"][u]["csid"]
-		else:
-			assert "csid" not in ftdb["funcs"][f["id"]]["locals"][u]
-	assert "derefs" in ftdb["funcs"][f["id"]]
-	for u,D in enumerate(f["derefs"]):
-		assert "kind" in ftdb["funcs"][f["id"]]["derefs"][u]
-		assert D["kind"]==ftdb["funcs"][f["id"]]["derefs"][u]["kind"]
-		if "offset" in D:
-			assert "offset" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["offset"]==ftdb["funcs"][f["id"]]["derefs"][u]["offset"]
-		else:
-			assert "offset" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		if "basecnt" in D:
-			assert "basecnt" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["basecnt"]==ftdb["funcs"][f["id"]]["derefs"][u]["basecnt"]
-		else:
-			assert "basecnt" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		for n,oref in enumerate(D["offsetrefs"]):
-			assert "kind" in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-			assert oref["kind"]==ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["kind"],"%s vs %s"%(oref["kind"],ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["kind"])
-			assert "id" in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-			assert oref["id"]==ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["id"]
-			if "mi" in oref:
-				assert "mi" in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-				assert oref["mi"]==ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["mi"]
-			else:
-				assert "mi" not in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-			if "di" in oref:
-				assert "di" in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-				assert oref["di"]==ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["di"]
-			else:
-				assert "di" not in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-			if "cast" in oref:
-				assert "cast" in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-				assert oref["cast"]==ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]["cast"]
-			else:
-				assert "cast" not in ftdb["funcs"][f["id"]]["derefs"][u]["offsetrefs"][n]
-		assert "expr" in ftdb["funcs"][f["id"]]["derefs"][u]
-		assert D["expr"]==ftdb["funcs"][f["id"]]["derefs"][u]["expr"]
-		assert "csid" in ftdb["funcs"][f["id"]]["derefs"][u]
-		assert D["csid"]==ftdb["funcs"][f["id"]]["derefs"][u]["csid"]
-		assert "ord" in ftdb["funcs"][f["id"]]["derefs"][u]
-		assert D["ord"]==ftdb["funcs"][f["id"]]["derefs"][u]["ord"]
-		if "member" in D:
-			assert "member" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["member"]==ftdb["funcs"][f["id"]]["derefs"][u]["member"]
-		else:
-			assert "member" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		if "type" in D:
-			assert "type" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["type"]==ftdb["funcs"][f["id"]]["derefs"][u]["type"]
-		else:
-			assert "type" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		if "access" in D:
-			assert "access" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["access"]==ftdb["funcs"][f["id"]]["derefs"][u]["access"]
-		else:
-			assert "access" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		if "shift" in D:
-			assert "shift" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["shift"]==ftdb["funcs"][f["id"]]["derefs"][u]["shift"]
-		else:
-			assert "shift" not in ftdb["funcs"][f["id"]]["derefs"][u]
-		if "mcall" in D:
-			assert "mcall" in ftdb["funcs"][f["id"]]["derefs"][u]
-			assert D["mcall"]==ftdb["funcs"][f["id"]]["derefs"][u]["mcall"]
-		else:
-			assert "mcall" not in ftdb["funcs"][f["id"]]["derefs"][u]
-	assert "ifs" in ftdb["funcs"][f["id"]]
-	for u,F in enumerate(f["ifs"]):
-		assert "refs" in ftdb["funcs"][f["id"]]["ifs"][u]
-		assert F["refs"]==ftdb["funcs"][f["id"]]["ifs"][u]["refs"],"%s vs %s"%(F["refs"],ftdb["funcs"][f["id"]]["ifs"][u]["refs"])
-		assert "csid" in ftdb["funcs"][f["id"]]["ifs"][u]
-		assert F["csid"]==ftdb["funcs"][f["id"]]["ifs"][u]["csid"]
-	assert "asm" in ftdb["funcs"][f["id"]]
-	assert f["asm"]==ftdb["funcs"][f["id"]]["asm"],"%s vs %s"%(f["asm"],ftdb["funcs"][f["id"]]["asm"])
-	assert "globalrefs" in ftdb["funcs"][f["id"]]
-	assert f["globalrefs"]==ftdb["funcs"][f["id"]]["globalrefs"]
-	assert "globalrefInfo" in ftdb["funcs"][f["id"]]
-	assert f["globalrefInfo"]==ftdb["funcs"][f["id"]]["globalrefInfo"],"%s vs %s"%(f["globalrefInfo"],ftdb["funcs"][f["id"]]["globalrefInfo"])
-	assert "funrefs" in ftdb["funcs"][f["id"]]
-	assert f["funrefs"]==ftdb["funcs"][f["id"]]["funrefs"]
-	assert "refs" in ftdb["funcs"][f["id"]]
-	assert f["refs"]==ftdb["funcs"][f["id"]]["refs"]
-	assert "decls" in ftdb["funcs"][f["id"]]
-	assert f["decls"]==ftdb["funcs"][f["id"]]["decls"]
-	assert "types" in ftdb["funcs"][f["id"]]
-	assert f["types"]==ftdb["funcs"][f["id"]]["types"]
-sys.stdout.write("\n")
+gc.collect()
+postTestsMemoryUse = getMemUsage()
+memoryDiff = (postTestsMemoryUse - preTestsMemoryUse) // 1024 // 1024
 
-for i,T in enumerate(db["types"]):
-	sys.stdout.write("\rChecking types [member interface]: %d/%d"%(i+1,len(db["types"])))
-	sys.stdout.flush()
-	assert T["id"]==ftdb.types[T["id"]].id
-	assert T["fid"]==ftdb.types[T["id"]].fid
-	assert T["hash"]==ftdb.types[T["id"]].hash
-	assert T["class"]==ftdb.types[T["id"]].classname
-	assert T["qualifiers"]==ftdb.types[T["id"]].qualifiers
-	assert T["size"]==ftdb.types[T["id"]].size
-	assert T["str"]==ftdb.types[T["id"]].str
-	assert T["refcount"]==ftdb.types[T["id"]].refcount
-	assert T["refs"]==ftdb.types[T["id"]].refs
-	if "usedrefs" in T:
-		assert T["usedrefs"]==ftdb.types[T["id"]].usedrefs
-	if "decls" in T:
-		assert T["decls"]==ftdb.types[T["id"]].decls
-	if "def" in T:
-		assert T["def"]==ftdb.types[T["id"]].defstring
-	if "memberoffsets" in T:
-		assert T["memberoffsets"]==ftdb.types[T["id"]].memberoffsets
-	if "attrrefs" in T:
-		assert T["attrrefs"]==ftdb.types[T["id"]].attrrefs
-	if "attrnum" in T:
-		assert T["attrnum"]==ftdb.types[T["id"]].attrnum
-	if "name" in T:
-		assert T["name"]==ftdb.types[T["id"]].name
-	if "dependent" in T:
-		assert T["dependent"]==ftdb.types[T["id"]].dependent
-	if "globalrefs" in T:
-		assert T["globalrefs"]==ftdb.types[T["id"]].globalrefs
-	if "values" in T:
-		assert T["values"]==ftdb.types[T["id"]].enumvalues
-	if "outerfn" in T:
-		assert T["outerfn"]==ftdb.types[T["id"]].outerfn
-	if "outerfnid" in T:
-		assert T["outerfnid"]==ftdb.types[T["id"]].outerfnid
-	if "implicit" in T:
-		assert T["implicit"]==ftdb.types[T["id"]].implicit
-	if "union" in T:
-		assert T["union"]==ftdb.types[T["id"]].isunion
-	if "refnames" in T:
-		assert T["refnames"]==ftdb.types[T["id"]].refnames
-	if "location" in T:
-		assert T["location"]==ftdb.types[T["id"]].location
-	if "variadic" in T:
-		assert T["variadic"]==ftdb.types[T["id"]].variadic
-	if "funrefs" in T:
-		assert T["funrefs"]==ftdb.types[T["id"]].funrefs
-	if "useddef" in T:
-		assert T["useddef"]==ftdb.types[T["id"]].useddef
-	if "defhead" in T:
-		assert T["defhead"]==ftdb.types[T["id"]].defhead
-	if "identifiers" in T:
-		assert T["identifiers"]==ftdb.types[T["id"]].identifiers
-	if "methods" in T:
-		assert T["methods"]==ftdb.types[T["id"]].methods
-	if "bitfields" in T:
-		assert T["bitfields"]==ftdb.types[T["id"]].bitfields,"%s vs %s"%(T["bitfields"],ftdb.types[T["id"]].bitfields)
-sys.stdout.write("\n")
+print(f"Memory use after running all tests - +{memoryDiff}MB")
+# if memoryDiff > 10:
+# 	print(f"Error: Leaked {memoryDiff}MB of memory during tests")
+# 	failures += 1
 
-for i,T in enumerate(db["types"]):
-	sys.stdout.write("\rChecking types [mapping interface]: %d/%d"%(i+1,len(db["types"])))
-	sys.stdout.flush()
-	assert T["id"]==ftdb["types"][T["id"]]["id"]
-	assert "fid" in ftdb["types"][T["id"]]
-	assert T["fid"]==ftdb["types"][T["id"]]["fid"]
-	assert "hash" in ftdb["types"][T["id"]]
-	assert T["hash"]==ftdb["types"][T["id"]]["hash"]
-	assert "class" in ftdb["types"][T["id"]]
-	assert T["class"]==ftdb["types"][T["id"]]["class"]
-	assert "qualifiers" in ftdb["types"][T["id"]]
-	assert T["qualifiers"]==ftdb["types"][T["id"]]["qualifiers"]
-	assert "size" in ftdb["types"][T["id"]]
-	assert T["size"]==ftdb["types"][T["id"]]["size"]
-	assert "str" in ftdb["types"][T["id"]]
-	assert T["str"]==ftdb["types"][T["id"]]["str"]
-	assert "refcount" in ftdb["types"][T["id"]]
-	assert T["refcount"]==ftdb["types"][T["id"]]["refcount"]
-	assert "refs" in ftdb["types"][T["id"]]
-	assert T["refs"]==ftdb["types"][T["id"]]["refs"]
-	if "usedrefs" in T:
-		assert "usedrefs" in ftdb["types"][T["id"]]
-		assert T["usedrefs"]==ftdb["types"][T["id"]]["usedrefs"]
-	else:
-		assert "usedrefs" not in ftdb["types"][T["id"]]
-	if "decls" in T:
-		assert "decls" in ftdb["types"][T["id"]]
-		assert T["decls"]==ftdb["types"][T["id"]]["decls"]
-	else:
-		assert "decls" not in ftdb["types"][T["id"]]
-	if "def" in T:
-		assert "def" in ftdb["types"][T["id"]]
-		assert T["def"]==ftdb["types"][T["id"]]["def"]
-	else:
-		assert "def" not in ftdb["types"][T["id"]]
-	if "memberoffsets" in T:
-		assert "memberoffsets" in ftdb["types"][T["id"]]
-		assert T["memberoffsets"]==ftdb["types"][T["id"]]["memberoffsets"]
-	else:
-		assert "memberoffsets" not in ftdb["types"][T["id"]]		
-	if "attrrefs" in T:
-		assert "attrrefs" in ftdb["types"][T["id"]]
-		assert T["attrrefs"]==ftdb["types"][T["id"]]["attrrefs"]
-	else:
-		assert "attrrefs" not in ftdb["types"][T["id"]]		
-	if "attrnum" in T:
-		assert "attrnum" in ftdb["types"][T["id"]]
-		assert T["attrnum"]==ftdb["types"][T["id"]]["attrnum"]
-	else:
-		assert "attrnum" not in ftdb["types"][T["id"]]		
-	if "name" in T:
-		assert "name" in ftdb["types"][T["id"]]
-		assert T["name"]==ftdb["types"][T["id"]]["name"]
-	else:
-		assert "name" not in ftdb["types"][T["id"]]		
-	if "dependent" in T:
-		assert "dependent" in ftdb["types"][T["id"]]
-		assert T["dependent"]==ftdb["types"][T["id"]]["dependent"]
-	else:
-		assert "dependent" not in ftdb["types"][T["id"]]		
-	if "globalrefs" in T:
-		assert "globalrefs" in ftdb["types"][T["id"]]
-		assert T["globalrefs"]==ftdb["types"][T["id"]]["globalrefs"]
-	else:
-		assert "globalrefs" not in ftdb["types"][T["id"]]		
-	if "values" in T:
-		assert "values" in ftdb["types"][T["id"]]
-		assert T["values"]==ftdb["types"][T["id"]]["values"]
-	else:
-		assert "values" not in ftdb["types"][T["id"]]		
-	if "outerfn" in T:
-		assert "outerfn" in ftdb["types"][T["id"]]
-		assert T["outerfn"]==ftdb["types"][T["id"]]["outerfn"]
-	else:
-		assert "outerfn" not in ftdb["types"][T["id"]]		
-	if "outerfnid" in T:
-		assert "outerfnid" in ftdb["types"][T["id"]]
-		assert T["outerfnid"]==ftdb["types"][T["id"]]["outerfnid"]
-	else:
-		assert "outerfnid" not in ftdb["types"][T["id"]]		
-	if "implicit" in T:
-		assert "implicit" in ftdb["types"][T["id"]]
-		assert T["implicit"]==ftdb["types"][T["id"]]["implicit"]
-	else:
-		assert "implicit" not in ftdb["types"][T["id"]]		
-	if "union" in T:
-		assert "union" in ftdb["types"][T["id"]]
-		assert T["union"]==ftdb["types"][T["id"]]["union"]
-	else:
-		assert "union" not in ftdb["types"][T["id"]]		
-	if "refnames" in T:
-		assert "refnames" in ftdb["types"][T["id"]]
-		assert T["refnames"]==ftdb["types"][T["id"]]["refnames"]
-	else:
-		assert "refnames" not in ftdb["types"][T["id"]]		
-	if "location" in T:
-		assert "location" in ftdb["types"][T["id"]]
-		assert T["location"]==ftdb["types"][T["id"]]["location"]
-	else:
-		assert "location" not in ftdb["types"][T["id"]]		
-	if "variadic" in T:
-		assert "variadic" in ftdb["types"][T["id"]]
-		assert T["variadic"]==ftdb["types"][T["id"]]["variadic"]
-	else:
-		assert "variadic" not in ftdb["types"][T["id"]]		
-	if "funrefs" in T:
-		assert "funrefs" in ftdb["types"][T["id"]]
-		assert T["funrefs"]==ftdb["types"][T["id"]]["funrefs"]
-	else:
-		assert "funrefs" not in ftdb["types"][T["id"]]		
-	if "useddef" in T:
-		assert "useddef" in ftdb["types"][T["id"]]
-		assert T["useddef"]==ftdb["types"][T["id"]]["useddef"]
-	else:
-		assert "useddef" not in ftdb["types"][T["id"]]		
-	if "defhead" in T:
-		assert "defhead" in ftdb["types"][T["id"]]
-		assert T["defhead"]==ftdb["types"][T["id"]]["defhead"]
-	else:
-		assert "defhead" not in ftdb["types"][T["id"]]		
-	if "identifiers" in T:
-		assert "identifiers" in ftdb["types"][T["id"]]
-		assert T["identifiers"]==ftdb["types"][T["id"]]["identifiers"]
-	else:
-		assert "identifiers" not in ftdb["types"][T["id"]]		
-	if "methods" in T:
-		assert "methods" in ftdb["types"][T["id"]]
-		assert T["methods"]==ftdb["types"][T["id"]]["methods"]
-	else:
-		assert "methods" not in ftdb["types"][T["id"]]		
-	if "bitfields" in T:
-		assert "bitfields" in ftdb["types"][T["id"]]
-		assert T["bitfields"]==ftdb["types"][T["id"]]["bitfields"],"%s vs %s"%(T["bitfields"],ftdb.types[T["id"]]["bitfields"])
-	else:
-		assert "bitfields" not in ftdb["types"][T["id"]]		
-sys.stdout.write("\n")
-
-for i,g in enumerate(db["globals"]):
-	sys.stdout.write("\rChecking globals [member interface]: %d/%d"%(i+1,len(db["globals"])))
-	sys.stdout.flush()
-	assert g["name"]==ftdb.globals[g["id"]].name
-	assert g["hash"]==ftdb.globals[g["id"]].hash
-	assert g["id"]==ftdb.globals[g["id"]].id
-	assert g["fid"]==ftdb.globals[g["id"]].fid
-	assert g["def"]==ftdb.globals[g["id"]].defstring
-	assert g["file"]==ftdb.globals[g["id"]].file
-	assert g["type"]==ftdb.globals[g["id"]].type
-	assert g["linkage"]==ftdb.globals[g["id"]].linkage_string,"%s vs %s"%(g["linkage"],ftdb.globals[g["id"]].linkage_string)
-	assert g["location"]==ftdb.globals[g["id"]].location
-	assert g["deftype"]==ftdb.globals[g["id"]].deftype
-	assert g["init"]==ftdb.globals[g["id"]].init
-	assert g["globalrefs"]==ftdb.globals[g["id"]].globalrefs
-	assert g["refs"]==ftdb.globals[g["id"]].refs
-	assert g["funrefs"]==ftdb.globals[g["id"]].funrefs
-	assert g["decls"]==ftdb.globals[g["id"]].decls
-	assert g["literals"]==ftdb.globals[g["id"]].literals,"%s vs %s"%(g["literals"],ftdb.globals[g["id"]].literals)
-	assert g["hasinit"]==ftdb.globals[g["id"]].hasinit
-sys.stdout.write("\n")
-
-for i,g in enumerate(db["globals"]):
-	sys.stdout.write("\rChecking globals [mapping interface]: %d/%d"%(i+1,len(db["globals"])))
-	sys.stdout.flush()
-	assert "name" in ftdb["globals"][g["id"]]
-	assert g["name"]==ftdb["globals"][g["id"]]["name"]
-	assert "hash" in ftdb["globals"][g["id"]]
-	assert g["hash"]==ftdb["globals"][g["id"]]["hash"]
-	assert "id" in ftdb["globals"][g["id"]]
-	assert g["id"]==ftdb["globals"][g["id"]]["id"]
-	assert "fid" in ftdb["globals"][g["id"]]
-	assert g["fid"]==ftdb["globals"][g["id"]]["fid"]
-	assert "def" in ftdb["globals"][g["id"]]
-	assert g["def"]==ftdb["globals"][g["id"]]["def"]
-	assert "file" in ftdb["globals"][g["id"]]
-	assert g["file"]==ftdb["globals"][g["id"]]["file"]
-	assert "type" in ftdb["globals"][g["id"]]
-	assert g["type"]==ftdb["globals"][g["id"]]["type"]
-	assert "linkage" in ftdb["globals"][g["id"]]
-	assert g["linkage"]==ftdb["globals"][g["id"]]["linkage"],"%s vs %s"%(g["linkage"],ftdb.globals[g["id"]]["linkage"])
-	assert "location" in ftdb["globals"][g["id"]]
-	assert g["location"]==ftdb["globals"][g["id"]]["location"]
-	assert "deftype" in ftdb["globals"][g["id"]]
-	assert g["deftype"]==ftdb["globals"][g["id"]]["deftype"]
-	assert "init" in ftdb["globals"][g["id"]]
-	assert g["init"]==ftdb["globals"][g["id"]]["init"]
-	assert "globalrefs" in ftdb["globals"][g["id"]]
-	assert g["globalrefs"]==ftdb["globals"][g["id"]]["globalrefs"]
-	assert "refs" in ftdb["globals"][g["id"]]
-	assert g["refs"]==ftdb["globals"][g["id"]]["refs"]
-	assert "funrefs" in ftdb["globals"][g["id"]]
-	assert g["funrefs"]==ftdb["globals"][g["id"]]["funrefs"]
-	assert "decls" in ftdb["globals"][g["id"]]
-	assert g["decls"]==ftdb["globals"][g["id"]]["decls"]
-	assert "literals" in ftdb["globals"][g["id"]]
-	assert g["literals"]==ftdb["globals"][g["id"]]["literals"],"%s vs %s"%(g["literals"],ftdb.globals[g["id"]]["literals"])
-	assert "hasinit" in ftdb["globals"][g["id"]]
-	assert g["hasinit"]==ftdb["globals"][g["id"]]["hasinit"]
-sys.stdout.write("\n")
-
-for i,fd in enumerate(db["funcdecls"]):
-	sys.stdout.write("\rChecking function declarations [member interface]: %d/%d"%(i+1,len(db["funcdecls"])))
-	sys.stdout.flush()
-	assert fd["name"]==ftdb.funcdecls[fd["id"]].name
-	assert fd["id"]==ftdb.funcdecls[fd["id"]].id
-	if "namespace" in fd:
-		assert fd["namespace"]==ftdb.funcdecls[fd["id"]].namespace
-	assert fd["fid"]==ftdb.funcdecls[fd["id"]].fid
-	assert fd["types"]==ftdb.funcdecls[fd["id"]].types
-	assert fd["decl"]==ftdb.funcdecls[fd["id"]].decl
-	assert fd["variadic"]==ftdb.funcdecls[fd["id"]].variadic
-	if "template" in fd:
-		assert fd["template"]==ftdb.funcdecls[fd["id"]].template
-	if "member" in fd:
-		assert fd["member"]==ftdb.funcdecls[fd["id"]].member
-	if "class" in fd:
-		assert fd["class"]==ftdb.funcdecls[fd["id"]].classname
-	if "classid" in fd:
-		assert fd["classid"]==ftdb.funcdecls[fd["id"]].classid
-	if "template_parameters" in fd:
-		assert fd["template_parameters"]==ftdb.funcdecls[fd["id"]].template_parameters
-	assert fd["signature"]==ftdb.funcdecls[fd["id"]].signature
-	assert fd["declhash"]==ftdb.funcdecls[fd["id"]].declhash
-	assert fd["nargs"]==ftdb.funcdecls[fd["id"]].nargs
-	assert fd["refcount"]==ftdb.funcdecls[fd["id"]].refcount
-	assert fd["location"]==ftdb.funcdecls[fd["id"]].location
-	assert fd["linkage"]==ftdb.funcdecls[fd["id"]].linkage_string
-sys.stdout.write("\n")
-
-for i,fd in enumerate(db["funcdecls"]):
-	sys.stdout.write("\rChecking function declarations [mapping interface]: %d/%d"%(i+1,len(db["funcdecls"])))
-	sys.stdout.flush()
-	assert "name" in ftdb["funcdecls"][fd["id"]]
-	assert fd["name"]==ftdb["funcdecls"][fd["id"]]["name"]
-	assert "id" in ftdb["funcdecls"][fd["id"]]
-	assert fd["id"]==ftdb["funcdecls"][fd["id"]]["id"]
-	if "namespace" in fd:
-		assert "namespace" in ftdb["funcdecls"][fd["id"]]
-		assert fd["namespace"]==ftdb["funcdecls"][fd["id"]]["namespace"]
-	else:
-		assert "namespace" not in ftdb["funcdecls"][fd["id"]]
-	assert "fid" in ftdb["funcdecls"][fd["id"]]
-	assert fd["fid"]==ftdb["funcdecls"][fd["id"]]["fid"]
-	assert "types" in ftdb["funcdecls"][fd["id"]]
-	assert fd["types"]==ftdb["funcdecls"][fd["id"]]["types"]
-	assert "decl" in ftdb["funcdecls"][fd["id"]]
-	assert fd["decl"]==ftdb["funcdecls"][fd["id"]]["decl"]
-	assert "variadic" in ftdb["funcdecls"][fd["id"]]
-	assert fd["variadic"]==ftdb["funcdecls"][fd["id"]]["variadic"]
-	if "template" in fd:
-		assert "template" in ftdb["funcdecls"][fd["id"]]
-		assert fd["template"]==ftdb["funcdecls"][fd["id"]]["template"]
-	else:
-		assert "template" not in ftdb["funcdecls"][fd["id"]]
-	if "member" in fd:
-		assert "member" in ftdb["funcdecls"][fd["id"]]
-		assert fd["member"]==ftdb["funcdecls"][fd["id"]]["member"]
-	else:
-		assert "member" not in ftdb["funcdecls"][fd["id"]]
-	if "class" in fd:
-		assert "class" in ftdb["funcdecls"][fd["id"]]
-		assert fd["class"]==ftdb["funcdecls"][fd["id"]]["class"]
-	else:
-		assert "class" not in ftdb["funcdecls"][fd["id"]]
-	if "classid" in fd:
-		assert "classid" in ftdb["funcdecls"][fd["id"]]
-		assert fd["classid"]==ftdb["funcdecls"][fd["id"]]["classid"]
-	else:
-		assert "classid" not in ftdb["funcdecls"][fd["id"]]
-	if "template_parameters" in fd:
-		assert "template_parameters" in ftdb["funcdecls"][fd["id"]]
-		assert fd["template_parameters"]==ftdb["funcdecls"][fd["id"]]["template_parameters"]
-	else:
-		assert "template_parameters" not in ftdb["funcdecls"][fd["id"]]
-	assert "signature" in ftdb["funcdecls"][fd["id"]]
-	assert fd["signature"]==ftdb["funcdecls"][fd["id"]]["signature"]
-	assert "declhash" in ftdb["funcdecls"][fd["id"]]
-	assert fd["declhash"]==ftdb["funcdecls"][fd["id"]]["declhash"]
-	assert "nargs" in ftdb["funcdecls"][fd["id"]]
-	assert fd["nargs"]==ftdb["funcdecls"][fd["id"]]["nargs"]
-	assert "refcount" in ftdb["funcdecls"][fd["id"]]
-	assert fd["refcount"]==ftdb["funcdecls"][fd["id"]]["refcount"]
-	assert "location" in ftdb["funcdecls"][fd["id"]]
-	assert fd["location"]==ftdb["funcdecls"][fd["id"]]["location"]
-	assert "linkage" in ftdb["funcdecls"][fd["id"]]
-	assert fd["linkage"]==ftdb["funcdecls"][fd["id"]]["linkage"]
-sys.stdout.write("\n")
-
-assert db["fops"]["varn"]==ftdb.fops.varn,"%d vs %d"%(db["fops"]["varn"],ftdb["fops"].varn)
-assert db["fops"]["membern"]==ftdb.fops.membern,"%d vs %d"%(db["fops"]["membern"],ftdb["fops"].membern)
-for i,v in enumerate(db["fops"]["vars"]):
-	sys.stdout.write("\rChecking fops [member interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
-	sys.stdout.flush()
-	assert v["type"]==ftdb.fops[i].type
-	assert v["name"]==ftdb.fops[i].name
-	assert sorted(v["members"].items())==sorted(ftdb.fops[i].members.items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i].members.items()))
-	assert v["location"]==ftdb.fops[i].location
-sys.stdout.write("\n")
-
-assert db["fops"]["varn"]==ftdb["fops"]["varn"],"%d vs %d"%(db["fops"]["varn"],ftdb["fops"]["varn"])
-assert db["fops"]["membern"]==ftdb["fops"]["membern"],"%d vs %d"%(db["fops"]["membern"],ftdb["fops"]["membern"])
-for i,v in enumerate(db["fops"]["vars"]):
-	sys.stdout.write("\rChecking fops [mapping interface]: %d/%d"%(i+1,len(db["fops"]["vars"])))
-	sys.stdout.flush()
-	assert v["type"]==ftdb["fops"][i]["type"]
-	assert v["name"]==ftdb["fops"][i]["name"]
-	assert sorted(v["members"].items())==sorted(ftdb.fops[i]["members"].items()),"%s vs %s"%(sorted(v["members"].items()),sorted(ftdb.fops[i]["members"].items()))
-	assert v["location"]==ftdb["fops"][i]["location"]
-sys.stdout.write("\n")
+if failures == 0:
+	print("\033[0;32mSUCCESS\033[0m: All FTDB tests were successful")
+	sys.exit(0)
+else:
+	print("\033[0;31mFAIL\033[0m: Some tests failed")
+	sys.exit(1)
