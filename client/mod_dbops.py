@@ -191,7 +191,7 @@ class StoreCache(Module):
 
             start_time = time.time()
             print("creating cache from json database ...")
-            shared_args = self.args.shared_argvs.split(":") if self.args.shared_argvs else []
+            shared_args = self.args.shared_argvs.split(":") if self.args.shared_argvs else ['-shared','--shared']
             libcas.CASDatabase.create_db_image(json_db_filename, src_root, self.args.set_version, self.args.exclude_command_patterns, shared_args, cache_db_filename, self.args.debug)
             print("cache stored [%.2fs]" % (time.time() - start_time))
 
