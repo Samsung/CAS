@@ -23,6 +23,13 @@ MODULE_DESCRIPTION("Module that tracks multiple syscalls via tracepoints infrast
 MODULE_AUTHOR("SRPOL.MB.SEC");
 MODULE_LICENSE("GPL");
 
+#if defined(GIT_COMMIT) && defined(COMPILATION_TIME)
+#define TRACER_VERSION GIT_COMMIT ", compiled " COMPILATION_TIME
+#else
+#define TRACER_VERSION "unknown"
+#warning "Tracer version info unavailable"
+#endif
+
 // _THIS_IP_ is used internally by trace_printk() macro to show the address of
 // code that the given trace log comes from. We don't need that, so to make the
 // log a bit smaller (and keep compatibility with older solution based on
@@ -1626,6 +1633,7 @@ static void register_tracepoints(struct tracepoint *tp, void *ignore)
 
 static int et_init(void)
 {
+	pr_info("BAS tracer [" TRACER_VERSION "]");
 	pr_info("et_init called\n");
 
 	if (ignore_repeated_opens) {
