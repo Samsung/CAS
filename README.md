@@ -32,7 +32,7 @@ Together BAS with FTDB forms a tightly related toolset which was collectively na
 CAS is split into three separate functionalities (stored in three separate source directories):
 * build tracer ([tracer](tracer) directory)
 
-This is the Linux kernel module for tracing specific syscalls executed during build. The module file produced is **execve_trace.ko**. More details about tracer operation can be found in [readme](tracer/README.md) file.
+This is the Linux kernel module for tracing specific syscalls executed during build. The module file produced is **bas_tracer.ko**. More details about tracer operation can be found in [readme](tracer/README.md) file.
 
 * BAS tools ([bas](bas) directory)
 

@@ -1,4 +1,4 @@
-#define pr_fmt(fmt) "exec_trace: " fmt
+#define pr_fmt(fmt) "bas_tracer: " fmt
 
 #include <asm/syscall.h>
 #include <linux/binfmts.h>

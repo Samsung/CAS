@@ -1,6 +1,6 @@
 KERNEL_PATH ?= /lib/modules/$(shell uname -r)/build
 
-obj-m += execve_trace.o
+obj-m += bas_tracer.o
 
 all:
 	make -C $(KERNEL_PATH) M=$(PWD) modules

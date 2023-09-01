@@ -82,7 +82,7 @@ if [ "$SAVE_KERNEL_LOG" = "y" ]; then
     KLOGGER_PID="$!"
 fi
 
-# -------- install execve_trace module
+# -------- install bas_tracer module
 MYPID="$$"
 if (( $EUID != 0 )); then
     sudo -n setup_etrace.sh -i $MYPID $MODULE_PARAMS
@@ -98,7 +98,7 @@ fi
 "$@"
 RV="$?"
 
-# -------- remove execve_trace module
+# -------- remove bas_tracer module
 if (( $EUID != 0 )); then
     sudo -n setup_etrace.sh -r
 else

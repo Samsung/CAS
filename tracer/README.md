@@ -50,28 +50,28 @@ $ sudo mount -t debugfs none /sys/kernel/debug
 This module traces the whole process tree starting from a given root pid. To start the module, use insmod or modprobe:
 ```bash
 # run from tracer directory
-$ sudo insmod execve_trace.ko root_pid=<pid>
+$ sudo insmod bas_tracer.ko root_pid=<pid>
 
 # can be run from anywhere if "sudo make modules_install" was done
-$ sudo modprobe execve_trace root_pid=<pid>
+$ sudo modprobe bas_tracer root_pid=<pid>
 ```
 specifying the process tree root pid in root_pid parameter. Currently, only pids from root namespace are supported.
 
 Successful start is indicated in dmesg:
 ```
-[ 1573.426731] exec_trace: et_init called
-[ 1573.426733] exec_trace: Attaching to tracepoint: sys_enter
-[ 1573.427357] exec_trace: Attaching to tracepoint: sys_exit
-[ 1573.427794] exec_trace: Attaching to tracepoint: sched_process_exit
-[ 1573.428207] exec_trace: Attaching to tracepoint: sched_process_fork
-[ 1573.428621] exec_trace: Attaching to tracepoint: sched_process_exec
-[ 1573.429076] exec_trace: Module loaded
+[  269.189775] bas_tracer: et_init called
+[  269.190147] bas_tracer: Attaching to tracepoint: sys_enter
+[  269.190689] bas_tracer: Attaching to tracepoint: sys_exit
+[  269.191225] bas_tracer: Attaching to tracepoint: sched_process_exit
+[  269.191830] bas_tracer: Attaching to tracepoint: sched_process_fork
+[  269.192440] bas_tracer: Attaching to tracepoint: sched_process_exec
+[  269.193142] bas_tracer: Module loaded
 
 ```
 
 To remove the module use rmmod:
 ```bash
-$ sudo rmmod execve_trace
+$ sudo rmmod bas_tracer
 ```
 
 The module puts data about traced processes into trace_pipe:

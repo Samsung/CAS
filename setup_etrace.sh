@@ -51,11 +51,11 @@ elif [ "$1" = "-i" ]; then
     SUPPORT_NS_PID=""
 	uname -r | grep WSL > /dev/null && SUPPORT_NS_PID="support_ns_pid=1"
     echo SUPPORT_NS_PID=$SUPPORT_NS_PID
-	/sbin/modprobe execve_trace root_pid="$2" "$SUPPORT_NS_PID" "${@:3}"
+	/sbin/modprobe bas_tracer root_pid="$2" "$SUPPORT_NS_PID" "${@:3}"
 	exit "$?"
 
 elif [ "$1" = "-r" ]; then
-	/sbin/rmmod execve_trace
+	/sbin/rmmod bas_tracer
 	exit "$?"
 else
 	print_usage
