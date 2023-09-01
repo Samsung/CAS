@@ -94,27 +94,16 @@ int libftdb_ftdb_bool(PyObject* self) {
 
 PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject* kwargs ) {
 
-    const char* cache_filename = ".db.json.img";
-
-    if (PyTuple_Size(args)>0) {
-    	cache_filename = PyBytes_AsString(PyUnicode_AsASCIIString(PyTuple_GetItem(args,0)));
-    }
-
-    PyObject* py_debug = PyUnicode_FromString("debug");
-    PyObject* py_quiet = PyUnicode_FromString("quiet");
-
-    int debug = self->debug;
+	static char* kwlist[] = {"filename", "quiet", "debug", NULL};
+    const char* cache_filename = "db.img";
+	int debug = self->debug;
     int quiet = 0;
     bool err = true;
 
-    if (kwargs) {
-    	if (PyDict_Contains(kwargs,py_debug)) {
-    		debug = PyLong_AsLong(PyDict_GetItem(kwargs,py_debug));
-    	}
-    	if (PyDict_Contains(kwargs,py_quiet)) {
-			quiet = PyLong_AsLong(PyDict_GetItem(kwargs,py_quiet));
-		}
-    }
+	if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|s$pp", kwlist,
+		&cache_filename, &quiet, &debug))
+		return NULL;	/* Exception is already set by PyArg_ParseTupleAndKeywords */
+
 
     DBG( debug, "--- libftdb_ftdb_load(\"%s\")\n",cache_filename);
 
@@ -167,9 +156,6 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
 	err = false;
 
 done:
-	Py_DecRef(py_debug);
-	Py_DecRef(py_quiet);
-	PYASSTR_DECREF(cache_filename);
 	if (err) {
 		self->ftdb = self->unflatten = NULL;
 		return NULL;	/* Indicate that exception has been set */
