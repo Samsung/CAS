@@ -127,7 +127,7 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
 	if(!in) {
 		in = fopen(cache_filename, "rb");
 		if(!in) {
-			PyErr_SetString(libftdb_ftdbError, "Cannot open cache file");
+			PyErr_Format(libftdb_ftdbError, "Cannot open cache file - (%d) %s", errno, strerror(errno));
 			goto done;
 		}
 	}
@@ -150,6 +150,19 @@ PyObject* libftdb_ftdb_load(libftdb_ftdb_object* self, PyObject* args, PyObject*
 	fclose(in);
 
     self->ftdb = (const struct ftdb*) unflatten_root_pointer_next(self->unflatten);
+
+	/* Check whether it's correct file and in supported version */
+	if(self->ftdb->db_magic != FTDB_MAGIC_NUMBER) {
+		PyErr_Format(libftdb_ftdbError, "Failed to parse cache file - invalid magic %p", self->ftdb->db_magic);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+	if(self->ftdb->db_version != FTDB_VERSION) {
+		PyErr_Format(libftdb_ftdbError, "Failed to parse cache file - unsupported image version %p (required: %p)", self->ftdb->db_version, FTDB_VERSION);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+
 	self->init_done = 1;
 	err = false;
 
@@ -157,8 +170,10 @@ done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 	PYASSTR_DECREF(cache_filename);
-	if (err) 
+	if (err) {
+		self->ftdb = self->unflatten = NULL;
 		return NULL;	/* Indicate that exception has been set */
+	}
 	Py_RETURN_TRUE;
 }
 
@@ -8844,7 +8859,9 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 
-	struct ftdb ftdb = {};
+	struct ftdb ftdb = {0};
+	ftdb.db_magic = FTDB_MAGIC_NUMBER;
+	ftdb.db_version = FTDB_VERSION;
 
 	VALIDATE_FTDB_ENTRY(dbJSON,funcs);
 	VALIDATE_FTDB_ENTRY(dbJSON,funcdecls);

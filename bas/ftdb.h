@@ -3,6 +3,17 @@
 
 #include "maps.h"
 
+/*
+ * FTDB version tracking. Make sure to modify these values after every change
+ *  to libftdb that could affect backward compatibility.
+ * 
+ * FTDB_MAGIC_NUMBER - distinguish FTDB database from other .img files
+ * FTDB_VERSION - required libftdb version to support file
+ */
+#define FTDB_MAGIC_NUMBER		0x4244544642494cULL		/* b'LIBFTDB\0' */
+#define FTDB_VERSION			2ULL
+
+
 enum functionLinkage {
 	LINKAGE_NONE,
 	LINKAGE_INTERNAL,
@@ -783,6 +794,11 @@ struct BAS_item {
 };
 
 struct ftdb {
+	/* FTDB.img header - DO NOT modify */
+	unsigned long long db_magic;
+	unsigned long long db_version;
+	/* End of FTDB.img header */
+
 	struct ftdb_func_entry* funcs;
 	unsigned long funcs_count;
 	struct ftdb_funcdecl_entry* funcdecls;

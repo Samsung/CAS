@@ -421,7 +421,7 @@ else()
 endif()
 
 add_custom_command(OUTPUT libuflat_x86_64.a PRE_LINK
-                    COMMAND make -j8 uflat
+                    COMMAND $(MAKE) uflat
                     COMMAND ${CMAKE_COMMAND} -E copy lib/libuflat_x86_64.a ${PROJECT_BINARY_DIR}/.
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/kflat
 )

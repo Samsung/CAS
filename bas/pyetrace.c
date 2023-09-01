@@ -774,7 +774,10 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args, PyObject* kwar
 	PyObject* osModule = PyImport_Import(osModuleString);
 	PyObject* pathJoinFunction = PyObject_GetAttrString(osModule,(char*)"join");
 
-	struct nfsdb nfsdb = {};
+	struct nfsdb nfsdb = {0};
+	nfsdb.db_magic = NFSDB_MAGIC_NUMBER;
+	nfsdb.db_version = LIBETRACE_VERSION;
+
 	nfsdb.source_root = PyString_get_c_str(source_root);
 	nfsdb.source_root_size = strlen(nfsdb.source_root);
 	nfsdb.dbversion = PyString_get_c_str(dbversion);
@@ -1109,7 +1112,9 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 
-	struct nfsdb_deps nfsdb_deps = {};
+	struct nfsdb_deps nfsdb_deps = {0};
+	nfsdb_deps.db_magic = NFSDB_DEPS_MAGIC_NUMBER;
+	nfsdb_deps.db_version = LIBETRACE_VERSION;
 
 	/* Make a cache string table object */
 	PyObject* stringTable = PyDict_New();
@@ -3627,7 +3632,7 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 	if (!in) {
 		in = fopen(cache_filename, "rb");
 		if(!in) {
-			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
+			PyErr_Format(libetrace_nfsdbError, "Cannot open cache file - (%d) %s", errno, strerror(errno));
 			goto done;
 		}
 	}
@@ -3654,6 +3659,20 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 	fclose(in);
 
     self->nfsdb = (const struct nfsdb*) unflatten_root_pointer_next(self->unflatten);
+
+	/* Check whether it's correct file and in supported version */
+	if(self->nfsdb->db_magic != NFSDB_MAGIC_NUMBER) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - invalid magic %p", self->nfsdb->db_magic);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+	if(self->nfsdb->db_version != LIBETRACE_VERSION) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)", 
+						self->nfsdb->db_version, LIBETRACE_VERSION);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+
 	self->init_done = 1;
 	err = false;
 
@@ -3679,7 +3698,7 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 
 	int debug = self->debug;
 	int quiet = 0;
-	int err=0;
+	bool err = true;
 
 	if (kwargs) {
 		if (PyDict_Contains(kwargs,py_debug)) {
@@ -3701,7 +3720,7 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 	if (!in) {
 		in = fopen(cache_filename, "rb");
 		if(!in) {
-			PyErr_SetString(libetrace_nfsdbError, "Cannot open cache file");
+			PyErr_Format(libetrace_nfsdbError, "Cannot open cache file - (%d) %s", errno, strerror(errno));
 			goto done;
 		}
 	}
@@ -3728,13 +3747,30 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 	fclose(in);
 
 	self->nfsdb_deps = (const struct nfsdb_deps*) unflatten_root_pointer_next(self->unflatten_deps);
-	err = 1;
+
+	/* Check whether it's correct file and in supported version */
+	if(self->nfsdb_deps->db_magic != NFSDB_DEPS_MAGIC_NUMBER) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - invalid magic %p", self->nfsdb_deps->db_magic);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+	if(self->nfsdb_deps->db_version != LIBETRACE_VERSION) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)", 
+						self->nfsdb_deps->db_version, LIBETRACE_VERSION);
+		unflatten_deinit(self->unflatten);
+		goto done;
+	}
+
+	err = false;
 
 done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 	PYASSTR_DECREF(cache_filename);
-	if (!err) Py_RETURN_FALSE;
+	if (err) {
+		self->nfsdb_deps = NULL;
+		return NULL;
+	}
 	Py_RETURN_TRUE;
 }
 

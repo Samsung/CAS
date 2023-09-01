@@ -3,6 +3,19 @@
 
 #include "maps.h"
 
+/*
+ * .nfsdb and .nfsdb.deps version tracking. Make sure to modify these values 
+ *  after every change to libetrace that could affect backward compatibility.
+ * 
+ * NFSDB_MAGIC_NUMBER - distinguish .nfsdb database from other .img files
+ * NFSDB_DEPS_MAGIC_NUMBER - distinguish .deps database from other .img files
+ * LIBETRACE_VERSION - required etrace version to support file
+ */
+#define NFSDB_MAGIC_NUMBER			0x424453464e42494cULL	/* b'LIBNFSDB' */
+#define NFSDB_DEPS_MAGIC_NUMBER		0x5350454442494cULL		/* b'LIBDEPS\0' */
+#define LIBETRACE_VERSION			2ULL
+
+
 struct eid {
 	unsigned long pid;
 	unsigned long exeidx;
@@ -80,6 +93,11 @@ struct nfsdb_entry {
 };
 
 struct nfsdb_deps {
+	/* nfsdb.deps.img header - DO NOT modify */
+	unsigned long long db_magic;
+	unsigned long long db_version;
+	/* End of FTDB.img header */
+
 	struct rb_root depmap;
 	struct rb_root ddepmap;
 	struct rb_root revdepmap;
@@ -87,6 +105,11 @@ struct nfsdb_deps {
 };
 
 struct nfsdb {
+	/* nfsdb.img header - DO NOT modify */
+	unsigned long long db_magic;
+	unsigned long long db_version;
+	/* End of FTDB.img header */
+
 	struct nfsdb_entry* nfsdb;
 	unsigned long nfsdb_count;
 	const char* source_root;
