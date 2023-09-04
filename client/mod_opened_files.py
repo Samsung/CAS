@@ -105,10 +105,9 @@ class ProcRef(Module, PipedModule, FilterableModule):
 
     def get_data(self) -> tuple:
         if self.args.show_commands:
-            data = list({
-                ent  # TODO: consider with-children arg
-                for ent in self.nfsdb.get_entries_with_pids([(int(pid),) for pid in self.args.pid])
-                if self.filter_exec(ent)
+            data = list({ self.get_exec_of_open(o)
+                for o in self.yield_open_from_pid([(int(pid),) for pid in self.args.pid])
+                if self.filter_exec(self.get_exec_of_open(o)) and self.filter_open(o)
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))

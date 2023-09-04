@@ -38,7 +38,7 @@ class Compiled(Module, FilterableModule):
                 ent
                 for ent in self.nfsdb.filtered_execs_iter(self.command_filter.libetrace_filter if self.command_filter else None, has_comp_info=True)
                 for o in ent.compilation_info.files
-                if self.filter_open(o)
+                if self.filter_open(o) and self.filter_exec(ent)
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))
@@ -107,7 +107,7 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
                 oo.opaque
                 for opn in self.nfsdb.get_opens_of_path(self.args.path)
                 for oo in opn.parent.parent.opens_with_children
-                if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo)
+                if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo) and self.filter_exec(oo.opaque)
             })
             return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0]
         else:

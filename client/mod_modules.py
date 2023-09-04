@@ -44,8 +44,8 @@ class LinkedModules(Module, PipedModule, FilterableModule):
             data = list({
                 o.opaque
                 for o in self.nfsdb.linked_modules()
-                if o.opaque is not None and self.filter_open(o)
-            } if self.needs_open_filtering() else {
+                if o.opaque is not None and self.filter_open(o) and self.filter_exec(o.opaque)
+            } if self.needs_open_filtering() or self.needs_exec_filtering() else {
                 o.parent
                 for o in self.nfsdb.linked_modules()
             })
@@ -130,11 +130,11 @@ class ModDepsFor(Module, PipedModule, FilterableModule):
             data = list({
                 o.parent if self.args.all else o.opaque
                 for o in self.nfsdb.get_module_dependencies(self.args.path, direct=self.args.direct)
-                if o.path in linked_modules and (self.args.all or o.opaque is not None) and self.filter_open(o)
+                if o.path in linked_modules and (self.args.all or o.opaque is not None) and self.filter_open(o) and self.filter_exec(o.parent)
             } if self.args.generate else {
                 o.parent
                 for o in self.nfsdb.get_module_dependencies(self.args.path, direct=self.args.direct)
-                if o.path in linked_modules and self.filter_open(o)
+                if o.path in linked_modules and self.filter_open(o) and self.filter_exec(o.parent)
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid

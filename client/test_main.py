@@ -870,6 +870,17 @@ class TestCompiled:
         for ent in ret:
             assert ent.split(RAW_SEP)[0].endswith(".cpp") and not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
+    def test_commands(self):
+        ret = get_json_entries("compiled --filter=[path=*.cpp,type=wc] --commands --command-filter=[bin=*clang++,type=wc] --json", 20000, 50000, is_command)
+        for ent in ret["entries"]:
+            assert any([c for c,t in ent['compiled'].items() if c.endswith(".cpp")]) and ent['bin'].endswith("/clang++")
+
+    def test_commands_raw(self):
+        ret = get_raw("compiled --filter=[path=*.cpp,type=wc] --commands --command-filter=[bin=*clang++,type=wc] ", 20000, 50000, is_raw_command)
+        for ent in ret:
+            assert ent.split(RAW_SEP)[8].split(":")[0].endswith(".cpp") and \
+            ent.split(RAW_SEP)[4].endswith("/clang++")
+
     def test_compile_commands(self):
         ret = get_json_entries("compiled --commands --json -n=0", 50000, 150000, is_command, timeout=10)
         for ent in ret["entries"]:
@@ -1006,6 +1017,16 @@ class TestDepsFor:
     def test_commands_raw(self, vmlinux):
         get_raw(f"deps_for --path={vmlinux} --commands", 2000, 20000, is_raw_command)
 
+    def test_commands_filter(self, vmlinux):
+        ret = get_json_entries(f"deps_for --path={vmlinux} --filter=[path=*common.o,type=wc] --commands --command-filter=[bin=*/ld.lld,type=wc] --json", 1, 100, is_command)
+        for ent in ret["entries"]:
+            assert ent['bin'].endswith("/ld.lld") and ( ent['linked'].endswith("common.o") or ent['linked'].endswith("vmlinux") )
+
+    def test_commands_filter_raw(self, vmlinux):
+        ret = get_raw(f"deps_for --path={vmlinux} --filter=[path=*common.o,type=wc] --commands --command-filter=[bin=*/ld.lld,type=wc] ", 1, 100, is_raw_command)
+        for ent in ret:
+            assert ent.split(RAW_SEP)[4].endswith("/ld.lld") and ( ent.split(RAW_SEP)[7].endswith("common.o") or ent.split(RAW_SEP)[7].endswith("vmlinux") )
+
     def test_generate(self, vmlinux):
         get_json_simple(f"deps_for --path={vmlinux} --commands --generate -n=0 --json", 1500, 4000, is_generated)
 
@@ -1130,6 +1151,16 @@ class TestLinkedModules:
 
     def test_commands_raw(self):
         get_raw("linked_modules --filter=[path=*vmlinux,type=wc,exists=1]and[compressed,negate=1] --commands", 1, 1, is_raw_command)
+
+    def test_commands_filter(self):
+        ret = get_json_entries("linked_modules --filter=[path=*data.*,type=wc] --commands --command-filter=[bin=*llvm-ar,type=wc] --json", 1, 100, is_command)
+        for ent in ret["entries"]:
+            assert ent['bin'].endswith("llvm-ar") and ent['linked'].endswith("data.a")
+
+    def test_commands_filter_raw(self):
+        ret = get_raw("linked_modules --filter=[path=*data.*,type=wc] --commands --command-filter=[bin=*llvm-ar,type=wc]", 1, 100, is_raw_command)
+        for ent in ret:
+            assert ent.split(RAW_SEP)[4].endswith("llvm-ar") and ent.split(RAW_SEP)[7].endswith("data.a")
 
     def test_details(self):
         get_json_entries("linked_modules --details -n=0 --json", 2000, 15000, is_open_details)
@@ -1562,6 +1593,16 @@ class TestRevDepsFor:
 
     def test_filter_raw(self, compiled_file):
         get_raw(f"revdeps_for --path={compiled_file} --filter=[path=*curl*,type=wc]", 1, 20, is_normpath)
+
+    def test_filter_commands(self, compiled_file):
+        ret = get_json_entries(f"revdeps_for --path={compiled_file} --filter=[path=*curl*,type=wc] --commands --command-filter=[bin=*ld.lld,type=wc] --json", 1, 20, is_command)
+        for ent in ret['entries']:
+            assert ent['bin'].endswith("ld.lld")
+
+    def test_filter_commands_raw(self, compiled_file):
+        ret = get_raw(f"revdeps_for --path={compiled_file} --filter=[path=*curl*,type=wc] --commands --command-filter=[bin=*ld.lld,type=wc]", 1, 20, is_raw_command)
+        for ent in ret:
+            assert ent.split(RAW_SEP)[4].endswith("ld.lld")
 
     def test_relative(self, compiled_file):
         ret = get_json_entries(f"revdeps_for --path={compiled_file} --filter=[path=*curl*,type=wc] --json --relative", 1, 20, is_normpath)

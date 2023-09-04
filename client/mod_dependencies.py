@@ -94,7 +94,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
                 self.get_exec_of_open(d)
                 for o in self.get_multi_deps(paths)
                 for d in o
-                if self.filter_open(d) and self.should_display(d)
+                if self.filter_exec(self.get_exec_of_open(d)) and self.should_display(d) and self.filter_open(d)
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))
@@ -195,7 +195,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
             data = list({
                 o.opaque
                 for o in rdeps
-                if self.filter_exec(o.opaque)
+                if self.filter_exec(o.opaque) and self.filter_open(o)
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid
