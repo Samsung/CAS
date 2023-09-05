@@ -1611,7 +1611,6 @@ PyObject* libftdb_ftdb_func_entry_repr(PyObject* self) {
 	return PyUnicode_FromString(repr);
 }
 
-/* TODO: leaks */
 PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyObject *args) {
 
 	PyObject* json_entry = PyDict_New();
@@ -1667,7 +1666,9 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 			PyList_Append(taint_list,py_taint_element);
 			Py_DecRef(py_taint_element);
 		}
-		PyDict_SetItem(taint,PyUnicode_FromFormat("%lu",i),taint_list);
+		PyObject* key = PyUnicode_FromFormat("%lu",i);
+		PyDict_SetItem(taint,key,taint_list);
+		Py_DecRef(key);
 	}
 	FTDB_SET_ENTRY_PYOBJECT(json_entry,taint,taint);
 
@@ -1816,6 +1817,8 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 				PyList_Append(py_case_info,raw_code);
 				Py_DecRef(raw_code);
 			}
+			PyList_Append(cases,py_case_info);
+			Py_DecRef(py_case_info);
 		}
 		FTDB_SET_ENTRY_PYOBJECT(py_switch_info,cases,cases);
 		PyList_Append(switches,py_switch_info);
@@ -2147,7 +2150,6 @@ PyObject* libftdb_ftdb_func_entry_get_linkage(PyObject* self, void* closure) {
 
 	return PyLong_FromLong((long)__self->entry->linkage);
 }
-
 
 PyObject* libftdb_ftdb_func_entry_get_linkage_string(PyObject* self, void* closure) {
 
