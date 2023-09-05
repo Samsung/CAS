@@ -402,6 +402,8 @@ PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_next_entry(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_prev_entry(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_binary(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_cwd(PyObject* self, void* closure);
@@ -448,6 +450,8 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"parent",libetrace_nfsdb_entry_get_parent,0,"nfsdb entry parent entry",0},
 	{"child_cids",libetrace_nfsdb_entry_get_child_cids,0,"nfsdb entry child cids list",0},
 	{"childs",libetrace_nfsdb_entry_get_childs,0,"nfsdb entry childs list",0},
+	{"next",libetrace_nfsdb_entry_get_next_entry,0,"get the next execution entry in the same process (if this is the last execution, returns None)",0},
+	{"prev",libetrace_nfsdb_entry_get_prev_entry,0,"get the prev execution entry in the same process (if this is the first execution, returns None)",0},
 	{"binary",libetrace_nfsdb_entry_get_binary,0,"nfsdb entry binary value",0},
 	{"cwd",libetrace_nfsdb_entry_get_cwd,0,"nfsdb entry cwd value",0},
 	{"bpath",libetrace_nfsdb_entry_get_bpath,0,"nfsdb entry binary path value",0},

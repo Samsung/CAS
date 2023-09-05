@@ -4379,6 +4379,44 @@ PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
 	return cL;
 }
 
+PyObject* libetrace_nfsdb_entry_get_next_entry(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+	unsigned long next_index = __self->entry->nfsdb_index+1;
+
+	if ((next_index<__self->nfsdb->nfsdb_count) && (__self->nfsdb->nfsdb[next_index].eid.pid==__self->entry->eid.pid)) {
+		PyObject* args = PyTuple_New(2);
+		PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
+		PYTUPLE_SET_ULONG(args,1,next_index);
+		PyObject *next_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryType, args);
+		Py_DECREF(args);
+		return next_entry;
+	}
+
+	Py_RETURN_NONE;
+}
+
+PyObject* libetrace_nfsdb_entry_get_prev_entry(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	if (__self->entry->nfsdb_index<=0) {
+		Py_RETURN_NONE;
+	}
+	unsigned long prev_index = __self->entry->nfsdb_index-1;
+
+	if (__self->nfsdb->nfsdb[prev_index].eid.pid==__self->entry->eid.pid) {
+		PyObject* args = PyTuple_New(2);
+		PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self->nfsdb);
+		PYTUPLE_SET_ULONG(args,1,prev_index);
+		PyObject *prev_entry = PyObject_CallObject((PyObject *) &libetrace_nfsdbEntryType, args);
+		Py_DECREF(args);
+		return prev_entry;
+	}
+
+	Py_RETURN_NONE;
+}
+
 PyObject* libetrace_nfsdb_entry_get_binary(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
