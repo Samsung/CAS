@@ -4345,6 +4345,11 @@ PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure) {
 	PyObject* cL = PyList_New(0);
 
 	for (unsigned long i=0; i<__self->entry->child_ids_count; ++i) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,__self->entry->child_ids[i].pid);
+		if (!node) {
+			printf("WARNING: Missing child pid entry [%ld] created from process [%ld:%ld]\n",__self->entry->child_ids[i].pid,__self->entry->eid.pid,__self->entry->eid.exeidx);
+			continue;
+		}
 		PyObject* args = PyTuple_New(2);
 		PYTUPLE_SET_ULONG(args,0,__self->entry->child_ids[i].pid);
 		PYTUPLE_SET_ULONG(args,1,__self->entry->child_ids[i].flags);
@@ -4358,13 +4363,15 @@ PyObject* libetrace_nfsdb_entry_get_child_cids(PyObject* self, void* closure) {
 
 PyObject* libetrace_nfsdb_entry_get_childs(PyObject* self, void* closure) {
 
-	static char errmsg[ERRMSG_BUFFER_SIZE];
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 	PyObject* cL = PyList_New(0);
 
 	for (unsigned long i=0; i<__self->entry->child_ids_count; ++i) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->procmap,__self->entry->child_ids[i].pid);
-		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Invalid pid key [%ld] at nfsdb entry",__self->entry->child_ids[i].pid);
+		if (!node) {
+			printf("WARNING: Missing child pid entry [%ld] created from process [%ld:%ld]\n",__self->entry->child_ids[i].pid,__self->entry->eid.pid,__self->entry->eid.exeidx);
+			continue;
+		}
 		struct nfsdb_entry* entry = node->entry_list[0];
 
 		PyObject* args = PyTuple_New(2);
