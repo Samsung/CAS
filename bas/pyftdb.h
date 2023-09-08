@@ -648,10 +648,12 @@ PyObject* libftdb_ftdb_func_callinfo_entry_get_expr(PyObject* self, void* closur
 PyObject* libftdb_ftdb_func_callinfo_entry_get_loc(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_get_csid(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_callinfo_entry_get_args(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_func_callinfo_entry_json(libftdb_ftdb_func_callinfo_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_func_callinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_callinfo_entry_sq_contains(PyObject* self, PyObject* key);
 
 static PyMethodDef libftdb_ftdbFuncCallInfoEntry_methods[] = {
+	{"json",(PyCFunction)libftdb_ftdb_func_callinfo_entry_json,METH_VARARGS,"Returns the json representation of the callinfo entry"},
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

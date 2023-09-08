@@ -3345,6 +3345,24 @@ PyObject* libftdb_ftdb_func_callinfo_entry_get_args(PyObject* self, void* closur
 	return args;
 }
 
+PyObject* libftdb_ftdb_func_callinfo_entry_json(libftdb_ftdb_func_callinfo_entry_object *self, PyObject *args) {
+
+	PyObject* py_callinfo_entry = PyDict_New();
+
+	FTDB_SET_ENTRY_STRING(py_callinfo_entry,start,self->entry->start);
+	FTDB_SET_ENTRY_STRING(py_callinfo_entry,end,self->entry->end);
+	FTDB_SET_ENTRY_ULONG(py_callinfo_entry,ord,self->entry->ord);
+	FTDB_SET_ENTRY_STRING(py_callinfo_entry,expr,self->entry->expr);
+	FTDB_SET_ENTRY_STRING_OPTIONAL(py_callinfo_entry,loc,self->entry->loc);
+	FTDB_SET_ENTRY_INT64(py_callinfo_entry,csid,self->entry->csid);
+	PyObject* py_args = PyList_New(0);
+	for (unsigned long i=0; i<self->entry->args_count; ++i) {
+		PYLIST_ADD_ULONG(py_args,self->entry->args[i]);
+	}
+	FTDB_SET_ENTRY_PYOBJECT(py_callinfo_entry,args,py_args);
+	return py_callinfo_entry;
+}
+
 PyObject* libftdb_ftdb_func_callinfo_entry_mp_subscript(PyObject* self, PyObject* slice) {
 
 	static char errmsg[ERRMSG_BUFFER_SIZE];
