@@ -11,7 +11,7 @@
  * FTDB_VERSION - required libftdb version to support file
  */
 #define FTDB_MAGIC_NUMBER		0x4244544642494cULL		/* b'LIBFTDB\0' */
-#define FTDB_VERSION			2ULL
+#define FTDB_VERSION			3ULL
 
 
 enum functionLinkage {

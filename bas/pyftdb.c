@@ -7656,7 +7656,6 @@ PyObject* libftdb_ftdb_fops_entry_deepcopy(PyObject* self, PyObject* memo) {
 FUNCTION_DECLARE_FLATTEN_STRUCT(stringRefMap_node);
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(stringRefMap_node,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_EMBEDDED_POINTER(stringRefMap_node,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,node.rb_right);
@@ -7811,7 +7810,6 @@ FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap);
 
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_type_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,node.rb_right);
@@ -7820,7 +7818,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_func_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,node.rb_right);
@@ -7829,7 +7826,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_funcdecl_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,node.rb_right);
@@ -7838,7 +7834,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_global_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,node.rb_right);
@@ -7853,7 +7848,6 @@ FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap);
 
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_type_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,node.rb_right);
@@ -7863,7 +7857,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_func_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,node.rb_right);
@@ -7873,7 +7866,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_funcdecl_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,node.rb_right);
@@ -7883,7 +7875,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_global_entryMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,node.rb_right);
@@ -7896,7 +7887,6 @@ FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap);
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_func_entryListMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,node.rb_right);
@@ -7909,7 +7899,6 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap,
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,
-	STRUCT_ALIGN(4);
 	AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_global_entryListMap,node.__rb_parent_color,
 			ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
 	AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryListMap,node.rb_right);
