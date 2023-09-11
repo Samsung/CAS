@@ -143,7 +143,7 @@ Errorable<NewProcArguments> StreamParser::parse_newproc_short_arguments(const ev
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    NewProcArguments arguments;
+    NewProcArguments arguments = {};
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -260,7 +260,7 @@ Errorable<OpenArguments> StreamParser::parse_open_short_arguments(const eventTup
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    OpenArguments arguments;
+    OpenArguments arguments = {};
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -358,7 +358,7 @@ Errorable<PipeArguments> StreamParser::parse_pipe_short_arguments(const eventTup
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    PipeArguments arguments;
+    PipeArguments arguments = {};
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -414,7 +414,7 @@ Errorable<RenameArguments> StreamParser::parse_rename_short_arguments(const even
     char *separator;
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     ShortArguments tag;
-    RenameArguments arguments;
+    RenameArguments arguments = {};
 
     separator = std::strchr(event_line, '=');
     if (!separator)
@@ -439,7 +439,7 @@ Errorable<LinkArguments> StreamParser::parse_link_short_arguments(const eventTup
     char *separator;
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     ShortArguments tag;
-    LinkArguments arguments;
+    LinkArguments arguments = {};
 
     separator = std::strchr(event_line, '=');
     if (!separator)
@@ -490,7 +490,7 @@ Errorable<RenameArguments> StreamParser::parse_rename2_short_arguments(const eve
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    RenameArguments arguments;
+    RenameArguments arguments = {};
 
     separator = std::strchr(event_line, '=');
     if (!separator)
@@ -531,7 +531,7 @@ Errorable<LinkArguments> StreamParser::parse_linkat_short_arguments(const eventT
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    LinkArguments arguments;
+    LinkArguments arguments = {};
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -574,7 +574,7 @@ Errorable<DupArguments> StreamParser::parse_dup_short_arguments(const eventTuple
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    DupArguments arguments;
+    DupArguments arguments = {};
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -627,7 +627,7 @@ Errorable<SymlinkArguments> StreamParser::parse_symlink_short_arguments(const ev
     char *event_line = const_cast<char *>(event.event_arguments.c_str());
     uint64_t value;
     ShortArguments tag;
-    SymlinkArguments arguments;
+    SymlinkArguments arguments = {};
     arguments.resolvednamesize = -1;
 
     for (;;) {

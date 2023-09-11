@@ -177,6 +177,7 @@ struct Execution {
     Execution() = default;
     Execution(upid_t pid)
         : pid (pid)
+        , elapsed_time (0)
     {};
 
     upid_t pid;
