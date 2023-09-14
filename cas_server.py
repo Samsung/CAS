@@ -5,6 +5,7 @@ from os import path
 import json
 import sys
 import math
+import argparse
 
 from flask import Flask, render_template, send_from_directory, request
 from flask.wrappers import Response, Request
@@ -393,8 +394,17 @@ def favicon():
         mimetype='image/vnd.microsoft.icon')
 
 
+def get_arpgparser():
+    parser = argparse.ArgumentParser(description="CAS server arguments")
+    parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
+    parser.add_argument("--host", "-h", type=str, default="0.0.0.0", help="server address")
+
+    return parser
+
 if __name__ == '__main__':
     if path.exists('config.json'):
         app.config.from_file('config.json', json.load)
 
-    app.run("0.0.0.0", 8080, use_reloader=True)
+    parser = get_arpgparser()
+    args = parser.parse_args()
+    app.run(args.host, args.port, use_reloader=True)

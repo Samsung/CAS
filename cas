@@ -38,12 +38,26 @@ if __name__ == '__main__':
         from cas_server import app
         from cas_server import translate_to_url
 
+        try:
+            port_idx = list(map(lambda x: x.startswith("--port"), args)).index(True)
+            port = int(args[port_idx].split('=')[1])
+            args.pop(port_idx)
+        except Exception:
+            port = 8383
+
+        try:
+            host_idx = list(map(lambda x: x.startswith("--host"), args)).index(True)
+            host = int(args[port_idx].split('=')[1])
+            args.pop(host_idx)
+        except Exception:
+            host = "0.0.0.0"
+        
         url_args = translate_to_url(args)
         def browser_spawn():
-            browser.open(f"http://0.0.0.0:8383/{url_args}", new=2)
+            browser.open(f"http://{host}:{port}/{url_args}", new=2)
 
         threading.Thread(target=browser_spawn).start()
-        app.run("0.0.0.0", 8383)
+        app.run(host, port)
     else:
         import os
         from typing import Generator,  Iterator
