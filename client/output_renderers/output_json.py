@@ -40,32 +40,38 @@ class Renderer(OutputRenderer):
         return json.dumps({"count": self.count})
 
     def formatter(self, format_func=None):
+        count=self.count
+        page=0 if not self.args.page else self.args.page
+        page_max = int(self.count / self.args.entries_per_page) if self.count >0 and self.args.entries_per_page >0 else 0
+        entries_per_page = self.args.entries_per_page
+        num_entries=self.num_entries
         if self.count > 0:
+
             if format_func is not None:
                 return self.entries_format.format(
-                    count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    count=count,
+                    page=page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join([format_func(row) for row in self.data])+"\n    "
                     )
             if isinstance(self.data, libetrace.nfsdbFilteredOpensPathsIter):
                 return self.entries_format.format(
                     count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    page= page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join(['        "'+self.origin_module.get_path(row)+'"' for row in self.data])+"\n    "
                     )
             if isinstance(self.data, libetrace.nfsdbFilteredOpensIter) or isinstance(self.data, libetrace.nfsdbOpensIter):
                 return self.entries_format.format(
                     count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    page= page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join([self._file_entry_format(row) for row in self.data])+"\n    "
                 )
             if isinstance(self.data, libetrace.nfsdbFilteredCommandsIter):
@@ -77,10 +83,10 @@ class Renderer(OutputRenderer):
                 else:
                     return self.entries_format.format(
                         count=self.count,
-                        page=0 if not self.args.page else self.args.page,
-                        page_max = int(self.count / self.args.entries_per_page),
-                        entries_per_page = self.args.entries_per_page,
-                        num_entries=self.num_entries,
+                        page= page,
+                        page_max = page_max,
+                        entries_per_page = entries_per_page,
+                        num_entries=num_entries,
                         entries="\n"+",\n".join([(self._command_entry_format_openrefs(row) if self.args.openrefs else self._command_entry_format(row)) for row in self.data])+"\n    "
                     )
             # Assign formatter according to output type
@@ -91,19 +97,19 @@ class Renderer(OutputRenderer):
                     fmt = '        "', '"'
                 return self.entries_format.format(
                     count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    page= page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join([fmt[0]+self.origin_module.get_path(row)+fmt[1] for row in self.data])+"\n    "
                     )
             elif isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
                 return self.entries_format.format(
                     count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    page= page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join([self._file_entry_format(row) for row in self.data])+"\n    "
                 )
             elif isinstance(self.data[0], libetrace.nfsdbEntry):
@@ -133,19 +139,19 @@ class Renderer(OutputRenderer):
                         }
                     return self.entries_format.format(
                         count=self.count,
-                        page=0 if not self.args.page else self.args.page,
-                        page_max = int(self.count / self.args.entries_per_page),
-                        entries_per_page = self.args.entries_per_page,
-                        num_entries=self.num_entries,
+                        page= page,
+                        page_max = page_max,
+                        entries_per_page = entries_per_page,
+                        num_entries=num_entries,
                         entries="\n"+",\n".join([self._command_entry_format(row) for row in self.data])+"\n    "
                     )
             else:
                 return self.entries_format.format(
                     count=self.count,
-                    page=0 if not self.args.page else self.args.page,
-                    page_max = int(self.count / self.args.entries_per_page),
-                    entries_per_page = self.args.entries_per_page,
-                    num_entries=self.num_entries,
+                    page= page,
+                    page_max = page_max,
+                    entries_per_page = entries_per_page,
+                    num_entries=num_entries,
                     entries="\n"+",\n".join([row for row in self.data])+"\n    "
                     )
         else:
@@ -155,18 +161,18 @@ class Renderer(OutputRenderer):
                 else:
                     return self.entries_format.format(
                         count=self.count,
-                        page=0 if not self.args.page else self.args.page,
-                        page_max = int(self.count / self.args.entries_per_page),
-                        entries_per_page = self.args.entries_per_page,
-                        num_entries=self.num_entries,
+                        page= page,
+                        page_max = int(self.count / self.args.entries_per_page) if self.count > 0 else 0,
+                        entries_per_page = entries_per_page,
+                        num_entries=num_entries,
                         entries=",\n".join([])
                     )
             return self.entries_format.format(
                 count=self.count,
-                page=0 if not self.args.page else self.args.page,
-                page_max = int(self.count / self.args.entries_per_page),
-                entries_per_page = self.args.entries_per_page,
-                num_entries=self.num_entries,
+                page= page,
+                page_max = int(self.count / self.args.entries_per_page) if self.count > 0 else 0,
+                entries_per_page = entries_per_page,
+                num_entries=num_entries,
                 entries=",\n".join([])
                 )
 

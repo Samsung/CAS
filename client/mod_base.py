@@ -543,7 +543,7 @@ class Module:
                 return output_renderers[name].Renderer
         return output_renderers['plain'].Renderer
 
-    def should_display(self, ent) -> bool:  # TODO reconsider this
+    def should_display_open(self, ent: libetrace.nfsdbEntryOpenfile) -> bool:
         if self.args.generate:
             if self.args.all:
                 return True
@@ -551,9 +551,21 @@ class Module:
                 return ent.opaque is not None and ent.opaque.compilation_info is not None
         else:
             return True
+        
+    def should_display_exe(self, ent: libetrace.nfsdbEntry) -> bool:
+        if self.args.generate:
+            if self.args.all:
+                return True
+            else:
+                return ent.compilation_info is not None
+        else:
+            return True        
 
     def get_exec_of_open(self, ent: libetrace.nfsdbEntryOpenfile) -> libetrace.nfsdbEntry:
-        return ent.opaque if self.args.generate and ent.opaque is not None else ent.parent
+        if self.args.generate and not self.args.all and ent.opaque is not None:
+            return ent.opaque
+        else:
+            return ent.parent
 
 
 class FilterableModule:

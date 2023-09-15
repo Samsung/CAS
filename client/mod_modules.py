@@ -42,12 +42,13 @@ class LinkedModules(Module, PipedModule, FilterableModule):
     def get_data(self) -> tuple:
         if self.args.show_commands:
             data = list({
-                o.opaque
+                self.get_exec_of_open(o)
                 for o in self.nfsdb.linked_modules()
-                if o.opaque is not None and self.filter_open(o) and self.filter_exec(o.opaque)
+                if self.filter_open(o) and self.filter_exec(self.get_exec_of_open(o)) and self.should_display_open(o)
             } if self.needs_open_filtering() or self.needs_exec_filtering() else {
-                o.parent
+                self.get_exec_of_open(o)
                 for o in self.nfsdb.linked_modules()
+                if self.should_display_open(o)
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid
@@ -128,11 +129,11 @@ class ModDepsFor(Module, PipedModule, FilterableModule):
 
         if self.args.show_commands:
             data = list({
-                o.parent if self.args.all else o.opaque
+                self.get_exec_of_open(o)
                 for o in self.nfsdb.get_module_dependencies(self.args.path, direct=self.args.direct)
                 if o.path in linked_modules and (self.args.all or o.opaque is not None) and self.filter_open(o) and self.filter_exec(o.parent)
             } if self.args.generate else {
-                o.parent
+                self.get_exec_of_open(o)
                 for o in self.nfsdb.get_module_dependencies(self.args.path, direct=self.args.direct)
                 if o.path in linked_modules and self.filter_open(o) and self.filter_exec(o.parent)
             })

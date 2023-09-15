@@ -93,7 +93,7 @@ def get_json_entries(cmd, len_min=0, len_max=sys.maxsize, check_func=None, timeo
         cmd += " --dir={}".format(os.environ["DB_DIR"])
     ret = json.loads(get_main(cmd, timeout=timeout))
     assert "entries" in ret and "count" in ret and "page" in ret and "num_entries" in ret
-    assert len_min <= int(ret["num_entries"]) <= len_max
+    assert len_min <= int(ret["count"]) <= len_max
     if check_func is not None:
         for ent in ret["entries"]:
             assert check_func(ent)
@@ -134,7 +134,7 @@ def get_dep_graph(cmd, len_min=0, len_max=sys.maxsize, check_func=None, timeout=
 
 
 def get_raw(cmd, line_count_min=0, line_count_max=sys.maxsize, check_func=None, sort=False, timeout=DEF_TIMEOUT) -> List[str]:
-    cmd = cmd + f" --separator={RAW_SEP} --fmt={{N}}{{L}}"
+    cmd = cmd + f" --separator={RAW_SEP} --fmt={{S}}{{L}}"
     ret = get_main(cmd=cmd, sort=sort, timeout=timeout)
     try:
         json.loads(ret)
@@ -144,9 +144,9 @@ def get_raw(cmd, line_count_min=0, line_count_max=sys.maxsize, check_func=None, 
     if ret:
         out = ret.split(os.linesep)
         try:
-            num_entries = int(out[0])
+            count = int(out[0])
             out = out[1:]
-            assert line_count_min <= num_entries <= line_count_max
+            assert line_count_min <= count <= line_count_max
         except ValueError:
             assert line_count_min <= len(out) <= line_count_max
         if check_func is not None:
@@ -610,11 +610,11 @@ class TestBinaries:
         ret = get_json_entries("binaries -n=1000 --command-filter=[bin_source_root=1] --json --details", 50000, 900000, is_command)
         for ent in ret["entries"]:
             assert ent["bin"].startswith(nfsdb.source_root)
-        sr_count = int(ret['num_entries'])
+        sr_count = int(ret['count'])
         ret = get_json_entries("binaries -n=1000 --command-filter=[bin_source_root=0] --json --details", 50000, 900000, check_func=is_command)
         for ent in ret["entries"]:
             assert not ent["bin"].startswith(nfsdb.source_root)
-        nsr_count = int(ret['num_entries'])
+        nsr_count = int(ret['count'])
         assert total_count == (sr_count + nsr_count)
 
     def test_src_root_raw(self):
@@ -649,7 +649,7 @@ class TestBinaries:
             assert ent.split(RAW_SEP)[4].endswith("ld.lld")
 
     def test_count(self):
-        assert get_json_entries("binaries --json ")["num_entries"] == get_json_simple("binaries --json -l")["count"]
+        assert get_json_entries("binaries --json ")["count"] == get_json_simple("binaries --json -l")["count"]
 
 
 class TestCommands:
@@ -780,7 +780,7 @@ class TestCommands:
             assert ent.split(RAW_SEP)[4] == linker
 
     def test_count(self):
-        assert get_json_entries("commands --json -n=1")["num_entries"] == get_json_simple("commands --json -l")["count"]
+        assert get_json_entries("commands --json -n=1")["count"] == get_json_simple("commands --json -l")["count"]
 
 
 class TestCompilationInfo:
@@ -815,7 +815,7 @@ class TestCompilationInfo:
         assert is_raw_comp_info(ret)
 
     def test_count(self):
-        assert get_json_entries("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for --json ")["num_entries"] == \
+        assert get_json_entries("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for --json ")["count"] == \
             get_json_simple("compiled --filter=[path=*curl/lib*,type=wc] compilation_info_for --json -l")["count"]
 
 
@@ -904,7 +904,7 @@ class TestCompiled:
             assert not ent.startswith(s_r)
 
     def test_count(self):
-        assert get_json_entries("compiled --json ")["num_entries"] == \
+        assert get_json_entries("compiled --json ")["count"] == \
             get_json_simple("compiled --json -l")["count"]
 
 
@@ -1081,7 +1081,7 @@ class TestDepsFor:
         assert is_raw_dep_graph(ret)
 
     def test_count(self, vmlinux):
-        assert get_json_entries(f"deps_for --path={vmlinux} --json ")["num_entries"] == \
+        assert get_json_entries(f"deps_for --path={vmlinux} --json ")["count"] == \
             get_json_simple(f"deps_for --path={vmlinux} --json -l")["count"]
 
 
@@ -1125,7 +1125,7 @@ class TestFaccess:
             assert ent.split(RAW_SEP)[1] == "r"
 
     def test_count(self, compiled_file):
-        assert get_json_entries(f"faccess --path={compiled_file} --json ")["num_entries"] == \
+        assert get_json_entries(f"faccess --path={compiled_file} --json ")["count"] == \
             get_json_simple(f"faccess --path={compiled_file} --json -l")["count"]
 
 
@@ -1235,7 +1235,7 @@ class TestLinkedModules:
             assert not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
     def test_count(self):
-        assert get_json_entries("linked_modules --json ")["num_entries"] == \
+        assert get_json_entries("linked_modules --json ")["count"] == \
             get_json_simple("linked_modules --json -l")["count"]
 
 
@@ -1305,13 +1305,13 @@ class TestModdepsFor:
             assert not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
     def test_generate(self, vmlinux):
-        get_json_simple(f"moddeps_for --path={vmlinux} --commands --generate -n=0 --json", 400, 3000, is_generated)
+        get_json_simple(f"moddeps_for --path={vmlinux} --commands --generate --all -n=0 --json", 400, 3000, is_generated)
 
     def test_generate_raw(self, vmlinux):
-        get_raw(f"moddeps_for --path={vmlinux} --commands --generate", 400, 3000, is_raw_generated)
+        get_raw(f"moddeps_for --path={vmlinux} --commands --generate --all", 400, 3000, is_raw_generated)
 
     def test_count(self, vmlinux):
-        assert get_json_entries(f"moddeps_for --path={vmlinux} --json ", 400, 3000)["num_entries"] == \
+        assert get_json_entries(f"moddeps_for --path={vmlinux} --json ", 400, 3000)["count"] == \
             get_json_simple(f"moddeps_for --path={vmlinux} --json -l")["count"]
 
     def test_pipeline(self, vmlinux):
@@ -1370,7 +1370,7 @@ class TestProcref:
             assert int(ent.split(RAW_SEP)[2]) in pids and not ent.split(RAW_SEP)[0].startswith(nfsdb.source_root)
 
     def test_count(self, pids):
-        assert get_json_entries(f"procref --pid={pids[0]} --pid={pids[1]} --pid={pids[2]} --json")["num_entries"] == \
+        assert get_json_entries(f"procref --pid={pids[0]} --pid={pids[1]} --pid={pids[2]} --json")["count"] == \
             get_json_simple(f"procref --pid={pids[0]} --pid={pids[1]} --pid={pids[2]} --json -l")["count"]
 
 
@@ -1433,7 +1433,7 @@ class TestRefFiles:
             assert not ent.startswith(nfsdb.source_root)
 
     def test_count(self):
-        assert get_json_entries("ref_files --json ")["num_entries"] == \
+        assert get_json_entries("ref_files --json ")["count"] == \
             get_json_simple("ref_files --json -l")["count"]
 
     def test_filter_re_wc(self):
@@ -1561,7 +1561,7 @@ class TestRevCompsFor:
             assert not ent.startswith(nfsdb.source_root)
 
     def test_count(self, header_file):
-        assert get_json_entries(f"revcomps_for --path={header_file} --json ")["num_entries"] == \
+        assert get_json_entries(f"revcomps_for --path={header_file} --json ")["count"] == \
             get_json_simple(f"revcomps_for --path={header_file} --json -l")["count"]
 
 
@@ -1621,7 +1621,7 @@ class TestRevDepsFor:
         get_raw(f"revdeps_for --path={compiled_file} --cdm", 1, 10000, is_raw_cdm)
 
     def test_count(self, compiled_file):
-        assert get_json_entries(f"revdeps_for --path={compiled_file} --json ")["num_entries"] == \
+        assert get_json_entries(f"revdeps_for --path={compiled_file} --json ")["count"] == \
             get_json_simple(f"revdeps_for --path={compiled_file} --json -l")["count"]
 
     def test_pipeline(self):
@@ -1634,12 +1634,12 @@ class TestPipeline:
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent['bin'], "*javac")
         count = get_json_simple("binaries -l --command-filter=[bin=*javac,type=wc] commands --json")["count"]
-        assert ret["num_entries"] == count
+        assert ret["count"] == count
 
     def test_linked_modules_2_deps_for(self):
         ret = get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc] deps_for --json", 13000, 25000, is_normpath)
         count = get_json_simple("linked_modules -l --filter=[path=*vmlinux,type=wc] deps_for --json")["count"]
-        assert ret["num_entries"] == count
+        assert ret["count"] == count
 
 
 class TestMiscModules:

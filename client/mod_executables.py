@@ -36,17 +36,16 @@ class Binaries(Module, FilterableModule):
         args = self.prepare_args()
 
         if self.args.details or self.args.show_commands:
-            data = self.nfsdb.filtered_execs_iter(**args)
+            data = list({ e 
+                         for e in self.nfsdb.filtered_execs_iter(**args)
+                         if self.should_display_exe(e)
+            })
             return data, DataTypes.commands_data, lambda x: x.bpath
         else:
             data = list({
                 ex.bpath
-                for ex in self.nfsdb.filtered_execs_iter(**args)}
-            ) if self.needs_exec_filtering() else [
-                x
-                for x in self.nfsdb.db.bpaths()
-                if len(x) > 0
-                ]
+                for ex in self.nfsdb.filtered_execs_iter(**args)
+            })
 
             return data, DataTypes.binary_data, lambda x: x
 
