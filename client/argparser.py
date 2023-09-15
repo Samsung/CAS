@@ -125,6 +125,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     output_renderers = get_output_renderers()
     output_group = parser.add_argument_group("Output selection arguments")
     output_group.add_argument('--proc-tree', action='store_true', default=False, help='')
+    output_group.add_argument('--deps-tree', action='store_true', default=False, help='')
     output_group.add_argument('--port', type=int, default=8383, help='Local server port (used with --proc-tree)')
     output_group.add_argument('--host', type=str, default="0.0.0.0", help='Local server host (used with --proc-tree)')
     output_group.add_argument('--output-file', '-o', type=str, default=None, help='Store results to file')

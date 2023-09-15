@@ -17,12 +17,16 @@ class Renderer(OutputRenderer):
     entries_format = '''{{
     "count": {count},
     "page": {page},
+    "page_max": {page_max},
+    "entries_per_page": {entries_per_page},
     "num_entries": {num_entries},
     "entries": [{entries}]
 }}'''
     entries_match_format = '''{{
     "count": {count},
     "page": {page},
+    "page_max": {page_max},
+    "entries_per_page": {entries_per_page},
     "num_entries": {num_entries},
     "entries": [{entries}],
     "match": [{match}]
@@ -33,7 +37,7 @@ class Renderer(OutputRenderer):
         pass
 
     def count_renderer(self):
-        return json.dumps({"count": self.num_entries})
+        return json.dumps({"count": self.count})
 
     def formatter(self, format_func=None):
         if self.count > 0:
@@ -41,6 +45,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([format_func(row) for row in self.data])+"\n    "
                     )
@@ -48,6 +54,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join(['        "'+self.origin_module.get_path(row)+'"' for row in self.data])+"\n    "
                     )
@@ -55,6 +63,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([self._file_entry_format(row) for row in self.data])+"\n    "
                 )
@@ -68,6 +78,8 @@ class Renderer(OutputRenderer):
                     return self.entries_format.format(
                         count=self.count,
                         page=0 if not self.args.page else self.args.page,
+                        page_max = int(self.count / self.args.entries_per_page),
+                        entries_per_page = self.args.entries_per_page,
                         num_entries=self.num_entries,
                         entries="\n"+",\n".join([(self._command_entry_format_openrefs(row) if self.args.openrefs else self._command_entry_format(row)) for row in self.data])+"\n    "
                     )
@@ -80,6 +92,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([fmt[0]+self.origin_module.get_path(row)+fmt[1] for row in self.data])+"\n    "
                     )
@@ -87,6 +101,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([self._file_entry_format(row) for row in self.data])+"\n    "
                 )
@@ -101,14 +117,25 @@ class Renderer(OutputRenderer):
                         return {
                                 "count": self.count,
                                 "page": 0 if not self.args.page else self.args.page,
-                                "page_max": int(self.num_entries / self.args.entries_per_page),
+                                "page_max": int(self.count / self.args.entries_per_page),
                                 "entries_per_page": self.args.entries_per_page,
                                 "num_entries": self.num_entries,
                                 "entries": [self._command_entry_format_proc_tree(row) for row in self.data]
                         }
+                    if self.args.deps_tree:
+                        return {
+                                "count": self.count,
+                                "page": 0 if not self.args.page else self.args.page,
+                                "page_max": int(self.count / self.args.entries_per_page),
+                                "entries_per_page": self.args.entries_per_page,
+                                "num_entries": self.num_entries,
+                                "entries": [self._command_entry_format_deps_tree(row) for row in self.data]
+                        }
                     return self.entries_format.format(
                         count=self.count,
                         page=0 if not self.args.page else self.args.page,
+                        page_max = int(self.count / self.args.entries_per_page),
+                        entries_per_page = self.args.entries_per_page,
                         num_entries=self.num_entries,
                         entries="\n"+",\n".join([self._command_entry_format(row) for row in self.data])+"\n    "
                     )
@@ -116,6 +143,8 @@ class Renderer(OutputRenderer):
                 return self.entries_format.format(
                     count=self.count,
                     page=0 if not self.args.page else self.args.page,
+                    page_max = int(self.count / self.args.entries_per_page),
+                    entries_per_page = self.args.entries_per_page,
                     num_entries=self.num_entries,
                     entries="\n"+",\n".join([row for row in self.data])+"\n    "
                     )
@@ -127,12 +156,16 @@ class Renderer(OutputRenderer):
                     return self.entries_format.format(
                         count=self.count,
                         page=0 if not self.args.page else self.args.page,
+                        page_max = int(self.count / self.args.entries_per_page),
+                        entries_per_page = self.args.entries_per_page,
                         num_entries=self.num_entries,
                         entries=",\n".join([])
                     )
             return self.entries_format.format(
                 count=self.count,
                 page=0 if not self.args.page else self.args.page,
+                page_max = int(self.count / self.args.entries_per_page),
+                entries_per_page = self.args.entries_per_page,
                 num_entries=self.num_entries,
                 entries=",\n".join([])
                 )
@@ -180,6 +213,13 @@ class Renderer(OutputRenderer):
                 "children": len(self.origin_module.nfsdb.get_entries_with_pids([(c.pid,) for c in row.child_cids])),
                 "wpid": row.wpid if row.wpid else "",
                 "open_len": len(row.opens),
+            }
+    def _command_entry_format_deps_tree(self, row):
+        mdeps = {x.path for x in self.origin_module.nfsdb.db.mdeps(row.linked_path, direct=True)}
+        return {
+            "path": row.linked_path,
+            "num_deps": len([x for x in mdeps if x in self.origin_module.nfsdb.linked_module_paths() and x!=row.linked_path]),
+            "parent": str(row.eid.pid)+":"+str(row.eid.index)
             }
     
     def _command_entry_format(self, row: libetrace.nfsdbEntry):

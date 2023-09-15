@@ -101,6 +101,9 @@ fileModal.addEventListener('show.bs.modal', function (event) {
             opens_div.innerHTML += "<p class='file_mode_" + mode_file[0] + "'>" + mode_file[1] + "</p>"
         }
         if (data.class === "compiler") {
+            if(fileModal.querySelector('#headingCompiler').children[0].classList.contains("collapsed")){
+                fileModal.querySelector('#headingCompiler').children[0].click();
+            }   
             fileModal.querySelector('#compilerModal').style.display = "block";
             fileModal.querySelector('.src_type').innerText = data["src_type"];
             var compiled_div = fileModal.querySelector('.compiled_list');
@@ -117,13 +120,30 @@ fileModal.addEventListener('show.bs.modal', function (event) {
 
         }
         if (data.class === "linker") {
+            if(fileModal.querySelector('#headingLinker').children[0].classList.contains("collapsed")){
+                fileModal.querySelector('#headingLinker').children[0].click();
+            }
             fileModal.querySelector('#linkerModal').style.display = "block";
             let linked_div = fileModal.querySelector('.linked_list');
-            linked_div.innerHTML += "<p>" + data["linked"] + "</p>"
+            linked_div.innerHTML += "<a href=/deps_tree?path="+data["linked"]+' target="_blank">' + data["linked"] + "</a>"
+        }
+        if (data.class === "linker" && data.class === "compiler"){
+            if(fileModal.querySelector('#headingFiles').children[0].classList.contains("collapsed")){
+                fileModal.querySelector('#headingFiles').children[0].click();
+            }
         }
     });
 })
 fileModal.addEventListener('hidden.bs.modal', function (event) {
+    if(fileModal.querySelector('#headingFiles').children[0].classList.contains("collapsed")==false){
+        fileModal.querySelector('#headingFiles').children[0].click();
+    }
+    if(fileModal.querySelector('#headingLinker').children[0].classList.contains("collapsed")==false){
+        fileModal.querySelector('#headingLinker').children[0].click();
+    }
+    if(fileModal.querySelector('#headingCompiler').children[0].classList.contains("collapsed")==false){
+        fileModal.querySelector('#headingCompiler').children[0].click();
+    }   
     fileModal.querySelector('#openModal').style.display = "none";
     fileModal.querySelector('.file_contents').innerHTML = "";
     fileModal.querySelector('#compilerModal').style.display = "none";

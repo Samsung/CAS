@@ -41,7 +41,7 @@ class OutputRenderer:
         self.args = args
         self.data = data
         if not self.args.plain or self.args.count:
-            self.num_entries = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
+            self.count = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
         self.sort_lambda = self.get_sorting_lambda(sort_lambda)
 
         if self.args.entries_per_page is None:
@@ -137,8 +137,8 @@ class OutputRenderer:
                     assert False, "Wrong range!"
         elif self.args.entries_per_page != 0:
             if (isinstance(self.data, list) or isinstance(self.data, Iterator)):
-                if self.num_entries < (self.args.page * self.args.entries_per_page):
-                    self.args.page = int(self.num_entries/self.args.entries_per_page)
+                if self.count < (self.args.page * self.args.entries_per_page):
+                    self.args.page = int(self.count/self.args.entries_per_page)
 
                 if isinstance(self.data, list):
                     self.data = self.data[self.args.page * self.args.entries_per_page: (self.args.page + 1) * self.args.entries_per_page]
@@ -146,7 +146,7 @@ class OutputRenderer:
                     self.data = list(itertools.islice(self.data, self.args.page * self.args.entries_per_page,(self.args.page + 1) * self.args.entries_per_page))
 
         if not self.args.plain:
-            self.count = len(self.data) if isinstance(self.data, list) or isinstance(self.data, Iterator) else -1
+            self.num_entries = len(self.data) if isinstance(self.data, list) or isinstance(self.data, Iterator) else -1
         if self.args.count:
             return self.count_renderer()
         return self.output_renderer()

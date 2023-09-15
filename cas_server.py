@@ -33,7 +33,7 @@ root_pid = int(json.loads(process_commandline(cas_db, "root_pid --json"))["root_
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
 bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command",
              "extended", "dep-graph", "filerefs", "direct-global", "cached", "wrap-deps", "with-pipes", "original-path", "parent",
-             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree"]
+             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree"]
 
 
 def translate_to_cmdline(req: Request) -> List[str]:
@@ -110,6 +110,14 @@ def get_module(module: str) -> Response:
             return Response(render_template('proc_tree.html', exe=e, diable_search=True), mimetype='text/html')
         else:
             return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
+    if "--deps-tree" in commandline:
+        e: Dict = process_commandline(cas_db, commandline)
+        if isinstance(e, dict) and "entries" in e:
+            e["origin_url"] = org_url
+            return Response(render_template('deps_tree.html', exe=e, diable_search=True), mimetype='text/html')
+        else:
+            return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
+    
     if "--cdb" in commandline:
         return Response(process_commandline(cas_db, commandline), mimetype='text/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
     elif "--makefile" in commandline:
@@ -180,17 +188,29 @@ def child_renderer(exe: nfsdbEntry):
 @app.route('/proc_tree', methods=['GET'])
 def proc_tree() -> Response:
     j = request.args
-    root_exe = {
-                            "count": 1,
-                            "page": 0,
-                            "page_max": 1,
-                            "entries_per_page": 1,
-                            "num_entries": 1,
-                            "origin_url": None,
-                            "entries": [child_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])))] 
-                            if "pid" in j and "idx" in j 
-                            else [child_renderer(cas_db.get_exec_at_pos(0))]
-                    }
+    if "pid" in j and "idx" not in j:
+        entries = cas_db.get_entries_with_pid(int(j["pid"]))
+        root_exe = {
+                                "count": len(entries),
+                                "page": 0,
+                                "page_max": 1,
+                                "entries_per_page": len(entries),
+                                "num_entries": len(entries),
+                                "origin_url": None,
+                                "entries": [child_renderer(x) for x in entries] 
+                        }
+    else:
+        root_exe = {
+                                "count": 1,
+                                "page": 0,
+                                "page_max": 1,
+                                "entries_per_page": 1,
+                                "num_entries": 1,
+                                "origin_url": None,
+                                "entries": [child_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])))] 
+                                if "pid" in j and "idx" in j 
+                                else [child_renderer(cas_db.get_exec_at_pos(0))]
+                        }
     return Response(render_template('proc_tree.html', exe=root_exe), mimetype="text/html")
 
 
@@ -255,6 +275,43 @@ def children_of() -> Response:
     return Response(
         json.dumps(result),
         mimetype='text/json', direct_passthrough=True)
+
+@app.route('/deps_of', methods=['GET'])
+def deps_of() -> Response:
+    maxResults = 10
+    j = request.args
+    lm_only = True if "lm_only" in j and j["lm_only"] == "true" else False
+    page = 0
+    if "page" in j.keys():
+        page = int(j["page"])
+    if "path" in j.keys():
+        path = j["path"]
+        entries = [x
+                   for x in sorted(cas_db.db.mdeps(path, direct=True))
+                   if x.path!=path and x.path in cas_db.linked_module_paths()]
+        result = {
+                        "count": len(entries),
+                        "page": page,
+                        "page_max": page,
+                        "num_entries": maxResults,
+                        "entries": []
+                }
+        result["page_max"] = math.ceil(result["count"]/result["num_entries"])
+        for entry in entries[(page*maxResults):(page*maxResults+maxResults)]:
+            mdeps = {x.path for x in cas_db.db.mdeps(entry.path, direct=True)}
+            h = len([x for x in mdeps if x in cas_db.linked_module_paths() and x!=entry.path])
+            result["entries"].append({"path": entry.path, 
+                                    "num_deps": h,
+                                    "parent": str(entry.parent.eid.pid)+":"+str(entry.parent.eid.index)})
+        result["entries"] = result["entries"]
+        result["num_entries"] = len(result["entries"])
+        return Response(
+            json.dumps(result),
+            mimetype='text/json', direct_passthrough=True)
+    
+    return Response(
+        json.dumps({"ERROR": "No such path!"}),
+        mimetype='text/json')
 
 
 @lru_cache(1)
@@ -370,7 +427,70 @@ def search_files() -> Response:
         json.dumps(data),
         mimetype='text/json')
 
+@app.route('/deps_tree/', methods=['GET'])
+@app.route('/deps_tree', methods=['GET'])
+def deps_tree() -> Response:
+    maxResults = 10
+    j = dict(request.args)
+    if "page" not in j:
+        page = 0
+    else:
+        page = int(j["page"])
+    if "path" in j:
+        j["path"] = j["path"].replace(" ", "+")
+        entries=[]
+        entry=""
+        for x in cas_db.db.mdeps(j["path"], direct=True): 
+            if x.path in cas_db.linked_module_paths():
+                if x.path==j["path"]:
+                    entry=x
+                else:
+                    entries.append(x)
 
+        first_modules = {
+                                "count": 1,
+                                "page": 0,
+                                "page_max": 0,
+                                "entries_per_page": 1,
+                                "num_entries": 1,
+                                "origin_url": None,
+                                "entries": [{"path": j["path"], 
+                                             "num_deps": len(entries),
+                                             "parent": str(entry.parent.eid.pid)+":"+str(entry.parent.eid.index)
+                                            }]
+                        }
+    elif "filter" in j and len(j["filter"])> 0:
+        entries = [x for x in cas_db.linked_modules() if j["filter"] in x.path]
+        first_modules = {
+                                "count": len(entries),
+                                "page": page,
+                                "page_max": len(entries)/maxResults,
+                                "entries_per_page": maxResults,
+                                "num_entries": 0,
+                                "origin_url": "/deps_tree?filter="+str(j["filter"])+"&page="+str(page),
+                                "entries": []
+                        }
+        for mod in sorted(entries)[(page*maxResults):(page*maxResults+maxResults)]:
+            mdeps = {x.path for x in cas_db.db.mdeps(mod.path, direct=True)}
+            y = len([x for x in mdeps if x in cas_db.linked_module_paths() and x!=mod.path])
+            first_modules["entries"].append({"path": mod.path, "num_deps": y, "parent": str(mod.parent.eid.pid)+":"+str(mod.parent.eid.index)})
+    else:
+        first_modules = {
+                                "count": len(cas_db.linked_module_paths()),
+                                "page": page,
+                                "page_max": len(cas_db.linked_module_paths())/maxResults,
+                                "entries_per_page": maxResults,
+                                "num_entries": 0,
+                                "origin_url": "/deps_tree?page="+str(page),
+                                "entries": []
+                        }
+        for mod in sorted(cas_db.linked_modules())[(page*maxResults):(page*maxResults+maxResults)]:
+            mdeps = {x.path for x in cas_db.db.mdeps(mod.path, direct=True)}
+            y = len([x for x in mdeps if x in cas_db.linked_module_paths() and x!=mod.path])
+            first_modules["entries"].append({"path": mod.path, "num_deps": y, "parent": str(mod.parent.eid.pid)+":"+str(mod.parent.eid.index)})
+
+    first_modules["num_entries"]=len(first_modules["entries"])
+    return Response(render_template('deps_tree.html', exe=first_modules), mimetype="text/html")
 
 @app.route('/db_list', methods=['GET'])
 def dblist() -> Response:

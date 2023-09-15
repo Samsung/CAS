@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     args = sys.argv[1:]
 
-    if "--proc-tree" in args:
+    if "--proc-tree" in args or "--deps-tree" in args:
         import webbrowser
         import threading
         try:

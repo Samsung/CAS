@@ -243,9 +243,9 @@
 
 <div id="tree_pagination" class="row  align-middle ml-10"></div>
 
-{% if exe and exe["num_entries"] > exe["count"] %}
+{% if exe and exe["count"] > exe["num_entries"] %}
 <script>
-  render_pagination("tree_pagination", {{exe['page'] | int}}, {{exe['page_max'] | int}}, {{ exe['num_entries'] | int}}, {{exe['entries_per_page'] | int}}, "{{exe['origin_url']}}")
+  render_pagination("tree_pagination", {{exe['page'] | int}}, {{exe['page_max'] | int}}, {{ exe['count'] | int}}, {{exe['entries_per_page'] | int}}, "{{exe['origin_url']}}")
 </script>
 {% endif %}
 <!--<div>origin_url = {{ exe["origin_url"]}}</div>-->
@@ -257,7 +257,7 @@
 <div class="tree">
   <ul class="treeview-animated-list mb-3 nested">
 
-{%for i in range(0, exe['count'])%}
+{%for i in range(0, exe['num_entries'])%}
       <li>
         <div class="no-before" >
           {% if exe['entries'][i]['ppid']!=0 %}
