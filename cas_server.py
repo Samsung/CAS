@@ -397,7 +397,7 @@ def favicon():
 def get_arpgparser():
     parser = argparse.ArgumentParser(description="CAS server arguments")
     parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
-    parser.add_argument("--host", "-h", type=str, default="0.0.0.0", help="server address")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="server address")
 
     return parser
 
