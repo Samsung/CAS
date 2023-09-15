@@ -1728,6 +1728,30 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 				secondaryChain,IgnoreLiteral,noticeInitListExpr);
 			break;
 		}
+		case Stmt::GenericSelectionExprClass:{
+			const GenericSelectionExpr* GSE = static_cast<const GenericSelectionExpr*>(E);
+
+			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
+				QualType T = GSE->getType();
+				if (verifyMemberExprBaseType(T)) {
+					get_type(cache).push_back(CastExprOrType(T));
+				}
+				else {
+					llvm::outs() << "\nERROR: cache size for ChooseExpr > CastExpr cache size (" << get_member(cache).size() <<
+									") vs (" << get_type(cache).size() << ")\n";
+					GSE->dumpColor();
+					llvm::outs() << "ChooseExpr Type: " << T->getTypeClassName() << "\n";
+					T.dump();
+					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
+					origExpr->dumpColor();
+					exit(EXIT_FAILURE);
+				}
+			}
+
+			lookForDeclRefWithMemberExprsInternal(GSE->getResultExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
+				secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			break;
+		}
 		case Stmt::ConditionalOperatorClass:
 		{
 			const ConditionalOperator* CO = static_cast<const ConditionalOperator*>(E);
