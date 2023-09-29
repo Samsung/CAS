@@ -291,6 +291,34 @@ void printPrettySectionAttr(SectionAttr* A, raw_ostream &OS, const PrintingPolic
 }
 }
 
+static void printPrettyWarnUnusedResultAttr(WarnUnusedResultAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
+  switch (A->getAttributeSpellingListIndex()) {
+    default:
+      llvm_unreachable("Unknown attribute spelling!");
+      break;
+    case 0 : {
+      OS << " [[nodiscard(\"" << A->getMessage() << "\")]]";
+      break;
+    }
+    case 1 : {
+      OS << " [[nodiscard(\"" << A->getMessage() << "\")]]";
+      break;
+    }
+    case 2 : {
+      OS << " [[clang::warn_unused_result(\"" << A->getMessage() << "\")]]";
+      break;
+    }
+    case 3 : {
+      OS << " __attribute__((warn_unused_result))";
+      break;
+    }
+    case 4 : {
+      OS << " [[gnu::warn_unused_result(\"" << A->getMessage() << "\")]]";
+      break;
+    }
+  }
+}
+
 static void printPrettyAttr(Attr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
   if(A->getKind() == attr::Section)
     return printPrettySectionAttr(cast<SectionAttr>(A), OS, Policy);
@@ -312,6 +340,9 @@ void DeclPrinter::prettyPrintAttributes(Decl *D) {
 #define PRAGMA_SPELLING_ATTR(X) case attr::X:
 #include "clang/Basic/AttrList.inc"
         break;
+      case attr::WarnUnusedResult:
+        printPrettyWarnUnusedResultAttr(reinterpret_cast<WarnUnusedResultAttr*>(A), Out, Policy);
+	break;
       default:
         printPrettyAttr(A, Out, Policy);
         break;
@@ -500,6 +531,9 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
       continue;
     }
 
+    if(isa<TagDecl>(*D) && !cast<TagDecl>(*D)->isCompleteDefinition())
+      continue;
+
     if (isa<AccessSpecDecl>(*D)) {
       Indentation -= Policy.Indentation;
       this->Indent();
@@ -673,6 +707,8 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       printTemplateParameters(D->getTemplateParameterList(I));
   }
 
+  prettyPrintAttributes(D);
+
   CXXConstructorDecl *CDecl = dyn_cast<CXXConstructorDecl>(D);
   CXXConversionDecl *ConversionDecl = dyn_cast<CXXConversionDecl>(D);
   CXXDeductionGuideDecl *GuideDecl = dyn_cast<CXXDeductionGuideDecl>(D);
@@ -844,8 +880,6 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   } else {
     Ty.print(Out, Policy, Proto);
   }
-
-  prettyPrintAttributes(D);
 
   if (D->isPure())
     Out << " = 0";
