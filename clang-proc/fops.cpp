@@ -41,11 +41,11 @@ std::string FOPSClassVisitor::typeMatching(QualType T) {
 			const IdentifierInfo *II = rD->getIdentifier();
 			if (rD->isCompleteDefinition()) {
 				if (II) {
-					if (_opts.fops_all) {
+					if (opts.fops_all) {
 						return II->getName().str();
 					}
-					auto it = _opts.fopsRecords.find(II->getName().str());
-					if (it!=_opts.fopsRecords.end()) {
+					auto it = opts.fopsRecords.find(II->getName().str());
+					if (it!=opts.fopsRecords.end()) {
 						return *it;
 					}
 				}
@@ -123,11 +123,11 @@ std::string FOPSClassVisitor::typeMatchingWithPtr(QualType T) {
 			const IdentifierInfo *II = rD->getIdentifier();
 			if (rD->isCompleteDefinition()) {
 				if (II) {
-					if (_opts.fops_all) {
+					if (opts.fops_all) {
 						return II->getName().str();
 					}
-					auto it = _opts.fopsRecords.find(II->getName().str());
-					if (it!=_opts.fopsRecords.end()) {
+					auto it = opts.fopsRecords.find(II->getName().str());
+					if (it!=opts.fopsRecords.end()) {
 						return *it;
 					}
 				}
@@ -192,7 +192,7 @@ void FOPSClassVisitor::noticeImplicitCastExpr(const ImplicitCastExpr* ICE, const
 		const ValueDecl* v = F->getDecl();
 		if (v->getKind()==Decl::Function) {
 			const FunctionDecl* FD = static_cast<const FunctionDecl*>(v);
-			DBG( _opts.debugNotice, llvm::outs() << "Index: " << index << ", function: " << FD->getNameAsString() << ", Var: " <<
+			DBG( opts.debugNotice, llvm::outs() << "Index: " << index << ", function: " << FD->getNameAsString() << ", Var: " <<
 					(const void*)Dref << " (" << cast<NamedDecl>(Dref)->getNameAsString() << ")" <<
 					" [struct " << matchedType << "]\n" );
 			std::tuple<unsigned long,std::string,std::string,std::string> val(index,matchedType,FD->getNameAsString(),getFunctionDeclHash(FD));
@@ -255,9 +255,9 @@ std::string FOPSClassVisitor::getFunctionDeclHash(const FunctionDecl *FD) {
 
 bool FOPSClassVisitor::VisitVarDecl(const VarDecl *D) {
 
-	DBG(_opts.debugNotice, llvm::outs() << "@VisitVarDecl (" << D << ")[" << D->isThisDeclarationADefinition() << "] : "; );
+	DBG(opts.debugNotice, llvm::outs() << "@VisitVarDecl (" << D << ")[" << D->isThisDeclarationADefinition() << "] : "; );
 
-	DBG(_opts.debugNotice, llvm::outs() << int(D->isThisDeclarationADefinition()==VarDecl::Definition) <<
+	DBG(opts.debugNotice, llvm::outs() << int(D->isThisDeclarationADefinition()==VarDecl::Definition) <<
 			"\n"; D->dumpColor(); );
 
 	if (D->isThisDeclarationADefinition()==VarDecl::Definition) {
@@ -311,7 +311,7 @@ bool FOPSClassVisitor::noticeMemberExprForAssignment(const MemberExpr* ME, struc
 		smallStackME.push_back(ME);
 	}
 	const ValueDecl* v = ME->getMemberDecl();
-	DBG(_opts.debugNotice, llvm::outs() << "[" << v->getDeclKindName() << "]"; );
+	DBG(opts.debugNotice, llvm::outs() << "[" << v->getDeclKindName() << "]"; );
 	if (v->getKind()==Decl::Field) {
 		for (const Stmt *SubStmt : static_cast<const Expr*>(ME)->children()) {
 			if (SubStmt->getStmtClass()==Stmt::MemberExprClass) {
@@ -349,7 +349,7 @@ bool FOPSClassVisitor::VisitBinaryOperator(const BinaryOperator *Node) {
 
 		struct AssignInfo AI = {"",0,""};
 		Expr* lhs = Node->getLHS();
-		DBG(_opts.debugNotice, llvm::outs() << "@VisitBinaryOperator::Assign (" << Node << ")[" <<
+		DBG(opts.debugNotice, llvm::outs() << "@VisitBinaryOperator::Assign (" << Node << ")[" <<
 				lhs->getStmtClassName() << "]"; );
 
 		if (lhs->getStmtClass()==Stmt::MemberExprClass) {
@@ -360,7 +360,7 @@ bool FOPSClassVisitor::VisitBinaryOperator(const BinaryOperator *Node) {
 			noticeMemberExprForAssignment(ME,AI,fieldIndex);
 		}
 
-		DBG(_opts.debugNotice, llvm::outs() << "\n"; Node->dumpColor(); );
+		DBG(opts.debugNotice, llvm::outs() << "\n"; Node->dumpColor(); );
 
 		Expr* rhs = Node->getRHS();
 		if (rhs->getStmtClass()==Stmt::ImplicitCastExprClass) {
@@ -489,7 +489,7 @@ void FOPSClassConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
 	  Visitor.TraverseDecl(Context.getTranslationUnitDecl());
 	  llvm::outs() << "{\n";
 	  llvm::outs() << "\t\"sourcen\": " << 1 << ",\n";
-	  llvm::outs() << "\t\"sources\": [\n\t\t{ \"" << *_sourceFile << "\" : " << 0 << " }\n\t],\n";
+	  llvm::outs() << "\t\"sources\": [\n\t\t{ \"" << multi::files.at(file_id) << "\" : " << 0 << " }\n\t],\n";
 	  llvm::outs() << "\t\"varn\": " << Visitor.getVarNum() << ",\n";
 	  llvm::outs() << "\t\"vars\":" << "\n";
 	  printVarMaps(1);

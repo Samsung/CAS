@@ -53,23 +53,7 @@ static inline llvm::raw_ostream& operator<<(llvm::raw_ostream &os,const QualType
   return os<<T.getAsOpaquePtr();
 }
 
-extern size_t exprOrd;
-
-class CompoundStmtClassVisitor
-  : public RecursiveASTVisitor<CompoundStmtClassVisitor> {
-public:
-	explicit CompoundStmtClassVisitor(ASTContext &Context, const struct main_opts& opts): Context(Context), _opts(opts) {}
-	bool VisitStmt(Stmt *S);
-	bool VisitExpr(const Expr *Node);
-	bool TraverseStmt(Stmt* S);
-	bool WalkUpFromStmt(Stmt *S);
-	bool WalkUpFromCompoundStmt(CompoundStmt *S);
-	bool shouldTraversePostOrder();
-
-private:
-	  ASTContext &Context;
-	  const struct main_opts& _opts;
-};
+extern thread_local size_t exprOrd;
 
 struct anonRecord {
   std::vector<std::string> fieldNames;
@@ -83,10 +67,10 @@ static std::string ARGeplacementToken = "\"\"\"&\"\"\"";
 class DbJSONClassVisitor
   : public RecursiveASTVisitor<DbJSONClassVisitor> {
 public:
-  explicit DbJSONClassVisitor(ASTContext &Context, const struct main_opts& opts)
-    : TypeNum(0), VarNum(0), FuncNum(0), lastFunctionDef(0), CTA(0), missingRefsCount(0), Context(Context), _opts(opts) {}
+  explicit DbJSONClassVisitor(ASTContext &Context)
+    : TypeNum(0), VarNum(0), FuncNum(0), lastFunctionDef(0), CTA(0), missingRefsCount(0), Context(Context) {}
 
-    // bool shouldVisitImplicitCode() const {return true;}
+    bool shouldVisitImplicitCode() const {return true;}
 
   static QualType getDeclType(Decl* D) {
     if (TypedefNameDecl* TDD = dyn_cast<TypedefNameDecl>(D))
@@ -184,10 +168,25 @@ public:
   typedef std::vector<size_t> recordOffsets_t;
   typedef std::pair<recordFields_t,recordOffsets_t> recordInfo_t;
 
+  class ObjectID{
+      size_t _id = 0;
+      bool is_set = false;
+    public:
+      ObjectID(){}
+      void setID(size_t id){_id = id;}
+      void setIDProper(size_t id){_id = id; is_set = true;}
+      operator size_t(){
+        assert(is_set);
+        return _id;
+      }
+  };
   struct TypeData{
-    size_t id;
+    ObjectID id;
+    QualType T;
     recordInfo_t *RInfo;
     std::string hash;
+    std::shared_ptr<std::string> output;
+    void *usedrefs;
   };
 
   typedef std::map<QualType,TypeData> TypeArray_t;
@@ -967,18 +966,19 @@ public:
   };
 
   struct VarData{
+    ObjectID id;
     const VarDecl *Node;
-    size_t id;
+    std::string hash;
+    std::shared_ptr<std::string>output;
     std::set<QualType> g_refTypes;
-    std::set<size_t> g_refVars;
+    std::set<const VarDecl*> g_refVars;
     std::set<const FunctionDecl*> g_refFuncs;
     std::set<LiteralHolder> g_literals;
   };
-
-  typedef std::map<std::string,VarData> VarArray_t;
+  
+  std::set<std::string> unique_name;
+  typedef std::map<const VarDecl*,VarData> VarArray_t;
   VarArray_t VarMap;
-  std::map<size_t,const VarDecl*> revVarMap;
-  std::vector<std::string> VarIndex;
   size_t VarNum;
   typedef std::map<int,std::multimap<int,const VarDecl*>> taintdata_t;
 
@@ -1190,42 +1190,52 @@ public:
     }
   };
 
-  struct FuncData {
-    size_t id;
-	  const FunctionDecl* this_func;
-	  std::set<callfunc_info_t> funcinfo;
-	  std::map<const Expr*,std::vector<std::pair<caseinfo_t,caseinfo_t>>> switch_map;
-	  taintdata_t taintdata;
-	  int declcount;
-	  std::set<QualType> refTypes;
-	  std::set<size_t>refVars;
-	  std::multimap<size_t, const DeclRefExpr *> refVarInfo;
-	  std::set<const FunctionDecl*> refFuncs;
-	  long CSId;
-	  std::map<const CompoundStmt*,long> csIdMap;
-	  std::map<const CompoundStmt*,const CompoundStmt*> csParentMap;
+  struct FuncDeclData{
+    ObjectID id;
+    const FunctionDecl *this_func;
+    std::string declhash;
+    std::string signature;
+    std::string templatePars;
+    std::string nms;
+    int fid;
+    std::shared_ptr<std::string> output;
+  };
+
+  struct FuncData : public FuncDeclData{
+    size_t weak_id;
+    std::set<callfunc_info_t> funcinfo;
+    std::map<const Expr*,std::vector<std::pair<caseinfo_t,caseinfo_t>>> switch_map;
+    taintdata_t taintdata;
+    int declcount;
+    std::set<QualType> refTypes;
+    std::map<const VarDecl*,std::set<const DeclRefExpr*>>refVars;
+    std::set<const FunctionDecl*> refFuncs;
+    long CSId;
+    std::map<const CompoundStmt*,long> csIdMap;
+    std::map<const CompoundStmt*,const CompoundStmt*> csParentMap;
     std::map<const CompoundStmt*,size_t> csInfoMap;
     std::vector<ControlFlowData> cfData;
-	  long varId;
-	  std::map<const VarDecl*,VarInfo_t> varMap;
-	  std::map<const IfStmt*,IfInfo_t> ifMap;
-	  std::map<const GCCAsmStmt*,GCCAsmInfo_t> asmMap;
-      std::string hash;
-      std::string cshash;
-      std::set<DereferenceInfo_t> derefList;
-      std::set<LiteralHolder> literals;
-      std::string firstNonDeclStmtLoc;
+    long varId;
+    std::map<const VarDecl*,VarInfo_t> varMap;
+    std::map<const IfStmt*,IfInfo_t> ifMap;
+    std::map<const GCCAsmStmt*,GCCAsmInfo_t> asmMap;
+    std::string body;
+    std::string hash;
+    std::string cshash;
+    std::set<DereferenceInfo_t> derefList;
+    std::set<LiteralHolder> literals;
+    std::string firstNonDeclStmtLoc;
   };
 
   typedef std::map<const FunctionDecl*,FuncData> FuncArray_t;
   FuncArray_t FuncMap;
   size_t FuncNum;
   FuncData* lastFunctionDef, *lastFunctionDefCache;
-  std::string lastGlobalVarDecl;
+  const VarDecl* lastGlobalVarDecl = 0;
   std::vector<bool> inVarDecl;
   std::stack<const RecordDecl*> recordDeclStack;
   std::vector<FuncData*> functionStack;
-  typedef std::map<const FunctionDecl*,size_t> FuncDeclArray_t;
+  typedef std::map<const FunctionDecl*,FuncDeclData> FuncDeclArray_t;
   FuncDeclArray_t FuncDeclMap;
   const FunctionDecl* CTA;
   std::set<const FunctionDecl*> CTAList;
@@ -1260,7 +1270,7 @@ public:
   std::map<const TemplateSpecializationType*,FunctionDecl*> templateSpecializationFunctionMemberMap;
   std::map<QualType, QualType> vaTMap;
   unsigned long missingRefsCount;
-  std::map<const RecordDecl*,std::set<size_t>> gtp_refVars;
+  std::map<const RecordDecl*,std::set<const VarDecl*>> gtp_refVars;
   std::map<const RecordDecl*,std::set<const FunctionDecl*>> gtp_refFuncs;
   std::map<const EnumDecl*,std::set<size_t>> etp_refVars;
   std::map<const MemberExpr*,const CallExpr*> MEHaveParentCE;
@@ -1278,16 +1288,11 @@ public:
 	  return VarMap;
   }
 
-  VarData& getVarData(std::string name){
-    return VarMap.at(name);
+  const VarDecl* VarForMap(const VarDecl*D){
+    return D->getCanonicalDecl();
   }
-
   VarData& getVarData(const VarDecl *D){
-    return getVarData(D->getNameAsString());
-  }
-  
-  std::vector<std::string>& getVarIndex() {
-	  return VarIndex;
+    return VarMap.at(VarForMap(D));
   }
 
   size_t getFuncNum() {
@@ -1514,17 +1519,15 @@ public:
 
 private:
   ASTContext &Context;
-  const struct main_opts& _opts;
 };
 
 typedef std::tuple<std::string,std::string,std::string> MacroDefInfo;
 
 class DbJSONClassConsumer : public clang::ASTConsumer {
 public:
-  explicit DbJSONClassConsumer(ASTContext &Context, const std::string* sourceFile,
-		  const std::string* directory, const struct main_opts& opts, Preprocessor &PP, bool save_exps)
-    : Visitor(Context,opts), CSVisitor(Context,opts), _sourceFile(sourceFile), _directory(directory), _opts(opts),
-	  TUId(0), Context(Context), Macros(PP,save_exps) {
+  explicit DbJSONClassConsumer(ASTContext &Context, size_t fid,
+		  Preprocessor &PP, bool save_exps)
+    : Visitor(Context), file_id(fid), Context(Context), Macros(PP,save_exps) {
     }
 
   static QualType getDeclType(Decl* D) {
@@ -1609,26 +1612,30 @@ public:
   typedef std::tuple<defaut_type_map_t,default_nontype_map_t,std::vector<int>> template_default_map_t;
   
   std::string getAbsoluteLocation(SourceLocation L);
-  void printGlobalArray(int Indentation);
+  
+  void computeVarHashes();
   void computeTypeHashes();
   void computeFuncHashes();
+  void getFuncTemplatePars(DbJSONClassVisitor::FuncDeclData *func_data);
+  void getFuncDeclHash(DbJSONClassVisitor::FuncDeclData *func_data);
+  void getFuncHash(DbJSONClassVisitor::FuncData *func_data);
+  void printGlobalArray(int Indentation);
+  void printGlobalEntry(DbJSONClassVisitor::VarData &var_data, int Indentation);
+  void printTypeArray(int Indentation);
+  void printTypeEntry(DbJSONClassVisitor::TypeData &type_data, int Indentation);
   void printFuncArray(int Indentation);
+  void printFuncEntry(DbJSONClassVisitor::FuncData &func_data, int Indentation);
   void printFuncDeclArray(int Indentation);
-  void printUnresolvedFuncArray(int Indentation);
-  int getDeclId(Decl* D, std::pair<int,unsigned long long>& extraArg);
+  void printFuncDeclEntry(DbJSONClassVisitor::FuncDeclData &func_data, int Indentation);
+  size_t getDeclId(Decl* D, std::pair<int,unsigned long long>& extraArg);
   TypeGroup_t getTypeGroupIds(Decl** Begin, unsigned NumDecls, const PrintingPolicy &Policy);
   void get_class_references(RecordDecl* rD, TypeGroup_t& Ids, MethodGroup_t& MIds, std::vector<int>& rIds, std::vector<std::string>& rDef);
-  void printTemplateParameters(TemplateParameterList* TPL, const std::string& Indent,
-		  bool printDefaults = true);
   template_default_map_t getTemplateParameters(TemplateParameterList* TPL, const std::string& Indent,
 		  bool getDefaults = true);
-  void printTemplateParameters(template_default_map_t template_parms, const std::string& Indent,
-		  bool printDefaults = true);
-  void printTemplateTypeDefaults(defaut_type_map_t default_type_map, std::map<int,int> type_parms_idx,const std::string& Indent, bool nextJSONitem = true);
-  void printTemplateArgs(const TemplateArgumentList&, TemplateParameterList* Params, const std::string& Indent);
-  void printTemplateArgs(ArrayRef<TemplateArgument> Args, TemplateParameterList* Params, const std::string& Indent);
-  void printTemplateArgs(template_args_t& template_args, const std::string& Indent);
-  void printTemplateArgs(template_args_t& template_args, std::vector<int> type_args_idx, const std::string& Indent, bool nextJSONitem=true);
+  void printTemplateTypeDefaults(llvm::raw_string_ostream &TOut, defaut_type_map_t default_type_map,
+      std::map<int,int> type_parms_idx,const std::string& Indent, bool nextJSONitem = true);
+  void printTemplateArgs(llvm::raw_string_ostream &TOut, template_args_t& template_args,
+      std::vector<int> type_args_idx, const std::string& Indent, bool nextJSONitem=true);
   void getTemplateArguments(const TemplateArgumentList&, const std::string& Indent, template_args_t& template_args);
   void getTemplateArguments(ArrayRef<TemplateArgument> Args, const std::string& Indent, template_args_t& template_args);
 
@@ -1637,8 +1644,6 @@ public:
 
   void buildTemplateArgumentsString(ArrayRef<TemplateArgument> Args,
 	  	  	  std::string& typeString, std::pair<bool,unsigned long long> extraArg = {0,0});
-
-  void printTypeInternal(QualType T, const std::string& Indent);
 
   std::string render_switch_json(const Expr* cond,
 		  std::vector<std::pair<DbJSONClassVisitor::caseinfo_t,DbJSONClassVisitor::caseinfo_t>>& caselst,
@@ -1656,7 +1661,6 @@ public:
   void buildTypeString(QualType T, std::string& typeString,
 					  std::pair<int,unsigned long long> extraArg = std::pair<int,unsigned long long>(0,0));
   
-  void printTypeMap(int Indentation);
   void printDatabase();
   virtual void HandleTranslationUnit(clang::ASTContext &Context);
   
@@ -1674,11 +1678,7 @@ private:
   // Mapping of types to computed type strings (to speed-up type string creation)
   std::map<QualType,std::string> TypeStringMap;
   DbJSONClassVisitor Visitor;
-  CompoundStmtClassVisitor CSVisitor;
-  const std::string* _sourceFile;
-  const std::string* _directory;
-  const struct main_opts& _opts;
-  uint64_t TUId;
+  size_t file_id;
   ASTContext &Context;
   MacroHandler Macros;
 };

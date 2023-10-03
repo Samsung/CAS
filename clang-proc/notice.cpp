@@ -346,7 +346,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	    	  // No type to notice
 	      }
 	      else {
-	    	  if (_opts.exit_on_error) {
+	    	  if (opts.exit_on_error) {
 					llvm::outs() << "\nERROR: Unsupported TemplateArgument Kind: " << A.getKind() << "\n";
 					A.dump(llvm::outs());
 					exit(EXIT_FAILURE);
@@ -605,7 +605,8 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 				  // TODO removed likely unnecessary code, some issues may arise
 				  noticeTemplateArguments(CTPS->getTemplateArgs());
 			  }
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {TypeNum,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.at(T).id.setID(TypeNum);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << IT << "]RT = " << TypeNum << "\n" );
 			  TypeNum++;
 			  if (TRD->isCompleteDefinition()) {
@@ -650,20 +651,21 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			//   	}
 			//   }
 
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {TypeNum,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.at(T).id.setID(TypeNum);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << tp << "]R = " << TypeNum << "\n" );
 			  TypeNum++;
 
 			  if (rD->isCompleteDefinition()) {
 				  if (II) {
-					  DBG(_opts.debug2, llvm::outs() << "notice Record(" << II->getName().str() << ")(" << qualifierString << ")" <<
+					  DBG(opts.debug2, llvm::outs() << "notice Record(" << II->getName().str() << ")(" << qualifierString << ")" <<
 							  " [" << tp << "]\n" );
 				  }
 				  else {
-					  DBG(_opts.debug2, llvm::outs() << "notice Record()(" << qualifierString << ")" <<
+					  DBG(opts.debug2, llvm::outs() << "notice Record()(" << qualifierString << ")" <<
 							  " [" << tp << "]\n" );
 				  }
-				  if (_opts.debug2) {
+				  if (opts.debug2) {
 					  tp->dump();
 				  }
 				  /* Notice template arguments in case this is full specialization of some class (potentially
@@ -707,8 +709,8 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 					  }
 				  }
 				  TypeMap[T].RInfo = recordInfo;
-				  DBG(_opts.debug2, llvm::outs() << "T[" << tp << "]: " );
-				  DBG(_opts.debug2,
+				  DBG(opts.debug2, llvm::outs() << "T[" << tp << "]: " );
+				  DBG(opts.debug2,
 						  for (auto i=recordInfo->first.begin(); i!=recordInfo->first.end(); ++i) {
 							  llvm::outs() << *i << " ";
 						  } llvm::outs() << "\n" );
@@ -795,7 +797,8 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  const FunctionProtoType *tp = cast<FunctionProtoType>(T);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "@notice FunctionProto[" << tp->getNumParams() << "] (" << qualifierString << ")\n";
 			  	  	  T.dump());
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {TypeNum,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.at(T).id.setID(TypeNum);
 
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T << "]F = " << TypeNum << "\n" );
 			  TypeNum++;
@@ -823,7 +826,8 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  }
 
 	  if (TypeMap.find(T)==TypeMap.end()) {
-		  TypeMap.insert(std::pair<QualType,TypeData>(T, {TypeNum,0}));
+		  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+		  TypeMap.at(T).id.setID(TypeNum);
 		  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T << "]E = " << TypeNum << "\n" );
 		  TypeNum++;
 	  }

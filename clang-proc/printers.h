@@ -1,9 +1,9 @@
 #include "clang/AST/Decl.h"
 #include <set>
 
-extern int csd;
+extern thread_local int csd;
 extern bool enable_sa;
-extern std::set<const clang::FunctionDecl*> *CTAList;
+extern thread_local std::set<const clang::FunctionDecl*> *CTAList;
 
 void setCTAList(std::set<const clang::FunctionDecl*> *List);
 

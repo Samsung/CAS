@@ -11,9 +11,12 @@ import time
 import shutil
 import itertools
 import new_merge
+from tqdm import tqdm
 from datetime import datetime
 from queue import Empty, Full
+from threading import Thread
 __version_string__ = "0.90"
+
 
 # external use
 def mkunique_compile_commands(dbpath,debug=False,dry_run=False,ignoreDirPathEntries=set()):
@@ -537,7 +540,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
         with open(args.compilation_list,"r") as f:
             fns = [x.strip() for x in f.readlines() if x!=""]
     else:
-        fns = cdbd.keys()
+        fns = list(cdbd.keys())
         
     if args.range:
         fns = fns[int(args.range.split(":")[0]):int(args.range.split(":")[1])]
@@ -809,7 +812,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
         #logger.join()
         #print("Printed log to thred_#id.log files")
 
-    else:
+    elif args.legacy_merge:
         m = float(len(fns))/jobs
         job_list = []
         pipe_list = []
@@ -916,6 +919,73 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
                         if args.exit_on_error:
                             sys.exit(1)
                         rv+=1
+
+    else:
+        command += ["-multi" ,"-tc", f"{jobs}"]
+        if(args.range):
+            for f in fns:
+                command += ["%s"%(f[0])]
+        else:
+            command += ["__all__"]
+        try:
+            proc = subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            out = []
+            err = ''
+            def read_out(proc,out):
+                out.append(proc.stdout.read())
+                proc.stdout.close()
+
+            t = Thread(target=read_out,args=[proc,out],)
+            t.start()
+            print(proc.stderr.readline()[5:],end='')
+            count = 0
+            log_iter = tqdm(proc.stderr,total=len(fns),desc="Parsing files",miniters=1)
+            log_iter.bar_format='{desc}: {percentage:3.1f}%|{bar}{r_bar}'
+            for line in log_iter:
+                if line.startswith("LOG: "):
+                    count+=1
+                    if count > log_iter.total:
+                        log_iter.close()
+                        print(line[5:],end='')
+                        break
+                    continue
+                else:
+                    err = err+line
+                    log_iter.close()
+                    break
+            while line in proc.stderr:
+                err = err+line
+            t.join()
+            proc.communicate()
+            out = out[0]
+            rv+=1 if proc.returncode!=0 else 0
+        except Exception as e:
+            print("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]".format(0," ".join(command), 0, e))
+            with open(output_err,"a") as ferr:
+                ferr.write("{}ERROR - Failed to run ({}) - [{}] - [msg: {}]\n".format(0," ".join(command), 0, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write(traceback.format_exc()+"\n")
+                ferr.write("--------------------\n\n")
+            sys.exit(1)
+            rv+=1
+        try:
+            print("Processing...")
+            JDB = json.loads(out)
+        except Exception as e:
+            print("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]".format(0,"", 0, e))
+            print("  {}@RUNNING: {}\n".format(0," ".join(command).replace("(","\\(").replace(")","\\)")))
+            with open(output_err,"a") as ferr:
+                ferr.write("{}ERROR - Failed to process ({}) - [{}] - [msg: {}]\n".format(0,"", 0, e))
+                ferr.write("-------------------- {}\n".format(time.strftime("%Y-%m-%d %H:%M")))
+                ferr.write("OUT: {}\n".format(out))
+                ferr.write("ERR: {}\n".format(err))
+                ferr.write("{}RUNNING: {}\n".format(0," ".join(command).replace("(","\\(").replace(")","\\)")))
+                ferr.write(traceback.format_exc()+"\n")
+                ferr.write("--------------------\n\n")
+            if args.verbose:
+                traceback.print_exc()
+            sys.exit(1)
+
 
     if FDB is None:
         FDB = {"membern":0,"vars":[]}
@@ -1034,7 +1104,8 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
         JDB["module_info"] = [{"name":list(srcD.keys())[0],"id":list(srcD.values())[0]} for srcD in JDB["modules"]]
     # Now save the final JSON
     with open(output,"w") as f:
-        f.write(json.dumps(JDB,indent="\t"))
+        json.dump(JDB,f,indent="\t")
+        # f.write(json.dumps(JDB,indent="\t"))
     print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
     if mrrs+rv > 0:
         print("WARNING: Encountered some ERRORS!")

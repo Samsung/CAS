@@ -20,6 +20,8 @@ if __name__ == "__main__":
 	parser.add_argument("-Q", "--unique-cdb", action="store_true", help="Make compilation database unique while processing",required=False)
 	parser.add_argument("-nm", "--new-merge", required=False, action="store_true", help="Use new version of merging (this is the default as old merging is deprecated)")
 	parser.add_argument("-fm", "--fast-merge", required=False, action="store_true", help="Faster merging. Ids for the same objects in database will differ between runs")
+	parser.add_argument("-lm", "--legacy-merge", required=False, action="store_true", help="Run the old multi-process mode.")
+
 
 	# output control
 	parser.add_argument("-q", "--quiet", action="store_true", help="don't print any information on stdout")

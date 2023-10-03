@@ -13,6 +13,20 @@ extern int DEBUG_NOTICE;
 #include "fops.hpp"
 #include "compat.h"
 
+namespace multi{
+  extern std::string directory;
+  extern std::vector<std::string> files;
+  void registerVar(DbJSONClassVisitor::VarData&);
+  void registerType(DbJSONClassVisitor::TypeData&);
+  void registerFuncDecl(DbJSONClassVisitor::FuncDeclData&);
+  void registerFuncInternal(DbJSONClassVisitor::FuncData&);
+  void registerFunc(DbJSONClassVisitor::FuncData&);
+  void handleRefs(void *rv, std::vector<int> rIds,std::vector<std::string> rDef);
+  void processDatabase();
+  void emitDatabase(llvm::raw_ostream&);
+  void report();
+}
+
 struct main_opts {
 	bool fops;
 	bool fops_all;
@@ -44,5 +58,6 @@ struct main_opts {
 	std::string JSONRecord;
 	std::string BreakFunPlaceholder;
 	std::set<std::string> fopsRecords;
-	std::map<std::string,std::string> macroReplacementTokens;
 };
+
+extern main_opts opts;

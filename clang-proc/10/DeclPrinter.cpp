@@ -123,10 +123,10 @@ namespace {
   };
 }
 
-static int in_decl_group;
-static int group_unused;
-int csd = 0;
-std::set<const FunctionDecl*> *CTAList;
+static thread_local int in_decl_group;
+static thread_local int group_unused;
+thread_local int csd = 0;
+thread_local std::set<const FunctionDecl*> *CTAList;
 
 
 void Decl::print(raw_ostream &Out, unsigned Indentation,

@@ -1,213 +1,305 @@
 #include "main.hpp"
 
+#include <thread>
+
 //option used in DeclPrinter
 bool enable_sa = 0;
 
+using namespace llvm;
+using namespace clang;
+using namespace clang::tooling;
+
+ArgumentsAdjuster getStripWarningsAdjuster() {
+  return [](const CommandLineArguments &Args, StringRef /*unused*/) {
+    CommandLineArguments AdjustedArgs;
+    for (size_t i = 0, e = Args.size(); i < e; ++i) {
+      StringRef Arg = Args[i];
+
+      if(Arg.startswith("-Werror")){
+        continue;
+      }
+      AdjustedArgs.push_back(Args[i]);
+    }
+    AdjustedArgs.push_back("-w");
+    return AdjustedArgs;
+  };
+}
+
+ArgumentsAdjuster getClangStripDependencyFileAdjusterFixed() {
+  return [](const CommandLineArguments &Args, StringRef /*unused*/) {
+    CommandLineArguments AdjustedArgs;
+    for (size_t i = 0, e = Args.size(); i < e; ++i) {
+      StringRef Arg = Args[i];
+
+      // Include cases where option is passed by -Wp,
+      if(Arg.startswith("-Wp,")){
+        Arg = Arg.substr(4);
+      }
+      // All dependency-file options begin with -M. These include -MM,
+      // -MF, -MG, -MP, -MT, -MQ, -MD, and -MMD.
+      if (!Arg.startswith("-M")) {
+        AdjustedArgs.push_back(Args[i]);
+        continue;
+      }
+
+      if (Arg == "-MF" || Arg == "-MT" || Arg == "-MQ")
+        // These flags take an argument: -MX foo. Skip the next argument also.
+        ++i;
+    }
+    return AdjustedArgs;
+  };
+}
+
 class DbJSONClassAction : public clang::ASTFrontendAction {
 public:
-	DbJSONClassAction(const std::string* sourceFile, const struct main_opts& opts, const std::string* directory):
-		_sourceFile(sourceFile), _opts(opts), _directory(directory) {}
+	DbJSONClassAction(size_t fid): file_id(fid) {}
   virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer (
     clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
     return std::unique_ptr<clang::ASTConsumer>(
-        new DbJSONClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts,Compiler.getPreprocessor(),_opts.save_expansions));
+        new DbJSONClassConsumer(Compiler.getASTContext(),file_id,Compiler.getPreprocessor(),opts.save_expansions));
   }
   bool BeginSourceFileAction(CompilerInstance &CI) override {
 	  Preprocessor &PP = CI.getPreprocessor();
     return true;
   }
 
-
-  const std::string* _sourceFile;
-  const struct main_opts& _opts;
-  const std::string* _directory;
+  size_t file_id;
 };
 
 class FOPSClassAction : public clang::ASTFrontendAction {
 public:
-	FOPSClassAction(const std::string* sourceFile, const struct main_opts& opts, const std::string* directory):
-	_sourceFile(sourceFile), _opts(opts), _directory(directory) {}
+	FOPSClassAction(size_t fid) : file_id(fid) {}
 virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
   clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
   return std::unique_ptr<clang::ASTConsumer>(
-	  new FOPSClassConsumer(Compiler.getASTContext(),_sourceFile,_directory,_opts));
+	  new FOPSClassConsumer(Compiler.getASTContext(),file_id));
 }
 bool BeginSourceFileAction(CompilerInstance &CI) override {
   Preprocessor &PP = CI.getPreprocessor();
   return true;
 }
 
-const std::string* _sourceFile;
-const struct main_opts& _opts;
-const std::string* _directory;
+size_t file_id;
 };
 
 template <class Action>
 class DBFactory : public clang::tooling::FrontendActionFactory {
 public:
-	DBFactory(const std::string* sourceFile, const struct main_opts &opts, const std::string* directory)
-		: _sourceFile(sourceFile), _opts(opts), _directory(directory) {}
+  template <class... Args>
+  DBFactory(Args ...args): build([=](){return std::unique_ptr<clang::FrontendAction>(new Action(args...));}) {}
+
 	std::unique_ptr<clang::FrontendAction> create() override {
-		return std::unique_ptr<clang::FrontendAction>( new Action(_sourceFile,_opts,_directory) );
+		// return std::unique_ptr<clang::FrontendAction>(action);
+    return build();
 	}
 private:
-	const std::string* _sourceFile;
-  const struct main_opts _opts;
-  const std::string* _directory;
+  std::function<std::unique_ptr<clang::FrontendAction>()> build;
 };
 
-using namespace std;
-using namespace llvm;
-using namespace clang;
-using namespace clang::tooling;
+llvm::cl::OptionCategory ctCategory("clang-proc options");
+cl::opt<std::string> JSONRecordOption("R", cl::cat(ctCategory));
+cl::list<std::string> MacroReplaceOption("M", cl::cat(ctCategory),cl::ZeroOrMore);
+cl::list<std::string> AdditionalDefinesOption("D", cl::cat(ctCategory),cl::ZeroOrMore);
+cl::opt<bool> SaveMacroExpansionOption("X", cl::cat(ctCategory));
+cl::opt<bool> FopsOption("f", cl::cat(ctCategory));
+cl::opt<bool> CallOption("c", cl::cat(ctCategory));
+cl::opt<bool> AssertOption("a", cl::cat(ctCategory));
+cl::opt<bool> DebugOption("d", cl::cat(ctCategory));
+cl::opt<bool> Debug2Option("dd", cl::cat(ctCategory));
+cl::opt<bool> Debug3Option("ddd", cl::cat(ctCategory));
+cl::opt<bool> DebugNoticeOption("dn", cl::cat(ctCategory));
+cl::opt<bool> DebugDereference("du", cl::cat(ctCategory));
+cl::opt<bool> DebugBuildString("db", cl::cat(ctCategory));
+cl::opt<bool> DebugME("dme", cl::cat(ctCategory));
+cl::opt<std::string> BreakFunctionPlaceholder("B", cl::cat(ctCategory));
+cl::opt<bool> BreakOption("k", cl::cat(ctCategory));
+cl::opt<bool> IncludeOption("i", cl::cat(ctCategory));
+cl::list<std::string> AdditionalIncludePathsOption("A", cl::cat(ctCategory));
+cl::opt<bool> BodyOption("b", cl::cat(ctCategory));
+cl::opt<bool> DefsOption("F", cl::cat(ctCategory));
+cl::opt<bool> SwitchOption("s", cl::cat(ctCategory));
+cl::opt<bool> CSOption("t", cl::cat(ctCategory));
+cl::opt<std::string> TaintOption("pt", cl::cat(ctCategory),cl::desc("Generate taint info for functions' parameters"),cl::value_desc("database"));
+cl::opt<bool> TUDumpOption("u", cl::cat(ctCategory));
+cl::opt<bool> TUDumpContOption("U", cl::cat(ctCategory));
+cl::opt<bool> RecordLocOption("L", cl::cat(ctCategory));
+cl::opt<bool> TUDumpWithSrcOption("uS", cl::cat(ctCategory));
+cl::opt<bool> OnlySrcOption("S", cl::cat(ctCategory));
+cl::opt<bool> ExitOnErrorOption("E", cl::cat(ctCategory));
+cl::opt<bool> CustomStructDefs("csd",cl::cat(ctCategory));
+cl::opt<bool> ptrMEOption("pm", cl::cat(ctCategory));
+cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
 
-#include <stdio.h>
+cl::opt<bool> MultiOption("multi", cl::cat(ctCategory));
+cl::opt<int> ThreadCount("tc",cl::cat(ctCategory),cl::init(0));
 
-int main(int argc, const char **argv)
+std::string builtInIncludePath;
+std::map<std::string,std::string> macroReplacementTokens;
+struct main_opts opts;
 
-{
-	llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
-	llvm::cl::OptionCategory ctCategory("clang-proc options");
-    cl::opt<std::string> JSONRecordOption("R", cl::cat(ctCategory));
-    cl::list<std::string> MacroReplaceOption("M", cl::cat(ctCategory));
-    MacroReplaceOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
-    cl::list<std::string> AdditionalDefinesOption("D", cl::cat(ctCategory));
-    AdditionalDefinesOption.setNumOccurrencesFlag(llvm::cl::ZeroOrMore);
-    cl::opt<bool> SaveMacroExpansionOption("X", cl::cat(ctCategory));
-    cl::opt<bool> FopsOption("f", cl::cat(ctCategory));
-    cl::opt<bool> CallOption("c", cl::cat(ctCategory));
-    cl::opt<bool> AssertOption("a", cl::cat(ctCategory));
-    cl::opt<bool> DebugOption("d", cl::cat(ctCategory));
-    cl::opt<bool> Debug2Option("dd", cl::cat(ctCategory));
-    cl::opt<bool> Debug3Option("ddd", cl::cat(ctCategory));
-    cl::opt<bool> DebugNoticeOption("dn", cl::cat(ctCategory));
-    cl::opt<bool> DebugDereference("du", cl::cat(ctCategory));
-    cl::opt<bool> DebugBuildString("db", cl::cat(ctCategory));
-    cl::opt<bool> DebugME("dme", cl::cat(ctCategory));
-    cl::opt<std::string> BreakFunctionPlaceholder("B", cl::cat(ctCategory));
-    cl::opt<bool> BreakOption("k", cl::cat(ctCategory));
-    cl::opt<bool> IncludeOption("i", cl::cat(ctCategory));
-    cl::list<std::string> AdditionalIncludePathsOption("A", cl::cat(ctCategory));
-    cl::opt<bool> BodyOption("b", cl::cat(ctCategory));
-    cl::opt<bool> DefsOption("F", cl::cat(ctCategory));
-    cl::opt<bool> SwitchOption("s", cl::cat(ctCategory));
-    cl::opt<bool> CSOption("t", cl::cat(ctCategory));
-    cl::opt<std::string> TaintOption("pt", cl::cat(ctCategory),cl::desc("Generate taint info for functions' parameters"),cl::value_desc("database"));
-    cl::opt<bool> TUDumpOption("u", cl::cat(ctCategory));
-    cl::opt<bool> TUDumpContOption("U", cl::cat(ctCategory));
-    cl::opt<bool> RecordLocOption("L", cl::cat(ctCategory));
-    cl::opt<bool> TUDumpWithSrcOption("uS", cl::cat(ctCategory));
-    cl::opt<bool> OnlySrcOption("S", cl::cat(ctCategory));
-    cl::opt<bool> ExitOnErrorOption("E", cl::cat(ctCategory));
-    cl::opt<bool> CustomStructDefs("csd",cl::cat(ctCategory));
-    cl::opt<bool> ptrMEOption("pm", cl::cat(ctCategory));
-    cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
+std::atomic_int32_t counter(0);
+void run(const CompilationDatabase &compilations,const CommandLineArguments &sources){
+  unshare(CLONE_FS);
+  int max = sources.size();
+  int current = counter++;
+  std::string buf;
+  llvm::raw_string_ostream dbg(buf);
 
+  while(current<max){
+    std::string file = sources.at(current);
+    multi::files[current] = file;
+    std::string directory = compilations.getCompileCommands(file).at(0).Directory;
+    ClangTool Tool(compilations,file);
+    IgnoringDiagConsumer Diag;
+    Tool.setDiagnosticConsumer(&Diag);
+    Tool.setRestoreWorkingDir(false);
 
-    // CommonOptionsParser optionsParser(argc, argv, ctCategory);
-    auto optionsParser = std::move(CommonOptionsParser::create(argc,argv,ctCategory,cl::OneOrMore).get());
-
-    if(TaintOption.getValue().size()){
-      load_database(TaintOption.getValue());
-    }
-    
-    for(auto &sourceFile : optionsParser.getSourcePathList())
-    {
-        if(utils::fileExists(sourceFile) == false)
-        {
-            llvm::errs() << "File: " << sourceFile << " does not exist!\n";
-            return -1;
-        }
-        ClangTool Tool(optionsParser.getCompilations(),sourceFile);
-        auto directory = optionsParser.getCompilations().getCompileCommands(sourceFile).front().Directory;
-
-        if (IncludeOption.getValue()) {
-          auto arg = "-I" + utils::getClangBuiltInIncludePath(argv[0]);
-          Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
-        }
-
-        for (unsigned i = 0; i != AdditionalIncludePathsOption.size(); ++i) {
-          auto arg = "-I" + AdditionalIncludePathsOption[i];
-          Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
-        }
-
-        enable_sa = enableStaticAssert.getValue();
-        struct main_opts opts;
-        opts.JSONRecord = JSONRecordOption.getValue();
-        opts.BreakFunPlaceholder = BreakFunctionPlaceholder.getValue();
-        opts.call = CallOption.getValue();
-        opts.assert = AssertOption.getValue();
-        opts.debug = DebugOption.getValue();
-        opts.debug2 = Debug2Option.getValue();
-        opts.debug3 = Debug3Option.getValue();
-        opts.debugNotice = DebugNoticeOption.getValue();
-        DEBUG_NOTICE = opts.debugNotice;
-        opts.debugDeref = DebugDereference.getValue();
-        opts.debugbuild = DebugBuildString.getValue();
-        opts.debugME = DebugME.getValue();
-        opts.brk = BreakOption.getValue();
-        opts.addbody = BodyOption.getValue();
-        opts.switchopt = SwitchOption.getValue();
-        opts.adddefs = DefsOption.getValue();
-        opts.cstmt = CSOption.getValue();
-        opts.taint = TaintOption.getValue().size();
-        opts.tudump = TUDumpOption.getValue();
-        opts.tudumpcont = TUDumpContOption.getValue();
-        opts.tudumpwithsrc = TUDumpWithSrcOption.getValue();
-        opts.onlysrc = OnlySrcOption.getValue();
-        opts.recordLoc = RecordLocOption.getValue();
-        opts.exit_on_error = ExitOnErrorOption.getValue();
-        opts.csd = CustomStructDefs.getValue();
-        opts.ptrMEonly = ptrMEOption.getValue();
-        opts.save_expansions = opts.addbody && SaveMacroExpansionOption.getValue();
-        if (opts.JSONRecord=="*") {
-        	opts.fops_all = true;
-        }
-        else {
-        	opts.fops_all = false;
-        }
-        std::string fopsRecord;
-        std::stringstream recordList(opts.JSONRecord);
-        while(std::getline(recordList, fopsRecord, ':'))
-        {
-        	opts.fopsRecords.insert(fopsRecord);
-        }
-        opts.fops = FopsOption.getValue();
-
-        for (unsigned i = 0; i != MacroReplaceOption.size(); ++i) {
-        	size_t delim = MacroReplaceOption[i].find(":");
-        	if (delim==std::string::npos) continue;
-        	std::string macroReplacementName = MacroReplaceOption[i].substr(0,delim);
-        	std::string macroReplacementValue = MacroReplaceOption[i].substr(delim+1);
-        	opts.macroReplacementTokens[macroReplacementName] = macroReplacementValue;
-        	std::string MacroReplacementDef;
-        	std::stringstream MacroReplacementDefStream(MacroReplacementDef);
-        	MacroReplacementDefStream << "-D__macro_replacement__" << macroReplacementName << "=" << macroReplacementValue << "";
-        	Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(MacroReplacementDefStream.str().c_str()));
-                Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-implicit-function-declaration"));
-        }
-
-        for (unsigned i = 0; i != AdditionalDefinesOption.size(); ++i) {
-        	std::string def = AdditionalDefinesOption[i];
-        	std::string AdditionalDef;
-        	std::stringstream AdditionalDefStream(AdditionalDef);
-        	AdditionalDefStream << "-D" << def;
-        	Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(AdditionalDefStream.str().c_str()));
-        }
-
-        if (opts.fops) {
-          DBFactory<FOPSClassAction> Factory(&sourceFile,opts,&directory);
-		      Tool.run(&Factory);
-        }
-        else {
-          DBFactory<DbJSONClassAction> Factory(&sourceFile,opts,&directory);
-		      Tool.run(&Factory);
-        }
-        break;
+    if (IncludeOption.getValue()) {
+      auto arg = "-I" + builtInIncludePath;
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
     }
 
-    return 0;
+    for (unsigned i = 0; i != AdditionalIncludePathsOption.size(); ++i) {
+      auto arg = "-I" + AdditionalIncludePathsOption[i];
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+    }
+
+    for (auto &token : macroReplacementTokens) {
+      auto arg = "-D__macro_replacement__" + token.first + "=" + token.second;
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+    }
+    Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster("-Wno-implicit-function-declaration"));
+
+    for (unsigned i = 0; i != AdditionalDefinesOption.size(); ++i) {
+      auto arg = "-D" + AdditionalDefinesOption[i];
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+    }
+
+    Tool.appendArgumentsAdjuster(getStripWarningsAdjuster());
+    Tool.appendArgumentsAdjuster(getClangStripDependencyFileAdjusterFixed());
+
+    if (opts.fops) {
+      DBFactory<FOPSClassAction> Factory(current);
+      Tool.run(&Factory);
+    }
+    else {
+      DBFactory<DbJSONClassAction> Factory(current);
+      Tool.run(&Factory);
+    }
+    // dbg<<"\33[2K"<<llvm::format_decimal(current,6)<<"  "<<file<<"\r";
+    dbg<<llvm::format_decimal(current,6)<<"  "<<file<<"\n";
+    dbg.flush();
+    llvm::errs()<<"LOG: "+buf;
+    buf.clear();
+
+    current = counter++;
+    if(!MultiOption.getValue())
+      break;
+  }
 }
 
 
 
+int main(int argc, const char **argv)
+{
+    llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+    // CommonOptionsParser optionsParser(argc, argv, ctCategory);
+    auto optionsParser = std::move(CommonOptionsParser::create(argc,argv,ctCategory,cl::OneOrMore).get());
+    auto AllFiles = optionsParser.getSourcePathList();
+    if(AllFiles.size() == 1 && AllFiles[0] == "__all__")
+      AllFiles = optionsParser.getCompilations().getAllFiles();
+
+    enable_sa = enableStaticAssert.getValue();
+    opts.JSONRecord = JSONRecordOption.getValue();
+    opts.BreakFunPlaceholder = BreakFunctionPlaceholder.getValue();
+    opts.call = CallOption.getValue();
+    opts.assert = AssertOption.getValue();
+    opts.debug = DebugOption.getValue();
+    opts.debug2 = Debug2Option.getValue();
+    opts.debug3 = Debug3Option.getValue();
+    opts.debugNotice = DebugNoticeOption.getValue();
+    DEBUG_NOTICE = opts.debugNotice;
+    opts.debugDeref = DebugDereference.getValue();
+    opts.debugbuild = DebugBuildString.getValue();
+    opts.debugME = DebugME.getValue();
+    opts.brk = BreakOption.getValue();
+    opts.addbody = BodyOption.getValue();
+    opts.switchopt = SwitchOption.getValue();
+    opts.adddefs = DefsOption.getValue();
+    opts.cstmt = CSOption.getValue();
+    opts.taint = TaintOption.getValue().size();
+    opts.tudump = TUDumpOption.getValue();
+    opts.tudumpcont = TUDumpContOption.getValue();
+    opts.tudumpwithsrc = TUDumpWithSrcOption.getValue();
+    opts.onlysrc = OnlySrcOption.getValue();
+    opts.recordLoc = RecordLocOption.getValue();
+    opts.exit_on_error = ExitOnErrorOption.getValue();
+    opts.csd = CustomStructDefs.getValue();
+    opts.ptrMEonly = ptrMEOption.getValue();
+    opts.save_expansions = opts.addbody && SaveMacroExpansionOption.getValue();
+    
+    if (opts.JSONRecord=="*") {
+      opts.fops_all = true;
+    }
+    else {
+      opts.fops_all = false;
+    }
+    std::string fopsRecord;
+    std::stringstream recordList(opts.JSONRecord);
+    while(std::getline(recordList, fopsRecord, ':'))
+    {
+      opts.fopsRecords.insert(fopsRecord);
+    }
+    opts.fops = FopsOption.getValue();
+
+    if (IncludeOption.getValue()) {
+      builtInIncludePath = utils::getClangBuiltInIncludePath(argv[0]);
+    }
+
+    for (unsigned i = 0; i != MacroReplaceOption.size(); ++i) {
+      size_t delim = MacroReplaceOption[i].find(":");
+      if (delim==std::string::npos) continue;
+      std::string macroReplacementName = MacroReplaceOption[i].substr(0,delim);
+      std::string macroReplacementValue = MacroReplaceOption[i].substr(delim+1);
+      macroReplacementTokens[macroReplacementName] = macroReplacementValue;
+    }
+
+    if(TaintOption.getValue().size()){
+      load_database(TaintOption.getValue());
+    }
+
+    multi::directory = optionsParser.getCompilations().getAllCompileCommands().front().Directory;
+    multi::files.resize(AllFiles.size());
+    if(MultiOption.getValue()){
+      int threadcount = ThreadCount.getValue() ?: std::thread::hardware_concurrency();
+      if(AllFiles.size()<threadcount)
+        threadcount = AllFiles.size();
+      llvm::errs()<<"LOG: "<<"Number of threads: "<<threadcount<<'\n';
+
+      llvm::outs().SetUnbuffered();
+
+      std::vector<std::thread> ts;
+      for(int i=0;i<threadcount;i++){
+        ts.emplace_back(run,std::ref(optionsParser.getCompilations()),std::ref(AllFiles));
+      }
+
+      for(auto &t :ts){
+        t.join();
+      }
+      llvm::errs()<<"LOG: Done.\n";
+      if(opts.fops)
+        return 0;
+
+      multi::processDatabase();
+      multi::emitDatabase(llvm::outs());
+      // multi::report();
+    }
+    else{ //normal pass for backwards compatibility
+      run(std::ref(optionsParser.getCompilations()),std::ref(AllFiles));
+      if(opts.fops)
+        return 0;
+      multi::processDatabase();
+      multi::emitDatabase(llvm::outs());
+    }
+    return 0;
+}

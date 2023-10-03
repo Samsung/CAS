@@ -228,7 +228,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForLiteral for:\n";
 				E->dump();
 				exit(EXIT_FAILURE);
@@ -446,7 +446,7 @@ void DbJSONClassVisitor::lookForDeclRefExprsWithStmtExpr(const Expr* E, std::set
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprsWithStmtExpr for:\n";
 				E->dump();
 				exit(EXIT_FAILURE);
@@ -652,7 +652,7 @@ void DbJSONClassVisitor::lookForDeclRefExprs(const Expr* E, std::set<ValueHolder
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefWithMemberExprs for:\n";
 				E->dump();
 				exit(EXIT_FAILURE);
@@ -690,7 +690,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternalFromStmt(const Stm
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs(Stmt) for:\n";
 				S->dump();
 				exit(EXIT_FAILURE);
@@ -2040,9 +2040,10 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs for:\n";
 				E->dump();
+				assert(0);
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -2489,9 +2490,10 @@ void DbJSONClassVisitor::lookForExplicitCastExprs(const Expr* E, std::vector<Qua
 		}
 		default:
 		{
-			if (_opts.exit_on_error) {
+			if (opts.exit_on_error) {
 				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs for:\n";
 				E->dump();
+				assert(0);
 				exit(EXIT_FAILURE);
 			}
 			else {
@@ -2760,14 +2762,13 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 				// TODO: handle further attributes with expressions
 			}
 			else {
-				noticeTypeClass(UTTE->getArgumentType());
 				QV.push_back(UTTE->getArgumentType());
 			}
 			return true;
 		  }
 		default:
 			{
-				if (_opts.exit_on_error) {
+				if (opts.exit_on_error) {
 					llvm::outs() << "\nERROR: No implementation in lookForUnaryExprOrTypeTraitExpr for:\n";
 					E->dump();
 					exit(EXIT_FAILURE);
@@ -2838,7 +2839,7 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 	  	  }
 	  	  default:
 	  	  {
-				if (_opts.exit_on_error) {
+				if (opts.exit_on_error) {
 					llvm::outs() << "\nWARNING: No implementation in lookForAttrTypes for Kind " << attr->getKind() << "\n";
 				}
 				else {

@@ -218,6 +218,7 @@ include_directories(${CMAKE_BINARY_DIR}/generated)
 # general include also provided by clang-build
 target_link_libraries(clang-proc
     PRIVATE
+    pthread
     clangTooling
     clangASTMatchers
     ${ADDITIONAL_LIBS}

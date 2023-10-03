@@ -1,8 +1,8 @@
 #include "main.hpp"
 #include "clang/AST/RecordLayout.h"
 
-int short_ptr = 0;
-bool autoforward = false;
+thread_local int short_ptr = 0;
+thread_local bool autoforward = false;
 
   void DbJSONClassConsumer::buildTemplateArgumentsString(const TemplateArgumentList& Args,
 		  std::string& typeString, std::pair<bool,unsigned long long> extraArg) {
@@ -47,7 +47,7 @@ bool autoforward = false;
 				  template_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
 			  }
 			  else {
-				  if (_opts.exit_on_error) {
+				  if (opts.exit_on_error) {
 						llvm::outs() << "\nERROR: Unsupported TemplateArgument Kind: " << A.getKind() << "\n";
 						A.dump(llvm::outs());
 						exit(EXIT_FAILURE);
@@ -195,9 +195,11 @@ bool autoforward = false;
 			  std::stringstream outerStr;
 			  const FunctionDecl* outerDef = static_cast<FunctionDecl*>(rD->getParentFunctionOrMethod());
 			  assert(outerDef && "Cannot find function definition for outer function of type");
-			  DbJSONClassVisitor::FuncData fnfo = Visitor.getFuncMap().at(outerDef);
+			  DbJSONClassVisitor::FuncData &fnfo = Visitor.getFuncMap().at(outerDef);
+			  // build ahead of time
+			  if(!fnfo.hash.size()) getFuncHash(&fnfo);
 			  outerStr << Visitor.parentFunctionOrMethodString(rD) << ":" << fnfo.hash;
-			  if (_opts.cstmt) {
+			  if (opts.cstmt) {
 				  if ((Visitor.getRecordCSMap().find(rD)!=Visitor.getRecordCSMap().end()) &&
 						  (Visitor.getRecordCSMap()[rD]!=0)) {
 					  const CompoundStmt* CS = Visitor.getRecordCSMap()[rD];
@@ -509,6 +511,19 @@ bool autoforward = false;
 			  }
 			  ss << rstr;
 			  typeString.append(ss.str());
+
+			  //update
+			  std::string parentRecordHash;
+			  if (Visitor.recordParentDeclMap.find(TRD)!=Visitor.recordParentDeclMap.end()) {
+				  CXXRecordDecl* parentRecord = Visitor.recordParentDeclMap[TRD];
+				  QualType RT = Context.getRecordType(parentRecord);
+				  DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
+				  // build ahead of time
+				  if(!RT_data.hash.size()) buildTypeString(RT,RT_data.hash);
+				  parentRecordHash = RT_data.hash;
+				  parentRecordHash+="::";
+							  }
+			  typeString.insert(3,parentRecordHash);
 		  }
 		  break;
 		  case Type::DependentName:
@@ -626,6 +641,7 @@ bool autoforward = false;
 		  case Type::Record:
 		  {
 			  const RecordType *tp = cast<RecordType>(T);
+			  bool do_update = false;
 			  RecordDecl* rD = tp->getDecl();
 			  if (isa<CXXRecordDecl>(rD)) {
 				  qualifierString.append("x");
@@ -637,6 +653,7 @@ bool autoforward = false;
 			  std::string rstr;
 			  if (rD->isCompleteDefinition() && !autoforward) {
 				  buildRecordTypeString(T,rD,qualifierString,rstr,extraArg );
+				  do_update = true;
 			  }
 			  else {
 				  autoforward=false;
@@ -668,6 +685,34 @@ bool autoforward = false;
 				  }
 			  }
 			  typeString.append(rstr);
+
+			  //update
+			  if(do_update)
+			  if ((Visitor.gtp_refVars.find(rD)!=Visitor.gtp_refVars.end())&&(Visitor.gtp_refVars[rD].size()>0)) {
+				  size_t pos = typeString.rfind(";");
+				  assert(pos!=typeString.npos);
+				  pos = typeString.rfind(":",pos);
+				  assert(pos!=typeString.npos);
+				  if(pos<88){
+					llvm::errs()<<typeString<<'\n';
+					T.dump();
+				  	assert(pos>=88);
+				  }
+				  std::string odt = base64_decode(typeString.substr(pos-88,88));
+				  SHA_CTX c;
+				  SHA_init(&c);
+				  SHA_update(&c,odt.data(),odt.length());
+				  std::set<std::string> ordered;
+				  for (auto u = Visitor.gtp_refVars[rD].begin(); u!=Visitor.gtp_refVars[rD].end(); ++u) {
+					  std::string &vhash = Visitor.getVarData(*u).hash;
+					  ordered.insert(vhash);
+				  }
+				  for(auto &vhash : ordered){
+					  SHA_update(&c,vhash.data(),vhash.length());
+				  }
+				  SHA_final(&c);
+				  typeString.replace(pos-88,88,base64_encode(reinterpret_cast<const unsigned char*>(c.buf.b), 64));
+			  }
 		  }
 		  break;
 		  case Type::ConstantArray:
@@ -915,5 +960,4 @@ bool autoforward = false;
 					  << qualifierString << ")\n" );
 			  break;
 	  }
-
   }

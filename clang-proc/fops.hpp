@@ -42,8 +42,7 @@ using namespace clang;
 class FOPSClassVisitor
   : public RecursiveASTVisitor<FOPSClassVisitor> {
 public:
-  explicit FOPSClassVisitor(ASTContext &Context, const struct main_opts& opts)
-    : Context(Context), _opts(opts) { (void)Context; }
+  explicit FOPSClassVisitor(ASTContext &Context) : Context(Context) {}
 
   void noticeInitListStmt(const Stmt* initExpr, const VarDecl * D);
   void noticeImplicitCastExpr(const ImplicitCastExpr* ICE, const VarDecl * Dref, QualType initExprType, unsigned long index);
@@ -78,14 +77,12 @@ public:
 
 private:
   ASTContext &Context;
-  const struct main_opts& _opts;
 };
 
 class FOPSClassConsumer : public clang::ASTConsumer {
 public:
-  explicit FOPSClassConsumer(ASTContext &Context, const std::string* sourceFile,
-		  const std::string* directory, const struct main_opts& opts)
-    : Visitor(Context,opts), _sourceFile(sourceFile), _directory(directory), _opts(opts), Context(Context) {}
+  explicit FOPSClassConsumer(ASTContext &Context, size_t fid)
+    : Visitor(Context), file_id(fid), Context(Context) {}
 
   void printVarMaps(int Indentation);
   void printVarMap(FOPSClassVisitor::initMapFixedType_t& FTVM, int Indentation);
@@ -98,9 +95,7 @@ public:
       }
 private:
   FOPSClassVisitor Visitor;
-  const std::string* _sourceFile;
-  const std::string* _directory;
-  const struct main_opts& _opts;
+  size_t file_id;
   ASTContext &Context;
 };
 
