@@ -1765,6 +1765,8 @@ class CASDatabase:
 
                                 extra_arg_num = 0
                                 for i,u in enumerate(reversed(argv)):
+                                    if u.startswith("-fdump-preamble="):
+                                        continue
                                     if u not in self.config.clang_tailopts:
                                         break
                                     extra_arg_num += 1
