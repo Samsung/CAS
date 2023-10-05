@@ -697,7 +697,9 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
          I < NumTemplateParams; ++I)
       printTemplateParameters(D->getTemplateParameterList(I));
   }
-  
+
+  auto AsmAttr = D->getAttr<AsmLabelAttr>();
+  D->dropAttr<AsmLabelAttr>();
   prettyPrintAttributes(D);
 
   CXXConstructorDecl *CDecl = dyn_cast<CXXConstructorDecl>(D);
@@ -864,6 +866,11 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
     }
   } else {
     Ty.print(Out, Policy, Proto);
+  }
+
+  if(AsmAttr){
+    AsmAttr->printPretty(Out,Policy);
+    D->addAttr(AsmAttr);
   }
 
   if (D->isPure())
