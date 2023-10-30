@@ -73,7 +73,7 @@ class ExecWorker:
         self.initialized = False
 
 
-    def runCmd(self, cwd: str, cmd: str, args: List[str], input: Optional[str] = None) -> Tuple[str, int]:
+    def runCmd(self, cwd: str, cmd: str, args: List[str], input: Optional[str] = None) -> Tuple[str, str, int]:
         worker_status = self.worker.poll()
         if worker_status is not None:
             self.destroy()
@@ -95,11 +95,12 @@ class ExecWorker:
         self._safe_write(self.pWrite, dataToSend)
         
         # Hang on pipe read and retrieve output
-        header = self._safe_read(self.pRead, 10)
-        size, retCode, error = struct.unpack("IiH", header)
-        data = self._safe_read(self.pRead, size)
+        header = self._safe_read(self.pRead, 14)
+        sizeOut, sizeErr, retCode, error = struct.unpack("IIiH", header)
+        dataOut = self._safe_read(self.pRead, sizeOut)
+        dataErr = self._safe_read(self.pRead, sizeErr)
 
         if error:
             self.destroy()
-            raise ExecWorkerException(f"Cannot run command - worker encountered an error {data.decode()}")
-        return data.decode(), retCode
+            raise ExecWorkerException(f"Cannot run command - worker encountered an error {dataErr.decode()}")
+        return dataOut.decode(), dataErr.decode(), retCode

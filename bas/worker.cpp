@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -38,7 +39,8 @@ struct req_packet {
 } __PACKED;
 
 struct resp_packet {
-    unsigned int size;
+    unsigned int stdout_size;
+    unsigned int stderr_size;
     int return_code;
     unsigned short internal_error;
     char data[0];
@@ -73,7 +75,7 @@ public:
  */
 class ExecutionWorker {
     int readFD, writeFD, retCode;
-    std::vector<char> cwd, output, input;
+    std::vector<char> cwd, outputOut, outputErr, input;
     std::vector<std::vector<char>> cmd;
 
     void full_read(int fd, void* buffer, size_t len);
@@ -153,28 +155,34 @@ void ExecutionWorker::recv(void) {
 void ExecutionWorker::send(bool sentError) {
     struct resp_packet packet;
 
-    packet.size = output.size();
+    packet.stdout_size = outputOut.size();
+    packet.stderr_size = outputErr.size();
     packet.internal_error = sentError;
     packet.return_code = retCode;
     full_write(writeFD, &packet, sizeof(packet));
     
-    full_write(writeFD, output.data(), output.size());
+    full_write(writeFD, outputOut.data(), outputOut.size());
+    full_write(writeFD, outputErr.data(), outputErr.size());
 }
 
 
 void ExecutionWorker::execute(void) {
-    int fd[2], fdRead[2];
+    int fdOut[2], fdErr[2], fdRead[2];
     char slice[256];
     int status;
     int retries = 0;
-    size_t offset = 0;
     pid_t writerPid = -1;
 
-    output.clear();
+    outputOut.clear();
+    outputErr.clear();
 
-    int ret = pipe(fd);
+    int ret = pipe(fdOut);
     if(ret < 0)
         throw ExecutionWorkerException("cannot create output pipe to subprocess", true);
+    
+    ret = pipe(fdErr);
+    if(ret < 0)
+        throw ExecutionWorkerException("cannot create error pipe to subprocess", true);
 
     ret = pipe(fdRead);
     if(ret < 0)
@@ -183,7 +191,8 @@ void ExecutionWorker::execute(void) {
     pid_t pid = fork();
     if(pid > 0) {
         // Parent
-        close(fd[1]);
+        close(fdOut[1]);
+        close(fdErr[1]);
         close(fdRead[0]);
 
         // If there's any input to write, spawn new writer process
@@ -205,20 +214,59 @@ void ExecutionWorker::execute(void) {
         }
         close(fdRead[1]);
 
+        bool isOutDone = false, isErrDone = false;
         while(retries < 100) {
-            ssize_t ret = read(fd[0], slice, sizeof(slice));
-            if(ret < 0) {
+            /* Things got a bit complicated here - now we've got 2 file descriptors (stdout + stderr)
+             *  and both of them should be read frequently to avoid stalling child process. Let's use
+             *  poll syscall to achieve that
+             */
+            struct pollfd pfds[2];
+            memset(pfds, 0, sizeof(pfds));
+            pfds[0].fd = fdOut[0];
+            pfds[1].fd = fdErr[0];
+            pfds[0].events = pfds[1].events = POLLIN;
+
+            int poll_ret = poll(pfds, 2, -1);
+            if(poll_ret < 0) {
                 kill(pid, SIGKILL);
-                throw ExecutionWorkerException("cannot read from children pipe", true);
-            } else if (ret == 0 && waitpid(pid, &status, WNOHANG) == pid) {
-                break;
-            } else if(ret == 0)
-                retries++;
-            
-            output.resize(output.size() + ret);
-            memcpy(output.data() + offset, slice, ret);
-            offset += ret;
-            retries = 0;
+                throw ExecutionWorkerException("cannot poll pipe events", true);
+            }
+
+            if(pfds[0].revents) {
+                ssize_t ret = read(fdOut[0], slice, sizeof(slice));
+                if(ret < 0) {
+                    kill(pid, SIGKILL);
+                    throw ExecutionWorkerException("cannot read from children stdout pipe", true);
+                } else if (ret == 0 && waitpid(pid, &status, WNOHANG) == pid) {
+                    isOutDone = true;
+                    if(isErrDone) break;
+                } else if(ret == 0) {
+                    retries++;
+                } else {
+                    retries = 0;
+                    size_t oldSize = outputOut.size();
+                    outputOut.resize(oldSize + ret);
+                    memcpy(outputOut.data() + oldSize, slice, ret);
+                }
+            }
+
+            if(pfds[1].revents) {
+                ssize_t ret = read(fdErr[0], slice, sizeof(slice));
+                if(ret < 0) {
+                    kill(pid, SIGKILL);
+                    throw ExecutionWorkerException("cannot read from children stderr pipe", true);
+                } else if (ret == 0 && waitpid(pid, &status, WNOHANG) == pid) {
+                    isErrDone = true;
+                    if(isOutDone) break;
+                } else if(ret == 0) {
+                    retries++;
+                } else {
+                    retries = 0;
+                    size_t oldSize = outputErr.size();
+                    outputErr.resize(oldSize + ret);
+                    memcpy(outputErr.data() + oldSize, slice, ret);
+                }
+            }
         }
 
         // Make sure our child is cold dead
@@ -240,10 +288,12 @@ void ExecutionWorker::execute(void) {
     } else if(pid == 0) {
         // Child
         dup2(fdRead[0], STDIN_FILENO);
-        dup2(fd[1], STDOUT_FILENO);
-        dup2(fd[1], STDERR_FILENO);
-        close(fd[1]);
-        close(fd[0]);
+        dup2(fdOut[1], STDOUT_FILENO);
+        dup2(fdErr[1], STDERR_FILENO);
+        close(fdOut[1]);
+        close(fdOut[0]);
+        close(fdErr[1]);
+        close(fdErr[0]);
         close(fdRead[0]);
         close(fdRead[1]);
 
@@ -265,7 +315,8 @@ void ExecutionWorker::execute(void) {
         throw ExecutionWorkerException("fork failed", true);
     }
 
-    close(fd[0]);
+    close(fdOut[0]);
+    close(fdErr[0]);
 }
 
 
@@ -278,10 +329,10 @@ void ExecutionWorker::processSingleRequest(void) {
 void ExecutionWorker::sendError(const char* errorStr) {
     size_t errorLen = strlen(errorStr);
 
-    output.clear();
-    output.resize(errorLen + 1);
-    memcpy(output.data(), errorStr, errorLen);
-    output[errorLen] = '\0';
+    outputErr.clear();
+    outputErr.resize(errorLen + 1);
+    memcpy(outputErr.data(), errorStr, errorLen);
+    outputErr[errorLen] = '\0';
 
     // true - indicate to host that this is an error message
     send(true);

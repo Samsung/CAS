@@ -5,7 +5,8 @@
 #include <stdbool.h>
 #include <spawn.h>
 #include <sys/wait.h>
-
+#include <unistd.h>
+#include <stdio.h>
 #include "uflat.h"
 
 DEFINE_COMPILER(gcc);
@@ -276,8 +277,10 @@ PyObject * libetrace_precompute_command_patterns(PyObject *self, PyObject *args,
 			PyObject* cmds = PyUnicode_Join(py_space,cmdv);
 			const char* cmdstr = PyString_get_c_str(cmds);
 			cmdi++;
-			if ((cmdi%1000)==0) {
-				DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/cmd_count);
+			if (isatty(fileno(stdin))){
+				if ((cmdi%1000)==0) {
+					DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/cmd_count);
+				}
 			}
 			size_t bsize = (excl_commands_size-1)/8+1;
 			unsigned char* b = calloc(bsize,1);
@@ -1330,8 +1333,10 @@ PyObject* libetrace_nfsdb_precompute_command_patterns(libetrace_nfsdb_object *se
     for (unsigned long cmdi=0; cmdi<self->nfsdb->nfsdb_count; ++cmdi) {
     	struct nfsdb_entry* entry = &self->nfsdb->nfsdb[cmdi];
     	const char* cmdstr = libetrace_nfsdb_string_handle_join(self->nfsdb,entry->argv,entry->argv_count," ");
-    	if ((cmdi%1000)==0) {
-			DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/self->nfsdb->nfsdb_count);
+    	if (isatty(fileno(stdin))){
+			if ((cmdi%1000)==0) {
+				DBG(1,"\rPrecomputing exclude command patterns...%lu%%",(cmdi*100)/self->nfsdb->nfsdb_count);
+			}
 		}
 		size_t bsize = (excl_commands_size-1)/8+1;
 		unsigned char* b = calloc(bsize,1);

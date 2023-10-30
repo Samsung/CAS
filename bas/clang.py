@@ -3,11 +3,15 @@ import sys
 import string
 import subprocess
 import libetrace
+from functools import lru_cache
+from typing import List, Tuple
 
 COMPILER_NONE = 0
 COMPILER_C = 1
 COMPILER_CPP = 2
 COMPILER_OTHER = 3
+
+st = set(string.whitespace)
 
 test_file = "/tmp/.nfsdb__test.c"
 if not os.path.exists(test_file):
@@ -81,6 +85,7 @@ class clang(libetrace.clang):
             for ccpi_tuple in zip(self.cc_compilers,self.cc_preprocessors,self.cc_include_paths):
                 print ("[%s] [%s] %s\n"%(ccpi_tuple[0],ccpi_tuple[1],ccpi_tuple[2]))
 
+    @lru_cache
     def compiler_type(self, cbin):
         if cbin in self.c_compilers:
             i = self.c_compilers.index(cbin)
@@ -91,7 +96,8 @@ class clang(libetrace.clang):
         else:
             return None
 
-    def compiler_include_paths(self,cbin):
+    @lru_cache
+    def compiler_include_paths(self, cbin) -> List[str]:
         if cbin in self.c_compilers:
             i = self.c_compilers.index(cbin)
             return self.c_include_paths[i]
@@ -101,93 +107,160 @@ class clang(libetrace.clang):
         else:
             return []
 
-    def parse_include_files(self, exe, ipaths):
-        cmd = exe['v']
+    def parse_include_files(self, args:List[str], cwd:str, ipaths) -> List[str]:
         ifiles = list()
-        include_opt_indices = [i for i, x in enumerate(cmd) if x == "-include"]
+        include_opt_indices = [i for i, x in enumerate(args) if x == "-include"]
         for i in include_opt_indices:
-            if os.path.isabs(cmd[i+1]):
-                ifiles.append(cmd[i+1])
+            if os.path.isabs(args[i+1]):
+                ifiles.append(args[i+1])
             else:
-                tryPaths = [os.path.normpath(os.path.join(x,cmd[i+1])) for x in ipaths]+[os.path.realpath(os.path.normpath(os.path.join(exe['w'],cmd[i+1])))]
+                tryPaths = [os.path.normpath(os.path.join(x,args[i+1])) for x in ipaths]+[os.path.realpath(os.path.normpath(os.path.join(cwd,args[i+1])))]
                 pathsExist = [x for x in tryPaths if os.path.isfile(x)]
                 if len(pathsExist) > 0:
                     ifiles.append(pathsExist[0])
         return ifiles
 
-    # def get_compiled_files(self,out,exe):
-    #     return out[0]
-
     def have_integrated_cc1(self, exe):
         return "-fno-integrated-cc1" not in exe[2] and \
-                os.path.normpath(os.path.join(exe[1],exe[0])) in self.integrated_clang_compilers
+                os.path.normpath(os.path.join(exe[1], exe[0])) in self.integrated_clang_compilers
 
-    def get_object_files(self, comp_exe, have_int_cc1, fork_map, rev_fork_map, wr_map):
+    def get_object_files(self, pid, have_int_cc1, fork_map, rev_fork_map, wr_map):
         if have_int_cc1:
-            cpid = comp_exe["p"]
+            cpid = pid
         else:
-            cpid = rev_fork_map[comp_exe["p"]]
+            cpid = rev_fork_map[pid]
 
         return [
-            x for x in process_write_open_files_unique_with_children(cpid,fork_map,wr_map)
+            x for x in process_write_open_files_unique_with_children(cpid, fork_map, wr_map)
             if not x.startswith("/dev/") and libetrace.is_ELF_or_LLVM_BC_file(x)
             ]
 
     @staticmethod
-    def parse_one_def(s,st):
-        i = next((i for i, ch  in enumerate(s) if ch in st),None)
+    @lru_cache(maxsize=2048)
+    def parse_one_def(s):
+        i = next((i for i, ch in enumerate(s) if ch in st), None)
         if i:
-            return (s[:i],s[i:].strip())
+            return s[:i], s[i:].strip()
         else:
-            return (s,"")
+            return s, ""
 
-    def parse_defs(self, out):
-        intro="#include \"...\" search starts here:"
-        middle="#include <...> search starts here:"
-        outro="End of search list."
-        lns = [x.strip() for x in out.split("\n") if x.strip()!=""]
+    def parse_defs(self, stderr: List[str], stdout: List[str]) -> Tuple[List[str], List[Tuple[str, str]], List[Tuple[str, str]]]:
+        assert len(stderr) != 0
+        intro = '#include "..." search starts here:'
+        middle = '#include <...> search starts here:'
+        outro = "End of search list."
 
-        st = set(string.whitespace)
+        includes: List[str] = []
+        defs: List[Tuple[str, str]] = []
+        undefs: List[Tuple[str, str]] = []
 
-        includes = list()
+        lns = [x.strip() for x in stderr if x.strip() != ""]
         try:
-            i=lns.index(intro)
-            o=lns.index(outro, i)
+            i = lns.index(intro)
+            o = lns.index(outro, i)
             if middle in lns:
-                m=lns.index(middle)
+                m = lns.index(middle)
                 includes += lns[i+1:m]+lns[m+1:o]
             else:
                 includes += lns[i+1:o]
-
         except ValueError as err:
-            print ("@exception(%s)"%(str(err)), flush=True)
-            print ("@data(%s)"%(lns), flush=True)
-            raise err
+            print(f"@exception({str(err)})", flush=True)
+            print(f"@data({lns})", flush=True)
+            raise IncludeParseException from err
+        lns = [x.strip() for x in stdout if x.strip() != ""]
+        for i, x in enumerate(lns):
+            if x.startswith("#define"):
+                defs.append(self.parse_one_def(x[7:].lstrip()))
+            elif x.startswith("#undef"):
+                undefs.append(self.parse_one_def(x[6:].lstrip()))
+        if len(defs) ==0:
+            print("includes= {} defs={} undefs={}".format(len(includes), len(defs), len(undefs)))
+        return includes, defs, undefs
 
-        defs = [self.parse_one_def(x[7:].lstrip(),st) for x in lns[o+1:] if x.startswith("#define")]
-        undefs = [self.parse_one_def(x[6:].lstrip(),st) for x in lns[o+1:] if x.startswith("#undef")]
-
-        return (includes,defs,undefs)
-
-    def get_source_type(self,cmd,compiler_type,src_ext):
+    @staticmethod
+    def get_source_type(cmd, compiler_type, src_ext):
 
         comp_lan_indices = [i for i, x in enumerate(cmd) if x == "-x"]
         """
         So far only first specification of -x (if any) is applied to all source files; proper parsing of command line is required to handle that well
         """
-        cmd_lan_spec = cmd[comp_lan_indices[0]+1] if len(comp_lan_indices)>0 else None
-            
+        cmd_lan_spec = cmd[comp_lan_indices[0]+1] if len(comp_lan_indices) > 0 else None
+
         if cmd_lan_spec:
-            if cmd_lan_spec in ["c","c-header","cpp-output"]:
+            if cmd_lan_spec in ["c", "c-header", "cpp-output"]:
                 return COMPILER_C
-            elif cmd_lan_spec in ["c++","c++-header","c++-cpp-output"]:
+            elif cmd_lan_spec in ["c++", "c++-header", "c++-cpp-output"]:
                 return COMPILER_CPP
             elif cmd_lan_spec in ["assembler-with-cpp"]:
                 return COMPILER_OTHER
-        if compiler_type==COMPILER_CPP:
+        if compiler_type == COMPILER_CPP:
             return COMPILER_CPP
         else:
-            if src_ext==".c":
+            if src_ext == ".c":
                 return COMPILER_C
             else:
                 return COMPILER_CPP
+
+    @staticmethod
+    def quickcheck(bin, argv: List[str]):
+        # if os.path.exists(bin):
+        #     return False
+
+        # if "-cc1" in argv:
+        #     return False
+        if argv[0] == "clang":
+            if argv[1] == "--version":
+                # print (f"[quickcheck] Skipping {argv}")
+                return False
+            try:
+                i = argv.index("-x")
+                if argv[i+1] == "c" and argv[i+2] in ["/dev/null", "-"]:
+                    # print (f"[quickcheck] Skipping {argv}")
+                    return False
+                i = argv.index("-o")
+                if argv[i+1] == "/dev/null" or argv[i+1].startswith("/tmp/tmp.") or argv[i+1].endswith("/tmp"):
+                    # print (f"[quickcheck] Skipping {argv}")
+                    return False
+            except ValueError:
+                pass
+        return True
+
+    @staticmethod
+    def extract_comp_file(argv: List[str], cwd: str, tailopts: List[str]) -> str:
+        i = 0
+        loc_arg = argv.copy()
+        try:
+            o_pos = argv.index("-o")
+            loc_arg.pop(o_pos+1)
+            loc_arg.pop(o_pos)
+        except ValueError:
+            pass
+
+        for i, u in enumerate(reversed(loc_arg)):
+            if u.startswith("-fdump-preamble=") or u.startswith("-no-opaque-pointers"):
+                continue
+            if u not in tailopts:
+                break
+        return loc_arg[-1-i]
+
+    @staticmethod
+    def fix_argv(argv: List[str], compiler_type, compiled_file) -> List[str]:
+        oi = argv.index("-o")
+        argv.pop(oi)
+        argv.pop(oi)
+        argv.insert(oi, "-dD")
+        argv.insert(oi, "-E")
+        argv.insert(oi, "-P")
+        argv.insert(oi, "-v")
+        if "-x" not in argv:
+            argv.insert(oi, "c" if compiler_type == 1 else "c++")
+            argv.insert(oi, "-x")
+
+        ci = argv.index(compiled_file)
+        argv.pop(ci)
+        argv.append("-")
+
+        return argv
+
+class IncludeParseException(Exception):
+    pass

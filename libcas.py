@@ -1358,6 +1358,27 @@ class CASDatabase:
         r = CASDatabase.read_path_file_info(path)
         return "ELF" in r and "interpreter" in r
 
+    @staticmethod
+    def get_effective_args(args: List[str], cwd: str) -> List[str]:
+        if "@" in " ".join(args):
+            ret = []
+            for i, arg in enumerate(args):
+                if arg.startswith("@"):
+                    f = os.path.normpath(os.path.join(cwd, arg[1:]))
+                    if os.path.isfile(f):
+                        with open(f, "r") as arg_file:
+                            r = arg_file.read()
+                            ret.extend(r.split())
+                    else:
+                        print("Parsing args failed! {}".format(args))
+                        print("Argfile does not exists {}".format(f))
+                else:
+                    ret.append(arg)
+            return ret
+        else:
+            return args
+
+
     def post_process(self, json_db_filename, wrapping_bin_list: List[str], workdir,
                      process_linking=True, process_comp=True, process_rbm=True, process_pcp=True,
                      new_database=True, no_update=False, no_auto_detect_icc=False, max_chunk_size=sys.maxsize,
@@ -1386,7 +1407,7 @@ class CASDatabase:
                     out_f.write(";\n")
 
         start_time = time.time()
-        wr_map: Dict[int, List[str]] = {}
+        wr_map: Dict[int, Set[str]] = {}
         allow_llvm_bc = True
         gcc_comp_pids: List[int] = []
         gpp_comp_pids: List[int] = []
@@ -1483,23 +1504,6 @@ class CASDatabase:
                 print("command patterns precomputed processed (%d patterns)  [%.2fs]" % (len(self.config.string_table), time.time()-start_time))
                 out_pcp_map = dict()
 
-        def get_effective_args(args:List[str], cwd:str) -> List[str]:
-            ret = []
-            for i, arg in enumerate(args):
-                if arg.startswith("@"):
-                    f = os.path.normpath(os.path.join(cwd, arg[1:]))
-                    if os.path.isfile(f):
-                        with open(f, "r") as arg_file:
-                            r = arg_file.read()
-                            ret.extend(r.split())
-                    else:
-                        print("Parsing args failed! {}".format(args))
-                        print("Argfile does not exists {}".format(f))
-                else:
-                    ret.append(arg)
-
-            return ret
-
         if do_linked:
 
             start_time = time.time()
@@ -1512,7 +1516,7 @@ class CASDatabase:
 
                 for e in self.db.iter():
                     if linked_pattern.match(e.binary):
-                        effective_args: List[str] = get_effective_args(e.argv, e.cwd)
+                        effective_args: List[str] = self.get_effective_args(e.argv, e.cwd)
                         if "-o" in effective_args:
                             outidx = effective_args.index("-o")
                             if outidx < len(effective_args)-1:
@@ -1532,7 +1536,7 @@ class CASDatabase:
                                 out_linked[e.ptr] = {"l": os.path.normpath(os.path.join(e.cwd, effective_args[outidx+1])), "t": 1}
                                 l_size += 1
                     if ared_pattern.match(e.binary):
-                        effective_args: List[str] = get_effective_args(e.argv, e.cwd)
+                        effective_args: List[str] = self.get_effective_args(e.argv, e.cwd)
                         armod = next((x for x in effective_args if x.endswith(".a") or x.endswith(".a.tmp") or x.endswith(".lib") or x.endswith("built-in.o")), None)
                         if armod:
                             if not os.path.isabs(armod):
@@ -1571,7 +1575,7 @@ class CASDatabase:
                 print_mem_usage(debug, "Before processing compilations")
                 print("creating compilations input map ...")
 
-                fork_map: Dict[int, List[int]] = {}
+                fork_map: Dict[int, Set[int]] = {}
                 clang_input_execs = []
                 clangpp_input_execs = []
                 gcc_input_execs = []
@@ -1579,20 +1583,26 @@ class CASDatabase:
 
                 clangxx_compilers: Set[str] = set()
 
-                for ex in self.db.iter():
-                    fns = [op.path for op in ex.opens if op.mode & 3 >= 1] + [os.path.normpath(op.path) for op in ex.opens if op.mode & 3 >= 1]
-                    if ex.eid.pid in wr_map:
-                        wr_map[ex.eid.pid] += list(set(wr_map[ex.eid.pid]+fns))
-                    else:
-                        wr_map[ex.eid.pid] = list(set(fns))
-                    if ex.eid.pid in fork_map:
-                        fork_map[ex.eid.pid] += [ch.eid.pid for ch in ex.childs]
-                    else:
-                        fork_map[ex.eid.pid] = [ch.eid.pid for ch in ex.childs]
+                for ex in progressbar(self.db.iter(), disable=None):
+                    written_paths = {op.path for op in ex.opens if op.mode & 3 >= 1}
+
+                    if len(written_paths) > 0:
+                        if ex.eid.pid in wr_map:
+                            wr_map[ex.eid.pid].update(written_paths)
+                        else:
+                            wr_map[ex.eid.pid] = written_paths
+
+                    c = {ch.eid.pid for ch in ex.childs}
+                    if len(c) > 0:
+                        if ex.eid.pid in fork_map:
+                            fork_map[ex.eid.pid].update(c)
+                        else:
+                            fork_map[ex.eid.pid] = c
+
                     if do_compilations and ex.binary != '':
                         b = os.path.realpath(ex.binary) if ex.binary.endswith("/cc") or ex.binary.endswith("/c++") else ex.binary
                         if clangpp_spec_patterns.match(b):
-                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
+                            effective_args: List[str] = self.get_effective_args(ex.argv, ex.cwd)
                             clangpp_pattern_match_execs.append(ex.ptr)
                             if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
@@ -1604,7 +1614,7 @@ class CASDatabase:
                                 if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif clang_spec_patterns.match(b):
-                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
+                            effective_args: List[str] = self.get_effective_args(ex.argv, ex.cwd)
                             clang_pattern_match_execs.append(ex.ptr)
                             if ("-cc1" in effective_args or ((("-c" in effective_args) or ("-S" in effective_args)) and self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file))) \
                                 and "-o" in effective_args and ("-emit-llvm-bc" not in effective_args or allow_llvm_bc) \
@@ -1616,12 +1626,12 @@ class CASDatabase:
                                 if self.have_integrated_cc1(ex.binary, "-fno-integrated-cc1" not in effective_args, test_file):
                                     integrated_clang_compilers.add(ex.binary)
                         elif gcc_spec_patterns.match(b):
-                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
+                            effective_args: List[str] = self.get_effective_args(ex.argv, ex.cwd)
                             gcc_comp_pids.append(ex.ptr)
                             if "-" not in effective_args:
                                 gcc_input_execs.append(ex)
                         elif gpp_spec_patterns.match(b):
-                            effective_args: List[str] = get_effective_args(ex.argv, ex.cwd)
+                            effective_args: List[str] = self.get_effective_args(ex.argv, ex.cwd)
                             gpp_comp_pids.append(ex.ptr)
                             if "-" not in effective_args:
                                 gpp_input_execs.append(ex)
@@ -1639,6 +1649,7 @@ class CASDatabase:
                             rev_fork_map[child] = fork_pid
 
                 print("reverse fork map created in [%.2fs]" % (time.time()-start_time))
+
                 start_time = time.time()
                 print_mem_usage(debug)
 
@@ -1719,6 +1730,7 @@ class CASDatabase:
                             not_allow_pp = 0
                             parsing_fail = 0
                             cc1as_skipped = 0
+                            quick_skipped = 0
                             while not clang_work_queue.empty():
                                 try:
                                     pos = clang_work_queue.get(timeout=3)
@@ -1731,19 +1743,27 @@ class CASDatabase:
                                 ptr, compiler_type = clangxx_input_execs[pos]
                                 exe = self.get_exec_at_pos(ptr)
 
+                                if not clang_c.quickcheck(exe.binary, exe.argv):
+                                    quick_skipped += 1
+                                    continue
+
                                 argv: List[str] = exe.argv.copy()
-                                bin = exe.binary
-                                cwd = exe.cwd
-                                have_int_cc1 = self.have_integrated_cc1(os.path.join(cwd, bin), "-fno-integrated-cc1" not in argv, test_file)
 
                                 try:
-                                    out, ret_code = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
+                                    have_int_cc1 = self.have_integrated_cc1(os.path.join(exe.cwd, exe.binary), "-fno-integrated-cc1" not in argv, test_file)
+                                except FileNotFoundError:
+                                    not_exist += 1
+                                    continue
+                                
+                                try:
+                                    _, stderr, ret_code = worker.runCmd(exe.cwd, exe.binary, argv[1:] + ["-###"])
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running -###")
-                                    print ("[%s] %s" % (cwd, " ".join(argv[1:] + ["-###"])))
+                                    print ("[%s] %s" % (exe.cwd, " ".join(argv[1:] + ["-###"])))
                                     continue
-                                lns = out.split("\n")
+
+                                lns = stderr.split("\n")
                                 idx = [k for k, u in enumerate(lns) if "(in-process)" in u]
                                 if idx and len(lns) >= idx[0] + 2:
                                     ncmd = lns[idx[0] + 1]
@@ -1763,14 +1783,12 @@ class CASDatabase:
                                     # Remove clang invocations with -cc1as (it's not actual C/C++ compilation which generates errors later)
                                     continue
 
-                                extra_arg_num = 0
-                                for i,u in enumerate(reversed(argv)):
-                                    if u.startswith("-fdump-preamble="):
-                                        continue
-                                    if u not in self.config.clang_tailopts:
-                                        break
-                                    extra_arg_num += 1
-                                fn = os.path.normpath(os.path.join(cwd, argv[-1-i]))
+                                arg_fn = clang_c.extract_comp_file(argv, exe.cwd, self.config.clang_tailopts)
+                                if os.path.isabs(arg_fn):
+                                    fn = arg_fn
+                                else:
+                                    fn = os.path.join(exe.cwd, arg_fn)
+
                                 if not os.path.exists(fn):
                                     if "tmp" not in fn:
                                         print("Error: {} - does not exist".format(fn), flush=True)
@@ -1778,64 +1796,44 @@ class CASDatabase:
                                     not_exist += 1
                                     continue
                                 # fn - the path to the compiled file that exists
-                                output_arg_index = next((i for i, x in enumerate(argv) if x == "-o"), None)
-                                if output_arg_index is None:
-                                    print("****\nno -o arg \n{}\n{}\n****".format(argv, out), flush=True)
+                                try:
+                                    argv = clang_c.fix_argv(argv, compiler_type, arg_fn)
+                                except IndexError:
+                                    print("****\nno -o arg \n{}\n{}\n****".format(argv, stderr), flush=True)
                                     no_o_args += 1
                                     continue
-                                argv.insert(output_arg_index, "-dD")
-                                argv.insert(output_arg_index, "-E")
-                                argv.insert(output_arg_index, "-P")
-                                argv.insert(output_arg_index, "-v")
-                                if compiler_type == 1:
-                                    argv.insert(output_arg_index, "c")
-                                else:
-                                    argv.insert(output_arg_index, "c++")
-                                argv.insert(output_arg_index, "-x")
-                                argv[output_arg_index+7] = "-"
-                                if extra_arg_num > 0:
-                                    argv.pop(-1-extra_arg_num)
-                                    argv.append("-")
-                                else:
-                                    argv[-1] = "-"
+
                                 try:
-                                    output, ret_code = worker.runCmd(cwd, bin, argv[1:], "")  # last parameter is empty stdin for clang
+                                    stdout, stderr, ret_code = worker.runCmd(exe.cwd, exe.binary, argv[1:], "")  # last parameter is empty stdin for clang
+                                    if ret_code != 0 and debug:
+                                        print(f"[ERROR] - running \ncwd: {exe.cwd} \nbin: {exe.binary} \nargs: {argv[1:]}\nstdout:\n {stdout}\nstderr:\n {stderr}", flush=True)
+
                                 except exec_worker.ExecWorkerException as e:
                                     worker.initialize()
                                     print(e)
-                                    print("cwd  =  {}".format(cwd))
-                                    print("bin  =  {}".format(bin))
+                                    print("cwd  =  {}".format(exe.cwd))
+                                    print("bin  =  {}".format(exe.binary))
                                     print("argv =  {}".format(" ".join(argv[1:])))
                                     continue
-                                if output is None:
-                                    empty_output += 1
-                                    print("empty output", flush=True)
-                                    continue
+
                                 if not clang_c.allow_pp_in_compilations and '-E' in exe.argv:
                                     not_allow_pp += 1
                                     continue
 
-                                # Remove bogus compiled files (e.g. /dev/null)
-                                # cks = list(comp_dict_clang_chunk.keys())
-                                # for k in cks:
-                                #     if comp_dict_clang_chunk[k][0][0].startswith("/dev/"):
-                                #         del comp_dict_clang_chunk[k]
-
-                                compiler_path = os.path.join(cwd, self.maybe_compiler_binary(bin))
+                                compiler_path = os.path.join(exe.cwd, self.maybe_compiler_binary(exe.binary))
                                 json_repr = exe.json()
-                                comp_objs = clang_c.get_object_files(json_repr, have_int_cc1, fork_map, rev_fork_map, wr_map)
+                                comp_objs = clang_c.get_object_files(exe.eid.pid, have_int_cc1, fork_map, rev_fork_map, wr_map)
 
                                 try:
-                                    includes, defs, undefs = clang_c.parse_defs(output)
-                                    includes = [os.path.realpath(os.path.normpath(os.path.join(cwd, x))) for x in includes]
+                                    includes, defs, undefs = clang_c.parse_defs(stderr.splitlines(), stdout.splitlines())
+                                    includes = [os.path.realpath(os.path.normpath(os.path.join(exe.cwd, x))) for x in includes]
                                     ipaths = clang_c.compiler_include_paths(compiler_path)
                                     for u in ipaths:
                                         if u not in includes:
                                             includes.append(u)
-                                    ifiles = clang_c.parse_include_files(json_repr, includes)
-                                except Exception as e:
-                                    print(cwd, flush=True)
-                                    print(output, flush=True)
+                                    ifiles = clang_c.parse_include_files(exe.argv, exe.cwd, includes)
+                                except clang.IncludeParseException as e:
+                                    print("[ERROR] - Failed to process defs from clang output.\nstdout: {}\nstderr: {}".format(stdout, stderr), flush=True)
                                     parsing_fail += 1
                                     with open(".nfsdb.log.err", "a") as ef:
                                         ef.write("ERROR: Exception while processing compilation:\n%s\n" % (json_repr))
@@ -1843,7 +1841,7 @@ class CASDatabase:
                                     continue
 
                                 src_type = clang_c.get_source_type(argv, compiler_type, os.path.splitext(fn)[1])
-                                absfn = os.path.realpath(os.path.normpath(os.path.join(cwd, fn)))
+                                absfn = os.path.realpath(os.path.normpath(os.path.join(exe.cwd, fn)))
 
                                 if absfn.startswith("/dev/"):
                                     printdbg("\nSkipping bogus file {} ".format(absfn), debug)
@@ -1861,8 +1859,8 @@ class CASDatabase:
                                     }})
                                 found_comps.value += 1
 
-                            printdbg("Worker {} finished! ok={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
-                                      worker_idx, processed.value, no_o_args, not_exist, empty_output, not_allow_pp, parsing_fail, cc1as_skipped), debug)
+                            printdbg("Worker {} finished! ok={} quick_skipped={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
+                                        worker_idx, processed.value, quick_skipped, no_o_args, not_exist, empty_output, not_allow_pp, parsing_fail, cc1as_skipped), debug)
 
                         print("Searching for clang compilations ... (%d candidates; %d jobs)" % (len(clangxx_input_execs), jobs))
                         print_mem_usage(debug)
@@ -1953,7 +1951,8 @@ class CASDatabase:
                                     # bin = str(Path(shutil.which(bin)).resolve())
                                     # print (bin)
                                     if os.path.exists(cwd) and os.path.exists(bin):
-                                        out, ret = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
+                                        stdout, stderr, ret = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
+                                        out = stdout + "\n" + stderr
                                     else:
                                         print("Command or cwd does not exist cwd={} bin={}".format(cwd,bin))
                                         continue
@@ -1978,8 +1977,8 @@ class CASDatabase:
                                     continue
 
                                 lns = [shlex.split(x)
-                                       for x in out.split("\n")
-                                       if x.startswith(" ") and re.match(cc1_patterns, x.split()[0])]
+                                        for x in out.split("\n")
+                                        if x.startswith(" ") and re.match(cc1_patterns, x.split()[0])]
 
                                 if len(lns) == 0:
                                     # print("No cc1 \n{}".format(lns))
@@ -1999,7 +1998,8 @@ class CASDatabase:
                                     nargv.append('-c')
 
                                 try:
-                                    out, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    stdout, stderr, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    out = stdout + "\n" + stderr
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running gcc -fplugin command:")
@@ -2008,7 +2008,8 @@ class CASDatabase:
                                 if ret != 0:
                                     if "Permission denied" in out:
                                         try:
-                                            out, ret = worker.runCmd("/tmp/", nargv[0], nargv[1:], "")
+                                            stdout, stderr, ret = worker.runCmd("/tmp/", nargv[0], nargv[1:], "")
+                                            out = stdout + "\n" + stderr
                                         except exec_worker.ExecWorkerException:
                                             worker.initialize()
                                             print("Exception while running gcc -fplugin command:")
@@ -2058,7 +2059,8 @@ class CASDatabase:
                                         print("CAN'T POP FILENAME \n{}\n{}".format(fns, nargv))
                                 nargv.append('-')
                                 try:
-                                    out, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    stdout, stderr, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    out = stdout + "\n" + stderr
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception")
