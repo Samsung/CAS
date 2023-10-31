@@ -1,13 +1,13 @@
 let fileModal = document.getElementById('proc_info_modal')
 
 function nextFiles(maxResults=50) {
-    let deps_div = fileModal.querySelector('.module_filename');
+    let modalTitle = fileModal.querySelector('.modal-title');
     let opens_div = fileModal.querySelector('.file_contents');
     let files_pages = fileModal.querySelector('.files_page_numbers');
     let page = parseInt(files_pages.innerText.split("/")[0]) - 1;
     if (page < (parseInt(files_pages.innerText.split("/")[1]) - 1)) {
         page++;
-        let request = '/deps_for?path=' + deps_div.innerText +"&page=" + page+'&entries-per-page='+maxResults+'&cached=true';
+        let request = '/revdeps_for?path=' + modalTitle.getAttribute("data-path") +"&page=" + page+'&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -27,13 +27,13 @@ function nextFiles(maxResults=50) {
 }
 
 function prevFiles(maxResults=50) {
-    let deps_div = fileModal.querySelector('.module_filename');
+    let modalTitle = fileModal.querySelector('.modal-title');
     let opens_div = fileModal.querySelector('.file_contents');
     let files_pages = fileModal.querySelector('.files_page_numbers');
     let page = parseInt(files_pages.innerText.split("/")[0]) - 1;
     if (page > 0) {
         page--;
-        let request = '/deps_for?path=' + deps_div.innerText +"&page=" + page+'&entries-per-page='+maxResults+'&cached=true';
+        let request = '/revdeps_for?path=' + modalTitle.getAttribute("data-path") +"&page=" + page+'&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -54,11 +54,12 @@ function prevFiles(maxResults=50) {
 
 fileModal.addEventListener('show.bs.modal', function (event) {
     let page = 0;
-    let button = event.relatedTarget
-    let deps_path = button.getAttribute('data-bs-pid')
+    let button = event.relatedTarget;
+    let deps_path = button.getAttribute('data-bs-path');
     let maxResults=50
-    let modalTitle = fileModal.querySelector('.modal-title')
-    modalTitle.textContent = 'Dependencies of: ' + deps_path
+    let modalTitle = fileModal.querySelector('.modal-title');
+    modalTitle.textContent = 'Reversed dependencies of: ' + deps_path
+    modalTitle.setAttribute('data-path', deps_path);
     let opens_div = fileModal.querySelector('.file_contents')
     let filename = fileModal.querySelector('.module_filename')
     let original_path = fileModal.querySelector('.module_path')
@@ -71,8 +72,22 @@ fileModal.addEventListener('show.bs.modal', function (event) {
     fileModal.querySelector('#prevFilesButton').setAttribute('disabled', '');
     fileModal.querySelector('#nextFilesButton').removeAttribute('disabled');
     let request = '/linked_modules?filter=[path='+deps_path+']&details=true';
+    filename.innerText = "";
+    original_path.innerText = "";
+    ppid.innerHTML = "";
+    type.innerText = "";
+    access.innerText = "";
+    exists.innerText = "";
+    link.innerText = "";
     $.get(request, function (data) {
         let entry = data.entries[0];
+        if(data.entries.length < 1)
+        {
+            fileModal.querySelector('.process_details').setAttribute('hidden', '');
+        }
+        else{
+            fileModal.querySelector('.process_details').removeAttribute('hidden');
+        }
         filename.innerText = entry.filename;
         original_path.innerText = entry.original_path;
         ppid.innerHTML = "<a href =/proc_tree?pid="+entry.ppid+' target="_blank" >'+entry.ppid+"</a>";
@@ -81,7 +96,7 @@ fileModal.addEventListener('show.bs.modal', function (event) {
         exists.innerText = entry.exists;
         link.innerText = entry.link;
     });
-    request = '/deps_for?path=' + deps_path + "&page=" + page + '&entries-per-page='+maxResults+'&cached=true';
+    request = '/revdeps_for?path=' + deps_path + "&page=" + page + '&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
     $.get(request, function (data) {
         if (Math.ceil(data.count/maxResults) < 2) {
             fileModal.querySelector('#nextFilesButton').setAttribute('disabled', '');

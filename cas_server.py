@@ -280,7 +280,6 @@ def children_of() -> Response:
 def deps_of() -> Response:
     maxResults = 10
     j = request.args
-    lm_only = True if "lm_only" in j and j["lm_only"] == "true" else False
     page = 0
     if "page" in j.keys():
         page = int(j["page"])
@@ -328,59 +327,18 @@ def get_ebins(binpath, sort_by_time):
     return sorted(cas_db.get_execs_using_binary(binpath),
                     key=lambda x: (x.etime if sort_by_time else x.eid.pid), reverse=sort_by_time)
 
+@lru_cache()
+def get_opens(path, filter=False):
+    if filter:
+        return sorted([x for x in cas_db.db.opens_paths() if path in x])
+    return sorted([x for x in cas_db.db.opens_paths() if path==x])
 
-@app.route('/search_bin', methods=['GET'])
-def search_bin() -> Response:
-    j = request.args
-    matched_bins = get_binaries(j["bin"])
-    etime_sort = True if "etime_sort" in j and j["etime_sort"] == "true" else False
-    if len(matched_bins) > 0:
-        execs = []
-        for binPath in matched_bins:
-            execs += get_ebins(binPath, etime_sort)
-        if "idx" in j:
-            if len(execs) > int(j["idx"]):
-                exe = execs[int(j["idx"])]
-            else:
-                return Response(json.dumps({"INFO": "No more entries", "count": len(execs)}), mimetype='text/json')
-        else:
-            exe = execs[0]
-        if "entries" in j and "page" in j:
-            data= { 
-                "count": len(execs),
-                "execs": []
-            }
-            for exec in execs[int(j["page"])*int(j["entries"]):(int(j["page"])+1)*int(j["entries"])]:
-                exeData={
-                "exec": {"pid": exec.eid.pid, "idx": exec.eid.index},
-                "parents": []
-                }
-                cur_exe = exec
-                while cur_exe.eid.pid != root_pid:
-                    exeData["parents"].append({"pid": cur_exe.parent.eid.pid, "idx": cur_exe.parent.eid.index})
-                    cur_exe = cur_exe.parent
-
-                exeData["parents"].reverse()
-                data["execs"].append(exeData)
-        else:
-            data = {
-                "exec": {"pid": exe.eid.pid, "idx": exe.eid.index},
-                "count": len(execs),
-                "parents": []
-            }
-            cur_exe = exe
-            while cur_exe.eid.pid != root_pid:
-                data["parents"].append({"pid": cur_exe.parent.eid.pid, "idx": cur_exe.parent.eid.index})
-                cur_exe = cur_exe.parent
-
-            data["parents"].reverse()
-
-        return Response(
-            json.dumps(data),
-            mimetype='text/json')
-    return Response(
-        json.dumps({"ERROR": "No such binary!", "count": 0}),
-        mimetype='text/json')
+@lru_cache()
+def get_rdeps(path):
+    return sorted([ f
+                for fp in cas_db.db.rdeps(path, recursive=False)
+                for f in cas_db.linked_modules() if f.path == fp and f.path!=path
+            ])
 
 @app.route('/search', methods=['GET'])
 def search_files() -> Response:
@@ -491,6 +449,102 @@ def deps_tree() -> Response:
 
     first_modules["num_entries"]=len(first_modules["entries"])
     return Response(render_template('deps_tree.html', exe=first_modules), mimetype="text/html")
+
+@app.route('/revdeps_tree/', methods=['GET'])
+@app.route('/revdeps_tree', methods=['GET'])
+def revdeps_tree() -> Response:
+    maxResults = 15
+    j = dict(request.args)
+    if "page" not in j:
+        page = 0
+    else:
+        page = int(j["page"])
+    if "path" in j:
+        if not cas_db.db.path_exists(j["path"]):
+            return Response(
+            json.dumps({"ERROR": "No matches!", "count": 0}),
+            mimetype='text/json')
+        j["path"] = j["path"].replace(" ", "+")
+        entries = get_opens(j["path"])
+        first_modules = {
+                                "count": len(entries),
+                                "page": page,
+                                "page_max": len(entries)/maxResults,
+                                "entries_per_page": maxResults,
+                                "num_entries": 0,
+                                "origin_url": None,
+                                "entries": []
+                        }
+        for entry in entries[(page*maxResults):(page*maxResults+maxResults)]:
+            rdeps = get_rdeps(entry)
+            first_modules["entries"].append({"path": entry, 
+                                             "num_deps": len(rdeps),
+                                             "class": entry in cas_db.linked_module_paths(),
+                                             "parent": str(entry)
+                                            })
+        first_modules["num_entries"]=len(first_modules["entries"])
+
+    elif "filter" in j and len(j["filter"])> 0:
+        entries = get_opens(j["filter"], filter=True)
+        first_modules = {
+                                "count": len(entries),
+                                "page": page,
+                                "page_max": len(entries)/maxResults,
+                                "entries_per_page": maxResults,
+                                "num_entries": 0,
+                                "origin_url": "/revdeps_tree?filter="+str(j["filter"])+"&page="+str(page),
+                                "entries": []
+                        }
+        for mod in entries[(page*maxResults):(page*maxResults+maxResults)]:
+            rdeps = get_rdeps(mod)
+            y = len(rdeps)
+            first_modules["entries"].append({"path": mod, "num_deps": y, "class": mod in cas_db.linked_module_paths(), "parent": mod})
+        first_modules["num_entries"]=len(first_modules["entries"])
+    else:
+        first_modules = {
+                                "count": 0,
+                                "page": 0,
+                                "page_max": 0,
+                                "entries_per_page": 0,
+                                "num_entries": 0,
+                                "origin_url": "/revdeps_tree?page=0",
+                                "entries": []
+                        }
+    return Response(render_template('revdeps_tree.html', exe=first_modules), mimetype="text/html")
+
+@app.route('/revdeps_of', methods=['GET'])
+def revdeps_of() -> Response:
+    maxResults = 10
+    j = request.args
+    page = 0
+    if "page" in j.keys():
+        page = int(j["page"])
+    if "path" in j.keys():
+        entries = get_rdeps(j["path"])
+        result = {
+                        "count": len(entries),
+                        "page": page,
+                        "page_max": page,
+                        "num_entries": maxResults,
+                        "entries": []
+                }
+        result["page_max"] = math.ceil(result["count"]/result["num_entries"])
+        for entry in entries[(page*maxResults):(page*maxResults+maxResults)]:
+            h=len(get_rdeps(entry.path))
+            result["entries"].append({"path": entry.path, 
+                                    "num_deps": h,
+                                    "class": entry.path in cas_db.linked_module_paths(),
+                                    "parent": str(entry.parent.eid.pid)
+                                    })
+        result["entries"] = result["entries"]
+        result["num_entries"] = len(result["entries"])
+        return Response(
+            json.dumps(result),
+            mimetype='text/json', direct_passthrough=True)
+    
+    return Response(
+        json.dumps({"ERROR": "No such path!"}),
+        mimetype='text/json')
 
 @app.route('/db_list', methods=['GET'])
 def dblist() -> Response:

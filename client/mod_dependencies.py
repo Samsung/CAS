@@ -188,8 +188,10 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
             sys.exit(2)
 
     def get_data(self) -> tuple:
-
-        rdeps = self.get_reverse_dependencies_opens(self.args.path, recursive=self.args.recursive)
+        rdeps = [ f
+            for fp in self.nfsdb.db.rdeps(self.args.path, recursive=self.args.recursive)
+            for f in self.nfsdb.db.filemap[fp]
+        ] 
 
         if self.args.show_commands:
             data = list({
