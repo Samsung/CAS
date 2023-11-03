@@ -2,6 +2,7 @@
 #define FTDB_COMPAT_H
 #include "clang/AST/Expr.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/AST/DeclTemplate.h"
 
 #if CLANG_VERSION==11
 #include "clang/Basic/FileManager.h"
@@ -20,14 +21,6 @@ namespace compatibility{
 #endif
   }
 
-  inline const auto getBuffer(SourceManager &SM, FileID FID){
-#if CLANG_VERSION>=12
-    return SM.getBufferOrFake(FID);
-#else
-    return SM.getBuffer(FID);
-#endif
-  }
-  
   inline std::string toString(llvm::APSInt Iv){
 #if CLANG_VERSION>=13
     llvm::SmallVector<char,30> tmp;
@@ -37,6 +30,25 @@ namespace compatibility{
     return Iv.toString(10);
 #endif
   }
-}
 
+  inline CompoundStmt *createEmptyCompoundStmt(ASTContext &Ctx){
+#if CLANG_VERSION>=15
+    return CompoundStmt::CreateEmpty(Ctx,1,0);
+#else
+    return CompoundStmt::CreateEmpty(Ctx,1);
+#endif
+  }
+
+#if CLANG_VERSION<16
+#define getUnmodifiedType getUnderlyingType
+#endif
+
+  inline const TemplateTypeParmType *getReplacedParmType(const SubstTemplateTypeParmType* tp){
+#if CLANG_VERSION>=16
+    return cast<TemplateTypeParmType>(tp->getReplacedParameter()->getTypeForDecl());
+#else
+    return tp->getReplacedParameter();
+#endif
+  }
+}
 #endif //FTDB_COMPAT_H

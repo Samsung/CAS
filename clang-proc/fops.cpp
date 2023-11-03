@@ -91,7 +91,7 @@ std::string FOPSClassVisitor::typeMatching(QualType T) {
 		case Type::TypeOf:
 		{
 			const TypeOfType *tp = cast<TypeOfType>(T);
-			QualType toT = tp->getUnderlyingType();
+			QualType toT = tp->getUnmodifiedType();
 			return typeMatching(toT);
 		}
 		break;
@@ -173,7 +173,7 @@ std::string FOPSClassVisitor::typeMatchingWithPtr(QualType T) {
 		case Type::TypeOf:
 		{
 			const TypeOfType *tp = cast<TypeOfType>(T);
-			QualType toT = tp->getUnderlyingType();
+			QualType toT = tp->getUnmodifiedType();
 			return typeMatchingWithPtr(toT);
 		}
 		break;

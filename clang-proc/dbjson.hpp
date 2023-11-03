@@ -49,10 +49,6 @@ using namespace clang;
 
 #define TTP_DEBUG 0
 
-static inline llvm::raw_ostream& operator<<(llvm::raw_ostream &os,const QualType &T){
-  return os<<T.getAsOpaquePtr();
-}
-
 extern thread_local size_t exprOrd;
 
 struct anonRecord {
@@ -149,7 +145,7 @@ public:
   			return prvLiteral.stringLiteral.compare(other.prvLiteral.stringLiteral)<0;
   		}
   		if (type==LiteralInteger) {
-  			return prvLiteral.integerLiteral.extOrTrunc(64).getExtValue() < other.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
+  			return prvLiteral.integerLiteral.extOrTrunc(63).getExtValue() < other.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
   		}
   		if (type==LiteralChar) {
   			return prvLiteral.charLiteral < other.prvLiteral.charLiteral;
@@ -206,7 +202,7 @@ public:
   TypeData& getTypeData(QualType T) {
 	  T = typeForMap(T);
 	  if (TypeMap.find(T)==TypeMap.end()) {
-		  llvm::outs()<<"Type not in map:"<<T<<'\n';
+		  llvm::outs()<<"Type not in map:"<<T.getAsOpaquePtr()<<'\n';
 		  T.dump();
 		  assert(0);
 	  }
@@ -1575,14 +1571,14 @@ public:
 			return "none";
 		case clang::InternalLinkage:
 			return "internal";
-		case clang::UniqueExternalLinkage:
-			return "";
-		case clang::VisibleNoLinkage:
-			return "";
-		case clang::ModuleInternalLinkage:
-			return "";
-		case clang::ModuleLinkage:
-			return "";
+		// case clang::UniqueExternalLinkage:
+		// 	return "";
+		// case clang::VisibleNoLinkage:
+		// 	return "";
+		// case clang::ModuleInternalLinkage:
+		// 	return "";
+		// case clang::ModuleLinkage:
+		// 	return "";
 		case clang::ExternalLinkage:
 			return "external";
 		default:

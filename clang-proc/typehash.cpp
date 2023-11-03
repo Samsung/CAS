@@ -825,7 +825,7 @@ thread_local bool autoforward = false;
                                           if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (width) {
-						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(64).getExtValue());
+						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(63).getExtValue());
 						  ConstantNames.push_back(ED->getName().str());
 					  }
 					  else {

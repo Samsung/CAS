@@ -139,7 +139,10 @@ struct main_opts opts;
 
 std::atomic_int32_t counter(0);
 void run(const CompilationDatabase &compilations,const CommandLineArguments &sources){
-  unshare(CLONE_FS);
+  if(unshare(CLONE_FS)){
+    llvm::errs()<<"Failed to clone fs\n";
+    return;
+  }
   int max = sources.size();
   int current = counter++;
   std::string buf;
@@ -152,7 +155,6 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
     ClangTool Tool(compilations,file);
     IgnoringDiagConsumer Diag;
     Tool.setDiagnosticConsumer(&Diag);
-    Tool.setRestoreWorkingDir(false);
 
     if (IncludeOption.getValue()) {
       auto arg = "-I" + builtInIncludePath;

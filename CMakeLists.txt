@@ -160,7 +160,7 @@ target_compile_options(clang-proc PRIVATE -ggdb3)
 target_compile_options(clang-proc PRIVATE $<$<CONFIG:Debug>:-O0>)
 target_compile_options(clang-proc PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
-target_compile_options(clang-proc PRIVATE -std=c++14)
+target_compile_options(clang-proc PRIVATE -std=c++17)
 target_compile_options(clang-proc PRIVATE -Wno-non-virtual-dtor)
 target_compile_options(clang-proc PRIVATE -Wno-missing-field-initializers)
 target_compile_options(clang-proc PRIVATE -Wno-comment)
@@ -223,6 +223,14 @@ target_link_libraries(clang-proc
     clangASTMatchers
     ${ADDITIONAL_LIBS}
 )
+
+if(CLANG_VERSION VERSION_GREATER_EQUAL 15)
+  target_link_libraries(clang-proc
+    PRIVATE
+    clangSupport
+)
+endif()
+
 
 target_include_directories(clang-proc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/clang-proc)
 

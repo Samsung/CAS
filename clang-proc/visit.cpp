@@ -140,7 +140,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		// Check if init can be evaluated as a constant expression
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
@@ -852,7 +852,7 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 	 // Check if return expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-		int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 		CStyleCastOrType valuecast;
 		if (!castType.isNull()) {
@@ -896,7 +896,7 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 bool DbJSONClassVisitor::VisitSwitchStmt(SwitchStmt *S){
 	// add compound statement if not present(should never happen)
 	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getBody();
 		S->setBody(CS);
 	}
@@ -963,12 +963,12 @@ bool DbJSONClassVisitor::VisitIfStmt(IfStmt *S){
 
 	// add compound statement if not present
 	if(S->getThen()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getThen();
 		S->setThen(CS);
 	}
 	if(S->getElse() && S->getElse()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getElse();
 		S->setElse(CS);
 	}
@@ -1008,7 +1008,7 @@ bool DbJSONClassVisitor::VisitForStmt(ForStmt *S){
 
 	// add compound statement if not present
 	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getBody();
 		S->setBody(CS);
 	}
@@ -1029,7 +1029,7 @@ bool DbJSONClassVisitor::VisitWhileStmt(WhileStmt *S){
 
 	// add compound statement if not present
 	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getBody();
 		S->setBody(CS);
 	}
@@ -1050,7 +1050,7 @@ bool DbJSONClassVisitor::VisitDoStmt(DoStmt *S){
 
 	// add compound statement if not present
 	if(S->getBody()->getStmtClass() != Stmt::CompoundStmtClass){
-		CompoundStmt *CS = CompoundStmt::CreateEmpty(Context,1);
+		CompoundStmt *CS = compatibility::createEmptyCompoundStmt(Context);
 		CS->body_begin()[0] = S->getBody();
 		S->setBody(CS);
 	}
@@ -1129,7 +1129,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					const Expr* E = CSCE->getSubExpr();
 					Expr::EvalResult Res;
 					if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)){
-						if (handleCallAddress(Res.Val.getInt().extOrTrunc(64).getExtValue(),E,callrefs,literalRefs,&baseType,CE,CSCE)) __callserved++;
+						if (handleCallAddress(Res.Val.getInt().extOrTrunc(63).getExtValue(),E,callrefs,literalRefs,&baseType,CE,CSCE)) __callserved++;
 					}
 				}
 			}
@@ -1217,7 +1217,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					// Check if function argument can be evaluated as a constant expression
 					Expr::EvalResult Res;
 					if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-						int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+						int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 						ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 						CStyleCastOrType valuecast;
 						if (!castType.isNull()) {
@@ -1381,7 +1381,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		std::vector<CStyleCastOrType> castVec;
 		const Expr* E = stripCastsEx(LHS,castVec);
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			v.setInteger(i,valuecast);
@@ -1400,7 +1400,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		castVec.clear();
 		E = stripCastsEx(RHS,castVec);
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			v.setInteger(i,valuecast);
@@ -1498,7 +1498,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		// Check if init can be evaluated as a constant expression
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-			int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
@@ -1640,7 +1640,7 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 	// Check if expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
-		idx_i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		idx_i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 	}
 	else {
 		idx_done = lookForDerefExprs(idxE,&idx_i,idx_vVR);
@@ -1750,7 +1750,7 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
             // Check if offset expression can be evaluated as a constant expression
             Expr::EvalResult Res;
             if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-                int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+                int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 
                 QualType rRT = resolve_Record_Type(lastFieldType);
                 if (!rRT.isNull()) {
@@ -1864,7 +1864,7 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	 // Check if return expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
-		int64_t i = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
 		CStyleCastOrType valuecast;
 		if (!castType.isNull()) {

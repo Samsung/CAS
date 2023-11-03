@@ -730,7 +730,7 @@ bool DbJSONClassVisitor::verifyMemberExprBaseType(QualType T) {
 		case Type::TypeOf:
 		{
 			const TypeOfType *tp = cast<TypeOfType>(T);
-			return verifyMemberExprBaseType(tp->getUnderlyingType());
+			return verifyMemberExprBaseType(tp->getUnmodifiedType());
 		}
 		case Type::Elaborated:
 		{
@@ -1044,7 +1044,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			int64_t i;
 			if (E->getStmtClass()==Stmt::IntegerLiteralClass) {
 				const IntegerLiteral* IL = static_cast<const IntegerLiteral*>(E);
-				i = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType()).extOrTrunc(64).getExtValue();
+				i = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType()).extOrTrunc(63).getExtValue();
 			}
 			else {
 				const CharacterLiteral* CL = static_cast<const CharacterLiteral*>(E);
@@ -1640,7 +1640,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					v.setRefCall(CE,BO,valuecast);
 				}
 				else if((!BO->isValueDependent()) && BO->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(BO,Res)) {
-					v.setInteger(Res.Val.getInt().extOrTrunc(64).getExtValue(),valuecast);
+					v.setInteger(Res.Val.getInt().extOrTrunc(63).getExtValue(),valuecast);
 				}
 				else {
 					v.setLogic(BO,valuecast);
@@ -2093,10 +2093,10 @@ bool DbJSONClassVisitor::computeOffsetExpr(const Expr* E, int64_t* LiteralOffset
 	}
 	if((!nE->isValueDependent()) && nE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(nE,Res)){
 		if (kind==BO_Add) {
-			*LiteralOffset += Res.Val.getInt().extOrTrunc(64).getExtValue();
+			*LiteralOffset += Res.Val.getInt().extOrTrunc(63).getExtValue();
 		}
 		else {
-			*LiteralOffset -= Res.Val.getInt().extOrTrunc(64).getExtValue();
+			*LiteralOffset -= Res.Val.getInt().extOrTrunc(63).getExtValue();
 		}
 		return true;
 	}
@@ -2120,10 +2120,10 @@ bool DbJSONClassVisitor::tryComputeOffsetExpr(const Expr* E, int64_t* LiteralOff
 	}
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)){
 		if (kind==BO_Add) {
-			*LiteralOffset += Res.Val.getInt().extOrTrunc(64).getExtValue();
+			*LiteralOffset += Res.Val.getInt().extOrTrunc(63).getExtValue();
 		}
 		else {
-			*LiteralOffset -= Res.Val.getInt().extOrTrunc(64).getExtValue();
+			*LiteralOffset -= Res.Val.getInt().extOrTrunc(63).getExtValue();
 		}
 	}
 	else {
@@ -2270,7 +2270,7 @@ bool DbJSONClassVisitor::lookForASExprs(const ArraySubscriptExpr *Node, VarRef_t
 	// Check if expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
-		*LiteralOffset = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		*LiteralOffset = Res.Val.getInt().extOrTrunc(63).getExtValue();
 	}
 	else {
 		DbJSONClassVisitor::DREMap_t DREMap;
@@ -3028,7 +3028,7 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
 		  case Type::SubstTemplateTypeParm:
 		  {
 		 	const SubstTemplateTypeParmType* tp = cast<SubstTemplateTypeParmType>(T);
-		 	const TemplateTypeParmType* ttp = tp->getReplacedParameter();
+		 	const TemplateTypeParmType* ttp = compatibility::getReplacedParmType(tp);
 		 	s.insert(ttp);
 		  }
 		  break;
@@ -3085,7 +3085,7 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
                   case Type::TypeOf:
                   {
                       const TypeOfType *tp = cast<TypeOfType>(T);
-                      QualType toT = tp->getUnderlyingType();
+                      QualType toT = tp->getUnmodifiedType();
                       LookForTemplateTypeParameters(toT,s);
                   }
                   break;
@@ -3305,7 +3305,7 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
                   case Type::TypeOf:
                   {
                       const TypeOfType *tp = cast<TypeOfType>(T);
-                      QualType toT = tp->getUnderlyingType();
+                      QualType toT = tp->getUnmodifiedType();
                       return LookForTemplateSpecializationType(toT);
                   }
                   break;
@@ -3397,7 +3397,7 @@ const FunctionProtoType* DbJSONClassVisitor::lookForFunctionType(QualType T) {
 		  case Type::TypeOf:
 		  {
 			  const TypeOfType *tp = cast<TypeOfType>(T);
-			  QualType toT = tp->getUnderlyingType();
+			  QualType toT = tp->getUnmodifiedType();
 			  return lookForFunctionType(toT);
 		  }
 		  case Type::FunctionProto:

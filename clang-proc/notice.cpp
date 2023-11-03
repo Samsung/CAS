@@ -800,7 +800,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
 			  TypeMap.at(T).id.setID(TypeNum);
 
-			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T << "]F = " << TypeNum << "\n" );
+			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T.getAsOpaquePtr() << "]F = " << TypeNum << "\n" );
 			  TypeNum++;
 			  noticeTypeClass(tp->getReturnType());
 			  for (unsigned i = 0; i<tp->getNumParams(); ++i) {
@@ -828,7 +828,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  if (TypeMap.find(T)==TypeMap.end()) {
 		  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
 		  TypeMap.at(T).id.setID(TypeNum);
-		  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T << "]E = " << TypeNum << "\n" );
+		  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T.getAsOpaquePtr() << "]E = " << TypeNum << "\n" );
 		  TypeNum++;
 	  }
   }
@@ -941,7 +941,7 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 		}
 		case Type::TypeOf:{
 			auto tp = cast<TypeOfType>(T);
-			return typeForMap(tp->getUnderlyingType().withFastQualifiers(quals));
+			return typeForMap(tp->getUnmodifiedType().withFastQualifiers(quals));
 		}
 		case Type::Decayed:{
 			auto tp = cast<DecayedType>(T);

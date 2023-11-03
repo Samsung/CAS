@@ -425,12 +425,9 @@ void DbJSONClassVisitor::setSwitchData(const Expr* caseExpr, int64_t* enumv,
 		std::string* enumstr, std::string* macroValue, std::string* raw_code, int64_t* exprVal) {
 
 	SourceManager& SM = Context.getSourceManager();
-	FileID FID = SM.getFileID(caseExpr->getExprLoc());
-	const auto InputBuffer= compatibility::getBuffer(SM,FID);
-	Lexer MacroLexer(FID,InputBuffer,SM,Context.getLangOpts());
 	if (caseExpr->IgnoreCasts()->getExprLoc().isMacroID()) {
-		*macroValue = MacroLexer.getSourceText(CharSourceRange(caseExpr->IgnoreCasts()->getSourceRange(),true),
-				SM,MacroLexer.getLangOpts()).str();
+		*macroValue = Lexer::getSourceText(CharSourceRange(caseExpr->IgnoreCasts()->getSourceRange(),true),
+				SM,Context.getLangOpts()).str();
 	}
 	llvm::raw_string_ostream cstream(*raw_code);
 	caseExpr->printPretty(cstream,nullptr,Context.getPrintingPolicy());
@@ -438,12 +435,12 @@ void DbJSONClassVisitor::setSwitchData(const Expr* caseExpr, int64_t* enumv,
 	const DeclRefExpr* DRE = lookForBottomDeclRef(caseExpr);
 	if (DRE && (DRE->getDecl()->getKind()==Decl::EnumConstant)) {
 		const EnumConstantDecl* ecd = static_cast<const EnumConstantDecl*>(DRE->getDecl());
-		*enumv = ecd->getInitVal().extOrTrunc(64).getExtValue();
+		*enumv = ecd->getInitVal().extOrTrunc(63).getExtValue();
 		*enumstr = ecd->getIdentifier()->getName().str();
 	}
 	Expr::EvalResult Res;
 	if((!caseExpr->isValueDependent()) && caseExpr->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(caseExpr,Res)){
-		*exprVal = Res.Val.getInt().extOrTrunc(64).getExtValue();
+		*exprVal = Res.Val.getInt().extOrTrunc(63).getExtValue();
 	}
 }
 
@@ -1006,7 +1003,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  }
 	  if (lh.type==LiteralHolder::LiteralInteger) {
 		  std::stringstream ss;
-		  ss << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
+		  ss << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
 		  return ss.str();
 	  }
 	  if (lh.type==LiteralHolder::LiteralString) {
@@ -1138,7 +1135,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  else{
 					  int_literals << ", ";
 				  }
-				  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
+				  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
 				  break;
 			  }
 			  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
@@ -1789,11 +1786,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 		  }
 		  
-		  FileID FID = SM.getFileID(D->getSourceRange().getBegin());
-		  const auto InputBuffer = compatibility::getBuffer(SM, FID);
-		  Lexer SrcLexer(FID,InputBuffer,SM,Context.getLangOpts());
 		  auto Range = SM.getExpansionRange(D->getSourceRange()).getAsRange();
-		  std::string upBody = SrcLexer.getSourceText(CharSourceRange(Range, true),SM,SrcLexer.getLangOpts()).str();
+		  std::string upBody = Lexer::getSourceText(CharSourceRange(Range, true),SM,Context.getLangOpts()).str();
+		  std::string fbody;
 		  Stmt* body = D->getBody();
 		  std::string fcsbody;
 		  llvm::raw_string_ostream bcsstream(fcsbody);
@@ -2466,7 +2461,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  else{
 						  int_literals << ", ";
 					  }
-					  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(64).getExtValue();
+					  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
 					  break;
 				  }
 				  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
@@ -4777,7 +4772,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
                                           if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
 					  if (width) {
-						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(64).getExtValue());
+						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(63).getExtValue());
 					  }
 					  else {
 						  // This is dependent EnumConstantDecl which cannot be resolved to integer value just yet

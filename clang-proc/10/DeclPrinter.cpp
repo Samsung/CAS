@@ -264,31 +264,28 @@ static std::string quote_escape( const std::string &str ) {
 }
 
 
-void printPrettySectionAttr(SectionAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  switch (A->getSemanticSpelling()) {
-  default:
-    llvm_unreachable("Unknown attribute spelling!");
-    break;
-  case 0 : {
-    OS << " __attribute__((section(\"" << quote_escape(A->getName().str()) << "\")))";
-    break;
-  }
-  case 1 : {
-    OS << " [[gnu::section(\"" << quote_escape(A->getName().str()) << "\")]]";
-    break;
-  }
-  case 2 : {
-    OS << " __declspec(allocate(\"" << quote_escape(A->getName().str()) << "\"))";
-    break;
-  }
-}
+static void printPrettyAttr(Attr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
+  return A->printPretty(OS, Policy);
 }
 
-static void printPrettyAttr(Attr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  if(A->getKind() == attr::Section)
-    return printPrettySectionAttr(cast<SectionAttr>(A), OS, Policy);
-  else
-    return A->printPretty(OS, Policy);
+static void printPrettySectionAttr(SectionAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
+  switch (A->getSemanticSpelling()) {
+    default:
+      llvm_unreachable("Unknown attribute spelling!");
+      break;
+    case 0 : {
+      OS << " __attribute__((section(\"" << quote_escape(A->getName().str()) << "\")))";
+      break;
+    }
+    case 1 : {
+      OS << " [[gnu::section(\"" << quote_escape(A->getName().str()) << "\")]]";
+      break;
+    }
+    case 2 : {
+      OS << " __declspec(allocate(\"" << quote_escape(A->getName().str()) << "\"))";
+      break;
+    }
+  }
 }
 
 static void printPrettyWarnUnusedResultAttr(WarnUnusedResultAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
@@ -319,6 +316,37 @@ static void printPrettyWarnUnusedResultAttr(WarnUnusedResultAttr* A, raw_ostream
   }
 }
 
+static void printPrettyAssumeAlignedAttr(AssumeAlignedAttr *A, raw_ostream &OS, const PrintingPolicy &Policy) {
+  const char *delim;
+  switch (A->getAttributeSpellingListIndex()) {
+    default:
+      llvm_unreachable("Unknown attribute spelling!");
+      break;
+    case 0 : {
+      OS << " __attribute__((assume_aligned(";
+      delim = "))";
+      break;
+    }
+    case 1 : {
+      OS << " [[gnu::assume_aligned";
+      delim = "]]";
+      break;
+    }
+    case 2 : {
+      OS << " [[gnu::assume_aligned";
+      delim = "]]";
+      break;
+    }
+  }
+  OS << "(";
+  A->getAlignment()->printPretty(OS,nullptr,Policy);
+  if(A->getOffset()){
+    OS << ", ";
+    A->getOffset()->printPretty(OS,nullptr,Policy);
+  }
+  OS << ")" << delim;
+}
+
 void DeclPrinter::prettyPrintAttributes(Decl *D) {
   if (Policy.PolishForDeclaration)
     return;
@@ -333,9 +361,15 @@ void DeclPrinter::prettyPrintAttributes(Decl *D) {
 #define PRAGMA_SPELLING_ATTR(X) case attr::X:
 #include "clang/Basic/AttrList.inc"
         break;
+      case attr::Section:
+        printPrettySectionAttr(cast<SectionAttr>(A), Out, Policy);
+        break;
       case attr::WarnUnusedResult:
-        printPrettyWarnUnusedResultAttr(reinterpret_cast<WarnUnusedResultAttr*>(A), Out, Policy);
-	break;
+        printPrettyWarnUnusedResultAttr(cast<WarnUnusedResultAttr>(A), Out, Policy);
+        break;
+      case attr::AssumeAligned:
+        printPrettyAssumeAlignedAttr(cast<AssumeAlignedAttr>(A), Out, Policy);
+        break;
       default:
         printPrettyAttr(A, Out, Policy);
         break;
