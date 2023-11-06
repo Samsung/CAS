@@ -31,7 +31,7 @@ def getMemUsage() -> int:
 def testTopLevelFields():
 	print("checking top level fields", end='')
 	topLevelFields = [
-		"source_info", "modules", "module_info", "funcs_tree_calls_no_asm",
+		"source_info", "module_info", "funcs_tree_calls_no_asm",
 		"funcs_tree_calls_no_known", "funcs_tree_calls_no_known_no_asm", "funcs_tree_func_calls", 
 		"funcs_tree_func_refs", "funcs_tree_funrefs_no_asm", "funcs_tree_funrefs_no_known", 
 		"funcs_tree_funrefs_no_known_no_asm", "globs_tree_globalrefs", "types_tree_refs", 
