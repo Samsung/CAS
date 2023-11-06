@@ -401,7 +401,7 @@ struct call_info {
 	unsigned long ord;
 	const char* expr;
 	const char* loc;
-	int64_t csid;
+	int64_t* csid;
 	unsigned long* args;
 	unsigned long args_count;
 };
@@ -785,6 +785,8 @@ struct known_data_entry {
 	unsigned long lib_funcs_ids_count;
 	unsigned long* always_inc_funcs_ids;
 	unsigned long always_inc_funcs_ids_count;
+	unsigned long* replacement_ids;
+	unsigned long replacement_ids_count;
 };
 
 struct BAS_item {

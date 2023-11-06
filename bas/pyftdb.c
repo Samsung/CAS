@@ -621,6 +621,7 @@ PyObject* libftdb_ftdb_get_known_data(PyObject* self, void* closure) {
 	FTDB_SET_ENTRY_STRING_ARRAY(py_known_data,lib_funcs,__self->ftdb->known_data->lib_funcs);
 	FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,lib_funcs_ids,__self->ftdb->known_data->lib_funcs_ids);
 	FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,always_inc_funcs_ids,__self->ftdb->known_data->always_inc_funcs_ids);
+	FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,replacement_ids,__self->ftdb->known_data->replacement_ids);
     PyList_Append(py_known_data_container,py_known_data);
     Py_DecRef(py_known_data);
 
@@ -1682,7 +1683,7 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 		FTDB_SET_ENTRY_ULONG(py_callinfo,ord,call_info_entry->ord);
 		FTDB_SET_ENTRY_STRING(py_callinfo,expr,call_info_entry->expr);
 		FTDB_SET_ENTRY_STRING(py_callinfo,loc,call_info_entry->loc);
-		FTDB_SET_ENTRY_INT64(py_callinfo,csid,call_info_entry->csid);
+		FTDB_SET_ENTRY_INT64_OPTIONAL(py_callinfo,csid,call_info_entry->csid);
 		FTDB_SET_ENTRY_ULONG_ARRAY(py_callinfo,args,call_info_entry->args);
 		PyList_Append(call_info,py_callinfo);
 		Py_DecRef(py_callinfo);
@@ -1746,7 +1747,7 @@ PyObject* libftdb_ftdb_func_entry_json(libftdb_ftdb_func_entry_object *self, PyO
 		FTDB_SET_ENTRY_STRING(py_refcallinfo,end,refcall_info_entry->end);
 		FTDB_SET_ENTRY_ULONG(py_refcallinfo,ord,refcall_info_entry->ord);
 		FTDB_SET_ENTRY_STRING(py_refcallinfo,expr,refcall_info_entry->expr);
-		FTDB_SET_ENTRY_INT64(py_refcallinfo,csid,refcall_info_entry->csid);
+		FTDB_SET_ENTRY_INT64_OPTIONAL(py_refcallinfo,csid,refcall_info_entry->csid);
 		FTDB_SET_ENTRY_STRING_OPTIONAL(py_refcallinfo,loc,refcall_info_entry->loc);
 		FTDB_SET_ENTRY_ULONG_ARRAY(py_refcallinfo,args,refcall_info_entry->args);
 		PyList_Append(refcall_info,py_refcallinfo);
@@ -3319,7 +3320,12 @@ PyObject* libftdb_ftdb_func_callinfo_entry_get_loc(PyObject* self, void* closure
 PyObject* libftdb_ftdb_func_callinfo_entry_get_csid(PyObject* self, void* closure) {
 
 	libftdb_ftdb_func_callinfo_entry_object* __self = (libftdb_ftdb_func_callinfo_entry_object*)self;
-	return PyLong_FromLong(__self->entry->csid);
+	if (__self->entry->csid) {
+		return PyLong_FromLong(*__self->entry->csid);
+	}
+	else {
+		Py_RETURN_NONE;
+	}
 }
 
 PyObject* libftdb_ftdb_func_callinfo_entry_get_args(PyObject* self, void* closure) {
@@ -3342,7 +3348,7 @@ PyObject* libftdb_ftdb_func_callinfo_entry_json(libftdb_ftdb_func_callinfo_entry
 	FTDB_SET_ENTRY_ULONG(py_callinfo_entry,ord,self->entry->ord);
 	FTDB_SET_ENTRY_STRING(py_callinfo_entry,expr,self->entry->expr);
 	FTDB_SET_ENTRY_STRING_OPTIONAL(py_callinfo_entry,loc,self->entry->loc);
-	FTDB_SET_ENTRY_INT64(py_callinfo_entry,csid,self->entry->csid);
+	FTDB_SET_ENTRY_INT64_OPTIONAL(py_callinfo_entry,csid,self->entry->csid);
 	PyObject* py_args = PyList_New(0);
 	for (unsigned long i=0; i<self->entry->args_count; ++i) {
 		PYLIST_ADD_ULONG(py_args,self->entry->args[i]);
@@ -7706,6 +7712,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(call_info,
 	AGGREGATE_FLATTEN_STRING(expr);
 	AGGREGATE_FLATTEN_STRING(loc);
 	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,args,ATTR(args_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(int64_t,csid,1);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(callref_info,
@@ -7960,6 +7967,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(known_data_entry,
 	);
 	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,lib_funcs_ids,ATTR(lib_funcs_ids_count));
 	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,always_inc_funcs_ids,ATTR(always_inc_funcs_ids_count));
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,replacement_ids,ATTR(replacement_ids_count));
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(BAS_item,
@@ -8258,7 +8266,7 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 		single_call_info->ord = FTDB_ENTRY_ULONG(py_single_call_info,ord);
 		single_call_info->expr = FTDB_ENTRY_STRING(py_single_call_info,expr);
 		single_call_info->loc = FTDB_ENTRY_STRING(py_single_call_info,loc);
-		single_call_info->csid = FTDB_ENTRY_INT64(py_single_call_info,csid);
+		single_call_info->csid = FTDB_ENTRY_INT64_OPTIONAL(py_single_call_info,csid);
 		single_call_info->args = FTDB_ENTRY_ULONG_ARRAY(py_single_call_info,args);
 		single_call_info->args_count = FTDB_ENTRY_ARRAY_SIZE(py_single_call_info,args);
 	}
@@ -8322,7 +8330,7 @@ static void libftdb_create_ftdb_func_entry(PyObject *self, PyObject* func_entry,
 		single_refcall_info->ord = FTDB_ENTRY_ULONG(py_single_refcall_info,ord);
 		single_refcall_info->expr = FTDB_ENTRY_STRING(py_single_refcall_info,expr);
 		single_refcall_info->loc = FTDB_ENTRY_STRING_OPTIONAL(py_single_refcall_info,loc);
-		single_refcall_info->csid = FTDB_ENTRY_INT64(py_single_refcall_info,csid);
+		single_refcall_info->csid = FTDB_ENTRY_INT64_OPTIONAL(py_single_refcall_info,csid);
 		single_refcall_info->args = FTDB_ENTRY_ULONG_ARRAY(py_single_refcall_info,args);
 		single_refcall_info->args_count = FTDB_ENTRY_ARRAY_SIZE(py_single_refcall_info,args);
 	}
@@ -8819,6 +8827,8 @@ void fill_known_data_entry_entry(PyObject* known_data_entry, struct known_data_e
 	new_entry->lib_funcs_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,lib_funcs_ids);
 	new_entry->always_inc_funcs_ids_count = FTDB_ENTRY_ARRAY_SIZE(known_data_entry,always_inc_funcs_ids);
 	new_entry->always_inc_funcs_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,always_inc_funcs_ids);
+	new_entry->replacement_ids_count = FTDB_ENTRY_ARRAY_SIZE(known_data_entry,replacement_ids);
+	new_entry->replacement_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,replacement_ids);
 }
 
 void fill_BAS_item_entry(PyObject* BAS_item_entry, struct BAS_item* new_entry) {
