@@ -1,2 +1,2 @@
 # Allow to use kernel tracing technology for etrace command for any user
-ALL  ALL = (root) NOPASSWD: /usr/bin/setup_etrace.sh
+ALL ALL = (root) NOPASSWD: /usr/bin/setup_etrace.sh
