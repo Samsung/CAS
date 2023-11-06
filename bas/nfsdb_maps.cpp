@@ -150,6 +150,7 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
  * fileMap:
  *  Maps a unique file path to a list of open file handles that used this path (i.e. nfsdb entry and openfile index within this entry)
  *   per open mode (RD,WR,RW) + single global access set (either RD, WR or RW)
+ *  For executable paths we also set the executable bit
  *
  * linkedMap:
  *  Maps a unique linked file path to a nfsdb entry that created this linked file path
@@ -174,13 +175,15 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		unsigned long pid = entry->eid.pid;
 		processMap[pid].push_back(entry);
 
-		/* If the entry is a compiler or linker move the first such entry at the beginning of the 'bexeMap'
-		   (it can ease the burden of checking whether a given path is a compiler or linker) */
-		if ((entry->compilation_info)||(entry->linked_file)) {
-			bexeMap[entry->bpath].push_front(entry);
-		}
-		else {
-			bexeMap[entry->bpath].push_back(entry);
+		if ((entry->bpath!=LIBETRACE_EMPTY_STRING_HANDLE)&&(entry->argv_count>0)) {
+			/* If the entry is a compiler or linker move the first such entry at the beginning of the 'bexeMap'
+			   (it can ease the burden of checking whether a given path is a compiler or linker) */
+			if ((entry->compilation_info)||(entry->linked_file)) {
+				bexeMap[entry->bpath].push_front(entry);
+			}
+			else {
+				bexeMap[entry->bpath].push_back(entry);
+			}
 		}
 
 		for (unsigned long i=0; i<entry->child_ids_count; ++i) {
@@ -233,6 +236,23 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 	BUILD_NFSDB_ENTRY_MAP(processMap,procmap);
 	BUILD_NFSDB_ENTRY_MAP(bexeMap,bmap);
 	BUILD_ULONG_MAP(forkMap,forkmap);
+
+	/* Check if the executed binary path exists after the build */
+	struct rb_node * p = rb_first(&nfsdb->bmap);
+	while(p) {
+		struct nfsdb_entryMap_node* data = (struct nfsdb_entryMap_node*)p;
+		const char* binary_path = nfsdb->string_table[data->key];
+		if (access(binary_path, F_OK) == 0) {
+			/* exists */
+			data->custom_data = 1;
+			/* is this a link? */
+			struct stat stat_buf;
+			if (!lstat(binary_path,&stat_buf)) {
+				if (S_ISLNK(stat_buf.st_mode)) data->custom_data++;
+			}
+		}
+		p = rb_next(p);
+	}
 
 	for (decltype(revforkMap)::iterator i=revforkMap.begin(); i!=revforkMap.end(); ++i) {
 		unsigned long* value_list = (unsigned long*)malloc(sizeof(unsigned long));
@@ -316,7 +336,23 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 			node->ga_entry_index[u] = (*j).second;
 		}
 		node->global_access = std::get<4>((*i).second);
+		node->access_type = FILE_ACCESS_TYPE_OPEN;
 	}
+	/* Now add the paths of executed binaries to the fileMap and mark the entries as executables accordingly */
+	p = rb_first(&nfsdb->bmap);
+	while(p) {
+		struct nfsdb_entryMap_node* data = (struct nfsdb_entryMap_node*)p;
+		struct nfsdb_fileMap_node* node = fileMap_search(&nfsdb->filemap,data->key);
+		if (!node) {
+			node = fileMap_insert_key(&nfsdb->filemap, data->key);
+			node->access_type = FILE_ACCESS_TYPE_EXEC;
+		}
+		else {
+			node->access_type = FILE_ACCESS_TYPE_OPENEXEC;
+		}
+		p = rb_next(p);
+	}
+
 	if (show_stats) {
 		printf("fileMap" " keys: %zu:%zu\n",fileMap.size(),fileMap_count(&nfsdb->filemap));
 		size_t fileMapRdEntryCount = 0;

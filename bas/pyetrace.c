@@ -1820,9 +1820,11 @@ PyObject* libetrace_nfsdb_opens_paths(libetrace_nfsdb_object *self, PyObject *ar
 	struct rb_node * p = rb_first(&self->nfsdb->filemap);
     while(p) {
         struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-        PyObject* s = PyUnicode_FromString(self->nfsdb->string_table[data->key]);
-        PyList_Append(paths,s);
-        Py_DecRef(s);
+        if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+	        PyObject* s = PyUnicode_FromString(self->nfsdb->string_table[data->key]);
+	        PyList_Append(paths,s);
+	        Py_DecRef(s);
+	    }
         p = rb_next(p);
     }
     return paths;
@@ -3283,20 +3285,6 @@ PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *arg
 	return bpaths;
 }
 
-PyObject* libetrace_nfsdb_fpath_list(libetrace_nfsdb_object *self, PyObject *args) {
-
-	PyObject* fpaths = PyList_New(0);
-
-	struct rb_node * p = rb_first(&self->nfsdb->filemap);
-	while(p) {
-		struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-		PYLIST_ADD_STRING(fpaths,self->nfsdb->string_table[data->key]);
-		p = rb_next(p);
-	}
-
-	return fpaths;
-}
-
 PyObject* libetrace_nfsdb_linked_module_paths(libetrace_nfsdb_object *self, PyObject *args) {
 
 	PyObject* linked_modules = PyList_New(0);
@@ -3352,20 +3340,27 @@ PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *ar
 		unsigned long hfpath = srefnode->value;
 		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
-		if (node->rd_entry_count>0) {
-			struct nfsdb_entry* entry = node->rd_entry_list[0];
-			unsigned long index = node->rd_entry_index[0];
-			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+		if (node->access_type==FILE_ACCESS_TYPE_EXEC) {
+			struct nfsdb_entryMap_node* binary_node = nfsdb_entryMap_search(&self->nfsdb->bmap,node->key);
+			ASSERT_WITH_NFSDB_FORMAT_ERROR(binary_node,"Internal nfsdb error at binary path handle [%lu]",node->key);
+			if (binary_node->custom_data) Py_RETURN_TRUE;
 		}
-		else if (node->rw_entry_count>0) {
-			struct nfsdb_entry* entry = node->rw_entry_list[0];
-			unsigned long index = node->rw_entry_index[0];
-			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
-		}
-		else if (node->wr_entry_count>0) {
-			struct nfsdb_entry* entry = node->wr_entry_list[0];
-			unsigned long index = node->wr_entry_index[0];
-			if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+		else {
+			if (node->rd_entry_count>0) {
+				struct nfsdb_entry* entry = node->rd_entry_list[0];
+				unsigned long index = node->rd_entry_index[0];
+				if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+			}
+			else if (node->rw_entry_count>0) {
+				struct nfsdb_entry* entry = node->rw_entry_list[0];
+				unsigned long index = node->rw_entry_index[0];
+				if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+			}
+			else if (node->wr_entry_count>0) {
+				struct nfsdb_entry* entry = node->wr_entry_list[0];
+				unsigned long index = node->wr_entry_index[0];
+				if ((entry->open_files[index].mode&0x40)!=0) Py_RETURN_TRUE;
+			}
 		}
 		Py_RETURN_FALSE;
 	}
@@ -3390,23 +3385,25 @@ PyObject* libetrace_nfsdb_path_regular(libetrace_nfsdb_object *self, PyObject *a
 		unsigned long hfpath = srefnode->value;
 		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
-		if (node->rd_entry_count>0) {
-			struct nfsdb_entry* entry = node->rd_entry_list[0];
-			unsigned long index = node->rd_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
-		}
-		else if (node->rw_entry_count>0) {
-			struct nfsdb_entry* entry = node->rw_entry_list[0];
-			unsigned long index = node->rw_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
-		}
-		else if (node->wr_entry_count>0) {
-			struct nfsdb_entry* entry = node->wr_entry_list[0];
-			unsigned long index = node->wr_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+		if (node->access_type!=FILE_ACCESS_TYPE_EXEC) {
+			if (node->rd_entry_count>0) {
+				struct nfsdb_entry* entry = node->rd_entry_list[0];
+				unsigned long index = node->rd_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+			}
+			else if (node->rw_entry_count>0) {
+				struct nfsdb_entry* entry = node->rw_entry_list[0];
+				unsigned long index = node->rw_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+			}
+			else if (node->wr_entry_count>0) {
+				struct nfsdb_entry* entry = node->wr_entry_list[0];
+				unsigned long index = node->wr_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0x8)) Py_RETURN_TRUE;
+			}
 		}
 		Py_RETURN_FALSE;
 	}
@@ -3431,23 +3428,25 @@ PyObject* libetrace_nfsdb_path_symlinked(libetrace_nfsdb_object *self, PyObject 
 		unsigned long hfpath = srefnode->value;
 		struct nfsdb_fileMap_node* node = fileMap_search(&self->nfsdb->filemap,hfpath);
 		ASSERT_WITH_NFSDB_FORMAT_ERROR(node,"Internal nfsdb error at file path handle [%lu]",hfpath);
-		if (node->rd_entry_count>0) {
-			struct nfsdb_entry* entry = node->rd_entry_list[0];
-			unsigned long index = node->rd_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
-		}
-		else if (node->rw_entry_count>0) {
-			struct nfsdb_entry* entry = node->rw_entry_list[0];
-			unsigned long index = node->rw_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
-		}
-		else if (node->wr_entry_count>0) {
-			struct nfsdb_entry* entry = node->wr_entry_list[0];
-			unsigned long index = node->wr_entry_index[0];
-			unsigned long mode = entry->open_files[index].mode;
-			if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+		if (node->access_type!=FILE_ACCESS_TYPE_EXEC) {
+			if (node->rd_entry_count>0) {
+				struct nfsdb_entry* entry = node->rd_entry_list[0];
+				unsigned long index = node->rd_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+			}
+			else if (node->rw_entry_count>0) {
+				struct nfsdb_entry* entry = node->rw_entry_list[0];
+				unsigned long index = node->rw_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+			}
+			else if (node->wr_entry_count>0) {
+				struct nfsdb_entry* entry = node->wr_entry_list[0];
+				unsigned long index = node->wr_entry_index[0];
+				unsigned long mode = entry->open_files[index].mode;
+				if (((mode&0x40)!=0)&&(((mode&0x3C)>>2)==0xA)) Py_RETURN_TRUE;
+			}
 		}
 		Py_RETURN_FALSE;
 	}
@@ -6482,17 +6481,30 @@ int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsd
 		index = 0;
 	}
 
-	struct nfsdb_entry* entry = data->ga_entry_list[index];
-	unsigned long openfile_index = data->ga_entry_index[index];
-	struct openfile* openfile = &entry->open_files[openfile_index];
+	struct nfsdb_entry* entry = 0;
+	unsigned long openfile_index;
+	struct openfile* openfile = 0;
 	int match = 0;
 
+	if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+		entry = data->ga_entry_list[index];
+		openfile_index = data->ga_entry_index[index];
+		openfile = &entry->open_files[openfile_index];
+	}
+
 	if (arg_class&(FILE_CLASS_BINARY|FILE_CLASS_COMPILER|FILE_CLASS_LINKER)) {
-		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->bmap,openfile->path);
+		struct nfsdb_entryMap_node* node;
+		if (data->access_type==FILE_ACCESS_TYPE_EXEC) {
+			node = nfsdb_entryMap_search(&__self->nfsdb->bmap,data->key);
+		}
+		else {
+			node = nfsdb_entryMap_search(&__self->nfsdb->bmap,openfile->path);
+		}
 		if (node) {
 			/* This file is a binary */
 			if ((arg_class&FILE_CLASS_BINARY)&&(!(arg_class&FILE_CLASS_COMPILER))&&(!(arg_class&FILE_CLASS_LINKER))) match=1;
 			else {
+				/* !BINARY || (COMPILER || LINKER) */
 				struct nfsdb_entry* first_entry = node->entry_list[0];
 				if (first_entry->compilation_info) {
 					/* This file is a compiler */
@@ -6576,10 +6588,18 @@ int libetrace_nfsdb_entry_openfile_filter_file_exists(void *self, const struct n
 		index = 0;
 	}
 
-	struct nfsdb_entry* entry = data->ga_entry_list[index];
-	unsigned long openfile_index = data->ga_entry_index[index];
-	unsigned long mode = entry->open_files[openfile_index].mode;
-	if (((mode&0x40)!=0)&&((mode&0x3c)!=0x10)) return 1;
+	if (data->access_type==FILE_ACCESS_TYPE_EXEC) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->bmap,data->key);
+		if (node && node->custom_data) {
+			return 1;
+		}
+	}
+	else {
+		struct nfsdb_entry* entry = data->ga_entry_list[index];
+		unsigned long openfile_index = data->ga_entry_index[index];
+		unsigned long mode = entry->open_files[openfile_index].mode;
+		if (((mode&0x40)!=0)&&((mode&0x3c)!=0x10)) return 1;
+	}
 
 	return 0;
 }
@@ -6593,10 +6613,18 @@ int libetrace_nfsdb_entry_openfile_filter_file_not_exists(void *self, const stru
 		index = 0;
 	}
 
-	struct nfsdb_entry* entry = data->ga_entry_list[index];
-	unsigned long openfile_index = data->ga_entry_index[index];
-	unsigned long mode = entry->open_files[openfile_index].mode;
-	if ((mode&0x40)==0) return 1;
+	if (data->access_type==FILE_ACCESS_TYPE_EXEC) {
+		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&__self->nfsdb->bmap,data->key);
+		if (node && (node->custom_data==0)) {
+			return 1;
+		}
+	}
+	else {
+		struct nfsdb_entry* entry = data->ga_entry_list[index];
+		unsigned long openfile_index = data->ga_entry_index[index];
+		unsigned long mode = entry->open_files[openfile_index].mode;
+		if ((mode&0x40)==0) return 1;
+	}
 
 	return 0;
 }
@@ -6610,10 +6638,12 @@ int libetrace_nfsdb_entry_openfile_filter_dir_exists(void *self, const struct nf
 		index = 0;
 	}
 
-	struct nfsdb_entry* entry = data->ga_entry_list[index];
-	unsigned long openfile_index = data->ga_entry_index[index];
-	unsigned long mode = entry->open_files[openfile_index].mode;
-	if (((mode&0x40)!=0)&&((mode&0x3c)==0x10)) return 1;
+	if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+		struct nfsdb_entry* entry = data->ga_entry_list[index];
+		unsigned long openfile_index = data->ga_entry_index[index];
+		unsigned long mode = entry->open_files[openfile_index].mode;
+		if (((mode&0x40)!=0)&&((mode&0x3c)==0x10)) return 1;
+	}
 
 	return 0;
 }
@@ -6624,18 +6654,23 @@ int libetrace_nfsdb_entry_openfile_filter_has_access(void *self, const struct nf
 	(void)__self;
 	unsigned long arg_access = (unsigned long)arg;
 
-	if (arg_access>2) {
-		/* We're looking for global access */
-		return (arg_access-3)==data->global_access;
-	}
-	else {
-		/* Per file access search */
-		struct nfsdb_entry* entry = data->ga_entry_list[index];
-		unsigned long openfile_index = data->ga_entry_index[index];
-		unsigned long mode = entry->open_files[openfile_index].mode;
-		return arg_access==(mode&0x3);
+	if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+
+		if (arg_access>2) {
+			/* We're looking for global access */
+			return (arg_access-3)==data->global_access;
+		}
+		else {
+			/* Per file access search */
+			struct nfsdb_entry* entry = data->ga_entry_list[index];
+			unsigned long openfile_index = data->ga_entry_index[index];
+			unsigned long mode = entry->open_files[openfile_index].mode;
+			return arg_access==(mode&0x3);
+		}
+
 	}
 
+	return 0;
 }
 
 int libetrace_nfsdb_entry_openfile_filter_at_source_root(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
@@ -6668,6 +6703,10 @@ int libetrace_nfsdb_entry_openfile_filter_source_type(void *self, const struct n
 
 	if (index==ULONG_MAX) {
 		index = 0;
+	}
+
+	if (data->access_type==FILE_ACCESS_TYPE_EXEC) {
+		return 0;
 	}
 
 	struct nfsdb_entry* entry = data->ga_entry_list[index];

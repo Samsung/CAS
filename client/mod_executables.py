@@ -43,8 +43,8 @@ class Binaries(Module, FilterableModule):
             return data, DataTypes.commands_data, lambda x: x.bpath
         else:
             data = list({
-                ex.bpath
-                for ex in self.nfsdb.filtered_execs_iter(**args)
+                opn
+                for opn in self.nfsdb.filtered_paths_iter(file_filter=self.open_filter.libetrace_filter if self.open_filter else None, binary=True)
             })
 
             return data, DataTypes.binary_data, lambda x: x

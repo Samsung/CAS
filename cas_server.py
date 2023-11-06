@@ -315,11 +315,11 @@ def deps_of() -> Response:
 
 @lru_cache(1)
 def get_binaries(bin_path):
-    return sorted([x for x in cas_db.db.bpaths() if bin_path in x])
+    return sorted([x for x in cas_db.db.binary_paths() if bin_path in x])
 
 @lru_cache(1)
 def get_opened_files(file_path):
-    return sorted([x for x in cas_db.db.fpaths() if file_path in x])
+    return sorted([x for x in cas_db.db.opens_paths() if file_path in x])
 
 
 @lru_cache()

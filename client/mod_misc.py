@@ -90,7 +90,7 @@ class ShowStat(Module):
             "execs_commands": len(self.nfsdb.db.filtered_execs_iter(has_command=True)),
             "execs_compilations": len(self.nfsdb.db.filtered_execs_iter(has_comp_info=True)),
             "execs_linking": len(self.nfsdb.db.filtered_execs_iter(has_linked_file=True)),
-            "binaries": len(self.nfsdb.db.bpaths()),
+            "binaries": len(self.nfsdb.db.binary_paths()),
             "opens": self.nfsdb.opens_num(),
             "linked": len(self.nfsdb.get_linked_files()),
             "compiled": len(self.nfsdb.get_compiled_files()),

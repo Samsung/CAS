@@ -232,7 +232,6 @@ PyObject* libetrace_nfsdb_filtered_execs_iter(libetrace_nfsdb_object *self, PyOb
 PyObject* libetrace_nfsdb_pcp_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_pid_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_bpath_list(libetrace_nfsdb_object *self, PyObject *args);
-PyObject* libetrace_nfsdb_fpath_list(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_linked_modules(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_linked_module_paths(libetrace_nfsdb_object *self, PyObject *args);
 PyObject* libetrace_nfsdb_path_exists(libetrace_nfsdb_object *self, PyObject *args);
@@ -268,6 +267,7 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"opens_iter",(PyCFunction)libetrace_nfsdb_opens_iter,METH_VARARGS,"Returns the open files iterator across entire database"},
 	{"opens",(PyCFunction)libetrace_nfsdb_opens_list,METH_VARARGS,"Returns the list of all opened files across entire database"},
 	{"opens_paths",(PyCFunction)libetrace_nfsdb_opens_paths,METH_VARARGS,"Returns the list of all unique opened paths across entire database"},
+	{"binary_paths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
 	{"filtered_paths",(PyCFunction)libetrace_nfsdb_filtered_opens_paths,METH_VARARGS|METH_KEYWORDS,"Returns the list of all unique opened paths across entire database filtered by a given set of filters"},
 	{"filtered_paths_iter",(PyCFunction)libetrace_nfsdb_filtered_opens_paths_iter,METH_VARARGS|METH_KEYWORDS,"Returns the iterator to the unique opened paths across entire database filtered by a given set of filters"},
 	{"filtered_opens",(PyCFunction)libetrace_nfsdb_filtered_opens,METH_VARARGS|METH_KEYWORDS,"Returns the list of all unique opened files across entire database filtered by a given set of filters"},
@@ -276,8 +276,6 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"filtered_execs_iter",(PyCFunction)libetrace_nfsdb_filtered_execs_iter,METH_VARARGS|METH_KEYWORDS,"Returns the iterator to the all executions across entire database filtered by a given set of filters"},
 	{"pcp_list",(PyCFunction)libetrace_nfsdb_pcp_list,METH_VARARGS,"Returns the list of command patterns to be precomputed"},
 	{"pids",(PyCFunction)libetrace_nfsdb_pid_list,METH_VARARGS,"Returns the list of all unique pids in the database"},
-	{"bpaths",(PyCFunction)libetrace_nfsdb_bpath_list,METH_VARARGS,"Returns the list of all unique binary paths in the database"},
-	{"fpaths",(PyCFunction)libetrace_nfsdb_fpath_list,METH_VARARGS,"Returns the list of all unique opened file paths in the database"},
 	{"linked_modules",(PyCFunction)libetrace_nfsdb_linked_modules,METH_VARARGS,"Returns the list of all linked modules present in the database"},
 	{"linked_module_paths",(PyCFunction)libetrace_nfsdb_linked_module_paths,METH_VARARGS,"Returns the list of all linked module paths present in the database"},
 	{"fdeps",(PyCFunction)libetrace_nfsdb_file_dependencies,METH_VARARGS|METH_KEYWORDS,"Returns the list of file dependencies for a given file"},
@@ -288,11 +286,11 @@ static PyMethodDef libetrace_nfsdb_methods[] = {
 	{"path_read",(PyCFunction)libetrace_nfsdb_path_read,METH_VARARGS,"Returns True if a given path was opened for read during the build"},
 	{"path_write",(PyCFunction)libetrace_nfsdb_path_write,METH_VARARGS,"Returns True if a given path was opened for write during the build"},
 	{"path_regular",(PyCFunction)libetrace_nfsdb_path_regular,METH_VARARGS,"Returns True if a given path is a regular file (which implies that path exists after the build)"},
-	{"path_symlinked",(PyCFunction)libetrace_nfsdb_path_symlinked,METH_VARARGS,"Returns True if a given path was reached through a symbolic link"},
-	{"symlink_paths",(PyCFunction)libetrace_nfsdb_symlink_paths,METH_VARARGS,"Returns list of original symlink paths for a given resolved path"},
+	{"path_symlinked",(PyCFunction)libetrace_nfsdb_path_symlinked,METH_VARARGS,"Returns True if a given path was reached through a symbolic link (doesn't apply to executed binary paths)"},
+	{"symlink_paths",(PyCFunction)libetrace_nfsdb_symlink_paths,METH_VARARGS,"Returns list of original symlink paths for a given resolved path (doesn't apply to executed binary paths)"},
 	{"create_deps_cache", (PyCFunction)libetrace_nfsdb_create_deps_cache, METH_VARARGS | METH_KEYWORDS,""},
 	{"precompute_command_patterns",(PyCFunction)libetrace_nfsdb_precompute_command_patterns, METH_VARARGS|METH_KEYWORDS,"Precompute command patterns for file dependency processing"},
-	{"filemap_has_path",(PyCFunction)libetrace_nfsdb_filemap_has_path,METH_VARARGS,"Returns True if a given opened path exists in the database"},
+	{"filemap_has_path",(PyCFunction)libetrace_nfsdb_filemap_has_path,METH_VARARGS,"Returns True if a given opened path exists in the database"}, /* TODO: write 'in' operator */
 	{NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

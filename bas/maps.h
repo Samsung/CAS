@@ -6,6 +6,7 @@ struct nfsdb_entryMap_node {
 	unsigned long key;
 	struct nfsdb_entry** entry_list;
 	unsigned long entry_count;
+	unsigned long custom_data;
 };
 
 struct ulongMap_node {
@@ -31,6 +32,12 @@ struct stringRefMap_node {
 	unsigned long value;
 };
 
+enum file_access_type {
+	FILE_ACCESS_TYPE_OPEN,
+	FILE_ACCESS_TYPE_EXEC,
+	FILE_ACCESS_TYPE_OPENEXEC,
+};
+
 struct nfsdb_fileMap_node {
 	struct rb_node node;
 	unsigned long key;
@@ -47,6 +54,7 @@ struct nfsdb_fileMap_node {
 	unsigned long* ga_entry_index;
 	unsigned long ga_entry_count;
 	unsigned long global_access;
+	enum file_access_type access_type;
 };
 
 struct nfsdb_entryMap_node* nfsdb_entryMap_search(const struct rb_root* nfsdb_entryMap, unsigned long key);

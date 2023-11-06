@@ -52,22 +52,22 @@ def fixture_header_file() -> str:
 
 @pytest.fixture(name="javac")
 def fixture_javac() -> str:
-    return get_main("binaries --command-filter=[bin=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
+    return get_main("binaries --filter=[path=*prebuilts/jdk/jdk11/linux-x86/bin/javac,type=wc] -n=1 --reverse")
 
 
 @pytest.fixture(name="sh")
 def fixture_sh() -> str:
-    return get_main("binaries --command-filter=[bin=*bin/sh,type=wc] -n=1")
+    return get_main("binaries --filter=[path=*bin/sh,type=wc] -n=1")
 
 
 @pytest.fixture(name="bash")
 def fixture_bash() -> str:
-    return get_main("binaries --command-filter=[bin=*bin/bash,type=wc] -n=1")
+    return get_main("binaries --filter=[path=*bin/bash,type=wc] -n=1")
 
 
 @pytest.fixture(name="linker")
 def fixture_linker() -> str:
-    return get_main("binaries --command-filter=[bin=*/bin/ld.lld,type=wc] -n=1")
+    return get_main("binaries --filter=[path=*/bin/ld.lld,type=wc] -n=1")
 
 
 @pytest.fixture(name="pids")
@@ -542,12 +542,12 @@ class TestBinaries:
             assert not ent.startswith(nfsdb.source_root)
 
     def test_with_bin(self):
-        ret = get_json_entries("binaries --command-filter=[bin=*/bin/bash,type=wc]or[bin=*/bin/sh,type=wc] --json", 2, 2, is_normpath)
+        ret = get_json_entries("binaries --filter=[path=*/bin/bash,type=wc]or[path=*/bin/sh,type=wc] --json", 2, 2, is_normpath)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent, "*/bin/*sh")
 
     def test_with_bin_raw(self):
-        ret = get_raw("binaries --command-filter=[bin=*/bin/bash,type=wc]or[bin=*/bin/sh,type=wc]", 2, 2, is_normpath)
+        ret = get_raw("binaries --filter=[path=*/bin/bash,type=wc]or[path=*/bin/sh,type=wc]", 2, 2, is_normpath)
         for ent in ret:
             assert fnmatch.fnmatch(ent, "*/bin/*sh")
 
@@ -562,35 +562,35 @@ class TestBinaries:
             assert javac in ent
 
     def test_with_filter(self):
-        ret = get_json_entries("binaries -n=10 --command-filter=[bin=*.py,type=wc] --json", 50, 150, is_normpath)
+        ret = get_json_entries("binaries -n=10 --filter=[path=*.py,type=wc] --json", 50, 150, is_normpath)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent, "*.py")
 
     def test_with_filter_raw(self):
-        ret = get_raw("binaries -n=10 --command-filter=[bin=*.py,type=wc]", 50, 150, is_normpath)
+        ret = get_raw("binaries -n=10 --filter=[path=*.py,type=wc]", 50, 150, is_normpath)
         for ent in ret:
             assert fnmatch.fnmatch(ent, "*.py")
 
     def test_compiler(self):
-        ret = get_json_entries("binaries -n=0 --command-filter=[class=compiler] --json", 4, 20, is_normpath)
+        ret = get_json_entries("binaries -n=0 --filter=[class=compiler] --json", 4, 20, is_normpath)
         comp_wc = config.config_info["gcc_spec"] + config.config_info["gpp_spec"] + config.config_info["clang_spec"] + config.config_info["clangpp_spec"] + config.config_info["armcc_spec"]
         for ent in ret["entries"]:
             assert any([len(fnmatch.filter([ent], wc)) > 0 for wc in comp_wc])
 
     def test_compiler_raw(self):
-        ret = get_raw("binaries --command-filter=[class=compiler]", 4, 20, is_normpath)
+        ret = get_raw("binaries --filter=[class=compiler]", 4, 20, is_normpath)
         comp_wc = config.config_info["gcc_spec"] + config.config_info["gpp_spec"] + config.config_info["clang_spec"] + config.config_info["clangpp_spec"] + config.config_info["armcc_spec"]
         for ent in ret:
             assert any([len(fnmatch.filter([ent], wc)) > 0 for wc in comp_wc])
 
     def test_linker(self):
-        ret = get_json_entries("binaries -n=0 --command-filter=[class=linker] --json", 4, 20, is_normpath)
+        ret = get_json_entries("binaries -n=0 --filter=[class=linker] --json", 4, 20, is_normpath)
         link_wc = config.config_info["ld_spec"] + config.config_info["ar_spec"] + ["/bin/bash"]
         for ent in ret["entries"]:
             assert any([len(fnmatch.filter([ent], wc)) > 0 for wc in link_wc])
 
     def test_linker_raw(self):
-        ret = get_raw("binaries -n=0 --command-filter=[class=linker]", 4, 20, is_normpath)
+        ret = get_raw("binaries -n=0 --filter=[class=linker]", 4, 20, is_normpath)
         link_wc = config.config_info["ld_spec"] + config.config_info["ar_spec"] + ["/bin/bash"]
         for ent in ret:
             assert any([len(fnmatch.filter([ent], wc)) > 0 for wc in link_wc])
@@ -1630,10 +1630,10 @@ class TestRevDepsFor:
 
 class TestPipeline:
     def test_binaries_2_commands(self):
-        ret = get_json_entries("binaries --command-filter=[bin=*javac,type=wc] commands --json", 300, 1500, is_command)
+        ret = get_json_entries("binaries --filter=[path=*javac,type=wc] commands --json", 300, 1500, is_command)
         for ent in ret["entries"]:
             assert fnmatch.fnmatch(ent['bin'], "*javac")
-        count = get_json_simple("binaries -l --command-filter=[bin=*javac,type=wc] commands --json")["count"]
+        count = get_json_simple("binaries -l --filter=[path=*javac,type=wc] commands --json")["count"]
         assert ret["count"] == count
 
     def test_linked_modules_2_deps_for(self):

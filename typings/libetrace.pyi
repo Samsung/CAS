@@ -272,19 +272,11 @@ class nfsdb:
         :rtype: list[int]
         """
 
-    def bpaths(self, ) -> List[str]:
+    def binary_paths(self, ) -> List[str]:
         """
         Returns list of all binaries paths
 
         :return: List of binaries paths
-        :rtype: list[str]
-        """
-
-    def fpaths(self, ) -> List[str]:
-        """
-        Returns list of all opened file paths
-
-        :return: List of file paths
         :rtype: list[str]
         """
 
