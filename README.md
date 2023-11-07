@@ -67,7 +67,10 @@ After the tracer module is installed setup the tracing wrapper:
 (cd ${CAS_DIR} && sudo ./etrace_install.sh)
 ```
 
-This will modify your sudoers file to allow for using the tracer kernel module by any user in the system.
+This will modify your sudoers file to allow for using the tracer kernel module by any user in the system. In case of problems with running the etrace command (i.e. asking for sudo password) please make sure that the following line is located at the end of the `/etc/sudoers` file
+```
+#includedir /etc/sudoers.d
+```
 
 Building CAS libraries:
 ```bash
