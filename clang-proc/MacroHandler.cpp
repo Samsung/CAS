@@ -115,7 +115,7 @@ class MacroExpCallbacks : public PPCallbacks{
       auto &SM = PP.getSourceManager();
       auto ExpCharRange = Lexer::getAsCharRange(SM.getExpansionRange(Range),SM,PP.getLangOpts());
       auto BeginLoc = ExpCharRange.getBegin();
-      auto EndLoc = ExpCharRange.getEnd().getLocWithOffset(-1);
+      auto EndLoc = ExpCharRange.getEnd().getLocWithOffset(FTDB_COMPAT_MACRO_OFFSET);
       //remove endif if contained
       ExpansionRanges.erase(ExpansionRanges.lower_bound(BeginLoc),ExpansionRanges.upper_bound(EndLoc));
         

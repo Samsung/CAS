@@ -10,6 +10,11 @@
 #include "clang/Basic/FileEntry.h"
 #endif
 
+#if CLANG_VERSION<11
+#define FTDB_COMPAT_MACRO_OFFSET -2
+#else
+#define FTDB_COMPAT_MACRO_OFFSET 0
+#endif
 using namespace clang;
 
 namespace compatibility{
