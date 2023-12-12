@@ -118,24 +118,6 @@ static std::string getFullFunctionNamespace(const FunctionDecl *D) {
 	  return fns;
   }
 
-
-static bool can_compute_type_width(QualType T) {
-
-	if (T->getTypeClass()==Type::Elaborated) {
-		const ElaboratedType *tp = cast<ElaboratedType>(T);
-		T = tp->getNamedType();
-	}
-
-	if ((T->getTypeClass()==Type::Record)&&(!cast<RecordType>(T)->getDecl()->isCompleteDefinition())) {
-		return false;
-	}
-	else if ((T->getTypeClass()==Type::Enum)&&(!cast<EnumType>(T)->getDecl()->isCompleteDefinition())) {
-		return false;
-	}
-
-	return true;
-}
-
 void DbJSONClassConsumer::getFuncDeclSignature(const FunctionDecl* D, std::string& fdecl_sig) {
   if(opts.assert && Visitor.CTAList.find(D)!=Visitor.CTAList.end()) {
 	  fdecl_sig += "__compiletime_assert";
@@ -2548,7 +2530,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 			  FOut << Indent << "\t\t\"declbody\": \"" << json::json_escape(declbody) << "\",\n";
 		  }
-		  FOut << Indent << "\t\t\"signature\": \"" << func_data.signature << "\",\n";
+		  FOut << Indent << "\t\t\"signature\": \"" << json::json_escape(func_data.signature) << "\",\n";
 		  FOut << Indent << "\t\t\"declhash\": \"" << func_data.declhash << "\",\n";
 		  FOut << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
 		  std::string sloc = getAbsoluteLocation(D->getSourceRange().getBegin());
@@ -3014,7 +2996,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
   			  if (hasTemplatePars) FDOut << Indent << "\t\t\"template_paremeters\": \"" << json::json_escape(func_data.templatePars) << "\",\n";
   			  FDOut << Indent << "\t\t\"decl\": \"" << json::json_escape(fdeclbody) << "\",\n";
   		  }
-		  FDOut << Indent << "\t\t\"signature\": \"" << func_data.signature << "\",\n";
+		  FDOut << Indent << "\t\t\"signature\": \"" << json::json_escape(func_data.signature) << "\",\n";
   		  FDOut << Indent << "\t\t\"declhash\": \"" << func_data.declhash << "\",\n";
   		  FDOut << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
   		  FDOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
@@ -4696,19 +4678,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  else {
 				  TOut << Indent << "\t\t\"implicit\": false,\n";
 			  }
-			  QualType uT = walkTypedefType(tT);
-  			  if (uT->isDependentType()) {
+  			  if (T->isIncompleteType() || T->isDependentType()) {
   				  TOut << Indent << "\t\t\"size\": " << "0" << ",\n";
   			  }
-  			  else {
-				  if (!can_compute_type_width(uT)) {
-					  TOut << Indent << "\t\t\"size\": " << "0" << ",\n";
-				  }
-				  else {
-					  TypeInfo ti = Context.getTypeInfo(uT);
-					  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
-				  }
-  			  }
+			  else{
+				  TOut << Indent << "\t\t\"size\": " << Context.getTypeSize(T) << ",\n";
+			  }
 			  if (owned) {
 				  TOut << Indent << "\t\t\"decls\": " << "[ 0 ]" << ",\n";
 			  }

@@ -902,6 +902,12 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 			//assert(0 && "Found Attributed");
 			return typeForMap(tp->getEquivalentType());
 		}
+		COMPAT_VERSION_GE(15,
+		case Type::BTFTagAttributed:{
+			auto tp = cast<BTFTagAttributedType>(T);
+			return typeForMap(tp->getWrappedType());
+		}
+		)
 		case Type::UnaryTransform:{
 			auto tp = cast<UnaryTransformType>(T);
 			assert(tp->getUTTKind() == UnaryTransformType::EnumUnderlyingType && "Not an enum!");

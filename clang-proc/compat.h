@@ -10,11 +10,26 @@
 #include "clang/Basic/FileEntry.h"
 #endif
 
+#if CLANG_VERSION>=10
+#define COMPAT_VERSION_GE_10(code) code
+#else
+#define COMPAT_VERSION_GE_10(code)
+#endif
+
+#if CLANG_VERSION>=15
+#define COMPAT_VERSION_GE_15(code) code
+#else
+#define COMPAT_VERSION_GE_15(code)
+#endif
+
+#define COMPAT_VERSION_GE(v,code) COMPAT_VERSION_GE_##v(code)
+
 #if CLANG_VERSION<11
 #define FTDB_COMPAT_MACRO_OFFSET -2
 #else
 #define FTDB_COMPAT_MACRO_OFFSET 0
 #endif
+
 using namespace clang;
 
 namespace compatibility{

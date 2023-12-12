@@ -98,6 +98,10 @@ public:
         BaseType = ATy->getDeducedType();
       else if (const AttributedType *AtrTy = BaseType->getAs<AttributedType>())
         BaseType = AtrTy->getModifiedType();
+      COMPAT_VERSION_GE(15,
+      else if (const BTFTagAttributedType *AtrTy = BaseType->getAs<BTFTagAttributedType>())
+        BaseType = AtrTy->getWrappedType();
+      )
       else if (const ParenType *PTy = BaseType->getAs<ParenType>())
         BaseType = PTy->desugar();
       else
@@ -1556,6 +1560,10 @@ public:
         BaseType = ATy->getDeducedType();
       else if (const AttributedType *AtrTy = BaseType->getAs<AttributedType>())
     	  BaseType = AtrTy->getModifiedType();
+      COMPAT_VERSION_GE(15,
+      else if (const BTFTagAttributedType *AtrTy = BaseType->getAs<BTFTagAttributedType>())
+        BaseType = AtrTy->getWrappedType();
+      )
       else if (const ParenType *PTy = BaseType->getAs<ParenType>())
         BaseType = PTy->desugar();
       else
@@ -1741,6 +1749,10 @@ static inline QualType walkTypedefType(QualType T) {
 	  TypedefNameDecl* D = tp->getDecl();
 	  QualType tT = D->getTypeSourceInfo()->getType();
 	  return walkTypedefType(tT);
+  }
+  else if(T->getTypeClass()==Type::Elaborated){
+    const ElaboratedType *tp = cast<ElaboratedType>(T);
+    return walkTypedefType(tp->getNamedType());
   }
   else {
 	  return T;

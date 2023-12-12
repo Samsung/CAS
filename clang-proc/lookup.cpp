@@ -742,6 +742,13 @@ bool DbJSONClassVisitor::verifyMemberExprBaseType(QualType T) {
 			const AttributedType *tp = cast<AttributedType>(T);
 			return verifyMemberExprBaseType(tp->getModifiedType());
 		}
+		COMPAT_VERSION_GE(15,
+		case Type::BTFTagAttributed:
+		{
+			const BTFTagAttributedType *tp = cast<BTFTagAttributedType>(T);
+			return verifyMemberExprBaseType(tp->getWrappedType());
+		}
+		)
 		case Type::MacroQualified:
 		{
 			const MacroQualifiedType *tp = cast<MacroQualifiedType>(T);
@@ -3041,7 +3048,16 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
                       LookForTemplateTypeParameters(eT,s);
                   }
                   break;
-                  case Type::VariableArray:
+				  COMPAT_VERSION_GE(15,
+                  case Type::BTFTagAttributed:
+                  {
+                      const BTFTagAttributedType *tp = cast<BTFTagAttributedType>(T);
+                      QualType eT = tp->getWrappedType();
+                      LookForTemplateTypeParameters(eT,s);
+                  }
+                  break;
+				  )
+				  case Type::VariableArray:
                   {
                       const VariableArrayType *tp = cast<VariableArrayType>(T);
                       QualType vaT = tp->getElementType();
@@ -3261,6 +3277,15 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
                       return LookForTemplateSpecializationType(eT);
                   }
                   break;
+				  COMPAT_VERSION_GE(15,
+                  case Type::BTFTagAttributed:
+                  {
+                      const BTFTagAttributedType *tp = cast<BTFTagAttributedType>(T);
+                      QualType eT = tp->getWrappedType();
+                      return LookForTemplateSpecializationType(eT);
+                  }
+                  break;
+				  )
                   case Type::VariableArray:
                   {
                       const VariableArrayType *tp = cast<VariableArrayType>(T);
