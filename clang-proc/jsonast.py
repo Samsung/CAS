@@ -11,11 +11,69 @@ import time
 import shutil
 import itertools
 import new_merge
-from tqdm import tqdm
+from typing import Any, Optional, Iterable
 from datetime import datetime
 from queue import Empty, Full
 from threading import Thread
 __version_string__ = "0.90"
+
+class progressbar:
+    def __init__(self, *args, **kwargs):
+        try:
+            from tqdm import tqdm as __progressbar
+        except:
+            class __progressbar:
+                n = 0
+                x = None
+
+                def __init__(self, data:Optional[Iterable]=None, x=None, total=0, disable=None,**kwargs):
+                    self.data_iter = data.__iter__()
+                    self.x = x
+                    self.total = total
+                    self.desc = kwargs["desc"] if 'desc' in kwargs else 'Progress'
+                    if disable is None:
+                        self.disable = not sys.stdout.isatty()
+                    self.start_time = time.time()
+
+                def __iter__(self):
+                    return self
+                def __next__(self):
+                    self.refresh()
+                    self.n+=1
+                    return self.data_iter.__next__()
+
+                def refresh(self):
+                    if not self.disable:
+                        self.render()
+
+                def render(self):
+                    progress = self.n/(self.total+0.0001)
+                    rbar = f'{self.desc}: {100*progress:3.1f}%|'
+                    lbar = f'| {self.n}/{self.total} [Elapsed time: {time.time()-self.start_time:.1f}s]'
+                    mlen = shutil.get_terminal_size()[0] - len(rbar) - len(lbar)
+                    fill = mlen*progress
+                    fillchr = chr(0x258f - int(8*(fill - int(fill))))
+                    mbar = f'{"":\u2588<{int(fill)}}{fillchr}{"":<{mlen-int(fill)-1}}'
+                    print(f'\r\033[K{rbar}{mbar}{lbar}',end='')
+
+                def close(self):
+                    pass
+
+        self.pb = __progressbar(*args, **kwargs)
+
+    def __getattribute__(self, __name: str) -> Any:
+        if __name == 'pb':
+            return super().__getattribute__(__name)
+        return getattr(self.pb, __name)
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if __name == 'pb':
+            return super().__setattr__(__name,__value)
+        return setattr(self.pb,__name,__value)
+
+    def __iter__(self):
+        return self.pb.__iter__()
+
+
 
 
 # external use
@@ -939,7 +997,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
             t.start()
             print(proc.stderr.readline()[5:],end='')
             count = 0
-            log_iter = tqdm(proc.stderr,total=len(fns),desc="Parsing files",miniters=1)
+            log_iter = progressbar(proc.stderr,total=len(fns),desc="Parsing files",miniters=1,disable=None)
             log_iter.bar_format='{desc}: {percentage:3.1f}%|{bar}{r_bar}'
             for line in log_iter:
                 if line.startswith("LOG: "):
