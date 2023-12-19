@@ -5219,8 +5219,6 @@ namespace multi{
       func_data.id.setIDProper(entry.id);
       func_data.output = nullptr;
     }
-    // fids
-    FuncFids[entry.id].insert(func_data.fid);
   }
 
   void registerFuncInternal(DbJSONClassVisitor::FuncData &func_data){
