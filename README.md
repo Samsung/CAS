@@ -297,3 +297,7 @@ For those who are cautious to load and run custom Linux kernel modules on their 
 ### Talks
 
 Talk about Code Aware Services from the Linux Security Summit NA 2022 can be found [here](https://youtu.be/M7gl7MFU_Bc?t=648)
+
+### Documentation
+
+Using CAS as a [DPE tool](https://samsung.github.io/CAS/) in the Complex Low-Level Systems World
