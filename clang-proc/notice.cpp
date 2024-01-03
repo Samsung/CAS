@@ -511,9 +511,6 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 							  const TemplateTypeParmType* ttp = cast<TemplateTypeParmType>(TPT);
 							  if (templateTypeParmTypeMap.find(ttp)==templateTypeParmTypeMap.end()) {
 								  templateTypeParmTypeMap.insert(std::pair<const TemplateTypeParmType*,QualType>(ttp,T));
-#if TTP_DEBUG
-								  llvm::outs() << "templateTypeParmTypeMap[" << ttp << "] = " << T << "\n";
-#endif
 							  }
 						  }
 					  }
@@ -538,9 +535,6 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 							  const TemplateTypeParmType* ttp = cast<TemplateTypeParmType>(TPT);
 							  if (templateTypeParmTypeMap.find(ttp)==templateTypeParmTypeMap.end()) {
 								  templateTypeParmTypeMap.insert(std::pair<const TemplateTypeParmType*,QualType>(ttp,T));
-#if TTP_DEBUG
-								  llvm::outs() << "templateTypeParmTypeMap[" << ttp << "] = " << T << "\n";
-#endif
 							  }
 							  noticeTypeClass(QualType(ttp,0));
 						  }

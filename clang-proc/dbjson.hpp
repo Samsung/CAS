@@ -39,15 +39,8 @@ using namespace clang;
 
 #define DBG(on,...)		do { if (on) { __VA_ARGS__; } } while(0)
 
-//#define DEBUG_PRINT
-#define DEBUG_TYPEMAP 0
-#define JSON_OUT
-
 #define DEBUG_TYPESTRING 0
-#define DEBUG_RECORDSTRING 0
 #define DEBUG_HASH 0
-
-#define TTP_DEBUG 0
 
 extern thread_local size_t exprOrd;
 
