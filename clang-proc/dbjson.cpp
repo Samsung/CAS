@@ -3429,22 +3429,25 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  std::string hashID = type_data.hash;
 	  DbJSONClassVisitor::recordInfo_t *RInfo = type_data.RInfo;
 	  TOut << Indent << "\t{\n";
+	  TOut << Indent << "\t\t\"id\": " << id << ",\n";
+	  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
+	  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
+	  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
+
 	  if (T.isNull()) {
 		  // Special case, placeholder for empty record types
-		  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-		  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-		  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 		  TOut << Indent << "\t\t\"class\": \"" << "empty_record" << "\",\n";
 		  TOut << Indent << "\t\t\"qualifiers\": \"" << "" << "\",\n";
 		  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 		  TOut << Indent << "\t\t\"str\": \"" << "" << "\",\n";
-		  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 		  TOut << Indent << "\t\t\"refs\": [],\n";
 		  TOut << Indent << "\t\t\"usedrefs\": []\n";
 		  return;
 	  }
 
 	  std::string qualifierString = getQualifierString(T);
+	  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
+
 	  switch(T->getTypeClass()) {
 		  case Type::MacroQualified:
 		  case Type::Attributed:
@@ -3470,14 +3473,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  TypeInfo ti = Context.getTypeInfo(T);
 				  width = ti.Width;
 			  }
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "builtin" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << tp->getName(Context.getPrintingPolicy()) << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [],\n";
 			  TOut << Indent << "\t\t\"usedrefs\": []\n";
 		  }
@@ -3487,14 +3485,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const PointerType *tp = cast<PointerType>(T);
 			  QualType ptrT = tp->getPointeeType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "pointer" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "*" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(ptrT).id;
 			  TOut << " ],\n";
@@ -3509,14 +3502,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  const MemberPointerType *tp = cast<MemberPointerType>(T);
 			  QualType mptrT = tp->getPointeeType();
 			  QualType cT = QualType(tp->getClass(),0);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "member_pointer" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "::*" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(cT).id;
@@ -3533,14 +3521,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const ComplexType *tp = cast<ComplexType>(T);
 			  QualType eT = tp->getElementType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "complex" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "(x,jy)" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(eT).id;
 			  TOut << " ],\n";
@@ -3560,14 +3543,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  Width = ti.Width*tp->getNumElements();
 				  }
 			  }
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "vector" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "v[N]" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(eT).id;
 			  TOut << " ],\n";
@@ -3587,14 +3565,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  Width = ti.Width*tp->getNumElements();
 				  }
 			  }
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "extended_vector" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "ev[N]" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(eT).id;
 			  TOut << " ],\n";
@@ -3608,14 +3581,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const LValueReferenceType *tp = cast<LValueReferenceType>(T);
 			  QualType ptrT = tp->getPointeeType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "lv_reference" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "&" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(ptrT).id;
 			  TOut << " ],\n";
@@ -3629,14 +3597,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const RValueReferenceType *tp = cast<RValueReferenceType>(T);
 			  QualType ptrT = tp->getPointeeType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "rv_reference" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "&&" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(ptrT).id;
 			  TOut << " ],\n";
@@ -3649,11 +3612,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  {
 			  const DependentSizedArrayType *tp = cast<DependentSizedArrayType>(T);
 			  QualType elT = tp->getElementType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "dependent_sized_array" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  std::string sizeExpr;
 			  if (tp->getSizeExpr()) {
@@ -3662,7 +3621,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			      estream.flush();
 			  }
 			  TOut << Indent << "\t\t\"str\": \"" << json::json_escape(sizeExpr) << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(elT).id;
@@ -3675,14 +3633,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Type::PackExpansion:
 		  {
 			  const PackExpansionType *tp = cast<PackExpansionType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "pack_expansion" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "<...>" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [ ],\n";
 			  TOut << Indent << "\t\t\"usedrefs\": [ ]\n";
@@ -3691,18 +3644,13 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Type::UnresolvedUsing:
 		  {
 			  const UnresolvedUsingType *tp = cast<UnresolvedUsingType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "unresolved_using" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  std::string usingDecl;
 			  llvm::raw_string_ostream cstream(usingDecl);
 			  tp->getDecl()->print(cstream,Context.getPrintingPolicy());
 			  cstream.flush();
 			  TOut << Indent << "\t\t\"str\": \"" << usingDecl << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [ ],\n";
 			  TOut << Indent << "\t\t\"usedrefs\": [ ]\n";
@@ -3713,11 +3661,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  const AutoType *tp = cast<AutoType>(T);
 			  assert(!tp->isSugared() && "sugar Auto type never in database");
 			  QualType aT = tp->getDeducedType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "auto" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  if (!aT.isNull()) {
 				  TypeInfo ti = Context.getTypeInfo(aT);
 				  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
@@ -3726,7 +3670,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  }
 			  TOut << Indent << "\t\t\"str\": \"" << "auto" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [ ";
 			  if (!aT.isNull()) {
@@ -3743,11 +3686,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Type::TemplateTypeParm:
 		  {
 			  const TemplateTypeParmType *tp = cast<TemplateTypeParmType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "template_type_parm" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  uint64_t size = 0;
 			  if (!tp->isDependentType() && tp->isSugared()) {
 				  TypeInfo ti = Context.getTypeInfo(tp->desugar());
@@ -3760,7 +3699,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  else {
 				  TOut << Indent << "\t\t\"str\": \"" << "" << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [ " << tp->getDepth() << ", " << tp->getIndex() << " ],";
 			  TOut << Indent << "\t\t\"usedrefs\": [ " << tp->getDepth() << ", " << tp->getIndex() << " ]";
@@ -3769,14 +3707,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Type::DependentName:
 		  {
 			  const DependentNameType *tp = cast<DependentNameType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "dependent_name" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "T::*" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [ ],\n";
 			  TOut << Indent << "\t\t\"usedrefs\": [ ]\n";
@@ -3800,14 +3733,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  QualType injT = QualType(IT,0);
 					  templateref = Visitor.getTypeData(injT).id;
 					  have_templateref = true;
-					  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-					  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-					  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 					  TOut << Indent << "\t\t\"class\": \"" << "record_specialization" << "\",\n";
-					  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 					  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 					  TOut << Indent << "\t\t\"str\": \"" << "T<X>" << "\",\n";
-					  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 					  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 					  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
 					  TOut << Indent << "\t\t\"def\": \"";
@@ -3895,14 +3823,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Type::DependentTemplateSpecialization:
 		  {
 			  const DependentTemplateSpecializationType *tp = cast<DependentTemplateSpecializationType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "record_specialization" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "DT<X>" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
 		  }
@@ -3931,9 +3854,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  TRD->print(defstream);
 				  defstream.flush();
 			  }
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "record_template" << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  if (opts.recordLoc) {
@@ -4005,7 +3925,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (opts.adddefs) {
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  std::vector<int> refs;
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TypeGroup_t Ids;
@@ -4227,9 +4146,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  defstream.flush();
 			  }
 			  const IdentifierInfo *II = rD->getIdentifier();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << rD->isDependentType() << ",\n";
 			  if (rD->isCompleteDefinition()) {
 				  TOut << Indent << "\t\t\"class\": \"" << "record" << "\",\n";
@@ -4240,7 +4156,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  TOut << Indent << "\t\t\"outerfnid\": " <<
 							  Visitor.outerFunctionorMethodIdforTagDecl(rD) << ",\n";
 				  }
-				  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 				  if (rD->isDependentType()) {
 					  TOut << Indent << "\t\t\"size\": " << "0" << ",\n";
 				  }
@@ -4251,7 +4166,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 			  else {
 				  TOut << Indent << "\t\t\"class\": \"" << "record_forward" << "\",\n";
-				  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 				  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  }
 			  bool PoI = false;
@@ -4360,7 +4274,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (opts.adddefs) {
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  std::vector<int> QVIds;
 			  if (QV.size()>0) {
 				  for (auto i = QV.begin(); i!=QV.end(); ++i) {
@@ -4577,14 +4490,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  Width = ti.Width;
 				  }
 			  }
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "const_array" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "[N]" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(elT).id;
 			  TOut << " ],\n";
@@ -4597,14 +4505,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  {
 			  const IncompleteArrayType *tp = cast<IncompleteArrayType>(T);
 			  QualType elT = tp->getElementType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "incomplete_array" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "[]" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(elT).id;
 			  TOut << " ],\n";
@@ -4617,14 +4520,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  {
 			  const VariableArrayType *tp = cast<VariableArrayType>(T);
 			  QualType vaT = tp->getElementType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "variable_array" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "[X]" << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(vaT).id;
 			  TOut << " ],\n";
@@ -4667,12 +4565,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 			  IdentifierInfo *II = D->getIdentifier();
 			  QualType tT = D->getTypeSourceInfo()->getType();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "typedef" << "\",\n";
 			  TOut << Indent << "\t\t\"name\": \"" << II->getName().str() << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  if (D->isImplicit()) {
 				  TOut << Indent << "\t\t\"implicit\": true,\n";
 			  }
@@ -4693,7 +4587,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }
                           TOut << Indent << "\t\t\"location\": \"" << getAbsoluteLocation(D->getLocation()) << "\",\n";
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  TOut << " " << Visitor.getTypeData(tT).id;
 			  TOut << " ],\n";
@@ -4714,9 +4607,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  defstream.flush();
 			  }
 			  const IdentifierInfo *II = eD->getIdentifier();
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  if (eD->isCompleteDefinition()) {
 				  eT = resolve_Typedef_Integer_Type(tp->getDecl()->getIntegerType());
 				  const BuiltinType *btp = cast<BuiltinType>(eT);
@@ -4732,7 +4622,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  TOut << Indent << "\t\t\"outerfnid\": " <<
 							  Visitor.outerFunctionorMethodIdforTagDecl(eD) << ",\n";
 				  }
-				  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 				  TOut << Indent << "\t\t\"size\": " << width << ",\n";
 				  TOut << Indent << "\t\t\"dependent\": " << btp->isDependentType() << ",\n";
 				  TOut << Indent << "\t\t\"values\": [\n";
@@ -4795,7 +4684,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 			  else {
 				  TOut << Indent << "\t\t\"class\": \"" << "enum_forward" << "\",\n";
-				  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 				  TOut << Indent << "\t\t\"size\": " << 0 << ",\n";
 			  }
 			  if (II) {
@@ -4814,7 +4702,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (opts.adddefs) {
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(def) << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  std::vector<int> refs;
 			  TOut << Indent << "\t\t\"refs\": [";
 			  if (eD->isCompleteDefinition()) {
@@ -4892,18 +4779,13 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  {
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const FunctionProtoType *tp = cast<FunctionProtoType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "function" << "\",\n";
-			  TOut << Indent << "\t\t\"qualifiers\": \"" << qualifierString << "\",\n";
 			  TOut << Indent << "\t\t\"variadic\": " << tp->isVariadic() << ",\n";
 			  TOut << Indent << "\t\t\"size\": " << ti.Width << ",\n";
 			  TOut << Indent << "\t\t\"str\": \"" << "()" << "\",\n";
 			  if (opts.adddefs) {
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(T.getAsString()) << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  std::vector<int> refs;
 			  TOut << Indent << "\t\t\"refs\": [";
 			  QualType rT = tp->getReturnType();
@@ -4939,9 +4821,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  {
 			  TypeInfo ti = Context.getTypeInfo(T);
 			  const FunctionNoProtoType *tp = cast<FunctionNoProtoType>(T);
-			  TOut << Indent << "\t\t\"id\": " << id << ",\n";
-			  TOut << Indent << "\t\t\"fid\": " << file_id << ",\n";
-			  TOut << Indent << "\t\t\"hash\": \"" << hashID << "\",\n";
 			  TOut << Indent << "\t\t\"class\": \"" << "function" << "\",\n";
 			  TOut << Indent << "\t\t\"qualifiers\": \"n\",\n";
 			  TOut << Indent << "\t\t\"variadic\": false,\n";
@@ -4950,7 +4829,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (opts.adddefs) {
 				  TOut << Indent << "\t\t\"def\": \"" << json::json_escape(T.getAsString()) << "\",\n";
 			  }
-			  TOut << Indent << "\t\t\"refcount\": " << 1 << ",\n";
 			  TOut << Indent << "\t\t\"refs\": [";
 			  QualType rT = tp->getReturnType();
 			  TOut << " " << Visitor.getTypeData(rT).id;
