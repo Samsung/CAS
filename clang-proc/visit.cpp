@@ -571,7 +571,7 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 
 	bool funcSaved = false;
 	if (D->hasBody()) {
-		const FunctionDecl * defdecl = D->getCanonicalDecl()->getDefinition();
+		const FunctionDecl * defdecl = D->getDefinition();
 		if (defdecl==D) {
 			assert(FuncMap.find(D)==FuncMap.end() && "Multiple definitions of Function body");
 			FuncMap.insert({D,{}});
@@ -670,7 +670,7 @@ bool DbJSONClassVisitor::VisitFunctionDeclComplete(const FunctionDecl *D) {
 	}
 
 	if (D->hasBody()) {
-		const FunctionDecl * defdecl = D->getCanonicalDecl()->getDefinition();
+		const FunctionDecl * defdecl = D->getDefinition();
 		if (defdecl==D) {
 			functionStack.pop_back();
 			if (functionStack.size()>0) {
