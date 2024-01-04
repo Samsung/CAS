@@ -363,6 +363,11 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  if(TypeMap.find(T) != TypeMap.end())
 	  	  return;
 
+	  size_t size = 0;
+	  auto ifsize = Context.getTypeSizeInCharsIfKnown(T);
+	  if(ifsize){
+		size = Context.toBits(ifsize.getValue());
+	  }
 	  std::string qualifierString = getQualifierString(T);
 	  switch(T->getTypeClass()) {
 		  // skipped types
@@ -601,7 +606,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 				  // TODO removed likely unnecessary code, some issues may arise
 				  noticeTemplateArguments(CTPS->getTemplateArgs());
 			  }
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,size,0}));
 			  TypeMap.at(T).id.setID(TypeNum);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << IT << "]RT = " << TypeNum << "\n" );
 			  TypeNum++;
@@ -631,23 +636,8 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 
 			  RecordDecl* rD = tp->getDecl();
 			  const IdentifierInfo *II = rD->getIdentifier();
-			// TEMPORARY CHANGE - only relevant for cpp targets
-			//   if (rD->isCompleteDefinition()) {
-			//   	if ((isa<CXXRecordDecl>(rD)) && (isa<ClassTemplateSpecializationDecl>(rD))) {
-			//   		if (cast<CXXRecordDecl>(rD)->isEmpty()) {
-			//   			/* Do not save empty records (for the purpose of traits only) into database
-			//   			   It grows enormously and there's no real usage of it afterwards
-			//   			   Instead insert empty type to reference any empty record using this type */
-			//   			if (TypeMap.find(QualType())==TypeMap.end()) {
-			//   				TypeMap.insert(std::pair<QualType,TypeData>(QualType(), {TypeNum,0}));
-			//   				TypeNum++;
-			//   			}
-			//   			return;
-			//   		}
-			//   	}
-			//   }
 
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,size,0}));
 			  TypeMap.at(T).id.setID(TypeNum);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << tp << "]R = " << TypeNum << "\n" );
 			  TypeNum++;
@@ -793,7 +783,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  const FunctionProtoType *tp = cast<FunctionProtoType>(T);
 			  DBG(DEBUG_NOTICE, llvm::outs() << "@notice FunctionProto[" << tp->getNumParams() << "] (" << qualifierString << ")\n";
 			  	  	  T.dump());
-			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+			  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,size,0}));
 			  TypeMap.at(T).id.setID(TypeNum);
 
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T.getAsOpaquePtr() << "]F = " << TypeNum << "\n" );
@@ -822,7 +812,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  }
 
 	  if (TypeMap.find(T)==TypeMap.end()) {
-		  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,0}));
+		  TypeMap.insert(std::pair<QualType,TypeData>(T, {{},T,size,0}));
 		  TypeMap.at(T).id.setID(TypeNum);
 		  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << T.getAsOpaquePtr() << "]E = " << TypeNum << "\n" );
 		  TypeNum++;

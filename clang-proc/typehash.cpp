@@ -249,12 +249,7 @@ thread_local bool autoforward = false;
 				  DBG(DEBUG_HASH, llvm::outs() << "build Record()(" << qualifierString << ")\n" );
 			  }
 		  }
-		  uint64_t tpSize = 0;
-		  if (!T->isDependentType()) {
-			  TypeInfo ti = Context.getTypeInfo(T);
-			  tpSize = ti.Width;
-		  }
-		  ss << base64_encode(reinterpret_cast<const unsigned char*>(c.buf.b), 64) << ":" << tpSize << ";";
+		  ss << base64_encode(reinterpret_cast<const unsigned char*>(c.buf.b), 64) << ":" << Visitor.getTypeData(T).size << ";";
 		  rstr.append(ss.str());
 		  TypeStringMap.insert(std::pair<QualType,std::string>(T,rstr));
 		  typeString.append(rstr);
@@ -264,13 +259,6 @@ thread_local bool autoforward = false;
 		  	  	  	  std::string& typeString,
 					  std::pair<int,unsigned long long> extraArg) {
 
-	  if (T.isNull()) {
-		  // Special case, placeholder for empty record types
-		  std::stringstream ss;
-		  ss << "EMPTY:0;";
-		  typeString.append(ss.str());
-		  return;
-	  }
 	  T = Visitor.typeForMap(T);
 	  std::string qualifierString = getQualifierString(T);
 
@@ -303,7 +291,6 @@ thread_local bool autoforward = false;
 				  ss << bname << ":" << 0 << ";";
 			  }
 			  else {
-				  TypeInfo ti = Context.getTypeInfo(T);
 				  if (extraArg.first&EXTRA_BITFIELD) {
 					  qualifierString.append("b");
 				  }
@@ -313,7 +300,7 @@ thread_local bool autoforward = false;
 				  }
 				  std::string bname = tp->getName(Context.getPrintingPolicy()).str();
 				  if(bname == "_Bool") bname ="bool";
-				  ss << bname << ":" << ti.Width << ";";
+				  ss << bname << ":" << Visitor.getTypeData(T).size << ";";
 			  }
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Builtin (" <<
 					  tp->getName(Context.getPrintingPolicy()).str() << ")(" << qualifierString << ")\n" );
@@ -323,7 +310,6 @@ thread_local bool autoforward = false;
 		  case Type::Pointer:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Pointer (" << qualifierString << ")\n" );
-			  TypeInfo ti = Context.getTypeInfo(T);
 			  const PointerType *tp = cast<PointerType>(T);
 			  QualType ptrT = tp->getPointeeType();
 			  std::stringstream ss;
@@ -334,14 +320,13 @@ thread_local bool autoforward = false;
 			  }
 			  buildTypeString(ptrT,pstr);
 			  autoforward=false;
-			  ss << pstr << ":" << ti.Width << ";";
+			  ss << pstr << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
 		  case Type::LValueReference:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build LValueReference (" << qualifierString << ")\n" );
-			  TypeInfo ti = Context.getTypeInfo(T);
 			  const LValueReferenceType *tp = cast<LValueReferenceType>(T);
 			  QualType ptrT = tp->getPointeeType();
 			  std::stringstream ss;
@@ -352,14 +337,13 @@ thread_local bool autoforward = false;
 			  }
 			  buildTypeString(ptrT,pstr);
 			  autoforward=false;
-			  ss << pstr << ":" << ti.Width << ";";
+			  ss << pstr << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
 		  case Type::RValueReference:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build RValueReference (" << qualifierString << ")\n" );
-			  TypeInfo ti = Context.getTypeInfo(T);
 			  const RValueReferenceType *tp = cast<RValueReferenceType>(T);
 			  QualType ptrT = tp->getPointeeType();
 			  std::stringstream ss;
@@ -370,21 +354,20 @@ thread_local bool autoforward = false;
 			  }
 			  buildTypeString(ptrT,pstr);
 			  autoforward=false;
-			  ss << pstr << ":" << ti.Width << ";";
+			  ss << pstr << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
 		  case Type::MemberPointer:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build MemberPointer (" << qualifierString << ")\n" );
-			  TypeInfo ti = Context.getTypeInfo(T);
 			  const MemberPointerType *tp = cast<MemberPointerType>(T);
 			  QualType mptrT = tp->getPointeeType();
 			  QualType cT = QualType(tp->getClass(),0);
 			  std::stringstream ss;
 			  ss << "MP:" << qualifierString << ":";
 			  ss << T.getAsString() << ":";
-			  ss << ti.Width;
+			  ss << Visitor.getTypeData(T).size;
 			  std::string mptrTstr;
 			  std::string cTstr;
 			  buildTypeString(mptrT,mptrTstr);
@@ -396,55 +379,39 @@ thread_local bool autoforward = false;
 		  case Type::Complex:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Complex (" << qualifierString << ")\n" );
-			  TypeInfo ti = Context.getTypeInfo(T);
 			  const ComplexType *tp = cast<ComplexType>(T);
 			  QualType eT = tp->getElementType();
 			  std::stringstream ss;
 			  ss << "CT:" << qualifierString << ":";
 			  std::string estr;
 			  buildTypeString(eT,estr);
-			  ss << estr << ":" << ti.Width << ";";
+			  ss << estr << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
 		  case Type::Vector:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Vector (" << qualifierString << ")\n" );
-			  uint64_t Width = 0;
 			  const VectorType *tp = cast<VectorType>(T);
 			  QualType eT = tp->getElementType();
-			  if ((eT->getTypeClass()!=Type::Record) || (cast<RecordType>(eT)->getDecl()->isCompleteDefinition())) {
-				  if (!tp->isDependentType()) {
-					  TypeInfo ti = Context.getTypeInfo(eT);
-					  Width = ti.Width*tp->getNumElements();
-				  }
-			  }
 			  std::stringstream ss;
 			  ss << "VT:" << qualifierString << ":";
 			  std::string estr;
 			  buildTypeString(eT,estr);
-			  ss << estr << ":" << tp->getNumElements() << ":" << Width << ";";
+			  ss << estr << ":" << tp->getNumElements() << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
 		  case Type::ExtVector:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build ExtVector (" << qualifierString << ")\n" );
-			  uint64_t Width = 0;
 			  const ExtVectorType *tp = cast<ExtVectorType>(T);
-			  tp->dump();
 			  QualType eT = tp->getElementType();
-			  if ((eT->getTypeClass()!=Type::Record) || (cast<RecordType>(eT)->getDecl()->isCompleteDefinition())) {
-				  if (!tp->isDependentType()) {
-					  TypeInfo ti = Context.getTypeInfo(eT);
-					  Width = ti.Width*tp->getNumElements();
-				  }
-			  }
 			  std::stringstream ss;
 			  ss << "EVT:" << qualifierString << ":";
 			  std::string estr;
 			  buildTypeString(eT,estr);
-			  ss << estr << ":" << tp->getNumElements() << ":" << Width << ";";
+			  ss << estr << ":" << tp->getNumElements() << ":" << Visitor.getTypeData(T).size << ";";
 			  typeString.append(ss.str());
 		  }
 		  break;
@@ -720,24 +687,14 @@ thread_local bool autoforward = false;
 		  case Type::ConstantArray:
 		  {
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build ConstantArray (" << qualifierString << ")\n" );
-			  uint64_t Width = 0;
 			  const ConstantArrayType *tp = cast<ConstantArrayType>(T);
 			  QualType elT = tp->getElementType();
-			  /* It happens that we got an array of records without complete definition
-			   * How would that even compile?
-			   */
-			  if ((elT->getTypeClass()!=Type::Record) || (cast<RecordType>(elT)->getDecl()->isCompleteDefinition())) {
-				  if (!tp->isDependentType()) {
-					  TypeInfo ti = Context.getTypeInfo(T);
-					  Width = ti.Width;
-				  }
-			  }
 			  std::string cas("CA:");
 			  cas+=qualifierString;
 			  cas+=":";
 			  buildTypeString(elT,cas);
 			  std::stringstream ss;
-			  ss << ":" << Width << ";";
+			  ss << ":" << Visitor.getTypeData(T).size << ";";
 			  cas.append(ss.str());
 			  typeString.append(cas);
 		  }
@@ -786,8 +743,7 @@ thread_local bool autoforward = false;
 				  if (extraArg.first&EXTRA_BITFIELD) {
 					  ss << extraArg.second << ":";
 				  }
-				  TypeInfo ti = Context.getTypeInfo(T);
-				  ss << "bool" << ":" << ti.Width << ";";
+				  ss << "bool" << ":" << Visitor.getTypeData(T).size << ";";
 				  typeString.append(ss.str());
 			  }
 			  else {
@@ -811,12 +767,6 @@ thread_local bool autoforward = false;
 			  std::string estr;
 			  if (eD->isCompleteDefinition()) {
 				  QualType eT = resolve_Typedef_Integer_Type(tp->getDecl()->getIntegerType());
-				  const BuiltinType *btp = cast<BuiltinType>(eT);
-				  uint64_t width = 0;
-				  if (!btp->isDependentType()) {
-					  TypeInfo ti = Context.getTypeInfo(eT);
-					  width = ti.Width;
-				  }
 				  std::vector<int64_t> ConstantValues;
 				  std::vector<std::string> ConstantNames;
 				  const DeclContext *DC = cast<DeclContext>(eD);
@@ -826,7 +776,7 @@ thread_local bool autoforward = false;
 					  if (D->isImplicit()) continue;
                                           if (D->getKind()!=Decl::EnumConstant) continue;
 					  EnumConstantDecl* ED = static_cast<EnumConstantDecl*>(*D);
-					  if (width) {
+					  if (!eT.isNull()) {
 						  ConstantValues.push_back(ED->getInitVal().extOrTrunc(63).getExtValue());
 						  ConstantNames.push_back(ED->getName().str());
 					  }
@@ -860,7 +810,7 @@ thread_local bool autoforward = false;
 							  ss << ",";
 						  }
 					  }
-					  ss << ":" << width << ";";
+					  ss << ":" << Visitor.getTypeData(T).size << ";";
 
 					  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Enum(" << tpII
 							  << ")(" << qualifierString << ")\n" );
@@ -875,7 +825,7 @@ thread_local bool autoforward = false;
 								  ss << ",";
 							  }
 						  }
-						  ss << ":" << width << ";";
+						  ss << ":" << Visitor.getTypeData(T).size << ";";
 
 						  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Enum("
 								  << eD->getTypedefNameForAnonDecl()->getName().str() << ")(" << qualifierString << ")\n" );
@@ -889,7 +839,7 @@ thread_local bool autoforward = false;
 								  ss << ",";
 							  }
 						  }
-						  ss << ":" << width << ";";
+						  ss << ":" << Visitor.getTypeData(T).size << ";";
 
 						  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Enum()(" << qualifierString << ")\n" );
 					  }

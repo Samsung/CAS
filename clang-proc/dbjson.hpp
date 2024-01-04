@@ -176,6 +176,7 @@ public:
   struct TypeData{
     ObjectID id;
     QualType T;
+    size_t size;
     recordInfo_t *RInfo;
     std::string hash;
     std::shared_ptr<std::string> output;
