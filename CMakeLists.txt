@@ -147,7 +147,6 @@ add_clang_tool(clang-proc
     clang-proc/visit.cpp
     clang-proc/lookup.cpp
     clang-proc/typehash.cpp
-    clang-proc/fops.cpp
     clang-proc/taint.cpp
     clang-proc/MacroHandler.cpp
     clang-proc/${CLANG_VERSION}/DeclPrinter.cpp

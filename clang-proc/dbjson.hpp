@@ -1868,3 +1868,18 @@ static inline QualType walkToFunctionProtoType(QualType T) {
 	  return QualType();
   }
 }
+
+namespace multi{
+  extern std::string directory;
+  extern std::vector<std::string> files;
+  void registerVar(DbJSONClassVisitor::VarData&);
+  void registerType(DbJSONClassVisitor::TypeData&);
+  void registerFuncDecl(DbJSONClassVisitor::FuncDeclData&);
+  void registerFuncInternal(DbJSONClassVisitor::FuncData&);
+  void registerFunc(DbJSONClassVisitor::FuncData&);
+  void registerFops(DbJSONClassVisitor::FopsData&);
+  void handleRefs(void *rv, std::vector<int> rIds,std::vector<std::string> rDef);
+  void processDatabase();
+  void emitDatabase(llvm::raw_ostream&);
+  void report();
+}

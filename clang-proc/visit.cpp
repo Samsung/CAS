@@ -1,4 +1,6 @@
 #include "main.hpp"
+#include "dbjson.hpp"
+#include "compat.h"
 #include "clang/AST/RecordLayout.h"
 
 // Decl visitors
@@ -530,13 +532,6 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 		DN << static_cast<const Decl*>(D)->getDeclKindName() << "Decl";
 		unsupportedFuncClass.insert(std::pair<Decl::Kind,std::string>(D->getDeclKind(),DN.str()));
 		return true;
-	}
-
-
-	if (opts.BreakFunPlaceholder!="") {
-		if (D->getName().str()==opts.BreakFunPlaceholder) {
-			int __x = 0;
-		}
 	}
 
 	if (D->hasBody()) {

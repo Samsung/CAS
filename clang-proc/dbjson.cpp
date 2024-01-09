@@ -1,4 +1,7 @@
 #include "main.hpp"
+#include "dbjson.hpp"
+#include "compat.h"
+
 #include "json.hpp"
 #include "clang/AST/RecordLayout.h"
 #include <stdlib.h>
@@ -1756,11 +1759,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  SourceManager& SM = Context.getSourceManager();
 	  std::string Indent(Indentation,'\t');
 		  const FunctionDecl* D = func_data.this_func;
-		  if (opts.BreakFunPlaceholder!="") {
-			  if (D->getName().str()==opts.BreakFunPlaceholder) {
-				  int __x = 0;
-			  }
-		  }
 		  bool dependentClass = false;
 		  bool hasTemplatePars = func_data.templatePars.size();
 		  std::string outerFnForClass;

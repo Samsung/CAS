@@ -245,11 +245,10 @@ created reverse dependency map file (rdm.json)
 
 Now you're ready for FTDB generation.
 ```bash
-${CAS_DIR}/clang-proc/create_json_db -P ${CLANG_PROC} -p fops -o fops.json
-${CAS_DIR}/clang-proc/create_json_db -p db -o db.json -P $CLANG_PROC -F fops.json -m android_common_kernel -V "12.0.0_r15-eng" -mr ${CAS_DIR}/clang-proc/vmlinux-macro_replacement.json -A -DD ${CAS_DIR}/clang-proc/vmlinux-additional_defs.json -cdm cdm.json -j4
+${CAS_DIR}/clang-proc/create_json_db -o db.json -P $CLANG_PROC -m android_common_kernel -V "12.0.0_r15-eng" -mr ${CAS_DIR}/clang-proc/vmlinux-macro_replacement.json -A -DD ${CAS_DIR}/clang-proc/vmlinux-additional_defs.json -cdm cdm.json -j4
 ```
 
-First we create some intermediate file, `fops` database. For every global variable of structure type (i.e. `struct file_operations`) that contains some function pointer members (i.e. `ioctl`) which are initialized statically we grab (and save) the function names that initialize them. Second invocation crates the final `db.json` file (with some additions helpful for the `AoT` project). If you have infinite amounts of RAM you can skip the `-j4` option and it'll run on full speed. Otherwise I suggest to keep it that way.
+The invocation crates the `db.json` file (with some additions helpful for the `AoT` project). If you have infinite amounts of RAM you can skip the `-j4` option and it'll run on full speed. Otherwise I suggest to keep it that way.
 
 The JSON database reached a few GB of size. Now it's fully justified to use the cache.
 ```bash

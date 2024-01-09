@@ -1,4 +1,6 @@
 #include "main.hpp"
+#include "dbjson.hpp"
+#include "compat.h"
 #include "clang/AST/RecordLayout.h"
 
 void DbJSONClassVisitor::notice_class_references(RecordDecl* rD) {

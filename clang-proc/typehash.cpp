@@ -1,4 +1,6 @@
 #include "main.hpp"
+#include "dbjson.hpp"
+#include "compat.h"
 #include "clang/AST/RecordLayout.h"
 
 thread_local int short_ptr = 0;

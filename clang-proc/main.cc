@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include "dbjson.hpp"
 
 #include <thread>
 
@@ -66,22 +67,6 @@ public:
   size_t file_id;
 };
 
-class FOPSClassAction : public clang::ASTFrontendAction {
-public:
-	FOPSClassAction(size_t fid) : file_id(fid) {}
-virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
-  clang::CompilerInstance &Compiler, llvm::StringRef InFile) override {
-  return std::unique_ptr<clang::ASTConsumer>(
-	  new FOPSClassConsumer(Compiler.getASTContext(),file_id));
-}
-bool BeginSourceFileAction(CompilerInstance &CI) override {
-  Preprocessor &PP = CI.getPreprocessor();
-  return true;
-}
-
-size_t file_id;
-};
-
 template <class Action>
 class DBFactory : public clang::tooling::FrontendActionFactory {
 public:
@@ -97,11 +82,9 @@ private:
 };
 
 llvm::cl::OptionCategory ctCategory("clang-proc options");
-cl::opt<std::string> JSONRecordOption("R", cl::cat(ctCategory));
 cl::list<std::string> MacroReplaceOption("M", cl::cat(ctCategory),cl::ZeroOrMore);
 cl::list<std::string> AdditionalDefinesOption("D", cl::cat(ctCategory),cl::ZeroOrMore);
 cl::opt<bool> SaveMacroExpansionOption("X", cl::cat(ctCategory));
-cl::opt<bool> FopsOption("f", cl::cat(ctCategory));
 cl::opt<bool> CallOption("c", cl::cat(ctCategory));
 cl::opt<bool> AssertOption("a", cl::cat(ctCategory));
 cl::opt<bool> DebugOption("d", cl::cat(ctCategory));
@@ -180,15 +163,9 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
     Tool.appendArgumentsAdjuster(getStripWarningsAdjuster());
     Tool.appendArgumentsAdjuster(getClangStripDependencyFileAdjusterFixed());
 
-    if (opts.fops) {
-      DBFactory<FOPSClassAction> Factory(current);
-      Tool.run(&Factory);
-    }
-    else {
-      DBFactory<DbJSONClassAction> Factory(current);
-      Tool.run(&Factory);
-    }
-    // dbg<<"\33[2K"<<llvm::format_decimal(current,6)<<"  "<<file<<"\r";
+    DBFactory<DbJSONClassAction> Factory(current);
+    Tool.run(&Factory);
+
     dbg<<llvm::format_decimal(current,6)<<"  "<<file<<"\n";
     dbg.flush();
     llvm::errs()<<"LOG: "+buf;
@@ -212,8 +189,6 @@ int main(int argc, const char **argv)
       AllFiles = optionsParser.getCompilations().getAllFiles();
 
     enable_sa = enableStaticAssert.getValue();
-    opts.JSONRecord = JSONRecordOption.getValue();
-    opts.BreakFunPlaceholder = BreakFunctionPlaceholder.getValue();
     opts.call = CallOption.getValue();
     opts.assert = AssertOption.getValue();
     opts.debug = DebugOption.getValue();
@@ -239,20 +214,6 @@ int main(int argc, const char **argv)
     opts.csd = CustomStructDefs.getValue();
     opts.ptrMEonly = ptrMEOption.getValue();
     opts.save_expansions = opts.addbody && SaveMacroExpansionOption.getValue();
-    
-    if (opts.JSONRecord=="*") {
-      opts.fops_all = true;
-    }
-    else {
-      opts.fops_all = false;
-    }
-    std::string fopsRecord;
-    std::stringstream recordList(opts.JSONRecord);
-    while(std::getline(recordList, fopsRecord, ':'))
-    {
-      opts.fopsRecords.insert(fopsRecord);
-    }
-    opts.fops = FopsOption.getValue();
 
     if (IncludeOption.getValue()) {
       builtInIncludePath = utils::getClangBuiltInIncludePath(argv[0]);
@@ -289,8 +250,6 @@ int main(int argc, const char **argv)
         t.join();
       }
       llvm::errs()<<"LOG: Done.\n";
-      if(opts.fops)
-        return 0;
 
       multi::processDatabase();
       multi::emitDatabase(llvm::outs());
@@ -298,8 +257,6 @@ int main(int argc, const char **argv)
     }
     else{ //normal pass for backwards compatibility
       run(std::ref(optionsParser.getCompilations()),std::ref(AllFiles));
-      if(opts.fops)
-        return 0;
       multi::processDatabase();
       multi::emitDatabase(llvm::outs());
     }

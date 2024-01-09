@@ -1,4 +1,7 @@
 #include "main.hpp"
+#include "dbjson.hpp"
+#include "compat.h"
+
 #include "clang/AST/RecordLayout.h"
 
 void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisitor::LiteralHolder>& refs,
