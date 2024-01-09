@@ -357,21 +357,6 @@ PyObject* libftdb_ftdb_get_fops(PyObject* self, void* closure) {
 	return fops;
 }
 
-PyObject* libftdb_ftdb_get_fops_as_dict(PyObject* self, void* closure) {
-
-	libftdb_ftdb_object* __self = (libftdb_ftdb_object*)self;
-
-	PyObject* fops = PyDict_New();
-	FTDB_SET_ENTRY_ULONG(fops,varn,__self->ftdb->fops.vars_count);
-	FTDB_SET_ENTRY_ULONG(fops,sourcen,__self->ftdb->sourceindex_table_count);
-	FTDB_SET_ENTRY_ULONG(fops,membern,__self->ftdb->fops.member_count);
-	PyObject* py_sources = libftdb_ftdb_get_sources_as_dict(self, closure);
-	FTDB_SET_ENTRY_PYOBJECT(fops,sources,py_sources);
-	PyObject* py_vars = libftdb_ftdb_get_fops(self, closure);
-	FTDB_SET_ENTRY_PYOBJECT(fops,vars,py_vars);
-	return fops;
-}
-
 PyObject* libftdb_ftdb_get_matrix_data_as_dict(struct matrix_data* matrix_data) {
 
 	PyObject* md = PyList_New(0);
@@ -802,6 +787,10 @@ PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice) {
 		PYASSTR_DECREF(attr);
 		return PyLong_FromUnsignedLong(__self->ftdb->funcs_count);
 	}
+	else if (!strcmp(attr,"fopn")) {
+		PYASSTR_DECREF(attr);
+		return PyLong_FromUnsignedLong(__self->ftdb->fops_count);
+	}
 
 	snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid attribute name: %s",attr);
 	PyErr_SetString(libftdb_ftdbError, errmsg);
@@ -956,6 +945,10 @@ int libftdb_ftdb_sq_contains(PyObject* self, PyObject* key) {
 		return 1;
 	}
 	else if (!strcmp(attr,"funcn")) {
+		PYASSTR_DECREF(attr);
+		return 1;
+	}
+	else if (!strcmp(attr,"fopn")) {
 		PYASSTR_DECREF(attr);
 		return 1;
 	}
@@ -7338,7 +7331,7 @@ PyObject* libftdb_ftdb_fops_repr(PyObject* self) {
 
 	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
 	int written = snprintf(repr,1024,"<ftdbFops object at %lx : ",(uintptr_t)self);
-	written+=snprintf(repr+written,1024-written,"%ld fops variables>",__self->ftdb->fops.vars_count);
+	written+=snprintf(repr+written,1024-written,"%ld fops variables>",__self->ftdb->fops_count);
 
 	return PyUnicode_FromString(repr);
 }
@@ -7346,7 +7339,7 @@ PyObject* libftdb_ftdb_fops_repr(PyObject* self) {
 Py_ssize_t libftdb_ftdb_fops_sq_length(PyObject* self) {
 
 	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
-	return __self->ftdb->fops.vars_count;
+	return __self->ftdb->fops_count;
 }
 
 PyObject* libftdb_ftdb_fops_getiter(PyObject* self) {
@@ -7366,37 +7359,14 @@ PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice) {
 
 	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
 
-	static char errmsg[ERRMSG_BUFFER_SIZE];
-
-	if ((!PyLong_Check(slice))&&(!PyUnicode_Check(slice))) {
-		PyErr_SetString(libftdb_ftdbError, "Invalid type fops index (not an (integer) and not (str))");
-		Py_RETURN_NONE;
-	}
-
-	if (PyUnicode_Check(slice)) {
-		const char* attr = PyString_get_c_str(slice);
-		if (!strcmp(attr,"varn")) {
-			PYASSTR_DECREF(attr);
-			return libftdb_ftdb_fops_get_varn(self,0);
-		}
-		else if (!strcmp(attr,"membern")) {
-			PYASSTR_DECREF(attr);
-			return libftdb_ftdb_fops_get_membern(self,0);
-		}
-		else if (!strcmp(attr,"vars")) {
-			PYASSTR_DECREF(attr);
-			return libftdb_ftdb_fops_get_vars(self,0);
-		}
-
-		snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid attribute name: %s",attr);
-		PyErr_SetString(libftdb_ftdbError, errmsg);
-		PYASSTR_DECREF(attr);
+	if ((!PyLong_Check(slice))) {
+		PyErr_SetString(libftdb_ftdbError, "Invalid type fops index (not an (integer))");
 		Py_RETURN_NONE;
 	}
 
 	unsigned long index = PyLong_AsLong(slice);
 
-	if (index >= __self->ftdb->fops.vars_count) {
+	if (index >= __self->ftdb->fops_count) {
 		/* Raising of standard StopIteration exception with empty value. */
 		PyErr_SetString(libftdb_ftdbError, "fops index out of range");
 		Py_RETURN_NONE;
@@ -7436,23 +7406,6 @@ int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key) {
 	return 0;
 }
 
-PyObject* libftdb_ftdb_fops_get_varn(PyObject* self, void* closure) {
-
-	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
-	return PyLong_FromUnsignedLong(__self->ftdb->fops.vars_count);
-}
-
-PyObject* libftdb_ftdb_fops_get_membern(PyObject* self, void* closure) {
-
-	libftdb_ftdb_fops_object* __self = (libftdb_ftdb_fops_object*)self;
-	return PyLong_FromUnsignedLong(__self->ftdb->fops.member_count);
-}
-
-PyObject* libftdb_ftdb_fops_get_vars(PyObject* self, void* closure) {
-
-	return libftdb_ftdb_fops_getiter(self);
-}
-
 void libftdb_ftdb_fops_iter_dealloc(libftdb_ftdb_fops_iter_object* self) {
 
 	PyTypeObject *tp = Py_TYPE(self);
@@ -7475,14 +7428,14 @@ PyObject* libftdb_ftdb_fops_iter_new(PyTypeObject *subtype, PyObject *args, PyOb
 Py_ssize_t libftdb_ftdb_fops_iter_sq_length(PyObject* self) {
 
 	libftdb_ftdb_fops_iter_object* __self = (libftdb_ftdb_fops_iter_object*)self;
-	return __self->ftdb->fops.vars_count;
+	return __self->ftdb->fops_count;
 }
 
 PyObject* libftdb_ftdb_fops_iter_next(PyObject *self) {
 
 	libftdb_ftdb_fops_iter_object* __self = (libftdb_ftdb_fops_iter_object*)self;
 
-	if (__self->index >= __self->ftdb->fops.vars_count) {
+	if (__self->index >= __self->ftdb->fops_count) {
 		/* Raising of standard StopIteration exception with empty value. */
 		PyErr_SetNone(PyExc_StopIteration);
 		return 0;
@@ -7511,12 +7464,12 @@ PyObject* libftdb_ftdb_fops_entry_new(PyTypeObject *subtype, PyObject *args, PyO
     if (self != 0) {
     	self->ftdb = (const struct ftdb*)PyLong_AsLong(PyTuple_GetItem(args,0));
     	unsigned long index = PyLong_AsLong(PyTuple_GetItem(args,1));
-    	if (index>=self->ftdb->fops.vars_count) {
+    	if (index>=self->ftdb->fops_count) {
     		PyErr_SetString(libftdb_ftdbError, "fops entry index out of bounds");
     		return 0;
     	}
     	self->index = index;
-    	self->entry = &self->ftdb->fops.vars[self->index];
+    	self->entry = &self->ftdb->fops[self->index];
     }
 
     return (PyObject *)self;
@@ -7528,7 +7481,6 @@ PyObject* libftdb_ftdb_fops_entry_repr(PyObject* self) {
 
 	libftdb_ftdb_fops_entry_object* __self = (libftdb_ftdb_fops_entry_object*)self;
 	int written = snprintf(repr,1024,"<ftdbFopsEntry object at %lx : ",(uintptr_t)self);
-	written+=snprintf(repr+written,1024-written,"type:%s|name:%s>",__self->entry->type,__self->entry->name);
 
 	return PyUnicode_FromString(repr);
 }
@@ -7537,34 +7489,53 @@ PyObject* libftdb_ftdb_fops_entry_json(libftdb_ftdb_fops_entry_object *self, PyO
 
 	PyObject* json_entry = PyDict_New();
 
-	FTDB_SET_ENTRY_STRING(json_entry,type,self->entry->type);
-	FTDB_SET_ENTRY_STRING(json_entry,name,self->entry->name);
+	FTDB_SET_ENTRY_ENUM_TO_STRING(json_entry,kind,self->entry->kind,fopsKind);
+	FTDB_SET_ENTRY_ULONG(json_entry,type,self->entry->type_id);
+	FTDB_SET_ENTRY_ULONG(json_entry,var,self->entry->var_id);
+	FTDB_SET_ENTRY_ULONG(json_entry,func,self->entry->func_id);
+	FTDB_SET_ENTRY_STRING(json_entry,loc,self->entry->location);
 	PyObject* members = PyDict_New();
 	for (unsigned long i=0; i<self->entry->members_count; ++i) {
-		struct fops_member_info* fops_member_info = &self->entry->members[i];
-		PyObject* py_member = PyUnicode_FromFormat("%lu",fops_member_info->index);
-		PyObject* py_fnid = PyLong_FromUnsignedLong(fops_member_info->fnid);
-		PyDict_SetItem(members,py_member,py_fnid);
+		struct ftdb_fops_member_entry* fops_member_info = &self->entry->members[i];
+		PyObject* py_member = PyUnicode_FromFormat("%lu",fops_member_info->member_id);
+		PyObject* py_func_ids = PyList_New(0);
+		for(unsigned long j=0; j<fops_member_info->func_ids_count; j++){
+			PyObject* py_fnid = PyLong_FromUnsignedLong(fops_member_info->func_ids[j]);
+			PyList_Append(py_func_ids,py_fnid);
+			Py_DecRef(py_fnid);
+		}
+		PyDict_SetItem(members,py_member,py_func_ids);
 		Py_DecRef(py_member);
-		Py_DecRef(py_fnid);
 	}
 	FTDB_SET_ENTRY_PYOBJECT(json_entry,members,members);
-	FTDB_SET_ENTRY_STRING(json_entry,location,self->entry->location);
 
 	return json_entry;
+}
+
+PyObject* libftdb_ftdb_fops_entry_get_kind(PyObject* self, void* closure) {
+
+	libftdb_ftdb_fops_entry_object* __self = (libftdb_ftdb_fops_entry_object*)self;
+	return PyUnicode_FromString(set_fopsKind(__self->entry->kind));
 }
 
 PyObject* libftdb_ftdb_fops_entry_get_type(PyObject* self, void* closure) {
 
 	libftdb_ftdb_fops_entry_object* __self = (libftdb_ftdb_fops_entry_object*)self;
-	return PyUnicode_FromString(__self->entry->type);
+	return PyLong_FromUnsignedLong(__self->entry->type_id);
 }
 
-PyObject* libftdb_ftdb_fops_entry_get_name(PyObject* self, void* closure) {
+PyObject* libftdb_ftdb_fops_entry_get_var(PyObject* self, void* closure) {
 
 	libftdb_ftdb_fops_entry_object* __self = (libftdb_ftdb_fops_entry_object*)self;
-	return PyUnicode_FromString(__self->entry->name);
+	return PyLong_FromUnsignedLong(__self->entry->var_id);
 }
+
+PyObject* libftdb_ftdb_fops_entry_get_func(PyObject* self, void* closure) {
+
+	libftdb_ftdb_fops_entry_object* __self = (libftdb_ftdb_fops_entry_object*)self;
+	return PyLong_FromUnsignedLong(__self->entry->func_id);
+}
+
 
 PyObject* libftdb_ftdb_fops_entry_get_members(PyObject* self, void* closure) {
 
@@ -7572,14 +7543,17 @@ PyObject* libftdb_ftdb_fops_entry_get_members(PyObject* self, void* closure) {
 
 	PyObject* members = PyDict_New();
 	for (unsigned long i=0; i<__self->entry->members_count; ++i) {
-		struct fops_member_info* fops_member_info = &__self->entry->members[i];
-		PyObject* py_member = PyUnicode_FromFormat("%lu",fops_member_info->index);
-		PyObject* py_fnid = PyLong_FromUnsignedLong(fops_member_info->fnid);
-		PyDict_SetItem(members,py_member,py_fnid);
+		struct ftdb_fops_member_entry* fops_member_info = &__self->entry->members[i];
+		PyObject* py_member = PyUnicode_FromFormat("%lu",fops_member_info->member_id);
+		PyObject* py_func_ids = PyList_New(0);
+		for(unsigned long j=0; j<fops_member_info->func_ids_count; j++){
+			PyObject* py_fnid = PyLong_FromUnsignedLong(fops_member_info->func_ids[j]);
+			PyList_Append(py_func_ids,py_fnid);
+			Py_DecRef(py_fnid);
+		}
+		PyDict_SetItem(members,py_member,py_func_ids);
 		Py_DecRef(py_member);
-		Py_DecRef(py_fnid);
 	}
-
 	return members;
 }
 
@@ -7602,11 +7576,19 @@ PyObject* libftdb_ftdb_fops_entry_mp_subscript(PyObject* self, PyObject* slice) 
 
 	if (!strcmp(attr,"type")) {
 		PYASSTR_DECREF(attr);
+	    return libftdb_ftdb_fops_entry_get_kind(self,0);
+	}
+	if (!strcmp(attr,"type")) {
+		PYASSTR_DECREF(attr);
 	    return libftdb_ftdb_fops_entry_get_type(self,0);
 	}
-	else if (!strcmp(attr,"name")) {
+	if (!strcmp(attr,"var")) {
 		PYASSTR_DECREF(attr);
-	    return libftdb_ftdb_fops_entry_get_name(self,0);
+	    return libftdb_ftdb_fops_entry_get_var(self,0);
+	}
+	if (!strcmp(attr,"func")) {
+		PYASSTR_DECREF(attr);
+	    return libftdb_ftdb_fops_entry_get_func(self,0);
 	}
 	else if (!strcmp(attr,"members")) {
 		PYASSTR_DECREF(attr);
@@ -7636,7 +7618,15 @@ int libftdb_ftdb_fops_entry_sq_contains(PyObject* self, PyObject* key) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
-	else if (!strcmp(attr,"name")) {
+	else if (!strcmp(attr,"var")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"func")) {
+		PYASSTR_DECREF(attr);
+	    return 1;
+	}
+	else if (!strcmp(attr,"kind")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
@@ -7644,7 +7634,7 @@ int libftdb_ftdb_fops_entry_sq_contains(PyObject* self, PyObject* key) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
-	else if (!strcmp(attr,"location")) {
+	else if (!strcmp(attr,"loc")) {
 		PYASSTR_DECREF(attr);
 	    return 1;
 	}
@@ -7694,9 +7684,10 @@ FUNCTION_DECLARE_FLATTEN_STRUCT(globalref_data);
 FUNCTION_DECLARE_FLATTEN_STRUCT(globalref_info);
 FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_global_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_type_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_entry);
+FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_member_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT(bitfield);
-FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_var_entry);
-FUNCTION_DECLARE_FLATTEN_STRUCT(fops_member_info);
+
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(taint_data,
 	AGGREGATE_FLATTEN_STRUCT_ARRAY(taint_element,taint_list,ATTR(taint_list_count));
@@ -7984,7 +7975,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb,
 	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_unresolvedfunc_entry,unresolvedfuncs,ATTR(unresolvedfuncs_count));
 	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_global_entry,globals,ATTR(globals_count));
 	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_type_entry,types,ATTR(types_count));
-	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_fops_var_entry,fops.vars,ATTR(fops.vars_count));
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_fops_entry,fops,ATTR(fops_count));
 	AGGREGATE_FLATTEN_STRUCT(stringRefMap_node,sourcemap.rb_node);
 	AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,sourceindex_table,ATTR(sourceindex_table_count));
 	FOREACH_POINTER(const char*,s,ATTR(sourceindex_table),ATTR(sourceindex_table_count),
@@ -8168,15 +8159,13 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_type_entry,
 	AGGREGATE_FLATTEN_STRUCT_ARRAY(bitfield,bitfields,ATTR(bitfields_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT(fops_member_info,
-	/* No recipes needed */
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_member_entry,
+	AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,func_ids,ATTR(func_ids_count));
 );
 
-FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_var_entry,
-	AGGREGATE_FLATTEN_STRING(type);
-	AGGREGATE_FLATTEN_STRING(name);
-	AGGREGATE_FLATTEN_STRUCT_ARRAY(fops_member_info,members,ATTR(members_count));
+FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_entry,
 	AGGREGATE_FLATTEN_STRING(location);
+	AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_fops_member_entry,members,ATTR(members_count));
 );
 
 /* TODO: memory leaks */
@@ -8715,36 +8704,32 @@ static void libftdb_create_ftdb_type_entry(PyObject *self, PyObject* type_entry,
 	Py_DecRef(key_bitfields);
 }
 
-static int member_info_compare (const void * a, const void * b)
-{
-  if ( ((struct fops_member_info*)a)->index <  ((struct fops_member_info*)b)->index ) return -1;
-  if ( ((struct fops_member_info*)a)->index >  ((struct fops_member_info*)b)->index ) return 1;
+static void libftdb_create_ftdb_fops_entry(PyObject *self, PyObject* fops_entry, struct ftdb_fops_entry* new_entry) {
 
-  return 0;
-}
-
-static void libftdb_create_ftdb_fops_var_entry(PyObject *self, PyObject* fops_var_entry, struct ftdb_fops_var_entry* new_entry) {
-
-	new_entry->type = FTDB_ENTRY_STRING(fops_var_entry,type);
-	new_entry->name = FTDB_ENTRY_STRING(fops_var_entry,name);
+	new_entry->kind = FTDB_ENTRY_ENUM_FROM_STRING(fops_entry,kind,fopsKind);
+	new_entry->type_id = FTDB_ENTRY_ULONG(fops_entry,type);
+	new_entry->var_id = FTDB_ENTRY_ULONG(fops_entry,var);
+	new_entry->func_id = FTDB_ENTRY_ULONG(fops_entry,func);
+	new_entry->location = FTDB_ENTRY_STRING(fops_entry,loc);
 	PyObject* key_members = PyUnicode_FromString("members");
-	PyObject* members = PyDict_GetItem(fops_var_entry,key_members);
-	PyObject* members_indexes = PyDict_Keys(members);
-	new_entry->members_count = PyList_Size(members_indexes);
-	new_entry->members = malloc(new_entry->members_count*sizeof(struct fops_member_info));
-	for (Py_ssize_t i=0; i<new_entry->members_count; ++i) {
-		PyObject* member_index = PyList_GetItem(members_indexes,i);
-		const char* member_index_cstr = PyString_get_c_str(member_index);
-		PyObject* member_int_index = PyLong_FromString(member_index_cstr,0,10);
-		PYASSTR_DECREF(member_index_cstr);
-		PyObject* member_fnid = PyDict_GetItem(members, member_index);
-		new_entry->members[i].index = PyLong_AsUnsignedLong(member_int_index);
-		new_entry->members[i].fnid = PyLong_AsUnsignedLong(member_fnid);
-	}
-	Py_DecRef(members_indexes);
-	qsort(new_entry->members,new_entry->members_count,sizeof(struct fops_member_info),member_info_compare);
+	PyObject* py_members = PyDict_GetItem(fops_entry,key_members);
 	Py_DecRef(key_members);
-	new_entry->location = FTDB_ENTRY_STRING(fops_var_entry,location);
+	new_entry->members = calloc(PyDict_Size(py_members),sizeof(struct ftdb_fops_member_entry));
+	new_entry->members_count = PyDict_Size(py_members);
+	PyObject *member_id, *func_ids;
+	Py_ssize_t pos = 0, i = 0;
+	while(PyDict_Next(py_members,&pos,&member_id,&func_ids)){
+		const char *member_id_str = PyString_get_c_str(member_id);
+		PyObject* member_id_int = PyLong_FromString(member_id_str,0,10);
+		new_entry->members[i].member_id = PyLong_AsUnsignedLong(member_id_int);
+		new_entry->members[i].func_ids = calloc(PyList_Size(func_ids),sizeof(unsigned long));
+		new_entry->members[i].func_ids_count = PyList_Size(func_ids);
+		for(Py_ssize_t j = 0;j<PyList_Size(func_ids);++j){
+			PyObject *py_func_id = PyList_GetItem(func_ids,j);
+			new_entry->members[i].func_ids[j] = PyLong_AsUnsignedLong(py_func_id);
+		}
+		++i;
+	}
 }
 
 void fill_matrix_data_entry(PyObject* matrix_data_entry, struct matrix_data* new_entry) {
@@ -8941,15 +8926,11 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
 	PyObject* key_fops = PyUnicode_FromString("fops");
 	PyObject* fops = PyDict_GetItem(dbJSON,key_fops);
 	Py_DecRef(key_fops);
-	ftdb.fops.member_count = FTDB_ENTRY_ULONG(fops,membern);
-	ftdb.fops.vars_count = FTDB_ENTRY_ARRAY_SIZE(fops,vars);
-	ftdb.fops.vars = calloc(ftdb.fops.vars_count,sizeof(struct ftdb_fops_var_entry));
-	PyObject* key_vars = PyUnicode_FromString("vars");
-	PyObject* vars = PyDict_GetItem(fops,key_vars);
-	Py_DecRef(key_vars);
-	for (Py_ssize_t i=0; i<ftdb.fops.vars_count; ++i) {
-		libftdb_create_ftdb_fops_var_entry(self,PyList_GetItem(vars,i),&ftdb.fops.vars[i]);
-		ftdb.fops.vars[i].__index = i;
+	ftdb.fops = calloc(PyList_Size(fops),sizeof(struct ftdb_fops_entry));
+	ftdb.fops_count = PyList_Size(fops);
+	for (Py_ssize_t i=0; i<PyList_Size(fops); ++i) {
+		libftdb_create_ftdb_fops_entry(self,PyList_GetItem(fops,i),&ftdb.fops[i]);
+		ftdb.fops[i].__index = i;
 	}
 
 	PyObject* key_source_info = PyUnicode_FromString("source_info");
@@ -9057,8 +9038,8 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
 	printf("globals entry count: %zu\n",ftdb.globals_count);
 	printf("types count: %ld\n",PyList_Size(types));
 	printf("types entry count: %zu\n",ftdb.types_count);
-	printf("fops vars count: %ld\n",PyList_Size(vars));
-	printf("fops vars entry count: %zu\n",ftdb.fops.vars_count);
+	printf("fops count: %ld\n",PyList_Size(fops));
+	printf("fops entry count: %zu\n",ftdb.fops_count);
 	if (ftdb.funcs_tree_calls_no_asm) printf("funcs_tree_calls_no_asm: OK\n");
 	if (ftdb.funcs_tree_calls_no_known) printf("funcs_tree_calls_no_known: OK\n");
 	if (ftdb.funcs_tree_calls_no_known_no_asm) printf("funcs_tree_calls_no_known_no_asm: OK\n");

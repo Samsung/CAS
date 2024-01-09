@@ -213,6 +213,85 @@ public:
 	  return TypeMap.at(T);
   }
 
+  struct FopsObject{
+    const QualType T;
+    const VarDecl *V;
+    const FunctionDecl *F;
+    enum FopsKind{
+      FObjGlobal,
+      FObjLocal,
+      FObjFunction,
+    } kind;
+    std::string FopsKindName() const {
+      switch(kind){
+        case FObjGlobal:
+          return "global";
+        case FObjLocal:
+          return "local";
+        case FObjFunction:
+          return "function";
+      }
+    }
+
+    FopsObject(QualType Type, const VarDecl *Var, const FunctionDecl *Func = nullptr) : T(Type), V(Var), F(Func) {
+      if(!Var){
+        // fallback case without associated variable
+        kind = FObjFunction;
+      }
+      else{
+        if(Var->isDefinedOutsideFunctionOrMethod()){
+          // global
+          kind = FObjGlobal;
+        }
+        else{
+          // local
+          kind = FObjLocal;
+        }
+      }
+    }
+
+    bool operator<(const FopsObject &other) const {
+      if(kind != other.kind){
+        return kind < other.kind;
+      }
+      else if(T != other.T){
+        return T <other.T;
+      }
+      else if(V){
+        return V <other.V;
+      }
+      else{
+        return F <other.F;
+      }
+    }
+    operator bool() const {
+      return bool(kind);
+    }
+  };
+
+  struct FopsData{
+    FopsData(FopsObject &FObj) : obj(FObj) {}
+    FopsObject obj;
+    std::string hash;
+    size_t type_id;
+    size_t var_id;
+    size_t func_id;
+    std::string loc;
+    std::map <size_t,std::set<const FunctionDecl*>> fops_info; //member_id : function id
+    std::shared_ptr<std::string>output;
+
+    bool operator<(const FopsData &other) const {
+      return obj <other.obj;
+    }
+  };
+
+  typedef std::map<FopsObject,FopsData> FopsArray_t;
+  FopsArray_t FopsMap;
+
+  FopsArray_t &getFopsMap(){
+    return FopsMap;
+  }
+
   typedef std::pair<int64_t,std::string> caseenum_t;
   typedef std::tuple<caseenum_t,std::string,std::string,int64_t> caseinfo_t;
 
@@ -1233,6 +1312,7 @@ public:
   FuncData* lastFunctionDef, *lastFunctionDefCache;
   const VarDecl* lastGlobalVarDecl = 0;
   std::vector<bool> inVarDecl;
+  std::vector<const VarDecl*>fopsVarDecl;
   std::stack<const RecordDecl*> recordDeclStack;
   std::vector<FuncData*> functionStack;
   typedef std::map<const FunctionDecl*,FuncDeclData> FuncDeclArray_t;
@@ -1336,6 +1416,8 @@ public:
   void noticeTypeClass(QualType T);
   void noticeTemplateParameters(TemplateParameterList* TPL);
   void noticeTemplateArguments(const TemplateArgumentList& Args);
+  const VarDecl* findFopsVar(const Expr *E);
+  void noticeFopsFunction(FopsObject &FObj, int field_index,const Expr *E);
   bool VisitEnumDecl(const EnumDecl *D);
   bool VisitRecordDecl(const RecordDecl *D);
   bool VisitCXXRecordDecl(const CXXRecordDecl* D);
@@ -1383,7 +1465,7 @@ public:
   bool VisitWhileStmt(WhileStmt *S);
   bool VisitDoStmt(DoStmt *S);
   bool VisitGCCAsmStmt(GCCAsmStmt *S);
-  // bool VisitInitListExpr(InitListExpr* ILE); [CHECK IF NEEDED - DOES NOTHING]
+  bool VisitInitListExpr(InitListExpr* ILE);
   bool VisitBinaryOperator(BinaryOperator *BO);
   bool VisitUnaryOperator(UnaryOperator *E);
   bool VisitArraySubscriptExpr(ArraySubscriptExpr *Node);
@@ -1620,6 +1702,7 @@ public:
   void computeVarHashes();
   void computeTypeHashes();
   void computeFuncHashes();
+  void processFops();
   void getFuncTemplatePars(DbJSONClassVisitor::FuncDeclData *func_data);
   void getFuncDeclHash(DbJSONClassVisitor::FuncDeclData *func_data);
   void getFuncHash(DbJSONClassVisitor::FuncData *func_data);
@@ -1631,6 +1714,8 @@ public:
   void printFuncEntry(DbJSONClassVisitor::FuncData &func_data, int Indentation);
   void printFuncDeclArray(int Indentation);
   void printFuncDeclEntry(DbJSONClassVisitor::FuncDeclData &func_data, int Indentation);
+  void printFopsArray(int Indentation);
+  void printFopsEntry(const DbJSONClassVisitor::FopsData &fops_data, int Indentation);
   size_t getDeclId(Decl* D, std::pair<int,unsigned long long>& extraArg);
   TypeGroup_t getTypeGroupIds(Decl** Begin, unsigned NumDecls, const PrintingPolicy &Policy);
   void get_class_references(RecordDecl* rD, TypeGroup_t& Ids, MethodGroup_t& MIds, std::vector<int>& rIds, std::vector<std::string>& rDef);

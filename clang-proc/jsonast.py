@@ -760,8 +760,6 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
         if fops_database:
             with open(fops_database,"r") as f:
                 FDB = json.loads(f.read())
-        else:
-            FDB = {"sources": [],"membern":0,"varn":0,"sourcen":0,"vars":[]}
 
     udir = None
     if args.unmerged_temp and args.clean_slate:
@@ -1046,7 +1044,10 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
 
 
     if FDB is None:
-        FDB = {"membern":0,"vars":[]}
+        if "fops" in JDB:
+            FDB = JDB["fops"]
+        else:
+            FDB = {"sources": [],"membern":0,"varn":0,"sourcen":0,"vars":[]}
     if "vars" in FDB and len(FDB["vars"])>0:
         fdfrefmap = {}
         frefmap = {}

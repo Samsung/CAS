@@ -37,7 +37,7 @@ def testTopLevelFields():
 		"funcs_tree_funrefs_no_known_no_asm", "globs_tree_globalrefs", "types_tree_refs", 
 		"types_tree_usedrefs", "static_funcs_map", "init_data", "known_data", "BAS",
 		"version", "module", "directory", "release", 
-		# TODO: "funcdecln", "typen", "sourcen", "globaln", "unresolvedfuncn", "funcn"
+		# TODO: "funcdecln", "typen", "sourcen", "globaln", "unresolvedfuncn", "funcn", "fopn"
 	]
 
 	for field in topLevelFields:
@@ -163,14 +163,15 @@ def testFuncdecls():
 # Step 6: Test fops
 def testFops():
 	print("checking fops entries in FTDB", end='')
-	assert db["fops"]["varn"] == ftdb.fops.varn
-	assert db["fops"]["membern"] == ftdb.fops.membern
+	# assert db["fopn"] == ftdb["fopn"]
 
-	for i,v in enumerate(db["fops"]["vars"]):
+	for i,v in enumerate(db["fops"]):
+		assert v["kind"]==ftdb.fops[i].kind
 		assert v["type"]==ftdb.fops[i].type
-		assert v["name"]==ftdb.fops[i].name
+		assert v["var"]==ftdb.fops[i].var
+		assert v["func"]==ftdb.fops[i].func
 		assert sorted(v["members"].items()) == sorted(ftdb.fops[i].members.items())
-		assert v["location"]==ftdb.fops[i].location
+		assert v["loc"]==ftdb.fops[i].loc
 
 # Step 7:
 def testFTDBApi():

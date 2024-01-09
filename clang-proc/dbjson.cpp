@@ -4981,6 +4981,81 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  }
   }
 
+  void DbJSONClassConsumer::processFops(){
+	for(auto i = Visitor.getFopsMap().begin(); i!=Visitor.getFopsMap().end();i++){
+    auto &fops_data = i->second;
+      llvm::raw_string_ostream hs(fops_data.hash);
+      switch(fops_data.obj.kind){
+        case DbJSONClassVisitor::FopsObject::FopsKind::FObjGlobal:{
+          fops_data.type_id = Visitor.getTypeData(fops_data.obj.T).id;
+          fops_data.var_id = Visitor.getVarData(fops_data.obj.V).id;
+          fops_data.func_id = 0;
+          fops_data.loc = getAbsoluteLocation(fops_data.obj.V->getLocation());
+          hs<<'g'<<fops_data.type_id <<'|'<<fops_data.var_id;
+          break;
+        }
+        case DbJSONClassVisitor::FopsObject::FopsKind::FObjLocal:{
+          auto &func_data = Visitor.getFuncData(fops_data.obj.F);
+          fops_data.type_id = Visitor.getTypeData(fops_data.obj.T).id;
+          fops_data.var_id = func_data.varMap.at(fops_data.obj.V).varId;
+          fops_data.func_id = func_data.id;
+          fops_data.loc = getAbsoluteLocation(fops_data.obj.V->getLocation());
+          hs<<'l'<<fops_data.type_id <<'|'<<fops_data.var_id<<'|'<<fops_data.func_id;
+          break;
+        }
+        case DbJSONClassVisitor::FopsObject::FopsKind::FObjFunction:{
+          fops_data.type_id = Visitor.getTypeData(fops_data.obj.T).id;
+          fops_data.var_id = 0;
+          fops_data.func_id = Visitor.getFunctionDeclId(fops_data.obj.F);
+          fops_data.loc = getAbsoluteLocation(fops_data.obj.F->getLocation());
+          hs<<'f'<<fops_data.type_id<<'|'<<fops_data.func_id;
+          break;
+        }
+      }
+	  hs.flush();
+      multi::registerFops(fops_data);
+    }
+  }
+
+
+  void DbJSONClassConsumer::printFopsArray(int Indentation) {
+    for (auto i = Visitor.getFopsMap().begin(); i !=Visitor.getFopsMap().end();i++) {
+      const DbJSONClassVisitor::FopsData &fops_data = i->second;
+      if(fops_data.output == nullptr) continue;
+      printFopsEntry(fops_data,Indentation);
+    }
+  }
+
+  void DbJSONClassConsumer::printFopsEntry(const DbJSONClassVisitor::FopsData &fops_data, int Indentation){
+    std::string Indent(Indentation,'\t');
+    llvm::raw_string_ostream Out(*fops_data.output);
+    Out << Indent << "\t{\n";
+    Out << Indent << "\t\t\"kind\": \""<<fops_data.obj.FopsKindName()<<"\",\n";
+    Out << Indent << "\t\t\"type\": "<<fops_data.type_id<<",\n";
+    Out << Indent << "\t\t\"var\": "<<fops_data.var_id<<",\n";
+    Out << Indent << "\t\t\"func\": "<<fops_data.func_id<<",\n";
+    Out << Indent << "\t\t\"loc\": \""<<fops_data.loc<<"\",\n";
+    Out << Indent << "\t\t\"members\": {\n";
+    for(auto field_iter = fops_data.fops_info.begin();field_iter != fops_data.fops_info.end();){
+      Out << Indent << "\t\t\t\""<<field_iter->first<<"\": [";
+      for(auto func_iter = field_iter->second.begin();func_iter!=field_iter->second.end();){
+        Out<<Visitor.getFunctionDeclId(*func_iter);
+        ++func_iter;
+        if(func_iter!=field_iter->second.end()){
+          Out<<", ";
+        }
+      }
+      Out<<"]";
+      ++field_iter;
+      if(field_iter!=fops_data.fops_info.end()){
+        Out<<",";
+      }
+      Out<<'\n';
+    }
+    Out << Indent << "\t\t}\n";
+    Out << Indent << "\t}";
+  }
+
   void DbJSONClassConsumer::HandleTranslationUnit(clang::ASTContext &Context) {
 	  exprOrd = 0;
 	  TranslationUnitDecl *D = Context.getTranslationUnitDecl();
@@ -5006,12 +5081,14 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  computeVarHashes();
 	  computeFuncHashes();
 	  computeTypeHashes();
+    processFops();
 
     // process data to string
     printGlobalArray(1);
     printTypeArray(1);
     printFuncArray(1);
     printFuncDeclArray(1);
+    printFopsArray(1);
 
 	  if (opts.brk) {
 		  return;
@@ -5153,6 +5230,9 @@ namespace multi{
     std::vector<db_status*>Funcs;
     std::vector<db_status*>FDecls;
     std::unordered_map<size_t,std::set<int>>FuncFids;
+
+	std::mutex FopsLock;
+	std::unordered_map<std::string,db_status>FopsMap;
   }
 
   std::string directory;
@@ -5300,6 +5380,21 @@ namespace multi{
     FuncFids[entry.id].insert(func_data.fid);
   }
 
+  void registerFops(DbJSONClassVisitor::FopsData &fops_data){
+    std::lock_guard<std::mutex> lock(FopsLock);
+    auto rv = FopsMap.insert({fops_data.hash,{}});
+    db_status &entry = rv.first->second;
+    if(rv.second){
+      // new entry
+      entry.out = std::make_shared<std::string>();
+      fops_data.output = entry.out;
+    }
+    else{
+      fops_data.output = nullptr;
+    }
+
+  }
+
   void handleRefs(void *rv, std::vector<int> rIds,std::vector<std::string> rDef){
     auto R = (usedrefs*)rv;
     std::lock_guard<std::mutex>(R->m);
@@ -5419,6 +5514,7 @@ namespace multi{
     db_file << "\t\"funcdecln\": " << FuncDeclCnt << ",\n";
     db_file << "\t\"funcn\": " << FuncId - FuncDeclCnt << ",\n";
     db_file << "\t\"unresolvedfuncn\": " << 0 << ",\n";
+    db_file << "\t\"fopn\": " <<FopsMap.size()<<",\n";
 
     db_file << "\t\"globals\": [\n";
     first = true;
@@ -5460,7 +5556,17 @@ namespace multi{
     }
     db_file << "\n\t],\n";
 
-    db_file << "\t\"unresolvedfuncs\": []\n";
+    db_file << "\t\"unresolvedfuncs\": [],\n";
+
+    db_file << "\t\"fops\": [\n";
+    first = true;
+    for(auto i = FopsMap.begin(); i != FopsMap.end();i++){
+      if(first) first = false;
+      else db_file << ",\n";
+      db_file<<*(i->second.out);
+    }
+    db_file << "\n\t]\n";
+
     db_file << "}\n";
   }
 

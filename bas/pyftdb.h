@@ -81,7 +81,6 @@ PyObject* libftdb_ftdb_get_unresolvedfuncs_as_list(PyObject* self, void* closure
 PyObject* libftdb_ftdb_get_globals(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_types(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_fops(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_get_fops_as_dict(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_asm(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known_no_asm(PyObject* self, void* closure);
@@ -1704,9 +1703,6 @@ Py_ssize_t libftdb_ftdb_fops_sq_length(PyObject* self);
 PyObject* libftdb_ftdb_fops_getiter(PyObject* self);
 PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key);
-PyObject* libftdb_ftdb_fops_get_membern(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_fops_get_varn(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_fops_get_vars(PyObject* self, void* closure);
 
 static PyMethodDef libftdb_ftdbFops_methods[] = {
 	{NULL, NULL, 0, NULL}        /* Sentinel */
@@ -1719,13 +1715,6 @@ static PySequenceMethods libftdb_ftdbFops_sequence_methods = {
 
 static PyMemberDef libftdb_ftdbFops_members[] = {
     {0}  /* Sentinel */
-};
-
-static PyGetSetDef libftdb_ftdbFops_getset[] = {
-	{"varn",libftdb_ftdb_fops_get_varn,0,"ftdb fops vars count",0},
-	{"membern",libftdb_ftdb_fops_get_membern,0,"ftdb fops members count",0},
-	{"vars",libftdb_ftdb_fops_get_vars,0,"ftdb fops vars iterator",0},
-	{0,0,0,0,0},
 };
 
 static PyMappingMethods libftdb_ftdbFops_mapping_methods = {
@@ -1744,7 +1733,6 @@ static PyTypeObject libftdb_ftdbFopsType = {
 	.tp_iter = libftdb_ftdb_fops_getiter,
 	.tp_methods = libftdb_ftdbFops_methods,
 	.tp_members = libftdb_ftdbFops_members,
-	.tp_getset = &libftdb_ftdbFops_getset[0],
 	.tp_new = libftdb_ftdb_fops_new,
 };
 
@@ -1777,7 +1765,7 @@ static PyTypeObject libftdb_ftdbFopsIterType = {
 
 typedef struct {
     PyObject_HEAD
-	const struct ftdb_fops_var_entry* entry;
+	const struct ftdb_fops_entry* entry;
     unsigned long index;
     const struct ftdb* ftdb;
 } libftdb_ftdb_fops_entry_object;
@@ -1786,8 +1774,10 @@ void libftdb_ftdb_fops_entry_dealloc(libftdb_ftdb_fops_entry_object* self);
 PyObject* libftdb_ftdb_fops_entry_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 PyObject* libftdb_ftdb_fops_entry_repr(PyObject* self);
 PyObject* libftdb_ftdb_fops_entry_json(libftdb_ftdb_fops_entry_object *self, PyObject *args);
+PyObject* libftdb_ftdb_fops_entry_get_kind(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_fops_entry_get_type(PyObject* self, void* closure);
-PyObject* libftdb_ftdb_fops_entry_get_name(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_fops_entry_get_var(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_fops_entry_get_func(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_fops_entry_get_members(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_fops_entry_get_location(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_fops_entry_mp_subscript(PyObject* self, PyObject* slice);
@@ -1813,10 +1803,12 @@ static PyMappingMethods libftdb_ftdbFopsEntry_mapping_methods = {
 };
 
 static PyGetSetDef libftdb_ftdbFopsEntry_getset[] = {
+	{"kind",libftdb_ftdb_fops_entry_get_kind,0,"ftdb fops entry kind value",0},
 	{"type",libftdb_ftdb_fops_entry_get_type,0,"ftdb fops entry type value",0},
-	{"name",libftdb_ftdb_fops_entry_get_name,0,"ftdb fops entry name value",0},
+	{"var",libftdb_ftdb_fops_entry_get_var,0,"ftdb fops entry var value",0},
+	{"func",libftdb_ftdb_fops_entry_get_func,0,"ftdb fops entry func value",0},
 	{"members",libftdb_ftdb_fops_entry_get_members,0,"ftdb fops entry members values",0},
-	{"location",libftdb_ftdb_fops_entry_get_location,0,"ftdb fops entry location value",0},
+	{"loc",libftdb_ftdb_fops_entry_get_location,0,"ftdb fops entry location value",0},
 	{0,0,0,0,0},
 };
 

@@ -59,6 +59,7 @@ bool DbJSONClassVisitor::VisitDecl(Decl *D) {
 
 // Variables
 bool DbJSONClassVisitor::VisitVarDeclStart(const VarDecl *D) {
+	fopsVarDecl.push_back(D);
 	if (D->isDefinedOutsideFunctionOrMethod() && !D->isStaticDataMember()
 			&& D->hasGlobalStorage() && !D->isStaticLocal()) {
 		// We're are taking care of global variable
@@ -70,6 +71,7 @@ bool DbJSONClassVisitor::VisitVarDeclStart(const VarDecl *D) {
 }
 
 bool DbJSONClassVisitor::VisitVarDeclComplete(const VarDecl *D) {
+	fopsVarDecl.pop_back();
 	lastGlobalVarDecl = nullptr;
 	inVarDecl.pop_back();
 	return true;
@@ -1358,6 +1360,23 @@ bool DbJSONClassVisitor::VisitCastExpr(const CastExpr *Node) {
 }
 
 bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
+	
+	//fops
+	if(BO->getOpcode() == BinaryOperatorKind::BO_Assign &&
+			BO->getLHS()->getStmtClass() == Stmt::MemberExprClass && 
+			BO->getType()->isFunctionPointerType()){
+		auto *ME = cast<MemberExpr>(BO->getLHS());
+		const VarDecl *D = findFopsVar(ME);
+		QualType T = ME->getBase()->getType()->getCanonicalTypeInternal();
+		if(T->isPointerType()){
+			T = T->getPointeeType();
+		}
+		assert(!T.hasQualifiers() && "Qualified type");
+		assert(lastFunctionDef && "assignment outside function body");
+		FopsObject FObj(T, D,lastFunctionDef->this_func);
+		int field_index = cast<FieldDecl>(ME->getMemberDecl())->getFieldIndex();
+		noticeFopsFunction(FObj, field_index, BO->getRHS());
+	}
 
 	// logic operators (includes bitwise operators)
 	if(BO->getOpcode() >= BO_Cmp && BO->getOpcode() <= BO_LOr){
@@ -2051,29 +2070,31 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 	return true;
 }
 
-/*
 bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
+	
+	// probably a part of compoundliteralexpr, we handle it in assign if relevant
+	if(fopsVarDecl.empty()) return true;
 
-	return true;
-
-	if (DoneILEs.find(ILE)!=DoneILEs.end()) {
+	QualType T = ILE->getType()->getCanonicalTypeInternal();
+	if(!T->isRecordType())
 		return true;
+
+	const FunctionDecl *F = lastFunctionDef ?  lastFunctionDef->this_func : nullptr;
+	assert(!T.hasQualifiers() && "Qualified type");
+	FopsObject FObj(T, fopsVarDecl.back(), F);
+	ILE = ILE->isSemanticForm()? ILE : ILE->getSemanticForm();
+	// ILE = ILE->getSemanticForm();
+	int field_index = 0;
+	for(const auto &init : ILE->children()){
+		auto *expr = llvm::cast<Expr>(init);
+		if(expr->getType()->isFunctionPointerType() || expr->getType()->isVoidPointerType()){
+			noticeFopsFunction(FObj, field_index, expr);
+		}
+		field_index++;
 	}
-
-	DbJSONClassVisitor::DREMap_t DREMap;
-	DbJSONClassVisitor::lookup_cache_t cache;
-	bool compundStmtSeen = false;
-	unsigned MECnt = 0;
-	lookForDeclRefWithMemberExprsInternal(ILE,ILE,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true,true);
-
-	std::string Expr;
-	llvm::raw_string_ostream exprstream(Expr);
-	ILE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-	exprstream.flush();
-
 	return true;
 }
-*/
+
 bool DbJSONClassVisitor::VisitIntegerLiteral(IntegerLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralInteger;

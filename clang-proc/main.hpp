@@ -21,6 +21,7 @@ namespace multi{
   void registerFuncDecl(DbJSONClassVisitor::FuncDeclData&);
   void registerFuncInternal(DbJSONClassVisitor::FuncData&);
   void registerFunc(DbJSONClassVisitor::FuncData&);
+  void registerFops(DbJSONClassVisitor::FopsData&);
   void handleRefs(void *rv, std::vector<int> rIds,std::vector<std::string> rDef);
   void processDatabase();
   void emitDatabase(llvm::raw_ostream&);

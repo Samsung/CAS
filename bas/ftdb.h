@@ -11,7 +11,7 @@
  * FTDB_VERSION - required libftdb version to support file
  */
 #define FTDB_MAGIC_NUMBER		0x4244544642494cULL		/* b'LIBFTDB\0' */
-#define FTDB_VERSION			3ULL
+#define FTDB_VERSION			4ULL
 
 
 enum functionLinkage {
@@ -363,6 +363,37 @@ static enum TypeClass get_TypeClass(const char* s) {
 	return TYPECLASS_UNDEF;
 }
 
+enum fopsKind{
+	FOPSKIND_GLOBAL,
+	FOPSKIND_LOCAL,
+	FOPSKIND_FUNCTION,
+};
+
+static enum fopsKind get_fopsKind(const char* s) {
+	if (!strcmp(s,"global")) {
+		return FOPSKIND_GLOBAL;
+	}
+	else if (!strcmp(s,"local")) {
+		return FOPSKIND_LOCAL;
+	}
+	else { // !strcmp(s,"function")) 
+		return FOPSKIND_FUNCTION;
+	}
+}
+
+static const char* set_fopsKind(enum fopsKind kind) {
+	if (kind==FOPSKIND_GLOBAL) {
+		return "global";
+	}
+	else if (kind==FOPSKIND_LOCAL) {
+		return "local";
+	}
+	else { // kind==FOPSKIND_FUNCTION
+		return "function";
+	}
+}
+
+
 struct taint_element {
 	unsigned long taint_level;
 	unsigned long varid;
@@ -705,25 +736,23 @@ struct ftdb_type_entry {
 	unsigned long bitfields_count;
 };
 
-struct fops_member_info {
-	unsigned long index;
-	unsigned long fnid;
+struct ftdb_fops_member_entry{
+	unsigned long member_id;
+	unsigned long *func_ids;
+	unsigned long func_ids_count;
 };
 
-struct ftdb_fops_var_entry {
+struct ftdb_fops_entry{
 	unsigned long __index;
-	const char* type;
-	const char* name;
-	struct fops_member_info* members;
+	enum fopsKind kind;
+	unsigned long type_id;
+	unsigned long var_id;
+	unsigned long func_id;
+	const char *location;
+	struct ftdb_fops_member_entry *members;
 	unsigned long members_count;
-	const char* location;
 };
 
-struct ftdb_fops {
-	struct ftdb_fops_var_entry* vars;
-	unsigned long vars_count;
-	unsigned long member_count;
-};
 
 struct matrix_data {
 	unsigned long* data;
@@ -811,7 +840,9 @@ struct ftdb {
 	unsigned long globals_count;
 	struct ftdb_type_entry* types;
 	unsigned long types_count;
-	struct ftdb_fops fops;
+	struct ftdb_fops_entry* fops;
+	unsigned long fops_count;
+
 	struct rb_root sourcemap;
 	const char** sourceindex_table;
 	unsigned long sourceindex_table_count;

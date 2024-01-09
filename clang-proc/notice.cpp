@@ -965,3 +965,101 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 	return T;
 }
 
+//fops
+const VarDecl* DbJSONClassVisitor::findFopsVar(const Expr *E){
+	bool ConsumeAddress = false;
+	const Expr *Base = E;
+	while(true){
+		switch(E->getStmtClass()){
+			case Stmt::CallExprClass:
+			case Stmt::StmtExprClass:
+				// unsupported
+				return nullptr;
+			case Stmt::ImplicitCastExprClass:
+				E = cast<ImplicitCastExpr>(E)->getSubExpr();
+				break;
+			case Stmt::CStyleCastExprClass:
+				E = cast<CStyleCastExpr>(E)->getSubExpr();
+				break;
+			case Stmt::ParenExprClass:
+				E = cast<ParenExpr>(E)->getSubExpr();
+				break;
+			case Stmt::DeclRefExprClass:{
+				auto D = cast<DeclRefExpr>(E)->getDecl();
+				if(isa<VarDecl>(D)){
+					return cast<VarDecl>(D);
+				}
+				return nullptr;
+			}
+			case Stmt::MemberExprClass:{
+				E = cast<MemberExpr>(E)->getBase();
+				break;
+			}
+			case Stmt::UnaryOperatorClass:{
+				E = cast<UnaryOperator>(E)->getSubExpr();
+				break;
+			}
+			case Stmt::ArraySubscriptExprClass:
+				E = cast<ArraySubscriptExpr>(E)->getBase();
+				break;
+
+			default:{
+				llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
+				E->dump();
+				E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
+				llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
+				return nullptr;
+			}
+		}
+	}
+}
+
+void DbJSONClassVisitor::noticeFopsFunction(FopsObject &FObj, int field_index, const Expr *E){
+	E = E->IgnoreParenCasts();
+	switch(E->getStmtClass()){
+	case Stmt::ImplicitValueInitExprClass:
+	case Stmt::IntegerLiteralClass:
+	case Stmt::StringLiteralClass:
+	case Stmt::MemberExprClass:
+	case Stmt::CallExprClass:
+	case Stmt::ArraySubscriptExprClass:
+	case Stmt::StmtExprClass:
+	case Stmt::CompoundLiteralExprClass:
+		//cases that don't directly resolve to functions
+		break;
+	case Stmt::OpaqueValueExprClass:
+		noticeFopsFunction(FObj,field_index,cast<OpaqueValueExpr>(E)->getSourceExpr());
+		break;
+	case Stmt::DeclRefExprClass:{
+		auto *Decl = cast<DeclRefExpr>(E)->getDecl();
+		if(Decl->getKind() == Decl::Function){
+			auto fops = FopsMap.emplace(FObj,FObj);
+			fops.first->second.fops_info[field_index].insert(cast<FunctionDecl>(Decl));
+		}
+		break;
+	}
+	case Stmt::UnaryOperatorClass:{
+		E = cast<UnaryOperator>(E)->getSubExpr();
+		noticeFopsFunction(FObj, field_index, E);
+		break;
+	}
+	case Stmt::BinaryOperatorClass:{
+		E = cast<BinaryOperator>(E)->getRHS();
+		noticeFopsFunction(FObj, field_index, E);
+		break;
+	}
+	case Stmt::ConditionalOperatorClass:
+	case Stmt::BinaryConditionalOperatorClass:{
+		noticeFopsFunction(FObj, field_index, cast<AbstractConditionalOperator>(E)->getTrueExpr());
+		noticeFopsFunction(FObj, field_index, cast<AbstractConditionalOperator>(E)->getFalseExpr());
+		break;
+	}
+	default:
+		llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
+		E->dump();
+		E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
+		llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
+		assert(0);
+	}
+	return;
+}
