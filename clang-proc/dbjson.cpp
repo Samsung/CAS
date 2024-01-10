@@ -7,6 +7,9 @@
 
 int DEBUG_NOTICE;
 
+//disabled useddef feature for now, since no one uses it
+constexpr bool DISABLED = false;
+
 thread_local size_t exprOrd;
 
 typedef std::string name_t;
@@ -4389,7 +4392,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  if (rD->isCompleteDefinition()) {
 				  get_class_references(rD,Ids,MIds,rIds,rDef);
           multi::handleRefs(type_data.usedrefs,rIds,rDef);
-				  if(opts.adddefs && opts.csd && !rDef.empty()){
+				  if(DISABLED && opts.adddefs && opts.csd && !rDef.empty()){
 					  TOut<< Indent << "\t\t\"defhead\": \"" << json::json_escape(head) << "\",\n";
 					  TOut << Indent << "\t\t\"useddef\": [";
             // will be updated in postprocessing
@@ -5278,6 +5281,8 @@ namespace multi{
       type_data.output = nullptr;
     }
     if(type_data.T->getTypeClass() == Type::Record){
+      entry.out = std::make_shared<std::string>();
+      type_data.output = entry.out;
       type_data.usedrefs = &TypeUsedRefs[entry.id];
     }
   }
@@ -5397,12 +5402,15 @@ namespace multi{
 
   void handleRefs(void *rv, std::vector<int> rIds,std::vector<std::string> rDef){
     auto R = (usedrefs*)rv;
-    std::lock_guard<std::mutex>(R->m);
+    std::lock_guard<std::mutex> lock(R->m);
     R->refs.resize(rIds.size());
     for(int i = 0;i<rIds.size();i++){
+      auto &ref = R->refs[i];
       if(rIds[i]>=0){
-        auto &ref = R->refs[i];
         ref.id = rIds[i];
+        ref.def = rDef[i];
+      }
+      if(ref.def.empty()){
         ref.def = rDef[i];
       }
     }
@@ -5480,14 +5488,14 @@ namespace multi{
       std::string useddef = "\"useddef\": [";
       for(auto &ref : t.second.refs){
         usedrefs+= " " + std::to_string(ref.id) + ",";
-        if(opts.adddefs && opts.csd){
+        if(DISABLED && opts.adddefs && opts.csd){
           useddef+= " \"" + json::json_escape(ref.def) + "\",";
         }
       }
       usedrefs.pop_back();
       usedrefs+=" ]";
       updateEntry("usedrefs",']',out,usedrefs);
-      if(opts.adddefs && opts.csd){
+      if(DISABLED && opts.adddefs && opts.csd){
         useddef.pop_back();
         useddef += " ]";
         updateEntry("useddef",']',out,useddef);
