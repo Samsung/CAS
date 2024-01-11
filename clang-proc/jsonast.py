@@ -1009,7 +1009,7 @@ def create_json_db_main(args: argparse.Namespace, allowed_phases: dict) -> int:
                     err = err+line
                     log_iter.close()
                     break
-            while line in proc.stderr:
+            for line in proc.stderr:
                 err = err+line
             t.join()
             proc.communicate()

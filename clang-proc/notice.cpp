@@ -1004,10 +1004,13 @@ const VarDecl* DbJSONClassVisitor::findFopsVar(const Expr *E){
 				break;
 
 			default:{
-				llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
-				E->dump();
-				E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
-				llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
+				if(opts.exit_on_error){
+					llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
+					E->dump();
+					E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
+					llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
+					assert(0);
+				}
 				return nullptr;
 			}
 		}
@@ -1025,6 +1028,7 @@ void DbJSONClassVisitor::noticeFopsFunction(FopsObject &FObj, int field_index, c
 	case Stmt::ArraySubscriptExprClass:
 	case Stmt::StmtExprClass:
 	case Stmt::CompoundLiteralExprClass:
+	case Stmt::OffsetOfExprClass:
 		//cases that don't directly resolve to functions
 		break;
 	case Stmt::OpaqueValueExprClass:
@@ -1055,11 +1059,13 @@ void DbJSONClassVisitor::noticeFopsFunction(FopsObject &FObj, int field_index, c
 		break;
 	}
 	default:
-		llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
-		E->dump();
-		E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
-		llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
-		assert(0);
+		if(opts.exit_on_error){
+			llvm::errs()<<"[unhandled]"<<E->getStmtClassName()<<'\n';
+			E->dump();
+			E->printPretty(llvm::errs(),nullptr,Context.getPrintingPolicy());
+			llvm::errs()<<E->getBeginLoc().printToString(Context.getSourceManager())<<'\n';
+			assert(0);
+		}
 	}
 	return;
 }
