@@ -7380,32 +7380,6 @@ PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice) {
 	return entry;
 }
 
-int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key) {
-
-	if (!PyUnicode_Check(key)) {
-		PyErr_SetString(libftdb_ftdbError, "Invalid type in contains check (not a str)");
-		return 0;
-	}
-
-	const char* attr = PyString_get_c_str(key);
-
-	if (!strcmp(attr,"varn")) {
-		PYASSTR_DECREF(attr);
-	    return 1;
-	}
-	else if (!strcmp(attr,"membern")) {
-		PYASSTR_DECREF(attr);
-	    return 1;
-	}
-	else if (!strcmp(attr,"vars")) {
-		PYASSTR_DECREF(attr);
-	    return 1;
-	}
-
-	PYASSTR_DECREF(attr);
-	return 0;
-}
-
 void libftdb_ftdb_fops_iter_dealloc(libftdb_ftdb_fops_iter_object* self) {
 
 	PyTypeObject *tp = Py_TYPE(self);

@@ -1702,7 +1702,6 @@ PyObject* libftdb_ftdb_fops_repr(PyObject* self);
 Py_ssize_t libftdb_ftdb_fops_sq_length(PyObject* self);
 PyObject* libftdb_ftdb_fops_getiter(PyObject* self);
 PyObject* libftdb_ftdb_fops_mp_subscript(PyObject* self, PyObject* slice);
-int libftdb_ftdb_fops_sq_contains(PyObject* self, PyObject* key);
 
 static PyMethodDef libftdb_ftdbFops_methods[] = {
 	{NULL, NULL, 0, NULL}        /* Sentinel */
@@ -1710,7 +1709,6 @@ static PyMethodDef libftdb_ftdbFops_methods[] = {
 
 static PySequenceMethods libftdb_ftdbFops_sequence_methods = {
 	.sq_length = libftdb_ftdb_fops_sq_length,
-	.sq_contains = libftdb_ftdb_fops_sq_contains
 };
 
 static PyMemberDef libftdb_ftdbFops_members[] = {
