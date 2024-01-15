@@ -70,35 +70,6 @@ QualType resolve_Typedef_Integer_Type(QualType T) {
 	}
 }
 
-QualType resolve_Record_Type(QualType T) {
-	if (T->getTypeClass()==Type::Typedef) {
-	  	const TypedefType *tpd = cast<TypedefType>(T);
-	  	TypedefNameDecl* D = tpd->getDecl();
-	  	return resolve_Record_Type(D->getTypeSourceInfo()->getType());
-	  }
-	else if (T->getTypeClass()==Type::Record) {
-		return T;
-	}
-	else if (T->getTypeClass()==Type::Elaborated) {
-		const ElaboratedType *tp = cast<ElaboratedType>(T);
-		QualType eT = tp->getNamedType();
-		return resolve_Record_Type(eT);
-	}
-	else if (T->getTypeClass()==Type::ConstantArray) {
-		const ConstantArrayType *tp = cast<ConstantArrayType>(T);
-		QualType elT = tp->getElementType();
-		return resolve_Record_Type(elT);
-	}
-	else if (T->getTypeClass()==Type::IncompleteArray) {
-		const IncompleteArrayType *tp = cast<IncompleteArrayType>(T);
-		QualType elT = tp->getElementType();
-		return resolve_Record_Type(elT);
-	}
-	else {
-		return QualType();
-	}
-}
-
 static std::string getFullFunctionNamespace(const FunctionDecl *D) {
 	  std::list<std::string> nsl;
 	  const DeclContext* DC = D->getEnclosingNamespaceContext();
@@ -349,59 +320,6 @@ int DbJSONClassVisitor::fieldIndexInGroup(Decl** Begin, unsigned NumDecls, const
 			  if (idx>=0) {
 				  return idx;
 			  }
-			  Decls.clear();
-		  }
-	  }
-
-	  return -1;
-}
-
-  int DbJSONClassVisitor::fieldToFieldIndex(const FieldDecl* FD, const RecordDecl* RD) {
-
-	int fieldIndex = 0;
-	if (RD->isCompleteDefinition()) {
-		  const DeclContext *DC = cast<DeclContext>(RD);
-		  SmallVector<Decl*, 2> Decls;
-		  for (DeclContext::decl_iterator D = DC->decls_begin(), DEnd = DC->decls_end();
-				 D != DEnd; ++D) {
-			  	 if ((isa<RecordDecl>(*D))&&(!cast<RecordDecl>(*D)->isCompleteDefinition())) {
-			  		 continue;
-			  	 }
-			     if (D->isImplicit()) {
-				   if (fieldMatch(*D,FD)) {
-					   return fieldIndex;
-				   }
-				   if ((*D)->getKind()==Decl::Field) {
-					  ++fieldIndex;
-				  }
-				   continue;
-			     }
-			  QualType CurDeclType = getDeclType(*D);
-			  if (!Decls.empty() && !CurDeclType.isNull()) {
-				QualType BaseType = GetBaseType(CurDeclType);
-				if (!BaseType.isNull() && isa<ElaboratedType>(BaseType))
-				  BaseType = cast<ElaboratedType>(BaseType)->getNamedType();
-				if (!BaseType.isNull() && isa<TagType>(BaseType) &&
-					cast<TagType>(BaseType)->getDecl() == Decls[0]) {
-				  Decls.push_back(*D);
-				  continue;
-				}
-			  }
-			  if (!Decls.empty()) {
-				  Decls.clear();
-			  }
-			  if (isa<TagDecl>(*D) && !cast<TagDecl>(*D)->getIdentifier()) {
-				Decls.push_back(*D);
-				continue;
-			  }
-			  if (fieldMatch(*D,FD)) {
-				  return fieldIndex;
-			  }
-			  if ((*D)->getKind()==Decl::Field) {
-				  ++fieldIndex;
-			  }
-		  }
-		  if (!Decls.empty()) {
 			  Decls.clear();
 		  }
 	  }

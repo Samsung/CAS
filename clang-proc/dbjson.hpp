@@ -1498,7 +1498,6 @@ public:
   void lookForLiteral(const Expr* E, std::set<LiteralHolder>& refs, unsigned pos = 0 );
   const DeclRefExpr* lookForBottomDeclRef(const Expr* E);
   int fieldToIndex(const FieldDecl* FD, const RecordDecl* RD);
-  int fieldToFieldIndex(const FieldDecl* FD, const RecordDecl* RD);
   void setSwitchData(const Expr* caseExpr, int64_t* enumtp, std::string* enumstr, std::string* macroValue, std::string* raw_code, int64_t* exprVal);
   void varInfoForRefs(FuncData &func_data, const std::set<ValueHolder>& refs, std::set<LiteralHolder> literals, std::vector<struct refvarinfo_t>& refvarList);
   bool VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef,std::set<const UnaryOperator*>& UnaryRef, std::set<const ArraySubscriptExpr*>& ASRef,
@@ -1770,7 +1769,6 @@ int internal_declcount(const FunctionDecl *F);
 void taint_params(const clang::FunctionDecl *F, DbJSONClassVisitor::FuncData&);
 bool isOwnedTagDeclType(QualType DT);
 QualType resolve_Typedef_Integer_Type(QualType T);
-QualType resolve_Record_Type(QualType T);
 
 static inline bool is_compiletime_assert_decl(const FunctionDecl* D, ASTContext& Context ) {
 	  if ((D->getNameAsString().rfind("__compiletime_assert_", 0) == 0) && /* .startswith() */

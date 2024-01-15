@@ -1713,17 +1713,21 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		return true;
 	}
 
+	Expr::EvalResult Res;
+	int64_t offsetof_offset = -1;
+	if((!Node->isValueDependent()) && Node->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(Node,Res)){
+		offsetof_offset = Res.Val.getInt().extOrTrunc(63).getExtValue();
+	}
+
 	VarRef_t VR;
 	VR.VDCAMUAS.setOOE(Node);
 	std::vector<VarRef_t> vVR;
 	DbJSONClassVisitor::DREMap_t DREMap;
 	bool canComputeOffset = true;
-	uint64_t computedOffset = 0;
 
 	unsigned MEIdx = 0;
 	int fieldIndex = -1;
 	QualType lastRecordType;
-	QualType lastFieldType;
 	unsigned fieldAccessCount = 0;
 	for (unsigned i=0; i<Node->getNumComponents(); ++i) {
 		const OffsetOfNode & C = Node->getComponent(i);
@@ -1740,19 +1744,8 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		if (k==OffsetOfNode::Field) {
 			FieldDecl* FD = C.getField();
 			const RecordDecl* RD = FD->getParent();
-            fieldIndex = fieldToIndex(FD,RD);
-            int fieldFieldIndex = fieldToFieldIndex(FD,RD);
-            if ((!RD->isDependentType())&&(fieldFieldIndex>=0)) {
-				const ASTRecordLayout& rL = Context.getASTRecordLayout(RD);
-				uint64_t off = rL.getFieldOffset(fieldFieldIndex);
-				computedOffset+=off;
-            }
-            else {
-            	canComputeOffset = false;
-            }
-
+			fieldIndex = fieldToIndex(FD,RD);
             lastRecordType = RD->getASTContext().getRecordType(RD);
-            lastFieldType = FD->getType();
             VR.MemberExprList.push_back(std::pair<size_t,MemberExprKind>(fieldIndex,static_cast<MemberExprKind>(0)));
             VR.MECastList.push_back(lastRecordType);
             noticeTypeClass(lastRecordType);
@@ -1765,23 +1758,6 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
             Expr::EvalResult Res;
             if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
                 int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-
-                QualType rRT = resolve_Record_Type(lastFieldType);
-                if (!rRT.isNull()) {
-                	const RecordType *tp = cast<RecordType>(rRT);
-					RecordDecl* rD = tp->getDecl();
-					if (!rD->isDependentType()) {
-						TypeInfo ti = Context.getTypeInfo(rRT);
-						computedOffset+=(i)*ti.Width;
-					}
-					else {
-						canComputeOffset = false;
-					}
-                }
-                else {
-                	canComputeOffset = false;
-                }
-
                 ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
                 v.setInteger(i);
                 vMCtuple_t vMCtuple;
@@ -1792,7 +1768,6 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
             else {
 	            lookup_cache_t cache;
 	            bool compundStmtSeen = false;
-	            canComputeOffset = false;
 	            unsigned MECnt = 0;
 	            lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,MEIdx-1,&MECnt,0,true,true);            	
             }
@@ -1802,11 +1777,6 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		else {
 			/* Not supported */
 		}
-	}
-
-	int64_t offsetof_offset = -1;
-	if (canComputeOffset) {
-		offsetof_offset = computedOffset/8;
 	}
 
     for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
