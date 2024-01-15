@@ -87,5 +87,15 @@
         "/bin/sh",
         "/usr/bin/bash",
         "/usr/bin/sh"
-    ]
+    ],
+    "dependency_exclude_patterns": [
+        "/dev/*",
+        "/proc/*"
+    ],
+    "additional_module_exclude_patterns": [
+    ],
+    "additional_module_exclude_pattern_variants": {
+    },
+    "exclude_command_variants": {
+    }
 }
