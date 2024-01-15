@@ -132,7 +132,7 @@ cas postprocess --set-root=<path to source root directory>
 There are times when the post-processed JSON file is really large (in case of full Android builds for latest OS version it can easily take few GB of size). Reading such JSON can be very time consuming and take a few minutes just to parse it. There is option to create a specialized cached version of the JSON file strictly dedicated for reading only. This will also (try to) precompute the file dependency information for all linked modules created during the build and save it into the (separate) cache file.
 
 ```bash
-cas cache [--set-version=<version string>] [--set-root=<path to source root directory>] [--shared-argvs=<shared linking spec>] [--jobs=<int>]
+cas cache [--set-version=<version string>] [--set-root=<path to source root directory>] [--shared-argvs=<shared linking spec>] [--jobs=<int>] [--deps-threshold DEPS_THRESHOLD]
 ```
 
 This will produce the `.nfsdb.img` file with in-memory representation of the parsed JSON data which can be read back into memory almost instantly.
@@ -140,6 +140,10 @@ This will produce the `.nfsdb.img` file with in-memory representation of the par
 The shared linking spec provides a list (delimited by `:`) of linker switches (that were used during the build) used to tell a linker that it should produce a shared library. For most of the possible usages it should be enough to provide `-shared:--shared` values (it's actually the default value).
 
 The number of jobs used during the cache creation specifies how many processors should be used for the file dependency computation of the linked modules (which defaults to the number of cores available in the system).
+
+When cache file is created the list of dependencies (both direct and full dependency list) for each processed module is created. If a number of computed dependencies for a given module exceeds some predefined value (90k at the current default implementation) the error is produced and the cache creation stops. The dependency threshold can be overriden using the `--deps-threshold` (or `-DT`) option.
+
+The cache creation process can be also split into two independent phases. When the `--create` option is passed only the core BAS database is saved into the cache file. Executing next with option `--deps-create` will compute the dependency list for each module and add that information to the cache as well.
 
 For more information regarding the `cas` command line tool (and other clients to access the database content) please see [client readme](CLIENT.md) file.
 
