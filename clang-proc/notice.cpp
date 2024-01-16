@@ -364,9 +364,9 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  	  return;
 
 	  size_t size = 0;
-	  auto ifsize = Context.getTypeSizeInCharsIfKnown(T);
-	  if(ifsize){
-		size = Context.toBits(ifsize.getValue());
+	  auto optsize = Context.getTypeSizeInCharsIfKnown(T);
+	  if(optsize){
+		size = Context.toBits(optsize.compatGetValue());
 	  }
 	  std::string qualifierString = getQualifierString(T);
 	  switch(T->getTypeClass()) {

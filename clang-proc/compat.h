@@ -30,6 +30,16 @@
 #define FTDB_COMPAT_MACRO_OFFSET 0
 #endif
 
+#if CLANG_VERSION<16
+#define getUnmodifiedType getUnderlyingType
+#endif
+
+#if CLANG_VERSION>=16
+#define compatGetValue value
+#else
+#define compatGetValue getValue
+#endif
+
 using namespace clang;
 
 namespace compatibility{
@@ -58,10 +68,6 @@ namespace compatibility{
     return CompoundStmt::CreateEmpty(Ctx,1);
 #endif
   }
-
-#if CLANG_VERSION<16
-#define getUnmodifiedType getUnderlyingType
-#endif
 
   inline const TemplateTypeParmType *getReplacedParmType(const SubstTemplateTypeParmType* tp){
 #if CLANG_VERSION>=16
