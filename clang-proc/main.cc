@@ -10,6 +10,13 @@ using namespace llvm;
 using namespace clang;
 using namespace clang::tooling;
 
+void clang_prepare(){
+  // prevents buffer access issue with multiple threads
+  llvm::outs().SetUnbuffered();
+  // forces intitialization of clang internal object SttmClassInfo
+  ((Stmt*)0)->addStmtClass((Stmt::StmtClass)0);
+}
+
 ArgumentsAdjuster getStripWarningsAdjuster() {
   return [](const CommandLineArguments &Args, StringRef /*unused*/) {
     CommandLineArguments AdjustedArgs;
@@ -239,7 +246,7 @@ int main(int argc, const char **argv)
         threadcount = AllFiles.size();
       llvm::errs()<<"LOG: "<<"Number of threads: "<<threadcount<<'\n';
 
-      llvm::outs().SetUnbuffered();
+      clang_prepare();
 
       std::vector<std::thread> ts;
       for(int i=0;i<threadcount;i++){
