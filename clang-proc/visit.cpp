@@ -749,6 +749,12 @@ bool DbJSONClassVisitor::TraverseStmt(Stmt *S) {
 	return TraverseResult;
 }
 
+// bypass the traversal of semantic form introduced by shouldVisitImplicitCode
+bool DbJSONClassVisitor::TraverseInitListExpr(InitListExpr *S){
+	S = S->isSyntacticForm()? S : S->getSyntacticForm();
+	return Base::TraverseSynOrSemInitListExpr(S);
+}
+
 // Track compound statements
 bool DbJSONClassVisitor::VisitStmt(Stmt *Node) {
 

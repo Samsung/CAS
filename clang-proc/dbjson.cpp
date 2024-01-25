@@ -2679,9 +2679,16 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  FOut << Indent << "\t\t],\n";
 			  FOut << Indent << "\t\t\"locals\": [\n";
 			  bool first = true;
-			  for (auto u = func_data.varMap.begin(); u!=func_data.varMap.end();) {
+
+			  std::vector<DbJSONClassVisitor::VarInfo_t> locals;
+			  locals.resize(func_data.varMap.size());
+			  for(auto &l : func_data.varMap){
+				  assert(l.second.varId < locals.size() && "locals index out-of-range");
+				  locals[l.second.varId] = l.second;
+			  }
+			  for (auto u = locals.begin(); u!=locals.end();) {
 				  const VarDecl* VD = 0;
-				  DbJSONClassVisitor::VarInfo_t vi = (*u).second;
+				  DbJSONClassVisitor::VarInfo_t vi = (*u);
 				  if ((!vi.VD) && (!vi.PVD)) {
 					++u;
 					continue;

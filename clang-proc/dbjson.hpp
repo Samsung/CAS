@@ -55,6 +55,7 @@ static std::string ARGeplacementToken = "\"\"\"&\"\"\"";
 
 class DbJSONClassVisitor
   : public RecursiveASTVisitor<DbJSONClassVisitor> {
+  using Base = RecursiveASTVisitor<DbJSONClassVisitor>;
 public:
   explicit DbJSONClassVisitor(ASTContext &Context)
     : TypeNum(0), VarNum(0), FuncNum(0), lastFunctionDef(0), CTA(0), missingRefsCount(0), Context(Context) {}
@@ -1450,6 +1451,7 @@ public:
   bool VisitCastExpr(const CastExpr *Node);
   bool VisitFriendDecl(const FriendDecl *D);
   bool TraverseStmt(Stmt* S);
+  bool TraverseInitListExpr(InitListExpr *S);
   bool VisitCompoundStmtStart(const CompoundStmt *CS);
   bool VisitCompoundStmtComplete(const CompoundStmt *CS);
   void handleConditionDeref(Expr *Cond,size_t cf_id);
