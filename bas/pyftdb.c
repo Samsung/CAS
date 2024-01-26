@@ -1224,7 +1224,7 @@ PyObject* libftdb_ftdb_modules_iter_next(PyObject *self) {
 
     PyObject* args = PyTuple_New(2);
     PYTUPLE_SET_ULONG(args,0,__self->index);
-    PYTUPLE_SET_STR(args,1,__self->ftdb->sourceindex_table[__self->index]);
+    PYTUPLE_SET_STR(args,1,__self->ftdb->moduleindex_table[__self->index]);
     __self->index++;
     return args;
 }
