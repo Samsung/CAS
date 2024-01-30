@@ -278,7 +278,7 @@ int DbJSONClassVisitor::fieldIndexInGroup(Decl** Begin, unsigned NumDecls, const
 		  SmallVector<Decl*, 2> Decls;
 		  for (DeclContext::decl_iterator D = DC->decls_begin(), DEnd = DC->decls_end();
 				 D != DEnd; ++D) {
-			  	 if ((isa<RecordDecl>(*D))&&(!cast<RecordDecl>(*D)->isCompleteDefinition())) {
+			  	 if ((isa<TagDecl>(*D))&&(!cast<TagDecl>(*D)->isCompleteDefinition())) {
 			  		 continue;
 			  	 }
 			     if (D->isImplicit()) {
