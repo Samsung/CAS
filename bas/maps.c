@@ -307,7 +307,7 @@ struct stringRefMap_node* stringRefMap_search(const struct rb_root* stringRefMap
 	return 0;
 }
 
-int stringRefMap_insert(struct rb_root* stringRefMap, const char* key, unsigned long value) {
+struct stringRefMap_node* stringRefMap_insert(struct rb_root* stringRefMap, const char* key, unsigned long value) {
 
 	struct stringRefMap_node* data = calloc(1,sizeof(struct stringRefMap_node));
 	data->key = key;
@@ -333,7 +333,11 @@ int stringRefMap_insert(struct rb_root* stringRefMap, const char* key, unsigned 
 	rb_link_node(&data->node, parent, new);
 	rb_insert_color(&data->node, stringRefMap);
 
-	return 1;
+	return data;
+}
+
+void stringRefMap_remove(struct rb_root* stringRefMap, struct stringRefMap_node* node) {
+	rb_erase(&node->node, stringRefMap);
 }
 
 void stringRefMap_destroy(struct rb_root* stringRefMap) {

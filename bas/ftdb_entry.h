@@ -793,6 +793,10 @@
 	PyTuple_SetItem(__tuple,__index,__val);	\
 } while(0)
 
+#define PYTUPLE_SET_PYOBJECT(__tuple,__index,__node)	do {\
+	PyTuple_SetItem(__tuple,__index,__node);	\
+} while(0)
+
 #define PYASSTR_DECREF(__node) do { \
 	Py_DecRef((PyObject*)container_of((const char(*)[1])__node,PyBytesObject,ob_sval)); \
 } while(0)
