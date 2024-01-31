@@ -1,6 +1,9 @@
 #ifndef __MAPS_H__
 #define __MAPS_H__
 
+#include <stdbool.h>
+#include "rbtree.h"
+
 struct nfsdb_entryMap_node {
 	struct rb_node node;
 	unsigned long key;

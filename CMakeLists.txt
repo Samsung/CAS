@@ -338,6 +338,20 @@ target_include_directories(etrace PRIVATE "kflat/lib/include_priv")
 target_link_libraries(etrace PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
 add_dependencies(etrace uflat_library)
 
+add_library(ftdb_c SHARED
+    bas/ftdb.c
+    bas/maps.c
+)
+target_include_directories(ftdb_c PRIVATE "kflat/lib")
+target_include_directories(ftdb_c PRIVATE "kflat/include")
+target_include_directories(ftdb_c PRIVATE "kflat/lib/include_priv")
+target_link_libraries(ftdb_c PUBLIC stdc++)
+target_link_libraries(ftdb_c PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
+add_dependencies(ftdb_c uflat_library)
+target_compile_options(ftdb_c PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(ftdb_c PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
+install(TARGETS ftdb_c DESTINATION .)
+
 add_library(ftdb SHARED
         bas/pyftdb.c
         bas/maps.c
@@ -392,7 +406,6 @@ add_custom_command(OUTPUT libuflat_x86_64.a PRE_LINK
 add_custom_target(uflat_library DEPENDS libuflat_x86_64.a)
 
 
-
 target_include_directories(ftdb PRIVATE ${Python_INCLUDE_DIRS})
 target_link_libraries(ftdb PUBLIC ${Python_LIBRARIES})
 target_include_directories(ftdb PRIVATE "kflat/lib")
@@ -409,3 +422,16 @@ add_library(gcc_input_name SHARED
 target_compile_options(gcc_input_name PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-mismatched-tags>)
 target_include_directories(gcc_input_name PRIVATE ${gcc_plugin_include_directory}/include)
 install(TARGETS gcc_input_name DESTINATION .)
+
+add_executable(ftdb_sha256_test
+    tests/ftdb_sha256_test.c
+)
+target_compile_options(ftdb_sha256_test PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(ftdb_sha256_test PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
+target_include_directories(ftdb_sha256_test PRIVATE "bas")
+target_include_directories(ftdb_sha256_test PRIVATE "kflat/lib/include_priv")
+add_dependencies(ftdb_sha256_test ftdb_c)
+target_link_libraries(ftdb_sha256_test PRIVATE ftdb_c)
+target_link_libraries(ftdb_c PUBLIC crypto)
+set_target_properties(ftdb_sha256_test PROPERTIES  INSTALL_RPATH ..)
+install(TARGETS ftdb_sha256_test DESTINATION tests)
