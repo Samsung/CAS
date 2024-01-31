@@ -1,0 +1,21 @@
+[package]
+authors = ["Marcin Gliński <m.glinski@samsung.com>"]
+categories = ["external-ffi-bindings", "parsing"]
+description = "Bindings for ftdb"
+edition = "2021"
+exclude = ["ftdb_nopy.pc", "ftdb.pc", ".gitignore"]
+keywords = ["ftdb", "mbsec"]
+license-file = "LICENSE.md"
+name = "ftdb-sys"
+version = "0.4.0"
+links = "ftdb_c"
+
+[features]
+default = []
+stub = []
+
+[dependencies]
+libc = "0.2.150"
+
+[build-dependencies]
+bindgen = "0.69.1"

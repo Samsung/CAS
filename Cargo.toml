@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "rust/ftdb-sys",
+    "rust/ftdb",
+    "rust/examples/ftdb-info",
+    "rust/examples/find-globals"
+]
+
+resolver = "2"

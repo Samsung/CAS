@@ -1,0 +1,10 @@
+[package]
+name = "ftdb-info"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ftdb = { path = "../../ftdb"}
+
+[features]
+default = []
