@@ -466,8 +466,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_calls_no_asm(PyObject* self, void* closure
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_calls_no_asm) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_calls_no_asm' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_calls_no_asm);
@@ -479,8 +478,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known(PyObject* self, void* closu
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_calls_no_known) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_calls_no_known' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_calls_no_known);
@@ -492,8 +490,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_calls_no_known_no_asm(PyObject* self, void
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_calls_no_known_no_asm) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_calls_no_known_no_asm' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_calls_no_known_no_asm);
@@ -505,8 +502,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_func_calls(PyObject* self, void* closure) 
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_func_calls) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_func_calls' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_func_calls);
@@ -518,8 +514,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_func_refs(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_func_refs) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_func_refs' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_func_refs);
@@ -531,8 +526,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_funrefs_no_asm(PyObject* self, void* closu
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_funrefs_no_asm) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_funrefs_no_asm' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_funrefs_no_asm);
@@ -544,8 +538,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_funrefs_no_known(PyObject* self, void* clo
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_funrefs_no_known) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_funrefs_no_known' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_funrefs_no_known);
@@ -557,8 +550,7 @@ PyObject* libftdb_ftdb_get_funcs_tree_funrefs_no_known_no_asm(PyObject* self, vo
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->funcs_tree_funrefs_no_known_no_asm) {
-        PyErr_SetString(libftdb_ftdbError, "No 'funcs_tree_funrefs_no_known_no_asm' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->funcs_tree_funrefs_no_known_no_asm);
@@ -570,8 +562,7 @@ PyObject* libftdb_ftdb_get_globs_tree_globalrefs(PyObject* self, void* closure) 
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->globs_tree_globalrefs) {
-        PyErr_SetString(libftdb_ftdbError, "No 'globs_tree_globalrefs' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->globs_tree_globalrefs);
@@ -583,8 +574,7 @@ PyObject* libftdb_ftdb_get_types_tree_refs(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->types_tree_refs) {
-        PyErr_SetString(libftdb_ftdbError, "No 'types_tree_refs' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->types_tree_refs);
@@ -596,8 +586,7 @@ PyObject* libftdb_ftdb_get_types_tree_usedrefs(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->types_tree_usedrefs) {
-        PyErr_SetString(libftdb_ftdbError, "No 'types_tree_usedrefs' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     return libftdb_ftdb_get_matrix_data_as_dict(__self->ftdb->types_tree_usedrefs);
@@ -609,8 +598,7 @@ PyObject* libftdb_ftdb_get_static_funcs_map(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->static_funcs_map) {
-        PyErr_SetString(libftdb_ftdbError, "No 'static_funcs_map' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     PyObject* sfm = PyList_New(0);
@@ -633,8 +621,7 @@ PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->init_data) {
-        PyErr_SetString(libftdb_ftdbError, "No 'init_data' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     PyObject* init_data = PyList_New(0);
@@ -682,8 +669,7 @@ PyObject* libftdb_ftdb_get_known_data(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->known_data) {
-        PyErr_SetString(libftdb_ftdbError, "No 'known_data' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     PyObject* py_known_data_container = PyList_New(0);
@@ -708,8 +694,7 @@ PyObject* libftdb_ftdb_get_BAS(PyObject* self, void* closure) {
     FTDB_MODULE_INIT_CHECK;
 
     if (!__self->ftdb->BAS_data) {
-        PyErr_SetString(libftdb_ftdbError, "No 'BAS' field in ftdb module");
-        return 0;
+        Py_RETURN_NONE;
     }
 
     PyObject* py_BAS = PyList_New(0);
