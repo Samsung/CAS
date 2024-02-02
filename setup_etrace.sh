@@ -47,10 +47,11 @@ elif [ "$1" = "-i" ]; then
 	fi
 
 	# install module
-    echo "Trying to support wsl"
     SUPPORT_NS_PID=""
 	uname -r | grep WSL > /dev/null && SUPPORT_NS_PID="support_ns_pid=1"
-    echo SUPPORT_NS_PID=$SUPPORT_NS_PID
+	if [ ! -z "${SUPPORT_NS_PID}" ]; then
+		echo SUPPORT_NS_PID=$SUPPORT_NS_PID
+	fi
 	/sbin/modprobe bas_tracer root_pid="$2" "$SUPPORT_NS_PID" "${@:3}"
 	exit "$?"
 
