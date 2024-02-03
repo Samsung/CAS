@@ -608,8 +608,7 @@ PyObject* libftdb_ftdb_get_static_funcs_map(PyObject* self, void* closure) {
         PyObject* data = PyDict_New();
         FTDB_SET_ENTRY_ULONG(data,id,entry->id);
         FTDB_SET_ENTRY_ULONG_ARRAY(data,fids,entry->fids);
-        PyList_Append(sfm,data);
-        Py_DecRef(data);
+        PYLIST_ADD_PYOBJECT(sfm,data);
     }
 
     return sfm;
@@ -652,12 +651,10 @@ PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure) {
             FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,min_value,item->min_value);
             FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,value,item->value);
             FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,user_name,item->user_name);
-            PyList_Append(py_items,py_item);
-            Py_DecRef(py_item);
+            PYLIST_ADD_PYOBJECT(py_items,py_item);
         }
         FTDB_SET_ENTRY_PYOBJECT(py_init_data_entry,items,py_items);
-        PyList_Append(init_data,py_init_data_entry);
-        Py_DecRef(py_init_data_entry);
+        PYLIST_ADD_PYOBJECT(init_data,py_init_data_entry);
     }
 
     return init_data;
@@ -682,8 +679,7 @@ PyObject* libftdb_ftdb_get_known_data(PyObject* self, void* closure) {
     FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,lib_funcs_ids,__self->ftdb->known_data->lib_funcs_ids);
     FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,always_inc_funcs_ids,__self->ftdb->known_data->always_inc_funcs_ids);
     FTDB_SET_ENTRY_ULONG_ARRAY(py_known_data,replacement_ids,__self->ftdb->known_data->replacement_ids);
-    PyList_Append(py_known_data_container,py_known_data);
-    Py_DecRef(py_known_data);
+    PYLIST_ADD_PYOBJECT(py_known_data_container,py_known_data);
 
     return py_known_data_container;
 }
@@ -703,11 +699,43 @@ PyObject* libftdb_ftdb_get_BAS(PyObject* self, void* closure) {
         PyObject* py_BAS_entry = PyDict_New();
         FTDB_SET_ENTRY_STRING(py_BAS_entry,loc,entry->loc);
         FTDB_SET_ENTRY_STRING_ARRAY(py_BAS_entry,entries,entry->entries);
-        PyList_Append(py_BAS,py_BAS_entry);
-        Py_DecRef(py_BAS_entry);
+        PYLIST_ADD_PYOBJECT(py_BAS,py_BAS_entry);
     }
 
     return py_BAS;
+}
+
+PyObject* libftdb_ftdb_get_func_fptrs(PyObject* self, void* closure) {
+
+    libftdb_ftdb_object* __self = (libftdb_ftdb_object*)self;
+    FTDB_MODULE_INIT_CHECK;
+
+    if (!__self->ftdb->func_fptrs_data) {
+        Py_RETURN_NONE;
+    }
+
+    PyObject* py_func_fptrs = PyList_New(0);
+    for (Py_ssize_t i=0; i<__self->ftdb->func_fptrs_data_count; ++i) {
+        struct func_fptrs_item* entry = &__self->ftdb->func_fptrs_data[i];
+        PyObject* py_func_fptrs_entry = PyDict_New();
+        FTDB_SET_ENTRY_ULONG(py_func_fptrs_entry,_id,entry->id);
+        PyObject* py_entries = PyList_New(0);
+        for (Py_ssize_t j=0; j<entry->entries_count; ++j) {
+            struct func_fptrs_entry* item = &entry->entries[j];
+            PyObject* py_entry = PyTuple_New(2);
+            PYTUPLE_SET_STR(py_entry,0,item->fname);
+            PyObject* py_ids = PyList_New(0);
+            for (Py_ssize_t k=0; k<item->ids_count; ++k) {
+                PYLIST_ADD_ULONG(py_ids,item->ids[k]);
+            }
+            PYTUPLE_SET_PYOBJECT(py_entry,1,py_ids);
+            PYLIST_ADD_PYOBJECT(py_entries,py_entry);
+        }
+        FTDB_SET_ENTRY_PYOBJECT(py_func_fptrs_entry,entries,py_entries);
+        PYLIST_ADD_PYOBJECT(py_func_fptrs,py_func_fptrs_entry);
+    }
+
+    return py_func_fptrs;
 }
 
 PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice) {
@@ -839,6 +867,10 @@ PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice) {
     else if (!strcmp(attr,"BAS")) {
         PYASSTR_DECREF(attr);
         return libftdb_ftdb_get_BAS(self,0);
+    }
+    else if (!strcmp(attr,"func_fptrs")) {
+        PYASSTR_DECREF(attr);
+        return libftdb_ftdb_get_func_fptrs(self,0);
     }
     else if (!strcmp(attr,"funcdecln")) {
         PYASSTR_DECREF(attr);
@@ -1002,6 +1034,10 @@ int libftdb_ftdb_sq_contains(PyObject* self, PyObject* key) {
     else if (!strcmp(attr,"BAS")) {
         PYASSTR_DECREF(attr);
         return !!__self->ftdb->BAS_data;
+    }
+    else if (!strcmp(attr,"func_fptrs")) {
+        PYASSTR_DECREF(attr);
+        return !!__self->ftdb->func_fptrs_data;
     }
     else if (!strcmp(attr,"funcdecln")) {
         PYASSTR_DECREF(attr);
@@ -7777,6 +7813,7 @@ FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_type_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT(ftdb_fops_member_entry);
 FUNCTION_DECLARE_FLATTEN_STRUCT(bitfield);
+FUNCTION_DECLARE_FLATTEN_STRUCT(func_fptrs_item);
 
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(taint_data,
@@ -8108,6 +8145,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb,
     AGGREGATE_FLATTEN_STRUCT_ARRAY(init_data_entry,init_data,ATTR(init_data_count));
     AGGREGATE_FLATTEN_STRUCT(known_data_entry,known_data);
     AGGREGATE_FLATTEN_STRUCT_ARRAY(BAS_item,BAS_data,ATTR(BAS_data_count));
+    AGGREGATE_FLATTEN_STRUCT_ARRAY(func_fptrs_item,func_fptrs_data,ATTR(func_fptrs_data_count));
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_func_entry,
@@ -8256,6 +8294,15 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_member_entry,
 FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_fops_entry,
     AGGREGATE_FLATTEN_STRING(location);
     AGGREGATE_FLATTEN_STRUCT_ARRAY(ftdb_fops_member_entry,members,ATTR(members_count));
+);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT(func_fptrs_entry,
+    AGGREGATE_FLATTEN_STRING(fname);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(long*,ids,ATTR(ids_count));
+);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT(func_fptrs_item,
+    AGGREGATE_FLATTEN_STRUCT_ARRAY(func_fptrs_entry,entries,ATTR(entries_count));
 );
 
 /* TODO: memory leaks */
@@ -8822,7 +8869,7 @@ static void libftdb_create_ftdb_fops_entry(PyObject *self, PyObject* fops_entry,
     }
 }
 
-void fill_matrix_data_entry(PyObject* matrix_data_entry, struct matrix_data* new_entry) {
+static void fill_matrix_data_entry(PyObject* matrix_data_entry, struct matrix_data* new_entry) {
 
     for (Py_ssize_t i=0; i<PyList_Size(matrix_data_entry); ++i) {
         PyObject* entry = PyList_GetItem(matrix_data_entry,i);
@@ -8847,20 +8894,20 @@ void fill_matrix_data_entry(PyObject* matrix_data_entry, struct matrix_data* new
     }
 }
 
-void fill_func_map_entry_entry(PyObject* func_map_entry, struct func_map_entry* new_entry) {
+static void fill_func_map_entry_entry(PyObject* func_map_entry, struct func_map_entry* new_entry) {
 
     new_entry->id = FTDB_ENTRY_ULONG(func_map_entry,id);
     new_entry->fids_count = FTDB_ENTRY_ARRAY_SIZE(func_map_entry,fids);
     new_entry->fids = FTDB_ENTRY_ULONG_ARRAY(func_map_entry,fids);
 }
 
-void fill_size_dep_item_entry(PyObject* size_dep_item, struct size_dep_item* new_entry) {
+static void fill_size_dep_item_entry(PyObject* size_dep_item, struct size_dep_item* new_entry) {
 
     new_entry->id = FTDB_ENTRY_ULONG(size_dep_item,id);
     new_entry->add = FTDB_ENTRY_ULONG(size_dep_item,add);
 }
 
-void fill_init_data_item_entry(PyObject* data_item_entry, struct init_data_item* new_entry) {
+static void fill_init_data_item_entry(PyObject* data_item_entry, struct init_data_item* new_entry) {
 
     new_entry->id = FTDB_ENTRY_ULONG_OPTIONAL(data_item_entry,id);
     new_entry->name_count = FTDB_ENTRY_ARRAY_SIZE(data_item_entry,name);
@@ -8877,7 +8924,7 @@ void fill_init_data_item_entry(PyObject* data_item_entry, struct init_data_item*
         new_entry->user_name = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,user_name);
 }
 
-void fill_init_data_entry_entry(PyObject* init_data_entry, struct init_data_entry* new_entry) {
+static void fill_init_data_entry_entry(PyObject* init_data_entry, struct init_data_entry* new_entry) {
 
     new_entry->name = FTDB_ENTRY_STRING(init_data_entry,name);
     new_entry->order_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(init_data_entry,order);
@@ -8887,7 +8934,7 @@ void fill_init_data_entry_entry(PyObject* init_data_entry, struct init_data_entr
     new_entry->items = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(init_data_entry,items,init_data_item,new_entry->items_count);
 }
 
-void fill_known_data_entry_entry(PyObject* known_data_entry, struct known_data_entry* new_entry) {
+static void fill_known_data_entry_entry(PyObject* known_data_entry, struct known_data_entry* new_entry) {
 
     new_entry->version = FTDB_ENTRY_STRING(known_data_entry,version);
     new_entry->func_ids_count = FTDB_ENTRY_ARRAY_SIZE(known_data_entry,func_ids);
@@ -8906,11 +8953,28 @@ void fill_known_data_entry_entry(PyObject* known_data_entry, struct known_data_e
     new_entry->replacement_ids = FTDB_ENTRY_ULONG_ARRAY(known_data_entry,replacement_ids);
 }
 
-void fill_BAS_item_entry(PyObject* BAS_item_entry, struct BAS_item* new_entry) {
+static void fill_BAS_item_entry(PyObject* BAS_item_entry, struct BAS_item* new_entry) {
 
     new_entry->loc = FTDB_ENTRY_STRING(BAS_item_entry,loc);
     new_entry->entries_count = FTDB_ENTRY_ARRAY_SIZE(BAS_item_entry,entries);
     new_entry->entries = FTDB_ENTRY_STRING_ARRAY(BAS_item_entry,entries);
+}
+
+static void fill_func_fptrs_entry_entry(PyObject* func_fptrs_item_tuple, struct func_fptrs_entry* new_entry) {
+
+    new_entry->fname = PyString_get_c_str(PyTuple_GetItem(func_fptrs_item_tuple,0));
+    PyObject* py_ids = PyTuple_GetItem(func_fptrs_item_tuple,1);
+    new_entry->ids_count = PyList_Size(PyTuple_GetItem(func_fptrs_item_tuple,1));
+    new_entry->ids = calloc(new_entry->ids_count,sizeof(unsigned long));
+    for (unsigned long i=0; i<new_entry->ids_count; ++i) {
+        new_entry->ids[i] = PyLong_AsUnsignedLong(PyList_GetItem(py_ids,i));
+    }
+}
+
+static void fill_func_fptrs_item_entry(PyObject* func_fptrs_item_entry, struct func_fptrs_item* new_entry) {
+    new_entry->id = FTDB_ENTRY_ULONG(func_fptrs_item_entry,_id);
+    new_entry->entries_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(func_fptrs_item_entry,entries);
+    new_entry->entries = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(func_fptrs_item_entry,entries,func_fptrs_entry,new_entry->entries_count);
 }
 
 static void destroy_ftdb(struct ftdb* ftdb) {
@@ -9103,6 +9167,8 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
     ftdb.known_data = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(dbJSON,known_data,known_data_entry,1);
     ftdb.BAS_data_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(dbJSON,BAS);
     ftdb.BAS_data = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(dbJSON,BAS,BAS_item,ftdb.BAS_data_count);
+    ftdb.func_fptrs_data_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(dbJSON,func_fptrs);
+    ftdb.func_fptrs_data = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(dbJSON,func_fptrs,func_fptrs_item,ftdb.func_fptrs_data_count);
 
     int ok = ftdb_maps(&ftdb,show_stats);
     (void)ok;
@@ -9134,6 +9200,7 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
     if (ftdb.init_data) printf("init_data [%lu]: OK\n",ftdb.init_data_count);
     if (ftdb.known_data) printf("known_data: OK\n");
     if (ftdb.BAS_data) printf("BAS_data [%lu]: OK\n",ftdb.BAS_data_count);
+    if (ftdb.func_fptrs_data) printf("func_fptrs_data [%lu]: OK\n",ftdb.func_fptrs_data_count);
 
     const char* dbfn_s =  PyString_get_c_str(dbfn);
     struct uflat* uflat = uflat_init(dbfn_s);

@@ -98,6 +98,7 @@ PyObject* libftdb_ftdb_get_static_funcs_map(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_known_data(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_BAS(PyObject* self, void* closure);
+PyObject* libftdb_ftdb_get_func_fptrs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_sq_contains(PyObject* self, PyObject* key);
 
@@ -141,6 +142,7 @@ static PyGetSetDef libftdb_ftdb_getset[] = {
     {"init_data",libftdb_ftdb_get_init_data,0,"ftdb init_data object",0},
     {"known_data",libftdb_ftdb_get_known_data,0,"ftdb known_data object",0},
     {"BAS",libftdb_ftdb_get_BAS,0,"ftdb BAS object",0},
+    {"func_fptrs",libftdb_ftdb_get_func_fptrs,0,"ftdb func_fptrs object",0},
     {0,0,0,0,0},
 };
 

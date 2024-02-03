@@ -832,6 +832,18 @@ struct BAS_item {
     unsigned long entries_count;
 };
 
+struct func_fptrs_entry {
+    const char* fname;
+    unsigned long* ids;
+    unsigned long ids_count;
+};
+
+struct func_fptrs_item {
+    unsigned long id;
+    struct func_fptrs_entry* entries;
+    unsigned long entries_count;
+};
+
 struct ftdb {
     /* FTDB.img header - DO NOT modify */
     unsigned long long db_magic;
@@ -891,6 +903,8 @@ struct ftdb {
     struct known_data_entry* known_data;
     struct BAS_item* BAS_data;
     unsigned long BAS_data_count;
+    struct func_fptrs_item* func_fptrs_data;
+    unsigned long func_fptrs_data_count;
 };
 
 #endif /* __FTDB_H__ */
