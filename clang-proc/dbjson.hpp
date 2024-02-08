@@ -225,6 +225,8 @@ public:
           return "local";
         case FObjFunction:
           return "function";
+        default:
+          assert(0 && "Invalid Fops kind");
       }
     }
 
@@ -1131,7 +1133,7 @@ public:
 	  const ParmVarDecl* PVD;
 	  const CompoundStmt* CSPtr;
 	  const CompoundStmt* parentCSPtr;
-	  long varId;
+	  size_t varId;
   };
 
   enum ControlFlowKind{
@@ -1284,12 +1286,12 @@ public:
     std::set<QualType> refTypes;
     std::map<const VarDecl*,std::set<const DeclRefExpr*>>refVars;
     std::set<const FunctionDecl*> refFuncs;
-    long CSId;
+    size_t CSId;
     std::map<const CompoundStmt*,long> csIdMap;
     std::map<const CompoundStmt*,const CompoundStmt*> csParentMap;
     std::map<const CompoundStmt*,size_t> csInfoMap;
     std::vector<ControlFlowData> cfData;
-    long varId;
+    size_t varId;
     std::map<const VarDecl*,VarInfo_t> varMap;
     std::map<const IfStmt*,IfInfo_t> ifMap;
     std::map<const GCCAsmStmt*,GCCAsmInfo_t> asmMap;

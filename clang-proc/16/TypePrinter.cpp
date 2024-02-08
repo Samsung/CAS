@@ -1312,12 +1312,9 @@ void TypePrinter::printTag(TagDecl *D, raw_ostream &OS) {
     return;
   }
 
-  bool HasKindDecoration = false;
-
   // We don't print tags unless this is an elaborated type.
   // In C, we just assume every RecordType is an elaborated type.
   if (!Policy.SuppressTagKeyword && !D->getTypedefNameForAnonDecl()) {
-    HasKindDecoration = true;
     OS << D->getKindName();
     OS << ' ';
   }

@@ -121,7 +121,7 @@ cl::opt<bool> ptrMEOption("pm", cl::cat(ctCategory));
 cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
 
 cl::opt<bool> MultiOption("multi", cl::cat(ctCategory));
-cl::opt<int> ThreadCount("tc",cl::cat(ctCategory),cl::init(0));
+cl::opt<unsigned int> ThreadCount("tc",cl::cat(ctCategory),cl::init(0));
 
 std::string builtInIncludePath;
 std::map<std::string,std::string> macroReplacementTokens;
@@ -241,7 +241,7 @@ int main(int argc, const char **argv)
     multi::directory = optionsParser.getCompilations().getAllCompileCommands().front().Directory;
     multi::files.resize(AllFiles.size());
     if(MultiOption.getValue()){
-      int threadcount = ThreadCount.getValue() ?: std::thread::hardware_concurrency();
+      unsigned int threadcount = ThreadCount.getValue() ?: std::thread::hardware_concurrency();
       if(AllFiles.size()<threadcount)
         threadcount = AllFiles.size();
       llvm::errs()<<"LOG: "<<"Number of threads: "<<threadcount<<'\n';
@@ -249,7 +249,7 @@ int main(int argc, const char **argv)
       clang_prepare();
 
       std::vector<std::thread> ts;
-      for(int i=0;i<threadcount;i++){
+      while(threadcount--){
         ts.emplace_back(run,std::ref(optionsParser.getCompilations()),std::ref(AllFiles));
       }
 

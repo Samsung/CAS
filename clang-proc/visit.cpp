@@ -198,7 +198,6 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 
 	if (opts.cstmt && (!D->isDefinedOutsideFunctionOrMethod())) {
 		if (lastFunctionDef) {
-			++lastFunctionDef->varId;
 			struct DbJSONClassVisitor::VarInfo_t vi = {0,0,0,0};
 			if (currentWithinCS()) {
 				vi.CSPtr = getCurrentCSPtr();
@@ -206,7 +205,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 					vi.parentCSPtr = getParentCSPtr();
 				}
 			}
-			vi.varId = lastFunctionDef->varId;
+			vi.varId = lastFunctionDef->varId++;
 
 			if(D->getKind() == Decl::Kind::Var){
 				vi.VD = D;
@@ -577,8 +576,8 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 			funcSaved = true;
 			lastFunctionDef = &FuncMap[D];
 			lastFunctionDef->this_func = D;
-			lastFunctionDef->CSId = -1;
-			lastFunctionDef->varId = -1;
+			lastFunctionDef->CSId = 0;
+			lastFunctionDef->varId = 0;
 			if(opts.taint){
 				FuncMap[D].declcount = internal_declcount(D);
 				taint_params(D,FuncMap[D]);
@@ -800,8 +799,7 @@ bool DbJSONClassVisitor::VisitCompoundStmtStart(const CompoundStmt *CS) {
 		}
 		csStack.push_back(CS);
 		if (lastFunctionDef) {
-			++lastFunctionDef->CSId;
-			lastFunctionDef->csIdMap.insert(std::pair<const CompoundStmt*,long>(CS,lastFunctionDef->CSId));
+			lastFunctionDef->csIdMap.insert(std::pair<const CompoundStmt*,long>(CS,lastFunctionDef->CSId++));
 			lastFunctionDef->csParentMap.insert(std::pair<const CompoundStmt*,const CompoundStmt*>(CS,parentCS));
 		}
 	}

@@ -5102,7 +5102,7 @@ namespace multi{
     auto R = (usedrefs*)rv;
     std::lock_guard<std::mutex> lock(R->m);
     R->refs.resize(rIds.size());
-    for(int i = 0;i<rIds.size();i++){
+    for(size_t i = 0;i<rIds.size();i++){
       auto &ref = R->refs[i];
       if(rIds[i]>=0){
         ref.id = rIds[i];
@@ -5207,7 +5207,7 @@ namespace multi{
     db_file << "\t\"sourcen\": " << multi::files.size() << ",\n";
     db_file << "\t\"sources\": [\n";
     first = true;
-    for(int i = 0; i<multi::files.size();i++){
+    for(size_t i = 0; i<multi::files.size();i++){
       if(first) first = false;
       else db_file << ",\n";
       db_file<<"\t\t{ \"" << files.at(i) << "\" : " << i << " }";
@@ -5224,7 +5224,7 @@ namespace multi{
 
     db_file << "\t\"globals\": [\n";
     first = true;
-    for(int i = 0; i< VarId;i++){
+    for(size_t i = 0; i< VarId;i++){
       if(first) first = false;
       else db_file << ",\n";
       db_file<<*(Vars.at(i)->out);
@@ -5233,7 +5233,7 @@ namespace multi{
 
     db_file << "\t\"types\": [\n";
     first = true;
-    for(int i = 0; i< TypeId;i++){
+    for(size_t i = 0; i< TypeId;i++){
       if(first) first = false;
       else db_file << ",\n";
       db_file<<*(Types.at(i)->out);
@@ -5242,7 +5242,7 @@ namespace multi{
 
     db_file << "\t\"funcs\": [\n";
     first = true;
-    for(int i = 0; i< FuncId; i++){
+    for(size_t i = 0; i< FuncId; i++){
       if(Funcs.at(i)->kind == 0){
         FDecls.push_back(Funcs.at(i));
         continue;
@@ -5255,7 +5255,7 @@ namespace multi{
 
     db_file << "\t\"funcdecls\": [\n";
     first = true;
-    for(int i = 0; i< FuncDeclCnt;i++){
+    for(size_t i = 0; i< FuncDeclCnt;i++){
       if(first) first = false;
       else db_file << ",\n";
       db_file<<*(FDecls.at(i)->out);
@@ -5290,7 +5290,7 @@ namespace multi{
       vmap[v.second.id] = v.first;
       vtotal+=v.second.out.get()->length();
     }
-    for(int i =0;i<VarId;i++){
+    for(size_t i =0;i<VarId;i++){
       llvm::outs()<<"G"<< llvm::format_decimal(i,8)<<"  "<<vmap[i]<<'\n';
 
     }
@@ -5300,7 +5300,7 @@ namespace multi{
       tmap[t.second.id] = t.first;
       ttotal+=t.second.out.get()->length();
     }
-    for(int i =0;i<TypeId;i++){
+    for(size_t i =0;i<TypeId;i++){
       llvm::outs()<<"T"<< llvm::format_decimal(i,8)<<"  "<<tmap[i]<<'\n';
     }
 
@@ -5310,7 +5310,7 @@ namespace multi{
       assert(f.second.out && "Somehow empty pointer...");
       ftotal+=f.second.out.get()->length();
     }
-    for(int i =0;i<FuncId;i++){
+    for(size_t i =0;i<FuncId;i++){
       llvm::outs()<<"F"<< llvm::format_decimal(i,8)<<"  "<<fmap[i]<<'\n';
     }
 

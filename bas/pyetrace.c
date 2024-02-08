@@ -2825,7 +2825,7 @@ static int pure_paths_single_filter(struct file_filter* flt) {
 	if ((flt->filter_set[1].func) && ((enum file_class)flt->filter_set[1].arg<=FILE_CLASS_PLAIN)) { /* class */
 		return 0;
 	}
-	if ((flt->filter_set[3].func) && ((enum file_class)flt->filter_set[3].arg<=ACCESS_RW)) { /* access */
+	if ((flt->filter_set[3].func) && ((enum file_access)flt->filter_set[3].arg<=ACCESS_RW)) { /* access */
 		return 0;
 	}
 	if (flt->filter_set[5].func) { /* srctype */
@@ -5699,14 +5699,14 @@ PyObject* libetrace_nfsdb_entry_openfile_json(libetrace_nfsdb_entry_openfile_obj
 
 PyObject* libetrace_nfsdb_entry_openfile_repr(PyObject* self) {
 
-	static char repr[1024];
+	static char repr[1088];
 
 	libetrace_nfsdb_entry_openfile_object* __self = (libetrace_nfsdb_entry_openfile_object*)self;
 	int written = snprintf(repr,1024,"<nfsdbOpenfileEntry object at %lx : ",(uintptr_t)self);
 	size_t path_size = __self->nfsdb->string_size_table[__self->path];
 	if (66+path_size-3>=1024-written) {
 		snprintf(repr+written,1024-written-64+1,"path:%s",__self->nfsdb->string_table[__self->path]);
-		snprintf(repr+1024-64,64,"...|mode:%08lx|size:%010lu|nfsdb:%08lx|index:%08lx>",
+		snprintf(repr+1024-64,128,"...|mode:%08lx|size:%010lu|nfsdb:%08lx|index:%08lx>",
 			__self->mode,__self->size,__self->parent,__self->index);
 	}
 	else {
