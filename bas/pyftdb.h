@@ -101,9 +101,13 @@ PyObject* libftdb_ftdb_get_BAS(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_get_func_fptrs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_get_BAS_item_by_loc(libftdb_ftdb_object* self, PyObject* args, PyObject* kwargs);
+PyObject* libftdb_ftdb_get_func_map_entry__by_id(libftdb_ftdb_object* self, PyObject* args, PyObject* kwargs);
 
 static PyMethodDef libftdb_ftdb_methods[] = {
     {"load",(PyCFunction)libftdb_ftdb_load,METH_VARARGS|METH_KEYWORDS,"Load the database cache file"},
+    {"get_BAS_item_by_loc",(PyCFunction)libftdb_ftdb_get_BAS_item_by_loc,METH_VARARGS|METH_KEYWORDS,"Get the BAS_item based on its location"},
+    {"get_func_map_entry_by_id",(PyCFunction)libftdb_ftdb_get_func_map_entry__by_id,METH_VARARGS|METH_KEYWORDS,"Get the func_map_entry based on its id"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 

@@ -1072,6 +1072,42 @@ int libftdb_ftdb_sq_contains(PyObject* self, PyObject* key) {
     return 0;
 }
 
+PyObject* libftdb_ftdb_get_BAS_item_by_loc(libftdb_ftdb_object* self, PyObject* args, PyObject* kwargs) {
+
+    const char* loc;
+    if(!PyArg_ParseTuple(args, "s", &loc))
+        return NULL;
+
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->BAS_data_index,loc);
+    if (!node) {
+        Py_RETURN_NONE;
+    }
+
+    struct BAS_item* entry = (struct BAS_item*)node->entry;
+    PyObject* py_BAS_entry = PyDict_New();
+    FTDB_SET_ENTRY_STRING(py_BAS_entry,loc,entry->loc);
+    FTDB_SET_ENTRY_STRING_ARRAY(py_BAS_entry,entries,entry->entries);
+    return py_BAS_entry;
+}
+
+PyObject* libftdb_ftdb_get_func_map_entry__by_id(libftdb_ftdb_object* self, PyObject* args, PyObject* kwargs) {
+
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
+
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->static_funcs_map_index,id);
+    if (!node) {
+        Py_RETURN_NONE;
+    }
+
+    struct func_map_entry* entry = (struct func_map_entry*)node->entry;
+    PyObject* py_func_map_entry = PyDict_New();
+    FTDB_SET_ENTRY_ULONG(py_func_map_entry,id,entry->id);
+    FTDB_SET_ENTRY_ULONG_ARRAY(py_func_map_entry,fids,entry->fids);
+    return py_func_map_entry;
+}
+
 void libftdb_ftdb_sources_dealloc(libftdb_ftdb_sources_object* self) {
 
     Py_DecRef((PyObject*)self->py_ftdb);
@@ -7932,6 +7968,7 @@ FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_func_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_funcdecl_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_ulong_static_funcs_map_entryMap);
 
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_type_entryMap,
@@ -7966,10 +8003,21 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_global_entryMap,
     AGGREGATE_FLATTEN_STRUCT(ftdb_global_entry,entry);
 );
 
+FUNCTION_DECLARE_FLATTEN_STRUCT(func_map_entry);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_ulong_static_funcs_map_entryMap,
+    AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_ulong_static_funcs_map_entryMap,node.__rb_parent_color,
+            ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_static_funcs_map_entryMap,node.rb_right);
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_static_funcs_map_entryMap,node.rb_left);
+    AGGREGATE_FLATTEN_STRUCT(func_map_entry,entry);
+);
+
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_funcdecl_entryMap);
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap);
+FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_BAS_data_entryMap);
 
 
 FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_type_entryMap,
@@ -8006,6 +8054,17 @@ FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,
     AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_global_entryMap,node.rb_left);
     AGGREGATE_FLATTEN_STRING(key);
     AGGREGATE_FLATTEN_STRUCT(ftdb_global_entry,entry);
+);
+
+FUNCTION_DECLARE_FLATTEN_STRUCT(BAS_item);
+
+FUNCTION_DEFINE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_BAS_data_entryMap,
+    AGGREGATE_FLATTEN_STRUCT_TYPE_EMBEDDED_POINTER(ftdb_stringRef_BAS_data_entryMap,node.__rb_parent_color,
+            ptr_clear_2lsb_bits,flatten_ptr_restore_2lsb_bits);
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_BAS_data_entryMap,node.rb_right);
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_BAS_data_entryMap,node.rb_left);
+    AGGREGATE_FLATTEN_STRING(key);
+    AGGREGATE_FLATTEN_STRUCT(BAS_item,entry);
 );
 
 FUNCTION_DECLARE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_func_entryListMap);
@@ -8146,6 +8205,9 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb,
     AGGREGATE_FLATTEN_STRUCT(known_data_entry,known_data);
     AGGREGATE_FLATTEN_STRUCT_ARRAY(BAS_item,BAS_data,ATTR(BAS_data_count));
     AGGREGATE_FLATTEN_STRUCT_ARRAY(func_fptrs_item,func_fptrs_data,ATTR(func_fptrs_data_count));
+
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_ulong_static_funcs_map_entryMap,static_funcs_map_index.rb_node);
+    AGGREGATE_FLATTEN_STRUCT_TYPE(ftdb_stringRef_BAS_data_entryMap,BAS_data_index.rb_node);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(ftdb_func_entry,
@@ -9172,6 +9234,18 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
 
     int ok = ftdb_maps(&ftdb,show_stats);
     (void)ok;
+
+    for (unsigned long i=0; i<ftdb.static_funcs_map_count; ++i) {
+        struct func_map_entry* entry = &ftdb.static_funcs_map[i];
+        ulong_entryMap_insert(&ftdb.static_funcs_map_index,entry->id,entry);
+    }
+    printf("static_funcs_map_index keys: %zu\n",ulong_entryMap_count(&ftdb.static_funcs_map_index));
+
+    for (unsigned long i=0; i<ftdb.BAS_data_count; ++i) {
+        struct BAS_item* item = &ftdb.BAS_data[i];
+        stringRef_entryMap_insert(&ftdb.BAS_data_index,item->loc,item);
+    }
+    printf("BAS_data_index keys: %zu\n",stringRef_entryMap_count(&ftdb.BAS_data_index));
 
     printf("funcs count: %ld\n",PyList_Size(funcs));
     printf("funcs entry count: %zu\n",ftdb.funcs_count);

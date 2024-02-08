@@ -19,7 +19,7 @@ struct ftdb_type_entry* libftdb_c_get_type_entry_by_id(CFtdb ftdb_c, unsigned lo
  * FTDB_VERSION - required libftdb version to support file
  */
 #define FTDB_MAGIC_NUMBER		0x4244544642494cULL		/* b'LIBFTDB\0' */
-#define FTDB_VERSION			4ULL
+#define FTDB_VERSION			5ULL
 
 
 enum functionLinkage {
@@ -905,6 +905,8 @@ struct ftdb {
     unsigned long BAS_data_count;
     struct func_fptrs_item* func_fptrs_data;
     unsigned long func_fptrs_data_count;
+    struct rb_root BAS_data_index;
+    struct rb_root static_funcs_map_index;
 };
 
 #endif /* __FTDB_H__ */

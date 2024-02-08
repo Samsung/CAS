@@ -100,6 +100,7 @@ typedef struct ulong_entryMap_node ftdb_ulong_type_entryMap;
 typedef struct ulong_entryMap_node ftdb_ulong_func_entryMap;
 typedef struct ulong_entryMap_node ftdb_ulong_funcdecl_entryMap;
 typedef struct ulong_entryMap_node ftdb_ulong_global_entryMap;
+typedef struct ulong_entryMap_node ftdb_ulong_static_funcs_map_entryMap;
 
 struct stringRef_entryMap_node {
 	struct rb_node node;
@@ -111,6 +112,7 @@ typedef struct stringRef_entryMap_node ftdb_stringRef_type_entryMap;
 typedef struct stringRef_entryMap_node ftdb_stringRef_func_entryMap;
 typedef struct stringRef_entryMap_node ftdb_stringRef_funcdecl_entryMap;
 typedef struct stringRef_entryMap_node ftdb_stringRef_global_entryMap;
+typedef struct stringRef_entryMap_node ftdb_stringRef_BAS_data_entryMap;
 
 struct stringRef_entryListMap_node {
 	struct rb_node node;
