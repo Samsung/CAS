@@ -848,18 +848,18 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 
 	if (!p) {
 		pr_err("tracepoint_probe_exec: task_struct is null\n");
-		goto release_tpid;
+		goto out;
 	}
 
 	if (!bprm) {
 		pr_err("tracepoint_probe_exec: bprm is null\n");
-		goto release_tpid;
+		goto out;
 	}
 
 	mm = p->mm; // TODO should use get_task_mm()?
 	if (!mm) {
 		pr_err("tracepoint_probe_exec: mm is null\n");
-		goto release_tpid;
+		goto out;
 	}
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5,8,0)
@@ -876,7 +876,7 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 #endif
 
 	if (arg_start >= arg_end)
-		goto release_tpid;
+		goto out;
 
 	args_size = arg_end - arg_start;
 	pr_debug("args start: %lx, end: %lx, len: %ld\n",
@@ -886,12 +886,13 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	if (p->fs) {
 		get_fs_pwd(p->fs, &cwd_path);
 		cwd_path_buf = get_pathstr_from_path(&cwd_path, &cwd_tmp_buf);
+		path_put(&cwd_path);
 	}
 	task_unlock(p);
 
 	if (!cwd_path_buf) {
 		pr_warn("tracepoint_probe_exec: failed to get cwd path\n");
-		goto clean_cwd_path;
+		goto out;
 	}
 	cwd_size = strlen(cwd_path_buf);
 
@@ -901,12 +902,13 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	err = kern_path(bprm->filename, 0, &pp_path);
 	if (err) {
 		pr_warn("tracepoint_probe_exec: kern_path(bprm->filename) failed\n");
-		goto clean_cwd;
+		goto out;
 	}
 	pp_path_buf = get_pathstr_from_path(&pp_path, &pp_tmp_buf);
+	path_put(&pp_path);
 	if (!pp_path_buf) {
 		pr_warn("tracepoint_probe_exec: failed to get PP path\n");
-		goto clean_cwd_pp_path;
+		goto out;
 	}
 	filename_size = strlen(pp_path_buf);
 
@@ -915,12 +917,13 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	err = kern_path(bprm->interp, 0, &pi_path);
 	if (err) {
 		pr_warn("tracepoint_probe_exec: kern_path(bprm->interp) failed\n");
-		goto clean_cwd_pp;
+		goto out;
 	}
 	pi_path_buf = get_pathstr_from_path(&pi_path, &pi_tmp_buf);
+	path_put(&pi_path);
 	if (!pi_path_buf) {
 		pr_warn("tracepoint_probe_exec: failed to get PI path\n");
-		goto clean_cwd_pp_pi_path;
+		goto out;
 	}
 	interp_size = strlen(pi_path_buf);
 
@@ -933,18 +936,10 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	print_exec_args(tpid->upid, p, arg_start, args_size);
 
 
+out:
 	kfree(pi_tmp_buf);
-clean_cwd_pp_pi_path:
-	path_put(&pi_path);
-clean_cwd_pp:
 	kfree(pp_tmp_buf);
-clean_cwd_pp_path:
-	path_put(&pp_path);
-clean_cwd:
 	kfree(cwd_tmp_buf);
-clean_cwd_path:
-	path_put(&cwd_path);
-release_tpid:
 	release_traced_pid(tpid);
 }
 
@@ -992,6 +987,7 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		}
 
 		path_buf = get_pathstr_from_path(&from, &tmp_buf);
+		path_put(&from);
 		if (!path_buf) {
 			break;
 		}
@@ -1035,6 +1031,7 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		}
 
 		path_buf = get_pathstr_from_path(&from, &tmp_buf);
+		path_put(&from);
 		if (!path_buf) {
 			break;
 		}
@@ -1232,8 +1229,10 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 						goto open_exit2;
 					}
 					dir_path = f->f_path;
+					path_get(&dir_path);
 				}
 				dir_path_retbuf = get_pathstr_from_path(&dir_path, &dir_path_tmpbuf);
+				path_put(&dir_path);
 				if (!dir_path_retbuf) {
 					pr_warn("sys_exit_open: failed to resolve at_dir path\n");
 					goto open_exit2;
@@ -1350,6 +1349,7 @@ open_exit:
 		}
 
 		path_buf = get_pathstr_from_path(&to, &tmp_buf);
+		path_put(&to);
 		if (!path_buf) {
 			break;
 		}
@@ -1392,6 +1392,7 @@ open_exit:
 		}
 
 		path_buf = get_pathstr_from_path(&to, &tmp_buf);
+		path_put(&to);
 		if (!path_buf) {
 			break;
 		}
@@ -1407,8 +1408,8 @@ open_exit:
 	case __NR_symlinkat: {
 		struct path target, to;
 		char __user *user_str, __user *user_target_str;
-		char *path_buf, *tmp_buf, *resolved_target_tmp_buf,
-		     *resolved_target_str, *target_str;
+		char *path_buf, *tmp_buf, *resolved_target_tmp_buf = NULL,
+		     *resolved_target_str, *target_str = NULL;
 		int err, target_resolve_err, dir_fd;
 		unsigned long len, target_len, resolved_target_len;
 		bool target_resolved = false;
@@ -1467,6 +1468,7 @@ open_exit:
 			pr_warn("sys_exit_symlink: user_path_at(target) failed\n");
 		} else {
 			resolved_target_str = get_pathstr_from_path(&target, &resolved_target_tmp_buf);
+			path_put(&target);
 			if (resolved_target_str) {
 				resolved_target_len = strlen(resolved_target_str);
 				target_resolved = true;
@@ -1474,9 +1476,10 @@ open_exit:
 		}
 
 		path_buf = get_pathstr_from_path(&to, &tmp_buf);
+		path_put(&to);
 		if (!path_buf) {
-			if (target_resolved)
-				kfree(resolved_target_tmp_buf);
+			kfree(resolved_target_tmp_buf);
+			kfree(target_str);
 			break;
 		}
 		len = strlen(path_buf);
@@ -1492,7 +1495,6 @@ open_exit:
 			print_long_string(tpid->upid, path_buf, len, "!SL",
 					  current);
 
-			kfree(resolved_target_tmp_buf);
 		} else {
 			PRINT_TRACE(tpid->upid,
 				    "!Symlink|targetnamesize=%ld,linknamesize=%ld",
@@ -1503,6 +1505,8 @@ open_exit:
 					  current);
 		}
 
+		kfree(resolved_target_tmp_buf);
+		kfree(target_str);
 		kfree(tmp_buf);
 		break;
 	}
