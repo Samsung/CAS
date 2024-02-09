@@ -1137,7 +1137,10 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 				// todo synchronization
 				goto out;
 			}
+
+			path_get(&f->f_path);
 			retbuf = d_path(&f->f_path, tmpbuf, trysize);
+			path_put(&f->f_path);
 			if (IS_ERR(retbuf)) {
 				kfree(tmpbuf);
 				trysize *= 2;
@@ -1408,7 +1411,7 @@ open_exit:
 	case __NR_symlinkat: {
 		struct path target, to;
 		char __user *user_str, __user *user_target_str;
-		char *path_buf, *tmp_buf, *resolved_target_tmp_buf = NULL,
+		char *path_buf, *tmp_buf = NULL, *resolved_target_tmp_buf = NULL,
 		     *resolved_target_str, *target_str = NULL;
 		int err, target_resolve_err, dir_fd;
 		unsigned long len, target_len, resolved_target_len;
@@ -1429,23 +1432,30 @@ open_exit:
 			dir_fd = (int) regs->si;
 		}
 		err = user_path_at(dir_fd, user_str, 0, &to);
-
 		if (err) {
 			pr_warn("sys_exit_symlink: user_path_at(to) failed\n");
 			break;
 		}
+
+		path_buf = get_pathstr_from_path(&to, &tmp_buf);
+		path_put(&to);
+		if (!path_buf)
+			break;
+		len = strlen(path_buf);
 
 		user_target_str = (char __user *) regs->di;
 
 		target_len = strnlen_user(user_target_str, 4096*32);
 		if (!target_len) {
 			pr_warn("sys_exit_symlink: strnlen_user failed\n");
+			kfree(tmp_buf);
 			break;
 		}
 
 		target_str = kmalloc(target_len, GFP_KERNEL);
 		if (!target_str) {
 			pr_warn("sys_exit_symlink: kalloc for target string failed\n");
+			kfree(tmp_buf);
 			break;
 		}
 
@@ -1453,6 +1463,7 @@ open_exit:
 				      user_target_str, target_len) < 0) {
 			pr_warn("sys_exit_symlink: strncpy_from_user failed\n");
 			kfree(target_str);
+			kfree(tmp_buf);
 			break;
 		}
 
@@ -1474,15 +1485,6 @@ open_exit:
 				target_resolved = true;
 			}
 		}
-
-		path_buf = get_pathstr_from_path(&to, &tmp_buf);
-		path_put(&to);
-		if (!path_buf) {
-			kfree(resolved_target_tmp_buf);
-			kfree(target_str);
-			break;
-		}
-		len = strlen(path_buf);
 
 		if (target_resolved) {
 			PRINT_TRACE(tpid->upid,
