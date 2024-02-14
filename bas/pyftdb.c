@@ -671,6 +671,7 @@ PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure) {
             FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,min_value,item->min_value);
             FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,value,item->value);
             FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,user_name,item->user_name);
+            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,protected,item->protected_var);
             PYLIST_ADD_PYOBJECT(py_items,py_item);
         }
         FTDB_SET_ENTRY_PYOBJECT(py_init_data_entry,items,py_items);
@@ -8254,6 +8255,7 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_item,
         AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,max_value,1);
         AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,value,1);
         AGGREGATE_FLATTEN_STRING(user_name);
+        AGGREGATE_FLATTEN_STRING(protected_var);
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_entry,
@@ -9110,10 +9112,11 @@ static void fill_init_data_item_entry(PyObject* data_item_entry, struct init_dat
     new_entry->tagged = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,tagged);
     new_entry->fuzz = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,fuzz);
     new_entry->pointer = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,pointer);
-        new_entry->min_value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,min_value);
-        new_entry->max_value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,max_value);
-        new_entry->value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,value);
-        new_entry->user_name = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,user_name);
+    new_entry->min_value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,min_value);
+    new_entry->max_value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,max_value);
+    new_entry->value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,value);
+    new_entry->user_name = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,user_name);
+    new_entry->protected_var = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,protected);
 }
 
 static void fill_init_data_entry_entry(PyObject* init_data_entry, struct init_data_entry* new_entry) {

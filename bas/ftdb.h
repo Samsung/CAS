@@ -793,10 +793,11 @@ struct init_data_item {
     const char* tagged;
     const char* fuzz;
     const char* pointer;
-        long* min_value;
-        long* max_value;
-        long* value;
-        const char* user_name;
+    long* min_value;
+    long* max_value;
+    long* value;
+    const char* user_name;
+    const char* protected_var;
 };
 
 struct init_data_entry {
