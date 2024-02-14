@@ -26,6 +26,7 @@ int ftdb_maps(struct ftdb* ftdb, int show_stats);
 }
 #endif
 
+PyObject * libftdb_generic_richcompare(PyObject *self, PyObject *other, int op);
 PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject *kwargs);
 PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args);
 extern PyObject *libftdb_ftdbError;
@@ -704,6 +705,7 @@ static PyTypeObject libftdb_ftdbFuncCallInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncCallInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncCallInfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncCallInfoEntry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncCallInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncCallInfoEntry_members,
@@ -726,8 +728,10 @@ PyObject* libftdb_ftdb_func_switchinfo_entry_get_condition(PyObject* self, void*
 PyObject* libftdb_ftdb_func_switchinfo_entry_get_cases(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_switchinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_switchinfo_entry_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_func_switchinfo_entry_json(libftdb_ftdb_func_switchinfo_entry_object *self, PyObject *args);
 
 static PyMethodDef libftdb_ftdbFuncSwitchInfoEntry_methods[] = {
+    {"json",(PyCFunction)libftdb_ftdb_func_switchinfo_entry_json,METH_VARARGS,"Returns the json representation of the switchinfo entry"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -758,6 +762,7 @@ static PyTypeObject libftdb_ftdbFuncSwitchInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncSwitchInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncSwitchInfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncSwitchInfoEntry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncSwitchInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncSwitchInfoEntry_members,
@@ -780,8 +785,10 @@ PyObject* libftdb_ftdb_func_ifinfo_entry_get_csid(PyObject* self, void* closure)
 PyObject* libftdb_ftdb_func_ifinfo_entry_get_refs(PyObject* self, void* closure);
 PyObject* libftdb_ftdb_func_ifinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_ifinfo_entry_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_func_ifinfo_entry_json(libftdb_ftdb_func_ifinfo_entry_object *self, PyObject *args);
 
 static PyMethodDef libftdb_ftdbFuncIfInfoEntry_methods[] = {
+    {"json",(PyCFunction)libftdb_ftdb_func_ifinfo_entry_json,METH_VARARGS,"Returns the json representation of the ifinfo entry"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -812,6 +819,7 @@ static PyTypeObject libftdb_ftdbFuncIfInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncIfInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncIfnfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncIfInfoEntry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncIfInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncIfInfoEntry_members,
@@ -841,10 +849,11 @@ PyObject* libftdb_ftdb_func_localinfo_entry_get_location(PyObject* self, void* c
 PyObject* libftdb_ftdb_func_localinfo_entry_has_csid(libftdb_ftdb_func_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_func_localinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_localinfo_entry_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_func_localinfo_entry_json(libftdb_ftdb_func_localinfo_entry_object *self, PyObject *args);
 
 static PyMethodDef libftdb_ftdbFuncLocalInfoEntry_methods[] = {
-    {"has_csid",(PyCFunction)libftdb_ftdb_func_localinfo_entry_has_csid,METH_VARARGS,
-            "Returns True if func localinfo entry has the csid entry"},
+    {"has_csid",(PyCFunction)libftdb_ftdb_func_localinfo_entry_has_csid,METH_VARARGS,"Returns True if func localinfo entry has the csid entry"},
+    {"json",(PyCFunction)libftdb_ftdb_func_localinfo_entry_json,METH_VARARGS,"Returns the json representation of the localinfo entry"},
     {NULL, NULL, 0, NULL}        /* Sentinel */
 };
 
@@ -881,6 +890,7 @@ static PyTypeObject libftdb_ftdbFuncLocalInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncLocalInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncLocalInfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncLocalInfoEntry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncLocalInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncLocalInfoEntry_members,
@@ -960,6 +970,7 @@ static PyTypeObject libftdb_ftdbFuncDerefInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncDerefInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncDerefInfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncDerefInfoEntry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncDerefInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncDerefInfoEntry_members,
@@ -969,8 +980,6 @@ static PyTypeObject libftdb_ftdbFuncDerefInfoEntryType = {
 
 typedef struct {
     PyObject_HEAD
-    unsigned long func_index;
-    unsigned long deref_index;
     unsigned long entry_index;
     struct offsetref_info* entry;
     const libftdb_ftdb_func_derefinfo_entry_object* deref_entry;
@@ -989,6 +998,7 @@ PyObject* libftdb_ftdb_func_offsetrefinfo_entry_has_cast(libftdb_ftdb_func_offse
 PyObject* libftdb_ftdb_func_offsetrefinfo_entry_json(libftdb_ftdb_func_offsetrefinfo_entry_object *self, PyObject *args);
 PyObject* libftdb_ftdb_func_offsetrefinfo_entry_mp_subscript(PyObject* self, PyObject* slice);
 int libftdb_ftdb_func_offsetrefinfo_entry_sq_contains(PyObject* self, PyObject* key);
+PyObject* libftdb_ftdb_func_offsetrefinfo_entry_richcompare(PyObject *self, PyObject *other, int op);
 
 static PyMethodDef libftdb_ftdbFuncOffsetrefInfoEntry_methods[] = {
     {"has_cast",(PyCFunction)libftdb_ftdb_func_offsetrefinfo_entry_has_cast,METH_VARARGS,"Returns True if the offsetref entry contains cast information"},
@@ -1027,6 +1037,7 @@ static PyTypeObject libftdb_ftdbFuncOffsetrefInfoEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncOffsetrefInfoEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncOffsetrefInfoEntry_mapping_methods,
     .tp_doc = "libftdb ftdbFuncOffsetrefInfoEntry object",
+    .tp_richcompare = libftdb_ftdb_func_offsetrefinfo_entry_richcompare,
     .tp_iter = 0,
     .tp_methods = libftdb_ftdbFuncOffsetrefInfoEntry_methods,
     .tp_members = libftdb_ftdbFuncOffsetrefInfoEntry_members,
@@ -1215,6 +1226,7 @@ static PyTypeObject libftdb_ftdbFuncdeclsEntryType = {
     .tp_as_sequence = &libftdb_ftdbFuncdeclEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncdeclEntry_mapping_methods,
     .tp_doc = "libftdb ftdb funcdecl entry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_methods = libftdb_ftdbFuncdeclEntry_methods,
     .tp_members = libftdb_ftdbFuncdeclEntry_members,
     .tp_getset = &libftdb_ftdbFuncdeclEntry_getset[0],
@@ -1475,6 +1487,7 @@ static PyTypeObject libftdb_ftdbGlobalEntryType = {
     .tp_as_sequence = &libftdb_ftdbGlobalEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbGlobalEntry_mapping_methods,
     .tp_doc = "libftdb ftdb global entry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_methods = libftdb_ftdbGlobalEntry_methods,
     .tp_members = libftdb_ftdbGlobalEntry_members,
     .tp_getset = &libftdb_ftdbGlobalEntry_getset[0],
@@ -1840,6 +1853,7 @@ static PyTypeObject libftdb_ftdbFopsEntryType = {
     .tp_as_sequence = &libftdb_ftdbFopsEntry_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFopsEntry_mapping_methods,
     .tp_doc = "libftdb ftdb fops entry object",
+    .tp_richcompare = libftdb_generic_richcompare,
     .tp_methods = libftdb_ftdbFopsEntry_methods,
     .tp_members = libftdb_ftdbFopsEntry_members,
     .tp_getset = &libftdb_ftdbFopsEntry_getset[0],

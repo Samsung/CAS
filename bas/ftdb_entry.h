@@ -422,6 +422,15 @@
 		Py_DecRef(val_##__name);	\
 	} while(0)
 
+#define FTDB_SET_ENTRY_LONG(__json,__name,__node)	\
+	do {	\
+		PyObject* key_##__name = PyUnicode_FromString(#__name);	\
+		PyObject* val_##__name = PyLong_FromLong(__node);	\
+		PyDict_SetItem(__json,key_##__name,val_##__name);	\
+		Py_DecRef(key_##__name);	\
+		Py_DecRef(val_##__name);	\
+	} while(0)
+
 #define FTDB_SET_ENTRY_ULONG_OPTIONAL(__json,__name,__node)	\
 	do {	\
 		if (__node) {	\

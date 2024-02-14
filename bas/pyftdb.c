@@ -36,6 +36,26 @@ static const char* PyString_get_c_str(PyObject* s) {
     }
 }
 
+PyObject* libftdb_generic_richcompare(PyObject *self, PyObject *other, int op) {
+    if(op != Py_EQ && op != Py_NE)
+        Py_RETURN_NOTIMPLEMENTED;
+    if(self == other)
+        Py_RETURN_TRUE;
+
+    if (Py_TYPE(self) != Py_TYPE(other))
+        Py_RETURN_NOTIMPLEMENTED;
+    
+    PyObject* self_json = PyObject_CallMethod(self, "json", "");
+    PyObject* other_json = PyObject_CallMethod(other, "json", "");
+    bool compare = PyObject_RichCompareBool(self_json, other_json, op);
+    Py_DECREF(self_json);
+    Py_DECREF(other_json);
+
+    if(compare) 
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
+}
+
 PyObject *libftdb_ftdbError;
 
 void libftdb_ftdb_dealloc(libftdb_ftdb_object* self) {
@@ -3721,6 +3741,44 @@ int libftdb_ftdb_func_switchinfo_entry_sq_contains(PyObject* self, PyObject* key
     return 0;
 }
 
+PyObject* libftdb_ftdb_func_switchinfo_entry_json(libftdb_ftdb_func_switchinfo_entry_object *self, PyObject *args) {
+
+    libftdb_ftdb_func_switchinfo_entry_object* __self = (libftdb_ftdb_func_switchinfo_entry_object*)self;
+    PyObject* py_switchinfo_entry = PyDict_New();
+
+    PyObject* cases = PyList_New(0);
+    for (unsigned long i=0; i<__self->entry->cases_count; ++i) {
+        struct case_info* case_info = &__self->entry->cases[i];
+        if (!case_info->rhs) {
+            PyObject* py_case_info = PyList_New(0);
+            PYLIST_ADD_LONG(py_case_info,case_info->lhs.expr_value);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.enum_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.macro_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.raw_code);
+            PyList_Append(cases,py_case_info);
+            Py_DecRef(py_case_info);
+        }
+        else {
+            PyObject* py_case_info = PyList_New(0);
+            PYLIST_ADD_LONG(py_case_info,case_info->lhs.expr_value);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.enum_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.macro_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->lhs.raw_code);
+            PYLIST_ADD_LONG(py_case_info,case_info->rhs->expr_value);
+            PYLIST_ADD_STRING(py_case_info,case_info->rhs->enum_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->rhs->macro_code);
+            PYLIST_ADD_STRING(py_case_info,case_info->rhs->raw_code);
+            PyList_Append(cases,py_case_info);
+            Py_DecRef(py_case_info);
+        }
+    }
+
+    FTDB_SET_ENTRY_PYOBJECT(py_switchinfo_entry,cases,cases);
+    FTDB_SET_ENTRY_STRING(py_switchinfo_entry,condition,__self->entry->condition);
+
+    return py_switchinfo_entry;
+}
+
 void libftdb_ftdb_func_ifinfo_entry_dealloc(libftdb_ftdb_func_ifinfo_entry_object* self) {
 
     Py_DecRef((PyObject*)self->func_entry);
@@ -3850,6 +3908,42 @@ int libftdb_ftdb_func_ifinfo_entry_sq_contains(PyObject* self, PyObject* key) {
 
     PYASSTR_DECREF(attr);
     return 0;
+}
+
+PyObject* libftdb_ftdb_func_ifinfo_entry_json(libftdb_ftdb_func_ifinfo_entry_object *self, PyObject *args) {
+
+    libftdb_ftdb_func_ifinfo_entry_object* __self = (libftdb_ftdb_func_ifinfo_entry_object*)self;
+
+    PyObject* py_ifinfo_entry = PyDict_New();
+
+    PyObject* refs = PyList_New(0);
+    for (unsigned long i=0; i<__self->entry->refs_count; ++i) {
+        struct ifref_info* ifref_info = &__self->entry->refs[i];
+        PyObject* py_ifref_info = PyDict_New();
+        FTDB_SET_ENTRY_ENUM_TO_STRING(py_ifref_info,type,ifref_info->type,exprType);
+        if (ifref_info->id) {
+            FTDB_SET_ENTRY_ULONG_OPTIONAL(py_ifref_info,id,ifref_info->id);
+        }
+        else if (ifref_info->integer_literal) {
+            FTDB_SET_ENTRY_INT64_OPTIONAL(py_ifref_info,id,ifref_info->integer_literal);
+        }
+        else if (ifref_info->character_literal) {
+            FTDB_SET_ENTRY_UINT_OPTIONAL(py_ifref_info,id,ifref_info->character_literal);
+        }
+        else if (ifref_info->floating_literal) {
+            FTDB_SET_ENTRY_FLOAT_OPTIONAL(py_ifref_info,id,ifref_info->floating_literal);
+        }
+        else if (ifref_info->string_literal) {
+            FTDB_SET_ENTRY_STRING_OPTIONAL(py_ifref_info,id,ifref_info->string_literal);
+        }
+        PyList_Append(refs,py_ifref_info);
+        Py_DecRef(py_ifref_info);
+    }
+
+    FTDB_SET_ENTRY_PYOBJECT(py_ifinfo_entry,refs,refs);
+    FTDB_SET_ENTRY_ULONG(py_ifinfo_entry,csid,__self->entry->csid);
+
+    return py_ifinfo_entry;
 }
 
 void libftdb_ftdb_func_localinfo_entry_dealloc(libftdb_ftdb_func_localinfo_entry_object* self) {
@@ -4070,6 +4164,24 @@ int libftdb_ftdb_func_localinfo_entry_sq_contains(PyObject* self, PyObject* key)
     return 0;
 }
 
+PyObject* libftdb_ftdb_func_localinfo_entry_json(libftdb_ftdb_func_localinfo_entry_object *self, PyObject *args) {
+
+    libftdb_ftdb_func_localinfo_entry_object* __self = (libftdb_ftdb_func_localinfo_entry_object*)self;
+
+    PyObject* py_localinfo_entry = PyDict_New();
+
+    FTDB_SET_ENTRY_ULONG(py_localinfo_entry,id,__self->entry->id);
+    FTDB_SET_ENTRY_STRING(py_localinfo_entry,name,__self->entry->name);
+    FTDB_SET_ENTRY_BOOL(py_localinfo_entry,parm,__self->entry->isparm);
+    FTDB_SET_ENTRY_ULONG(py_localinfo_entry,type,__self->entry->type);
+    FTDB_SET_ENTRY_BOOL(py_localinfo_entry,static,__self->entry->isstatic);
+    FTDB_SET_ENTRY_BOOL(py_localinfo_entry,used,__self->entry->isused);
+    FTDB_SET_ENTRY_ULONG_OPTIONAL(py_localinfo_entry,csid,__self->entry->csid);
+    FTDB_SET_ENTRY_STRING(py_localinfo_entry,location,__self->entry->location);
+
+    return py_localinfo_entry;
+}
+
 void libftdb_ftdb_func_derefinfo_entry_dealloc(libftdb_ftdb_func_derefinfo_entry_object* self) {
 
     Py_DecRef((PyObject*)self->func_entry);
@@ -4159,9 +4271,7 @@ PyObject* libftdb_ftdb_func_derefinfo_entry_get_offsetrefs(PyObject* self, void*
     for (unsigned long i=0; i<__self->entry->offsetrefs_count; ++i) {
         PyObject* args = PyTuple_New(4);
         PYTUPLE_SET_ULONG(args,0,(uintptr_t)__self);
-        PYTUPLE_SET_ULONG(args,1,__self->func_index);
-        PYTUPLE_SET_ULONG(args,2,__self->entry_index);
-        PYTUPLE_SET_ULONG(args,3,i);
+        PYTUPLE_SET_ULONG(args,1,i);
         PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncOffsetrefInfoEntryType, args);
         Py_DecRef(args);
         PyList_Append(offsetrefs,entry);
@@ -4450,51 +4560,68 @@ void libftdb_ftdb_func_offsetrefinfo_entry_dealloc(libftdb_ftdb_func_offsetrefin
 
 PyObject* libftdb_ftdb_func_offsetrefinfo_entry_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
     libftdb_ftdb_func_offsetrefinfo_entry_object* self;
 
     self = (libftdb_ftdb_func_offsetrefinfo_entry_object*)subtype->tp_alloc(subtype, 0);
-    if (self != 0) {
-        self->deref_entry = (const libftdb_ftdb_func_derefinfo_entry_object*)PyLong_AsLong(PyTuple_GetItem(args,0));
-        Py_IncRef((PyObject*)self->deref_entry);
-        unsigned long func_index = PyLong_AsLong(PyTuple_GetItem(args,1));
-        if (func_index>=self->deref_entry->func_entry->funcs->ftdb->funcs_count) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"func entry index out of bounds: %lu\n",func_index);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        self->func_index = func_index;
-        unsigned long deref_index = PyLong_AsLong(PyTuple_GetItem(args,2));
-        if (deref_index>=self->deref_entry->func_entry->funcs->ftdb->funcs[func_index].derefs_count) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"derefinfo entry index out of bounds: %lu@%lu\n",func_index,deref_index);
-            PyErr_SetString(libftdb_ftdbError,errmsg);
-            return 0;
-        }
-        self->deref_index = deref_index;
-        unsigned long entry_index = PyLong_AsLong(PyTuple_GetItem(args,3));
-        if (entry_index>=self->deref_entry->func_entry->funcs->ftdb->funcs[func_index].derefs[deref_index].offsetrefs_count) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"offsetrefinfo entry index out of bounds: %lu@%lu@%lu\n",
-                    func_index,deref_index,entry_index);
-            PyErr_SetString(libftdb_ftdbError,errmsg);
-            return 0;
-        }
-        self->entry_index = entry_index;
-        self->entry = &self->deref_entry->func_entry->funcs->ftdb->funcs[self->func_index].derefs[self->deref_index].offsetrefs[self->entry_index];
-    }
+    if (self == NULL)
+        return NULL;
 
+    self->deref_entry = (const libftdb_ftdb_func_derefinfo_entry_object*)PyLong_AsLong(PyTuple_GetItem(args,0));
+    Py_IncRef((PyObject*)self->deref_entry);
+    
+    unsigned long entry_index = PyLong_AsLong(PyTuple_GetItem(args,1));
+    if (entry_index >= self->deref_entry->entry->offsetrefs_count)
+        return PyErr_Format(libftdb_ftdbError, "offsetrefinfo entry index out of bounds: %lu", entry_index);
+    
+    self->entry_index = entry_index;
+    self->entry = &self->deref_entry->entry->offsetrefs[self->entry_index];
     return (PyObject *)self;
 }
 
 PyObject* libftdb_ftdb_func_offsetrefinfo_entry_repr(PyObject* self) {
 
-    static char repr[1024];
+    libftdb_ftdb_func_offsetrefinfo_entry_object* __self = (libftdb_ftdb_func_offsetrefinfo_entry_object*) self;
+    return PyUnicode_FromFormat("<ftdbFuncOffsetrefInfoEntry object at %p : fdx:%lu|ddx:%lu|edx:%lu>",
+            self, __self->deref_entry->func_entry->index, __self->deref_entry->entry_index, __self->entry_index);
 
+}
+
+PyObject* libftdb_ftdb_func_offsetrefinfo_entry_richcompare(PyObject *self, PyObject *other, int op) {
+    bool equals = true;
+    PyObject *self_id, *other_id;
     libftdb_ftdb_func_offsetrefinfo_entry_object* __self = (libftdb_ftdb_func_offsetrefinfo_entry_object*)self;
-    int written = snprintf(repr,1024,"<ftdbFuncOffsetrefInfoEntry object at %lx : ",(uintptr_t)self);
-    written+=snprintf(repr+written,1024-written,"fdx:%lu|ddx:%lu|edx:%lu>",
-            __self->func_index,__self->deref_index,__self->entry_index);
+    libftdb_ftdb_func_offsetrefinfo_entry_object* __other = (libftdb_ftdb_func_offsetrefinfo_entry_object*)other;
+    
+    if (op != Py_EQ && op != Py_NE)
+        Py_RETURN_NOTIMPLEMENTED;
 
-    return PyUnicode_FromString(repr);
+    if (!PyObject_IsInstance(other, (PyObject *)&libftdb_ftdbFuncOffsetrefInfoEntryType))
+        Py_RETURN_FALSE;
+    
+    if (__self->entry->kind != __other->entry->kind) {
+        equals = false;
+        goto out;
+    }
+
+    if(!SAFE_OPTIONAL_COMPARE(__self->entry->mi, __other->entry->mi))
+        equals = false;
+    if(!SAFE_OPTIONAL_COMPARE(__self->entry->di, __other->entry->di))
+        equals = false;
+    if(!SAFE_OPTIONAL_COMPARE(__self->entry->cast, __other->entry->cast))
+        equals = false;
+
+    // Comapare IDs
+    self_id = libftdb_ftdb_func_offsetrefinfo_entry_get_id((PyObject*) __self, NULL);
+    other_id = libftdb_ftdb_func_offsetrefinfo_entry_get_id((PyObject*) __other, NULL);
+    if(!PyObject_RichCompareBool(self_id, other_id, Py_EQ))
+        equals = false;
+    Py_DecRef(self_id);
+    Py_DecRef(other_id);
+
+out:
+    if((op == Py_EQ && equals) || (op == Py_NE && !equals))
+        Py_RETURN_TRUE;
+    Py_RETURN_FALSE;
 }
 
 PyObject* libftdb_ftdb_func_offsetrefinfo_entry_get_kind(PyObject* self, void* closure) {
@@ -7430,6 +7557,9 @@ Py_hash_t libftdb_ftdb_type_entry_hash(PyObject *o) {
 }
 
 PyObject* libftdb_ftdb_type_entry_richcompare(PyObject *self, PyObject *other, int op) {
+
+    if (!PyObject_IsInstance(other, (PyObject *)&libftdb_ftdbTypesType))
+        Py_RETURN_FALSE;
 
     libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)self;
     libftdb_ftdb_type_entry_object* __other = (libftdb_ftdb_type_entry_object*)other;

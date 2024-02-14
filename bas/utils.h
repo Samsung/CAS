@@ -22,6 +22,18 @@
         }                                                                   \
     } while (0)
 
+#define SAFE_OPTIONAL_COMPARE(val1, val2)                                   \
+    ({                                                                      \
+        bool result = false;                                                \
+        if((val1) == NULL && (val2) == NULL)                                \
+            result = true;                                                  \
+        else if((val1) != NULL && (val2) != NULL) {                         \
+            if(*(val1) == *(val2))                                          \
+                result = true;                                              \
+        }                                                                   \
+        result;                                                             \
+    })
+
 #define TIME_MARK_START(start_marker)		\
 		struct timeval  tv_mark_##start_marker;	\
 		gettimeofday(&tv_mark_##start_marker, 0)
