@@ -7559,7 +7559,7 @@ Py_hash_t libftdb_ftdb_type_entry_hash(PyObject *o) {
 
 PyObject* libftdb_ftdb_type_entry_richcompare(PyObject *self, PyObject *other, int op) {
 
-    if (!PyObject_IsInstance(other, (PyObject *)&libftdb_ftdbTypesType))
+    if (!PyObject_IsInstance(other, (PyObject *)&libftdb_ftdbTypeEntryType))
         Py_RETURN_FALSE;
 
     libftdb_ftdb_type_entry_object* __self = (libftdb_ftdb_type_entry_object*)self;
