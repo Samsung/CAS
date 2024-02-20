@@ -709,6 +709,11 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternalFromStmt(const Stm
 bool DbJSONClassVisitor::verifyMemberExprBaseType(QualType T) {
 
 	switch(T->getTypeClass()) {
+		case Type::Decayed:
+		{
+			const DecayedType *tp = cast<DecayedType>(T);
+			return verifyMemberExprBaseType(tp->getAdjustedType());
+		}
 		case Type::Pointer:
 		{
 			const PointerType *tp = cast<PointerType>(T);
