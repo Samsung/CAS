@@ -595,9 +595,11 @@ static int scan_openfile_list_with_children(const struct nfsdb* nfsdb, const str
 
 	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
-		for (unsigned long j=0; j<node->entry_count; ++j) {
-			struct nfsdb_entry* child_entry = node->entry_list[j];
-			if (scan_openfile_list_with_children(nfsdb,child_entry,cb,root_entry,arg)) return 1;
+		if (node) {
+			for (unsigned long j=0; j<node->entry_count; ++j) {
+				struct nfsdb_entry* child_entry = node->entry_list[j];
+				if (scan_openfile_list_with_children(nfsdb,child_entry,cb,root_entry,arg)) return 1;
+			}
 		}
 	}
 
