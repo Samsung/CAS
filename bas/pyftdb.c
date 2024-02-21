@@ -7867,7 +7867,7 @@ PyObject* libftdb_ftdb_fops_entry_mp_subscript(PyObject* self, PyObject* slice) 
 
     const char* attr = PyString_get_c_str(slice);
 
-    if (!strcmp(attr,"type")) {
+    if (!strcmp(attr,"kind")) {
         PYASSTR_DECREF(attr);
         return libftdb_ftdb_fops_entry_get_kind(self,0);
     }
@@ -7887,7 +7887,7 @@ PyObject* libftdb_ftdb_fops_entry_mp_subscript(PyObject* self, PyObject* slice) 
         PYASSTR_DECREF(attr);
         return libftdb_ftdb_fops_entry_get_members(self,0);
     }
-    else if (!strcmp(attr,"location")) {
+    else if (!strcmp(attr,"loc")) {
         PYASSTR_DECREF(attr);
         return libftdb_ftdb_fops_entry_get_location(self,0);
     }
