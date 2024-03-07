@@ -250,6 +250,9 @@ class ProjectGenerator:
                 if os.path.islink(fp):
                     print("WARNING: Tried to copy symlink ")
                     continue
+                if os.path.isdir(fp):
+                    # Ignore directories
+                    continue
                 shutil.copy(fp, abs_output_file, follow_symlinks=False)
             except FileNotFoundError:
                 print(f"ERROR - can't find '{fp}'")
