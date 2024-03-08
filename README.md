@@ -300,6 +300,7 @@ For those who are cautious to load and run custom Linux kernel modules on their 
 ### Talks
 
 Talk about Code Aware Services from the Linux Security Summit NA 2022 can be found [here](https://youtu.be/M7gl7MFU_Bc?t=648)
+Talk about how Code Aware Services can be used to improve the developer productivity in the complex low-level systems world can be found [here](https://www.youtube.com/watch?v=FZrhHgor4NE&t=1s)
 
 ### Documentation
 
