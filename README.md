@@ -47,7 +47,7 @@ This is the clang processor used to parse source files (currently only C sources
 
 First setup the build environment and download sources:
 ```bash
-sudo apt install git cmake llvm clang libclang-dev python3-dev gcc-9-plugin-dev build-essential linux-headers-$(uname -r) python2.7-numpy python-futures flex bison libssl-dev
+sudo apt install git cmake llvm clang libclang-dev python3-dev gcc-9-plugin-dev build-essential linux-headers-$(uname -r) python-futures flex bison libssl-dev
 git clone https://github.com/Samsung/CAS.git && cd CAS
 export CAS_DIR=$(pwd)
 ```

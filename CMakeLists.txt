@@ -369,10 +369,10 @@ target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 
 
 # Python Modules
-find_package (Python COMPONENTS Interpreter Development)
+find_package (Python3 COMPONENTS Interpreter Development REQUIRED)
 
-target_include_directories(etrace PRIVATE ${Python_INCLUDE_DIRS})
-target_link_libraries(etrace PUBLIC ${Python_LIBRARIES})
+target_include_directories(etrace PRIVATE ${Python3_INCLUDE_DIRS})
+target_link_libraries(etrace PUBLIC ${Python3_LIBRARIES})
 target_link_libraries(etrace PRIVATE "-lrt")
 install(TARGETS etrace DESTINATION .)
 
@@ -412,8 +412,8 @@ add_custom_command(OUTPUT libuflat_x86_64.a PRE_LINK
 add_custom_target(uflat_library DEPENDS libuflat_x86_64.a)
 
 
-target_include_directories(ftdb PRIVATE ${Python_INCLUDE_DIRS})
-target_link_libraries(ftdb PUBLIC ${Python_LIBRARIES})
+target_include_directories(ftdb PRIVATE ${Python3_INCLUDE_DIRS})
+target_link_libraries(ftdb PUBLIC ${Python3_LIBRARIES})
 target_include_directories(ftdb PRIVATE "kflat/lib")
 target_include_directories(ftdb PRIVATE "kflat/include")
 target_include_directories(ftdb PRIVATE "kflat/lib/include_priv")
