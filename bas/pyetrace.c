@@ -6523,7 +6523,7 @@ int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsd
 	}
 
 	if (arg_class&0x1f) { /* COMPILED or LINKED */
-		if (openfile->opaque_entry) {
+		if ((data->access_type!=FILE_ACCESS_TYPE_EXEC)&&(openfile->opaque_entry)) {
 			const struct nfsdb_entry* opaque_entry = openfile->opaque_entry;
 			if (arg_class&FILE_CLASS_COMPILED) {
 				if ((libetrace_nfsdb_entry_has_compilations_internal(opaque_entry)) &&
@@ -6553,26 +6553,40 @@ int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsd
 	if ((arg_class&(FILE_CLASS_BINARY|FILE_CLASS_COMPILER|FILE_CLASS_LINKER)) || (arg_class&0x1f)) {
 		/* We're looking for (possibly) symlink and something that's not plain at the same time */
 		if (arg_class&FILE_CLASS_SYMLINK) {
-			return (match && (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)==0x28)));
+			if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+				return (match && (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)==0x28)));
+			}
+			else {
+				/* If we have executed binary that hasn't been opened we cannot check whether it's symlink or not; in such case we assume that it cannot be a symlink */
+				match=0;
+			}
 		}
 		if (arg_class&FILE_CLASS_NOSYMLINK) {
-			return (match && (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)!=0x28)));
+			if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+				return (match && (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)!=0x28)));
+			}
 		}
 		return match;
 	}
 	else {
 		if ((arg_class&FILE_CLASS_SYMLINK)||(arg_class&FILE_CLASS_NOSYMLINK)) {
 			/* We're looking for symlink directly */
-			if (arg_class&FILE_CLASS_SYMLINK) {
-				return (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)==0x28));
-			}
-			if (arg_class&FILE_CLASS_NOSYMLINK) {
-				return (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)!=0x28));
-			}
+			if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+				/* In order to find executed binaries that hasn't been opened one need to look for binaries in the query; here we'll check only compiled files */
+				if (arg_class&FILE_CLASS_SYMLINK) {
+					return (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)==0x28));
+				}
+				if (arg_class&FILE_CLASS_NOSYMLINK) {
+					return (((openfile->mode&0x40)!=0)&&((openfile->mode&0x3c)!=0x28));
+				}
+			} /* otherwise match is set to 0 already */
 		}
 		else if (arg_class&FILE_CLASS_PLAIN) {
-			return ((!is_compiled_internal(openfile)) && (!is_linked_internal(openfile)) && (((openfile->mode&0x40)==0)||((openfile->mode&0x3c)!=0x28)) &&
-					(!nfsdb_entryMap_search(&__self->nfsdb->bmap,openfile->path)));
+			/* Looking for plain files only */
+			if (data->access_type!=FILE_ACCESS_TYPE_EXEC) {
+				return ((!is_compiled_internal(openfile)) && (!is_linked_internal(openfile)) && (((openfile->mode&0x40)==0)||((openfile->mode&0x3c)!=0x28)) &&
+						(!nfsdb_entryMap_search(&__self->nfsdb->bmap,openfile->path)));
+			}
 		}
 		else {
 			/* Nothing specified
