@@ -241,6 +241,7 @@ class Module:
         """
         if self.args.unique_output_list:
             to_unique = set()
+            marked_for_deletion = []
             patterns = [re.compile(p) for p in self.args.unique_output_list]
             for d in data:
                 for p in patterns:
@@ -248,9 +249,12 @@ class Module:
                     if m:
                         groups = m.groups()
                         if (groups[0], groups[1]) in to_unique:
-                            data.remove(d)
+                            marked_for_deletion.append(d)
+                            
                         else:
                             to_unique.add((groups[0], groups[1]))
+            for d in marked_for_deletion:
+                data.remove(d)
         return data
 
     def needs_open_filtering(self) -> bool:
