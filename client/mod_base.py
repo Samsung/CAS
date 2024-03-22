@@ -244,13 +244,13 @@ class Module:
             marked_for_deletion = []
             patterns = [re.compile(p) for p in self.args.unique_output_list]
             for d in data:
+                path = d.path if isinstance(d, libetrace.nfsdbEntryOpenfile) else d
                 for p in patterns:
-                    m = p.match(d)
+                    m = p.match(path)
                     if m:
                         groups = m.groups()
                         if (groups[0], groups[1]) in to_unique:
                             marked_for_deletion.append(d)
-                            
                         else:
                             to_unique.add((groups[0], groups[1]))
             for d in marked_for_deletion:

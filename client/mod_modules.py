@@ -61,7 +61,8 @@ class LinkedModules(Module, PipedModule, FilterableModule):
                 o
                 for o in self.nfsdb.linked_modules()
             })
-
+            if self.args.unique_output_list:
+                data = self.filter_output(data)
             return data, DataTypes.linked_data, None
         else:
             data = list({
@@ -72,14 +73,15 @@ class LinkedModules(Module, PipedModule, FilterableModule):
                 o.path
                 for o in self.nfsdb.linked_modules()
             })
+            if self.args.unique_output_list:
+                data = self.filter_output(data)
             if self.args.cdm:
                 data = self.get_cdm(data)
                 return data, DataTypes.cdm_data, None
             if self.args.rdm:
                 data = self.get_rdm(data)
                 return data, DataTypes.rdm_data, None
-            if self.args.unique_output_list:
-                data = self.filter_output(data)
+
             return data, DataTypes.linked_data, None
 
 
