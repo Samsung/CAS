@@ -14,7 +14,7 @@ class LinkedModules(Module, PipedModule, FilterableModule):
             "cdm", "cdm-ex-pt", "cdm-ex-fl",
             "revdeps",
             "rdm",
-            "recursive"], LinkedModules)
+            "recursive", "unique-output-list"], LinkedModules)
 
     def select_subject(self, ent) -> str:
         return ent.path
@@ -78,7 +78,8 @@ class LinkedModules(Module, PipedModule, FilterableModule):
             if self.args.rdm:
                 data = self.get_rdm(data)
                 return data, DataTypes.rdm_data, None
-
+            if self.args.unique_output_list:
+                data = self.filter_output(data)
             return data, DataTypes.linked_data, None
 
 

@@ -92,8 +92,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
         elif self.args.show_commands:
             data = list({
                 self.get_exec_of_open(d)
-                for o in self.get_multi_deps(paths)
-                for d in o
+                for d in self.get_multi_deps(paths)
                 if self.filter_exec(self.get_exec_of_open(d)) and self.should_display_open(d) and self.filter_open(d)
             })
             if self.args.cdb:
@@ -103,16 +102,14 @@ class DepsFor(Module, PipedModule, FilterableModule):
         elif self.args.details:
             data = list({
                 d
-                for o in self.get_multi_deps(paths)
-                for d in o
+                for d in self.get_multi_deps(paths)
                 if self.filter_open(d)
             })
             return data, DataTypes.file_data, None
         else:
             data = list({
                 d.path
-                for o in self.get_multi_deps(paths)
-                for d in o
+                for d in self.get_multi_deps(paths)
                 if self.filter_open(d)
             })
             if self.args.rdm:
@@ -191,13 +188,13 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
         rdeps = [ f
             for fp in self.nfsdb.db.rdeps(self.args.path, recursive=self.args.recursive)
             for f in self.nfsdb.db.filemap[fp]
-        ] 
+        ]
 
         if self.args.show_commands:
             data = list({
-                o.opaque
+                self.get_exec_of_open(o)
                 for o in rdeps
-                if self.filter_exec(o.opaque) and self.filter_open(o)
+                if self.filter_exec(self.get_exec_of_open(o)) and self.filter_exec(o.opaque)
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid

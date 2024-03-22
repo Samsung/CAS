@@ -819,7 +819,7 @@ class CASDatabase:
         """
         return list(self.db.rdeps(file_paths, recursive=recursive))
 
-    def get_module_dependencies(self, module_path, direct=False) -> List[libetrace.nfsdbEntryOpenfile]:
+    def get_module_dependencies(self, module_paths:"List[DepsParam| str]", direct:bool=False) -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function gets precomputed module dependencies for given module path.
 
@@ -828,10 +828,14 @@ class CASDatabase:
         :param direct: direct flag
         :type direct: bool
         """
+        paths:List[str] = []
+        for m in module_paths:
+            if isinstance(m, DepsParam):
+                paths.append(m.file)
+            else:
+                paths.append(m)
 
-        if isinstance(module_path, DepsParam):
-            module_path = module_path.file
-        return self.db.mdeps(module_path, direct=direct)
+        return self.db.mdeps(paths, direct=direct)
 
     def get_deps(self, epath: "DepsParam | str", direct_global=False, dep_graph=False, debug=False, debug_fd=False, use_pipes=False,
                 wrap_deps=False, all_modules: Optional[List[str]] = None) -> Tuple[List[int], List[str], List[libetrace.nfsdbEntryOpenfile], Dict]:
@@ -898,7 +902,7 @@ class CASDatabase:
                                     exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
                                     exclude_commands_index=excl_commands_index)
 
-    def get_multi_deps_cached(self, epaths:"List[DepsParam] | List[str]", direct_global=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+    def get_multi_deps_cached(self, epaths:"List[DepsParam|str]", direct_global=False) -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function returns cached list of open files that are dependencies of given file(s).
 
@@ -909,13 +913,10 @@ class CASDatabase:
         :return: list of dependency opens
         :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
         """
-        ret = []
-        for epath in epaths:
-            ret += [self.get_module_dependencies(epath, direct=direct_global)]
-        return ret
+        return self.get_module_dependencies(epaths, direct=direct_global)
 
-    def get_multi_deps(self, epaths:"List[DepsParam] | List[str]", direct_global=False, dep_graph=False,
-                        debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[List[libetrace.nfsdbEntryOpenfile]]:
+    def get_multi_deps(self, epaths:"List[DepsParam|str]", direct_global:bool=False, dep_graph:bool=False,
+                        debug:bool=False, debug_fd:bool=False, use_pipes:bool=False, wrap_deps:bool=False) -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function returns list of open files that are dependencies of given file path(s).
 
@@ -937,18 +938,25 @@ class CASDatabase:
         :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
         """
         ret = []
-        for epath in epaths:
-            ret += [self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph,
-                                    debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]]
+        simple_params: List[str] = [p for p in epaths if isinstance(p, str)]
+        extended_params: List[DepsParam] = [p for p in epaths if isinstance(p, DepsParam)]
+        ret = self.db.mdeps(simple_params, direct=direct_global)
+
+        if len(extended_params):
+            print(len(extended_params))
+            for epath in extended_params:
+                ret += self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph,
+                                        debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]
+            return list(set(ret))
         return ret
 
-    def get_dependency_graph(self, epaths:"List[DepsParam] | List[str]", direct_global=False,
+    def get_dependency_graph(self, epaths:"List[DepsParam|str]", direct_global=False,
                                 debug=False, debug_fd=False, use_pipes=False, wrap_deps=False) -> List[Tuple]:
         """
         Function returns list of dependency graph of given file path(s).
 
         :param epaths: extended path or simple string path
-        :type epaths: List[DepsParam] | List[str]
+        :type epaths: List[DepsParam|str]
         :param direct_global: global direct flag, defaults to False
         :type direct_global: bool, optional
         :param debug: enable debug info about dependency generation arguments

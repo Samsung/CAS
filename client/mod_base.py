@@ -1,6 +1,7 @@
 import fnmatch
 from functools import lru_cache
 import sys
+import re
 from abc import abstractmethod
 from types import LambdaType
 from typing import Any, List, Dict, Tuple, Optional, Generator, Type
@@ -228,6 +229,30 @@ class Module:
                     return True
         return False
 
+    def filter_output(self, data:List) -> List:
+        """
+        Function check all data paths and matches it with --unique-output-list parttern,
+        if more than one record matches it is dropped from data list.
+
+        :param data: data list to check
+        :type data: List
+        :return: data list
+        :rtype: List
+        """
+        if self.args.unique_output_list:
+            to_unique = set()
+            patterns = [re.compile(p) for p in self.args.unique_output_list]
+            for d in data:
+                for p in patterns:
+                    m = p.match(d)
+                    if m:
+                        groups = m.groups()
+                        if (groups[0], groups[1]) in to_unique:
+                            data.remove(d)
+                        else:
+                            to_unique.add((groups[0], groups[1]))
+        return data
+
     def needs_open_filtering(self) -> bool:
         """
         Function check if advanced filtering is necessary. This is optimization function for large element sets.
@@ -353,23 +378,23 @@ class Module:
                 if self.filter_open(o):
                     yield o
 
-    def get_multi_deps(self, epaths:"List[libcas.DepsParam] | List[str]") -> List[List[libetrace.nfsdbEntryOpenfile]]:
+    def get_multi_deps(self, epaths:"List[libcas.DepsParam | str]") -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function runs proper dependency generation function based on --cache argument.
 
         :param paths: list of extended deps parameters or single path
-        :type paths: List[libcas.DepsParam] | List[str]
+        :type paths: List[libcas.DepsParam|str]
         :return: list of opens objects
         :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
         """
         if self.args.cached:
-            return self.nfsdb.get_multi_deps_cached(epaths, direct_global=self.args.direct_global)
+            return self.nfsdb.get_module_dependencies(epaths, direct=self.args.direct_global)
         else:
             return self.nfsdb.get_multi_deps(epaths, direct_global=self.args.direct_global, dep_graph=self.args.dep_graph,
                                             debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
                                             wrap_deps=self.args.wrap_deps)
 
-    def get_dependency_graph(self, epaths:"List[libcas.DepsParam] | List[str]"):
+    def get_dependency_graph(self, epaths:"List[libcas.DepsParam | str]"):
         """
         Function returns dependency graph of given file list
 
@@ -450,21 +475,24 @@ class Module:
                 raise FilterException("'{}' is not proper '{}=' parameter value! Allowed values: {} ".format(ret[key], key, ", ".join(parameters_schema[key])))
         return ret
 
-    def expand_to_deps_param(self, expath_string: str) -> libcas.DepsParam:
+    def expand_to_deps_param(self, expath_string: str) -> "libcas.DepsParam | str":
         dct = self.expath_to_dict(expath_string)
+        if len(dct) == 1 and "file" in dct:
+            return expath_string
         return libcas.DepsParam(file=dct["file"],
                                 direct=(dct["direct"] == "true" if "direct" in dct else None),
                                 exclude_cmd=(dct["exclude_cmd"] if "exclude_cmd" in dct else None),
                                 exclude_pattern=(dct["exclude_pattern"] if "exclude_pattern" in dct else None),
                                 negate_pattern=(dct["negate_pattern"] if "negate_pattern" in dct else False))
 
-    def get_ext_paths(self, paths) -> List[libcas.DepsParam]:
+    def get_ext_paths(self, paths) -> "List[libcas.DepsParam|str]":
         if len(paths) > 0:
             for i, path in enumerate(paths):
-                path = path.replace('[', '(').replace(']', ')')
-                for _ in range(path.count(" ")):
-                    path = path.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
-                paths[i] = self.expand_to_deps_param(path if path.startswith("(") else "(file={})".format(path))
+                if (path.startswith("(") or path.startswith("[")) and (path.endswith(")") or path.endswith("]")):
+                    path = path.replace('[', '(').replace(']', ')')
+                    for _ in range(path.count(" ")):
+                        path = path.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
+                    paths[i] = self.expand_to_deps_param(path if path.startswith("(") else "(file={})".format(path))
         return paths
 
     @staticmethod
@@ -551,7 +579,7 @@ class Module:
                 return ent.opaque is not None and ent.opaque.compilation_info is not None
         else:
             return True
-        
+
     def should_display_exe(self, ent: libetrace.nfsdbEntry) -> bool:
         if self.args.generate:
             if self.args.all:
@@ -559,7 +587,7 @@ class Module:
             else:
                 return ent.compilation_info is not None
         else:
-            return True        
+            return True
 
     def get_exec_of_open(self, ent: libetrace.nfsdbEntryOpenfile) -> libetrace.nfsdbEntry:
         if self.args.generate and not self.args.all and ent.opaque is not None:

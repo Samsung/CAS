@@ -469,5 +469,12 @@ args_map = {
         action='store_true',
         default=False,
         help='Output compilations as compilation database'
+    ),
+    "unique-output-list": lambda x: x.add_argument(
+        '--unique-output-list',
+        type=str,
+        action='append',
+        default=None,
+        help='Exclude patterns for compilation-dependency-map'
     )
 }
