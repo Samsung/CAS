@@ -44,15 +44,15 @@ class Renderer(OutputRenderer):
         page=0 if not self.args.page else self.args.page
         page_max = int(self.count / self.args.entries_per_page) if self.count >0 and self.args.entries_per_page >0 else 0
         entries_per_page = self.args.entries_per_page
-        num_entries=self.num_entries
+        num_entries = self.num_entries
         if self.count > 0:
 
             if format_func is not None:
                 return self.entries_format.format(
                     count=count,
                     page=page,
-                    page_max = page_max,
-                    entries_per_page = entries_per_page,
+                    page_max=page_max,
+                    entries_per_page=entries_per_page,
                     num_entries=num_entries,
                     entries="\n"+",\n".join([format_func(row) for row in self.data])+"\n    "
                     )
@@ -310,13 +310,18 @@ class Renderer(OutputRenderer):
             cwd=row.cwd,
             command=fix_cmd(row.argv),
             src_type={1: "c", 2: "c++", 3: "other"}[row.compilation_info.type],
-            compiled_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.files) > 0 else "", ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.file_paths)])),
-            include_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.headers) > 0 else "", ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.header_paths)])),
-            include_paths='[{}{}\n            ]'.format("\n" if len(row.compilation_info.ipaths) > 0 else "", ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.ipaths)])),
-            defs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.defs) > 0 else "", 
-                ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.defs)])),
-            undefs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.undefs) > 0 else "", 
-                ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.undefs)])),
+            compiled_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.files) > 0 else "",
+                                                         ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.file_paths)])),
+            include_files='[{}{}\n            ]'.format("\n" if len(row.compilation_info.headers) > 0 else "",
+                                                        ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.header_paths)])),
+            include_paths='[{}{}\n            ]'.format("\n" if len(row.compilation_info.ipaths) > 0 else "",
+                                                        ",\n".join(['                "' + d + '"' for d in sorted(row.compilation_info.ipaths)])),
+            defs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.defs) > 0 else "",
+                                               ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(
+                                                   d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.defs)])),
+            undefs='[{}{}\n            ]'.format("\n" if len(row.compilation_info.undefs) > 0 else "",
+                                                 ",\n".join(['                {{\n                    "name": "{}",\n                    "value": {}\n                }}'.format(
+                                                     d[0], json.dumps(d[1])) for d in sorted(row.compilation_info.undefs)])),
             deps=[]
         )
 
@@ -346,7 +351,9 @@ class Renderer(OutputRenderer):
         )
 
     def _command_generate_entry_format(self, row:libetrace.nfsdbEntry):
-        filename = row.compilation_info.files[0].path if row.compilation_info and len(row.compilation_info.files) > 0 else row.linked_file.path if row.linked_file else ""
+        filename = (row.compilation_info.files[0].original_path if self.args.original_path else row.compilation_info.files[0].path) \
+            if row.compilation_info and len(row.compilation_info.files) > 0 \
+            else (row.linked_file.path if row.linked_file else "")
         return f'''    {{
         "directory": "{row.cwd}",
         "command": {fix_cmd(row.argv)},
@@ -354,7 +361,9 @@ class Renderer(OutputRenderer):
     }}'''
 
     def _command_generate_openrefs_entry_format(self, row:libetrace.nfsdbEntry):
-        filename = row.compilation_info.files[0].path if row.compilation_info and len(row.compilation_info.files) > 0 else row.linked_file.path if row.linked_file else ""
+        filename = (row.compilation_info.files[0].original_path if self.args.original_path else row.compilation_info.files[0].path) \
+            if row.compilation_info and len(row.compilation_info.files) > 0 \
+            else (row.linked_file.path if row.linked_file else "")
         return '''    {{
         "directory": "{dir}",
         "command": {cmd},
