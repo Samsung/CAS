@@ -949,6 +949,115 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 	struct traced_pid *tpid = NULL;
 
 	switch(id) {
+	case __NR_mount: {
+		int err;
+		unsigned long flags = regs->r10;
+		struct path from, to;
+		char __user *source = (char __user *) regs->di;
+		char __user *target = (char __user *) regs->si;
+		char fstype[256] = {0}; /* fstype is unbound in kernel w*/
+		char *tmp = NULL, *tmp2 = NULL;
+		int arbitrary_source = 0;
+
+		if (!should_trace(&tpid))
+			return;
+
+		err = user_path_at(AT_FDCWD, source, 0, &from);
+		if (err) {
+			source = kzalloc(PATH_MAX, GFP_KERNEL);
+			err = copy_from_user(source, (char __user *) regs->di,
+					PATH_MAX - 1);
+			arbitrary_source = !arbitrary_source;
+		} else {
+			source = get_pathstr_from_path(&from, &tmp);
+			path_put(&from);
+			if (!source) {
+				pr_warn("sys_enter_mount: could not get path from"
+						" struct path\n");
+				break;
+			}
+		}
+
+		err = user_path_at(AT_FDCWD, target, 0, &to);
+		if (err) {
+			pr_warn("sys_enter_mount: user_path_at failed\n");
+			kfree(tmp);
+			kfree(tmp2);
+			break;
+		}
+
+		target = get_pathstr_from_path(&to, &tmp2);
+		path_put(&to);
+		if (!target) {
+			pr_warn("sys_enter_mount: could not get path from struct"
+					" path\n");
+			kfree(tmp);
+			kfree(tmp2);
+			if (arbitrary_source)
+				kfree(source);
+			break;
+		}
+
+		err = strncpy_from_user(fstype, (char __user *) regs->dx,
+				sizeof(fstype) - 1);
+
+		if (!err && regs->dx) {
+			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
+				    ",sourcenamesize=%ld,typenamesize=%ld,"
+				    "flags=%ld",
+				    strlen(source), strlen(target),
+				    strlen(fstype), flags);
+		} else {
+			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
+				    ",sourcenamesize=%ld,flags=%ld",
+				    strlen(source), strlen(target), flags);
+		}
+
+		print_long_string(tpid->upid, source, strlen(source), "!MS",
+				current);
+		print_long_string(tpid->upid, target, strlen(target), "!MT",
+				current);
+		if (!err && regs->dx)
+			print_long_string(tpid->upid, fstype, strlen(fstype),
+					"!MX", current);
+		kfree(tmp);
+		kfree(tmp2);
+		if (arbitrary_source)
+			kfree(source);
+		break;
+		}
+	case __NR_umount2: {
+		int flags = regs->si;
+		char __user *target = (char __user *) regs->di;
+		char *tmp = NULL;
+		struct path from;
+		int err;
+
+		if (!should_trace(&tpid))
+			return;
+
+		err = user_path_at(AT_FDCWD, target, 0, &from);
+		if (err) {
+			pr_warn("sys_enter_umount: user_path_at failed\n");
+			break;
+		}
+
+		target = get_pathstr_from_path(&from, &tmp);
+		path_put(&from);
+		if (!target) {
+			pr_warn("sys_enter_umount: could not get path from struct"
+				" path\n");
+			kfree(tmp);
+			break;
+		}
+
+		PRINT_TRACE(tpid->upid, "!Umount|targetnamesize=%ld,flags=%d",
+			    strlen(target), flags);
+		print_long_string(tpid->upid, target, strlen(target), "!MT",
+				  current);
+		kfree(tmp);
+		break;
+	}
 	case __NR_clone: {
 		unsigned long clone_flags;
 
@@ -1068,6 +1177,26 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 
 	// TODO support creat()?
 	switch(syscall_nr) {
+	case __NR_mount: {
+		if (!should_trace(&tpid))
+			return;
+
+		if (ret < 0) {
+			PRINT_TRACE(tpid->upid, "!MountFailed|");
+		}
+
+		break;
+	}
+	case __NR_umount2: {
+		if (!should_trace(&tpid))
+			return;
+
+		if (ret < 0) {
+			PRINT_TRACE(tpid->upid, "!UmountFailed|");
+		}
+
+		break;
+	}
 	case __NR_clone: {
 		if (!should_trace(&tpid))
 			return;

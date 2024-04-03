@@ -439,3 +439,61 @@ Arguments:
 | oldfd | File descriptor to be copied |
 | newfd | New file descriptor that is a copy of oldfd |
 | flags | The flags passed to or inferred from the syscalls. It is O_CLOEXEC (0x80000) in case of dup3() and fnctl(..., F_DUPFD_CLOEXEC, ...) or 0 otherwise |
+
+#### mount
+Syntax:
+```
+Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+MS|/dev/sda1
+MT|/mnt/
+MX|ext4
+
+OR (1):
+Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+MS|/home/example_dir/source_dir
+MT|/home/example_dir/target_dir
+
+OR (2):
+Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+MS|/home/example_dir/source_dir
+MT|/home/example_dir/target_dir
+MountFailed|
+```
+
+Arguments:
+| Argument | Description |
+|----------|-------------|
+| sourcenamesize | length of source string |
+| targetnamesize | length of target path string |
+| typenamesize | length of fs type string |
+| flags | flags passed to syscall |
+
+Data events:
+| Tag | Description |
+|-----|-------------|
+| MS | Source passed to mount syscall, it does not have to by path (as specified by manpages) |
+| MT | Target mount path string |
+| MX | Filesystem for which mount is performed, does not have to appear if NULL was passed to mount() |
+
+### umount
+Syntax:
+```
+Umount|targetnamesize=nn,flags=nn
+MT|/mnt/
+
+OR (1):
+Umount|targetnamesize=nn,flags=nn
+MT|/mnt/
+UmountFailed|
+```
+
+Arguments:
+| Argument | Description |
+|----------|-------------|
+|targetnamesize | length of target path string|
+|flags     | flags passed to umount2()|
+
+Data events:
+| Tag | Description |
+|-----|-------------|
+| MT | Target umount path string |
