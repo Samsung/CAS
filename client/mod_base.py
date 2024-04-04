@@ -87,6 +87,8 @@ class ModulePipeline:
         if self.last_module is not None:
             if self.last_module.args.ide:
                 return data
+            if self.last_module.args.create_ftdb:
+                return data
             output_engine = self.last_module.get_output_engine()(data, self.last_module.args, self.last_module, renderer, sort_lambda)
             return output_engine.render_data()
         return None

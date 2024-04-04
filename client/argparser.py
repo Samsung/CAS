@@ -9,6 +9,7 @@ import re
 from typing import Dict, List, Tuple, Any
 from client.misc import get_output_renderers
 from client.ide_generator.project_generator import add_params as ide_add_params
+from client.ftdb_generator.ftdb_generator import add_params as ftdb_add_params
 
 def get_api_modules() -> Dict[str, Any]:
     """
@@ -135,6 +136,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         module.Renderer.append_args(parser)
 
     ide_add_params(parser)
+    ftdb_add_params(parser)
 
     will_run_api_key = len([x for x in get_api_keywords() if x in args]) > 0
     if not will_run_api_key:

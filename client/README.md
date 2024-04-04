@@ -283,3 +283,39 @@ After re-login run following command to verify:
 complete -F _cas_completions cas
 ```
 If `complete -F _cas_completions cas` appears it means that `cas` commanline tool should display hints on double `<TAB>` keypress.
+
+# FTDB creation
+CAS client has a functionality to create ftdb by adding `--create-ftdb` on the end of `cas` query. Example usage:
+```bash
+    cas linked_modules --filter=<Filter> --create-ftdb
+```
+or
+```bash
+    cas deps_for --path=<Path> --create-ftdb
+```
+There are also additional parameters for ftdb creation.
+
+| parameter | description | 
+| ------------- | ------------- | 
+| `--ftdb-output` | Path and name to output file for ftdb (.img extension) |
+| `--version`  | Version of output FTDB image |
+| `--macro-replacement-file` or `-mr`  | Path to definitions of macro replacement |
+| `--additional-defines-file` or `-dd`  | Path to additional macro file for parsing |
+| `--track-macro-expansions` or `-me`  | Path to definitions of macro replacement |
+| `--compilation-dependency-map` or `-cdm`  | Switch for creating compilation dependency map and using it in ftdb creation (For modules output. Not dependencies) |
+| `--ftdb-metaname` or `-m`  | Name of the output FTDB image |
+| `--preserve-cta` | If used it will not merge compile time asserts into one declaration |
+| `--make-unique-compile-commands` | Making sure that compile commands will be unique |
+
+# Process Tree, Dependency Tree and Reversed Dependencies Tree
+Process tree is showing children or parent processes. Clicking on a button with `<pid>:<idx>` will show children of the process. If we start the tree from other process than root, then we can also move up in the hierarchy by clicking `⇖` on the left. You can also start a new process tree by clicking the symbol `↸ ` at the end of bin path. Click letter `i` for more information about the process in proc_tree view.
+
+Dependency tree is showing all direct module dependencies of the given file. If you want to see all the dependencies you can simply click letter `i` for more information. You can also start a new dependency tree by clicking the symbol `^` at the end of dependency path.
+## From CAS
+```bash
+    cas <module> <filter> --commands=true --proc-tree/--deps-tree
+```
+## CAS Server
+When you run `cas_server.py` there will be 3 endpoints `/deps_tree`, `/proc_tree` and `/revdeps_tree`. 
+You can also add filters to create deps_tree/revdeps_tree for specified element or start proc_tree from specified element by adding `path=<path>` or `pid=<pid>` to query.
+On the top right corner of the page is Search where you can find elements by path, type etc.

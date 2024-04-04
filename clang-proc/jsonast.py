@@ -135,7 +135,7 @@ def make_unique_compile_commands(cdbfile):
     with open(cdbfile,"w") as f:
         f.write(json.dumps(db,indent=4, separators=(',', ': ')))
 
-def create_json_db_main(args: argparse.Namespace) -> int:
+def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -440,10 +440,11 @@ def create_json_db_main(args: argparse.Namespace) -> int:
     if "modules" in JDB:
         JDB["module_info"] = [{"name":list(srcD.keys())[0],"id":list(srcD.values())[0]} for srcD in JDB["modules"]]
     # Now save the final JSON
-    with open(output,"w") as f:
-        json.dump(JDB,f,indent="\t")
-        # f.write(json.dumps(JDB,indent="\t"))
-    print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
+    if not stream:
+        with open(output,"w") as f:
+            json.dump(JDB,f,indent="\t")
+            # f.write(json.dumps(JDB,indent="\t"))
+        print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
     if mrrs+rv > 0:
         print("WARNING: Encountered some ERRORS!")
     
@@ -451,5 +452,7 @@ def create_json_db_main(args: argparse.Namespace) -> int:
         sys.stdout = orig_stdout
         sys.stderr = orig_stderr
         f.close()
-    
-    return mrrs+rv
+    if stream:
+        return mrrs+rv, JDB
+    else:
+        return mrrs+rv

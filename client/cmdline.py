@@ -91,6 +91,13 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 out_file.write(zip_buffer.getvalue())
                 print("Output zipped to {}".format(os.path.abspath(os.path.expanduser(common_args.generate_zip))))
             return None
+        elif common_args.create_ftdb:
+            from client.ftdb_generator.ftdb_generator import FtdbGenerator
+            latest_module = module_pipeline.modules[-1]
+            ftdb_generator = FtdbGenerator(args=common_args, cas_db=cas_db, latest_module=latest_module)
+            if not latest_module.args.show_commands and not latest_module.args.details:
+                latest_module.args.details = True
+            ftdb_generator.create_ftdb(module_pipeline.render())
         else:
             return module_pipeline.render()
     else:
