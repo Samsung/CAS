@@ -472,67 +472,68 @@ static long depproc_process_qpid(libetrace_nfsdb_object* self, struct depproc_co
 		upid_t wpid = context->qpid.front();
 		context->qpid.pop_front();
 		if (!context->use_pipes) continue;
-		DBG(context->fd_debug,"     checking pipe_map for " GENERIC_ARG_PID_FMT,wpid);
+		DBG(context->fd_debug,"     checking pipe_map for " GENERIC_ARG_PID_FMT "\n",wpid);
 		int pipe_entry_count = 0;
-		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&self->nfsdb->procmap,wpid);
+		struct ulongMap_node* node = ulongMap_search(&self->nfsdb->pipemap, wpid);
 		if (node) {
-			for (unsigned long u=0; u<node->entry_count; ++u) {
-				struct nfsdb_entry* entry = node->entry_list[u];
-				for (unsigned long i=0; i<entry->pipe_eids_count; ++i) {
-					upid_t npid = entry->pipe_eids[i].pid;
-					upid_t wnpid = npid;
-					DBG(context->fd_debug,"       pipe write to " GENERIC_ARG_PID_FMT,npid);
-					pipe_entry_count++;
-					if (context->wrap_deps) {
-						unsigned long wrapper_pid = ULONG_MAX;
-						struct nfsdb_entryMap_node* nnode = nfsdb_entryMap_search(&self->nfsdb->procmap,npid);
-						if (nnode) {
-							for (unsigned long v=0; v<nnode->entry_count; ++v) {
-								struct nfsdb_entry* nentry = nnode->entry_list[v];
-								if (nentry->wrapper_pid!=ULONG_MAX) {
-									wrapper_pid = nentry->wrapper_pid;
-									break;
-								}
+			for (unsigned long u=0; u<node->value_count; ++u) {
+				upid_t npid = node->value_list[u];
+				upid_t wnpid = npid;
+				DBG(context->fd_debug,"       pipe write from " GENERIC_ARG_PID_FMT,npid);
+				pipe_entry_count++;
+				if (context->wrap_deps) {
+					unsigned long wrapper_pid = ULONG_MAX;
+					struct nfsdb_entryMap_node* nnode = nfsdb_entryMap_search(&self->nfsdb->procmap,npid);
+					if (nnode) {
+						for (unsigned long v=0; v<nnode->entry_count; ++v) {
+							struct nfsdb_entry* nentry = nnode->entry_list[v];
+							if (nentry->wrapper_pid!=ULONG_MAX) {
+								wrapper_pid = nentry->wrapper_pid;
+								break;
 							}
-						}
-						if (wrapper_pid!=ULONG_MAX) {
-							DBG(context->fd_debug," (wrapped: " GENERIC_ARG_PID_FMT ")",(upid_t)wrapper_pid);
-							wnpid = SET_MSB_UPID((upid_t)wrapper_pid);
 						}
 					}
-					if (context->writing_process_list.find(wnpid)==context->writing_process_list.end()) {
-						DBG(context->fd_debug," : new writing process\n");
-						context->qpid.push_back(wnpid);
-						unsigned match = 0;
-						if (context->excl_commands_index) {
-							match = depproc_commands_index_match(self,context,wnpid);
-						}
-						else {
-							match = depproc_commands_match(self,context,wnpid);
-						}
-						if (match) {
-							continue;
-						}
-						if (context->writing_process_list.insert(wnpid).second) {
-							DBG(context->fd_debug,"     added process to consider: " GENERIC_ARG_PID_FMT "\n",wnpid);
-							processed++;
-							if (context->fd_debug) {
-								log_write_process_commands(self,context,wnpid,"       ");
-							}
-						}
-						if (context->dep_graph) {
-							writing_pid_map.insert(std::pair<upid_t,std::string>(wnpid,f));
-						}
-						context->all_writing_process_list.insert(npid);
+					if (wrapper_pid!=ULONG_MAX) {
+						DBG(context->fd_debug," (wrapped: " GENERIC_ARG_PID_FMT ")",(upid_t)wrapper_pid);
+						wnpid = SET_MSB_UPID((upid_t)wrapper_pid);
+					}
+				}
+				DBG(context->fd_debug,"\n");
+				if (context->writing_process_list.find(wnpid)==context->writing_process_list.end()) {
+					DBG(context->fd_debug," : new writing process\n");
+					context->qpid.push_back(wnpid);
+					long match = 0;
+					if (context->excl_commands_index) {
+						match = depproc_commands_index_match(self,context,wnpid);
 					}
 					else {
-						DBG(context->fd_debug," : already considered\n");
+						match = depproc_commands_match(self,context,wnpid);
 					}
+					if (match>=0) {
+						continue;
+					}
+					if (context->writing_process_list.insert(wnpid).second) {
+						DBG(context->fd_debug,"     added process to consider: " GENERIC_ARG_PID_FMT "\n",wnpid);
+						processed++;
+						if (context->fd_debug) {
+							log_write_process_commands(self,context,wnpid,"       ");
+						}
+					}
+					if (context->dep_graph) {
+						writing_pid_map.insert(std::pair<upid_t,std::string>(wnpid,f));
+					}
+					context->all_writing_process_list.insert(npid);
+				}
+				else {
+					DBG(context->fd_debug," : already considered\n");
 				}
 			}
 			if (pipe_entry_count<=0) {
 				DBG(context->fd_debug," : no pipe entries\n");
 			}
+		}
+		else {
+			DBG(context->fd_debug,"     no entry\n");
 		}
 		if (g_timer||interrupt) {
 			return -1;

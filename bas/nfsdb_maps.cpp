@@ -124,7 +124,7 @@ typedef std::map<unsigned long,std::vector<unsigned long>> forkMap_t;
  * }
  *
  * pipeMap:
- *   Maps a given process to the unique list of other processes which can read data from this process through pipe
+ *   Maps a given process to the unique list of other processes which could've possibly written to this process through pipe
  * {
  *   <pid> : { <other_pid>, ... }
  * }
@@ -191,7 +191,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		}
 
 		for (unsigned long i=0; i<entry->pipe_eids_count; ++i) {
-			pipeMap[pid].insert(i<entry->pipe_eids[i].pid);
+			pipeMap[entry->pipe_eids[i].pid].insert(pid);
 		}
 
 		for (unsigned long i=0; i<entry->open_files_count; ++i) {
