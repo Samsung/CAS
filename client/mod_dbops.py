@@ -7,7 +7,7 @@ import libcas
 
 from client.mod_base import Module
 from client.output_renderers.output import DataTypes
-
+from client.argparser import args_map
 
 class ParseDB(Module):
     """
@@ -165,6 +165,8 @@ class StoreCache(Module):
         arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
         arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
         arg_group.add_argument('--shared-argvs', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
+        args_map["with-pipes"](arg_group)
+        args_map["wrap-deps"](arg_group)
         return module_parser
 
     def get_data(self) -> tuple:
@@ -205,8 +207,8 @@ class StoreCache(Module):
             db.set_config(self.config)
             db.load_db(cache_db_filename, debug=self.args.debug, quiet=True)
             db.create_deps_db_image(deps_cache_db_filename=deps_cache_db_filename, depmap_filename=depmap_filename,
-                                    ddepmap_filename=ddepmap_filename, jobs=self.args.jobs, deps_threshold=self.args.deps_threshold,
-                                    debug=self.args.debug)
+                                    ddepmap_filename=ddepmap_filename, use_pipes=self.args.with_pipes, wrap_deps=self.args.wrap_deps, jobs=self.args.jobs,
+                                    deps_threshold=self.args.deps_threshold, debug=self.args.debug)
             print("deps stored [%.2fs]" % (time.time() - start_time))
 
         print("Done cache [%.2fs]" % (time.time() - total_start_time))

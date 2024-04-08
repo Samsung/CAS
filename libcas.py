@@ -105,6 +105,8 @@ class CASConfig:
         self.clang_tailopts = []
         self.dependency_exclude_patterns = []
         self.additional_module_exclude_patterns = []
+        self.module_dependencies_with_pipes:List[str] = []
+        self.module_dependencies_exclude_with_pipes:List[str] = []
         self.additional_module_exclude_pattern_variants = {}
         self.exclude_command_variants = {}
         self.exclude_command_variants_index = {}
@@ -150,6 +152,26 @@ class CASConfig:
 
         return excl_patterns, excl_commands, excl_commands_index
 
+    def get_use_pipe_for_path(self, path:str, global_pipe_opt:bool) -> bool:
+        """Function returns proper use-pipe argument if overwrite was defined in config
+
+        :param path: File path
+        :type path: str
+        :param global_pipe_opt: global use-pipe argument
+        :type global_pipe_opt: bool
+        :return: True if pipes should be used otherwise False
+        :rtype: bool
+        """
+        if global_pipe_opt:
+            for path_wildcard in self.module_dependencies_exclude_with_pipes:
+                if fnmatch.fnmatch(path, path_wildcard):
+                    return False
+            return True
+        else:
+            for path_wildcard in self.module_dependencies_with_pipes:
+                if fnmatch.fnmatch(path, path_wildcard):
+                    return True
+            return False
 
 class CASDatabase:
     """
@@ -868,12 +890,13 @@ class CASDatabase:
 
         if isinstance(epath, str):  # simple path - no excludes
             excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath)
+            use_pipe_for_path = self.config.get_use_pipe_for_path(epath, use_pipes)
             if all_modules is not None:
-                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipe_for_path,
                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
                                     exclude_commands=excl_commands, exclude_commands_index=excl_commands_index, all_modules=all_modules)
             else:
-                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                return self.db.fdeps(epath, debug=debug, debug_fd=debug_fd, use_pipes=use_pipe_for_path,
                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
                                     exclude_commands=excl_commands, exclude_commands_index=excl_commands_index)
         else:
@@ -884,7 +907,7 @@ class CASDatabase:
                 all_modules = self.linked_module_paths()
 
             excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(epath.file)
-
+            use_pipe_for_path = self.config.get_use_pipe_for_path(epath.file, use_pipes)
             for e_c in epath.exclude_cmd:
                 excl_commands.append(e_c)
 
@@ -892,12 +915,12 @@ class CASDatabase:
                 excl_patterns.append(e_p)
 
             if all_modules is not None:
-                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipe_for_path,
                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
                                     exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
                                     exclude_commands_index=excl_commands_index, all_modules=all_modules)
             else:
-                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipes,
+                return self.db.fdeps(epath.file, debug=debug, debug_fd=debug_fd, use_pipes=use_pipe_for_path,
                                     wrap_deps=wrap_deps, direct=direct, dep_graph=dep_graph, exclude_patterns=excl_patterns,
                                     exclude_commands=excl_commands, negate_pattern=epath.negate_pattern,
                                     exclude_commands_index=excl_commands_index)
@@ -1032,7 +1055,7 @@ class CASDatabase:
         for dep_path in file_paths:
             if dep_path in lm:
                 excl_patterns, excl_commands, excl_commands_index = self.config.gen_excludes_for_path(dep_path)
-
+                use_pipe_for_path = self.config.get_use_pipe_for_path(dep_path, False)
                 if cdm_exclude_patterns is not None and isinstance(cdm_exclude_patterns, list):
                     for ex in cdm_exclude_patterns:
                         excl_commands.append(ex)
@@ -1044,7 +1067,7 @@ class CASDatabase:
                 if cdm_exclude_patterns or cdm_exclude_files:
                     deps = [ dep for dep in self.db.fdeps(dep_path, exclude_patterns=excl_patterns,
                                         exclude_commands=excl_commands, exclude_commands_index=excl_commands_index,
-                                        recursive=recursive)[2]
+                                        recursive=recursive,use_pipes=use_pipe_for_path)[2]
                                         if dep.opaque is not None and dep.opaque.compilation_info is not None
                             ]
                 else:
@@ -1136,8 +1159,8 @@ class CASDatabase:
             print_mem_usage(debug, "After create_nfsdb")
             return r
 
-    def create_deps_db_image(self, deps_cache_db_filename:str, depmap_filename:str, ddepmap_filename:str,
-                                jobs:int=multiprocessing.cpu_count(), deps_threshold:int=90000, debug:bool=False):
+    def create_deps_db_image(self, deps_cache_db_filename: str, depmap_filename: str, ddepmap_filename: str, use_pipes:bool, wrap_deps:bool,
+                            jobs: int = multiprocessing.cpu_count(), deps_threshold: int = 90000, debug: bool = False):
         """
         Function calculates all modules dependencies and create dependencies image.
 
@@ -1147,6 +1170,10 @@ class CASDatabase:
         :type depmap_filename: str
         :param ddepmap_filename: intermediate direct dependencies file path
         :type ddepmap_filename: str
+        :param use_pipes: enable generation dependencies with piped process
+        :type use_pipes: bool
+        :param wrap_deps: enable generation dependencies with wrapping process
+        :type wrap_deps: bool
         :param jobs: number of multiprocessing threads, defaults to multiprocessing.cpu_count()
         :type jobs: int, optional
         :param deps_threshold: max dependencies count - used to detect dependency generation issues, defaults to 90000
@@ -1163,8 +1190,6 @@ class CASDatabase:
             print("No linked modules found! Check linker patterns in config.")
             exit(0)
 
-        depmap = {}
-
         def get_module_dependencies(module_path, dm, done_modules, all_mods):
             linked_modules = [x[2] for x in dm[module_path] if x[2] in all_mods]
             ret = set(linked_modules)
@@ -1177,7 +1202,7 @@ class CASDatabase:
         global calc_deps
 
         def calc_deps(module_path, direct=True, all_mods=all_modules):
-            ret = self.get_deps(module_path, direct_global=direct, all_modules=all_mods)
+            ret = self.get_deps(module_path, direct_global=direct, all_modules=all_mods, use_pipes=use_pipes, wrap_deps=wrap_deps)
             # print("[%d / %d] %s %s_deps(%d)" % (processed.value, len(allm), module_path, "direct" if direct is True else "full", len(ret[2])), flush=True)
             with processed.get_lock():
                 processed.value += 1

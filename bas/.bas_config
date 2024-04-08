@@ -97,5 +97,9 @@
     "additional_module_exclude_pattern_variants": {
     },
     "exclude_command_variants": {
-    }
+    },
+    "module_dependencies_with_pipes":[
+    ],
+    "module_dependencies_exclude_with_pipes":[
+    ]
 }
