@@ -42,7 +42,7 @@ def translate_to_cmdline(req: Request) -> List[str]:
     """
     ret = [req.path.replace("/", "")]
     for parts in req.query_string.split(b"&"):
-        k_v = parts.decode().split("=",maxsplit=1)
+        k_v = parts.decode().replace('%22','').replace('%27','').split("=",maxsplit=1)
         if len(k_v) == 2:
             if k_v[0] in bool_args:
                 if "true" in k_v[1]:
