@@ -8,6 +8,8 @@ import libcas
 from client.mod_base import Module
 from client.output_renderers.output import DataTypes
 from client.argparser import args_map
+from typing import Any, Tuple, Callable
+
 
 class ParseDB(Module):
     """
@@ -26,7 +28,7 @@ class ParseDB(Module):
         arg_group.add_argument('--force', action='store_true', default=False, help="Force operation even if intermediate file exist")
         return module_parser
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         total_start_time = time.time()
         json_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.json_database))
         tracer_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.tracer_database))
@@ -53,7 +55,7 @@ class ParseDB(Module):
         else:
             print("Intermediate database found ( use --force to rebuild )")
 
-        return None, DataTypes.null_data, None
+        return None, DataTypes.null_data, None, None
 
 
 class Postprocess(Module):
@@ -100,7 +102,7 @@ class Postprocess(Module):
         arg_group.add_argument('--force', action='store_true', default=False)
         return module_parser
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         total_start_time = time.time()
         json_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.json_database))
         tracer_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.tracer_database))
@@ -137,7 +139,7 @@ class Postprocess(Module):
                         debug_compilations=self.args.debug_compilations, debug=self.args.debug, verbose=self.args.verbose)
 
         print("Done postprocess [%.2fs]" % (time.time()-total_start_time))
-        return None, DataTypes.null_data, None
+        return None, DataTypes.null_data, None, None
 
 
 class StoreCache(Module):
@@ -169,7 +171,7 @@ class StoreCache(Module):
         args_map["wrap-deps"](arg_group)
         return module_parser
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         total_start_time = time.time()
         json_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.json_database))
         cache_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.database))
@@ -212,4 +214,4 @@ class StoreCache(Module):
             print("deps stored [%.2fs]" % (time.time() - start_time))
 
         print("Done cache [%.2fs]" % (time.time() - total_start_time))
-        return None, DataTypes.null_data, None
+        return None, DataTypes.null_data, None, None

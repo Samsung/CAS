@@ -2,7 +2,8 @@ import sys
 from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-
+from typing import Any, Tuple, Callable
+import libetrace
 
 class DepsFor(Module, PipedModule, FilterableModule):
     """Dependencies - returns list of all files that have been read in process of creating given file."""
@@ -71,24 +72,24 @@ class DepsFor(Module, PipedModule, FilterableModule):
         else:
             return ent
 
-    def set_piped_arg(self, data, data_type):
-        if data_type == "str":
+    def set_piped_arg(self, data, data_type:type):
+        if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
-        if data_type == "nfsdbEntryOpenfile":
+        if data_type == libetrace.nfsdbEntryOpenfile:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        if data_type == libetrace.nfsdbEntry:
             print("ERROR: Wrong pipe input data {}.".format(data_type))
             sys.exit(2)
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         paths = self.get_ext_paths(self.args.path)
         self.args.path = None
 
         if self.args.dep_graph:
             data = self.get_dependency_graph(paths)
-            return data, DataTypes.dep_graph_data, lambda x: x[0]
+            return data, DataTypes.dep_graph_data, lambda x: x[0], str
         elif self.args.show_commands:
             data = list({
                 self.get_exec_of_open(d)
@@ -97,15 +98,15 @@ class DepsFor(Module, PipedModule, FilterableModule):
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))
-                return data, DataTypes.compilation_db_data, lambda x: x['filename']
-            return data, DataTypes.commands_data, lambda x: x.eid.pid
+                return data, DataTypes.compilation_db_data, lambda x: x['filename'],str
+            return data, DataTypes.commands_data, lambda x: x.eid.pid,libetrace.nfsdbEntry
         elif self.args.details:
             data = list({
                 d
                 for d in self.get_multi_deps(paths)
                 if self.filter_open(d)
             })
-            return data, DataTypes.file_data, None
+            return data, DataTypes.file_data, lambda x: x.path, libetrace.nfsdbEntryOpenfile
         else:
             data = list({
                 d.path
@@ -114,14 +115,14 @@ class DepsFor(Module, PipedModule, FilterableModule):
             })
             if self.args.rdm:
                 data = self.get_rdm(data)
-                return data, DataTypes.rdm_data, lambda x: x[0]
+                return data, DataTypes.rdm_data, lambda x: x[0],None
             if self.args.cdm:
                 data = self.get_cdm(data)
-                return data, DataTypes.cdm_data, lambda x: x[0]
+                return data, DataTypes.cdm_data, lambda x: x[0],None
             if self.args.revdeps:
                 data = self.get_revdeps(data)
-                return data, DataTypes.file_data, None
-            return data, DataTypes.file_data, None
+                return data, DataTypes.file_data, None,str
+            return data, DataTypes.file_data, None,str
 
 
 class RevDepsFor(Module, PipedModule, FilterableModule):
@@ -173,18 +174,18 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
         else:
             return ent.path
 
-    def set_piped_arg(self, data, data_type):
-        if data_type == "str":
+    def set_piped_arg(self, data, data_type:type):
+        if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
-        if data_type == "nfsdbEntryOpenfile":
+        if data_type == libetrace.nfsdbEntryOpenfile:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        if data_type == libetrace.nfsdbEntry:
             print("ERROR: Wrong pipe input data {}.".format(data_type))
             sys.exit(2)
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         rdeps = [ f
             for fp in self.nfsdb.db.rdeps(self.args.path, recursive=self.args.recursive)
             for f in self.nfsdb.db.filemap[fp]
@@ -197,7 +198,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
                 if self.filter_exec(self.get_exec_of_open(o)) and self.filter_exec(o.opaque)
             })
 
-            return data, DataTypes.commands_data, lambda x: x.eid.pid
+            return data, DataTypes.commands_data, lambda x: x.eid.pid, libetrace.nfsdbEntry
         elif self.args.details:
             data = list({
                 o
@@ -205,7 +206,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
                 if self.filter_open(o)
             })
 
-            return data, DataTypes.file_data, lambda x: x.path
+            return data, DataTypes.file_data, lambda x: x.path, libetrace.nfsdbEntryOpenfile
         else:
             data = list({
                 o.path
@@ -215,6 +216,6 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
 
             if self.args.cdm:
                 data = self.get_cdm(data)
-                return data, DataTypes.cdm_data, lambda x: x[0]
+                return data, DataTypes.cdm_data, lambda x: x[0], None
 
-            return data, DataTypes.file_data, None
+            return data, DataTypes.file_data, None,str

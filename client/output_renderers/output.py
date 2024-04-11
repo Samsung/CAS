@@ -1,8 +1,7 @@
 from abc import abstractmethod
 import itertools
 from enum import Enum
-from types import LambdaType
-from typing import Iterator
+from typing import Iterator, Callable
 
 import libetrace
 from client.misc import fix_cmd_makefile
@@ -37,7 +36,7 @@ class DataTypes(Enum):
 class OutputRenderer:
     default_entries_count = 0
 
-    def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: LambdaType) -> None:
+    def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: Callable) -> None:
         self.args = args
         self.data = data
         if not self.args.plain or self.args.count:

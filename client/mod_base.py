@@ -3,8 +3,7 @@ from functools import lru_cache
 import sys
 import re
 from abc import abstractmethod
-from types import LambdaType
-from typing import Any, List, Dict, Tuple, Optional, Generator, Type
+from typing import Any, List, Dict, Tuple, Optional, Generator, Type, Callable
 import argparse
 import libetrace
 import libcas
@@ -25,12 +24,13 @@ class ModulePipeline:
         last_data_type: Optional[Type] = None
         data = []
         renderer = None
-        sort_lambda = None
+        sort_lambda: "Callable | None" = None
+        pipe_type: "type | None" = None
         for mdl in self.modules:
             printdbg("DEBUG: START pipeline step {}".format(mdl.args.module.__name__), mdl.args)
 
-            if mdl.args.is_piped and self.last_module is not None and last_data_type is not None:
-                printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, last_data_type.__name__, mdl.args.module.__name__), mdl.args)
+            if mdl.args.is_piped and self.last_module is not None and pipe_type is not None:
+                printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, pipe_type.__name__, mdl.args.module.__name__), mdl.args)
                 if not isinstance(data, list):
                     print("ERROR: Input data is not list - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
                     sys.exit(0)
@@ -38,7 +38,7 @@ class ModulePipeline:
                     print("ERROR: Input data is empty - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
                     sys.exit(0)
                 if isinstance(mdl, PipedModule):
-                    mdl.set_piped_arg(data, last_data_type.__name__)
+                    mdl.set_piped_arg(data, pipe_type)
                 else:
                     print("ERROR: Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__))
                     sys.exit(2)
@@ -62,22 +62,11 @@ class ModulePipeline:
 
             try:
                 printdbg("DEBUG:   generating data...", mdl.args)
-                data, renderer, sort_lambda = mdl.get_data()
+                data, renderer, sort_lambda, pipe_type = mdl.get_data()
                 if isinstance(data, list):
                     printdbg("DEBUG:   data len == {}".format(len(data)), mdl.args)
-                    printdbg("DEBUG:   data renderer == {}".format(renderer.name), mdl.args)
-
-                if isinstance(data, list):
-                    last_data_type = type(data[0]) if len(data) > 0 else None
-                elif isinstance(data, libetrace.nfsdbOpensIter) or isinstance(data, libetrace.nfsdbFilteredOpensIter):
-                    last_data_type = libetrace.nfsdbEntryOpenfile
-                elif isinstance(data, libetrace.nfsdbFilteredOpensPathsIter):
-                    last_data_type = str
-                elif isinstance(data, libetrace.nfsdbFilteredCommandsIter):
-                    last_data_type = libetrace.nfsdbEntry
-                else:
-                    last_data_type = type(data)
-                printdbg("DEBUG:   entry data type == {}".format(last_data_type.__name__ if last_data_type else None), mdl.args)
+                printdbg("DEBUG:   data renderer == {}".format(renderer.name), mdl.args)
+                printdbg("DEBUG:   entry data type == {}".format(pipe_type), mdl.args)
             except ParameterException as exc:
                 return exc.message
             except libetrace.error as exc:
@@ -172,12 +161,12 @@ class Module:
         """
 
     @abstractmethod
-    def get_data(self) -> Tuple[Any, DataTypes, LambdaType]:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         """
-        Function returns `data` records with `DataType` and optional sorting lambda.
+        Function returns `data` records with `DataType` and optional pipe type and sorting lambda.
 
         :return: _description_
-        :rtype: tuple ( list, DataType, LambdaType )
+        :rtype: tuple ( list, DataType, type, Callable )
         """
 
     def get_relative(self, open_path: str) -> str:
@@ -231,7 +220,7 @@ class Module:
                     return True
         return False
 
-    def filter_output(self, data:List) -> List:
+    def filter_output(self, data:List) -> List["libetrace.nfsdbEntryOpenfile | str"]:
         """
         Function check all data paths and matches it with --unique-output-list parttern,
         if more than one record matches it is dropped from data list.
@@ -419,7 +408,7 @@ class Module:
     def get_rdm(self, file_paths):
         return self.nfsdb.get_rdm(file_paths, recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
 
-    def get_cdm(self, file_paths):
+    def get_cdm(self, file_paths)-> List[List]:
         cdm_exclude_patterns = None
         if self.args.cdm_exclude_patterns is not None:
             cdm_exclude_patterns = []
@@ -558,7 +547,7 @@ class Module:
                 sys.exit(1)
 
         try:
-            data, output_type, sort_lambda = self.get_data()
+            data, output_type, sort_lambda, pipe_type = self.get_data()
         except ParameterException as exc:
             printerr("ERROR: {}".format(exc.message))
             sys.exit(1)
@@ -607,7 +596,7 @@ class FilterableModule:
 
 class PipedModule:
     @abstractmethod
-    def set_piped_arg(self, data, data_type) -> None:
+    def set_piped_arg(self, data, data_type:type) -> None:
         """
         Function modifies input path argument considering previous data.
         """

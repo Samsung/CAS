@@ -16,7 +16,7 @@ class CompilerPattern(Module):
             "clangpp_spec": self.config.clangpp_spec,
             "gcc_spec": self.config.gcc_spec,
             "gpp_spec": self.config.gcc_spec,
-        }, DataTypes.config_part_data, None
+        }, DataTypes.config_part_data, None, None
 
 
 class LinkerPattern(Module):
@@ -30,7 +30,7 @@ class LinkerPattern(Module):
         return {
             "ar_spec": self.config.ar_spec,
             "ld_spec": self.config.ld_spec
-        }, DataTypes.config_part_data, None
+        }, DataTypes.config_part_data, None, None
 
 
 class VersionInfo(Module):
@@ -41,7 +41,7 @@ class VersionInfo(Module):
         return Module.add_args([], VersionInfo)
 
     def get_data(self) -> tuple:
-        return self.nfsdb.get_version(), DataTypes.dbversion_data, None
+        return self.nfsdb.get_version(), DataTypes.dbversion_data, None, None
 
 
 class RootPid(Module):
@@ -52,7 +52,7 @@ class RootPid(Module):
         return Module.add_args([], RootPid)
 
     def get_data(self) -> tuple:
-        return self.nfsdb.db[0].eid.pid, DataTypes.root_pid_data, None
+        return self.nfsdb.db[0].eid.pid, DataTypes.root_pid_data, None, None
 
 
 class SourceRoot(Module):
@@ -63,7 +63,7 @@ class SourceRoot(Module):
         return Module.add_args([], SourceRoot)
 
     def get_data(self) -> tuple:
-        return self.source_root, DataTypes.source_root_data, None
+        return self.source_root, DataTypes.source_root_data, None, None
 
 
 class ShowConfig(Module):
@@ -74,7 +74,7 @@ class ShowConfig(Module):
         return Module.add_args([], ShowConfig)
 
     def get_data(self) -> tuple:
-        return self.config, DataTypes.config_data, None
+        return self.config, DataTypes.config_data, None, None
 
 
 class ShowStat(Module):
@@ -96,4 +96,4 @@ class ShowStat(Module):
             "compiled": len(self.nfsdb.get_compiled_files()),
             "compiled_paths": len(self.nfsdb.get_compiled_file_paths()),
             "linked_paths": len(self.nfsdb.get_linked_file_paths())
-        }, DataTypes.stat_data, None
+        }, DataTypes.stat_data, None, None

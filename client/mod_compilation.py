@@ -1,8 +1,9 @@
 import sys
+from typing import Any, Tuple, Callable
 from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-
+import libetrace
 
 class Compiled(Module, FilterableModule):
     """Compiled - Returns compiled file list."""
@@ -32,7 +33,7 @@ class Compiled(Module, FilterableModule):
         else:
             return ent.original_path if self.args.original_path else ent.path
 
-    def get_data(self):
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.args.show_commands:
             data = list({
                 ent
@@ -42,8 +43,8 @@ class Compiled(Module, FilterableModule):
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))
-                return data, DataTypes.compilation_db_data, lambda x: x['filename']
-            return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0].path
+                return data, DataTypes.compilation_db_data, lambda x: x['filename'], None
+            return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0].path, libetrace.nfsdbEntry
         elif self.args.details:
             data = list({
                 o
@@ -51,7 +52,7 @@ class Compiled(Module, FilterableModule):
                 for o in ent.compilation_info.files
                 if self.filter_open(o)
             })
-            return data, DataTypes.compiled_data, lambda x: x.path
+            return data, DataTypes.compiled_data, lambda x: x.path, libetrace.nfsdbEntryOpenfile
         else:
             data = list({
                 o.path
@@ -62,9 +63,9 @@ class Compiled(Module, FilterableModule):
 
             if self.args.revdeps:
                 data = self.get_revdeps(data)
-                return data, DataTypes.file_data, None
+                return data, DataTypes.file_data, None, str
 
-            return data, DataTypes.compiled_data, None
+            return data, DataTypes.compiled_data, None, str
 
 
 class RevCompsFor(Module, PipedModule, FilterableModule):
@@ -90,18 +91,18 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
     def subject(self, ent) -> str:
         return ent.compilation_info.files[0].path
 
-    def set_piped_arg(self, data, data_type):
-        if data_type == "str":
+    def set_piped_arg(self, data, data_type:type):
+        if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
-        if data_type == "nfsdbEntryOpenfile":
+        if data_type == libetrace.nfsdbEntryOpenfile:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        if data_type == libetrace.nfsdbEntry:
             print("ERROR: Wrong pipe input data {}.".format(data_type))
             sys.exit(2)
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.args.show_commands or self.args.details:
             data = list({
                 oo.opaque
@@ -109,7 +110,7 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
                 for oo in opn.parent.parent.opens_with_children
                 if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo) and self.filter_exec(oo.opaque)
             })
-            return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0]
+            return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0], libetrace.nfsdbEntry
         else:
             data = list({
                 oo.opaque.compilation_info.files[0].path
@@ -119,9 +120,9 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
             })
             if self.args.revdeps:
                 data = self.get_revdeps(data)
-                return data, DataTypes.compiled_data, None
+                return data, DataTypes.compiled_data, None, str
 
-            return data, DataTypes.compiled_data, None
+            return data, DataTypes.compiled_data, None, str
 
 
 class CompilationInfo(Module, PipedModule, FilterableModule):
@@ -142,21 +143,21 @@ class CompilationInfo(Module, PipedModule, FilterableModule):
     def exclude_subject(self, ent):
         pass
 
-    def set_piped_arg(self, data, data_type):
-        if data_type == "str":
+    def set_piped_arg(self, data, data_type:type):
+        if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
-        if data_type == "nfsdbEntryOpenfile":
+        if data_type == libetrace.nfsdbEntryOpenfile:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
-        if data_type == "nfsdbEntry":
+        if data_type == libetrace.nfsdbEntry:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for ent in data for o in ent.compilation_info.files if ent.compilation_info is not None})
 
-    def get_data(self) -> tuple:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         data = list({opn
                     for opn in self.nfsdb.get_opens_of_path(self.args.path)
                     if opn.opaque is not None and opn.opaque.compilation_info is not None and self.filter_exec(opn.opaque)
                     })
 
-        return data, DataTypes.compilation_info_data, lambda x: x.path
+        return data, DataTypes.compilation_info_data, lambda x: x.path, libetrace.nfsdbEntryOpenfile
