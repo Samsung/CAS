@@ -21,7 +21,6 @@ class ModulePipeline:
         return self.last_module.subject(ent) if self.last_module is not None else None
 
     def render(self):
-        last_data_type: Optional[Type] = None
         data = []
         renderer = None
         sort_lambda: "Callable | None" = None
@@ -32,16 +31,13 @@ class ModulePipeline:
             if mdl.args.is_piped and self.last_module is not None and pipe_type is not None:
                 printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, pipe_type.__name__, mdl.args.module.__name__), mdl.args)
                 if not isinstance(data, list):
-                    print("ERROR: Input data is not list - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
-                    sys.exit(0)
+                    return "ERROR: Input data '{}' module is not list - cannot proceed with next pipeline step!".format(mdl.args.module.__name__)
                 elif len(data) == 0:
-                    print("ERROR: Input data is empty - cannot proceed with next pipeline step!", file=sys.stderr, flush=True)
-                    sys.exit(0)
+                    return "ERROR: Input data to '{}' module is empty - cannot proceed with next pipeline step!".format(mdl.args.module.__name__)
                 if isinstance(mdl, PipedModule):
                     mdl.set_piped_arg(data, pipe_type)
                 else:
-                    print("ERROR: Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__))
-                    sys.exit(2)
+                    return "ERROR: Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__)
 
             try:
                 mdl.check_required(mdl.required_args, mdl.args)
