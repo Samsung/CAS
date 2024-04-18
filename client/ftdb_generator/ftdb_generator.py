@@ -13,7 +13,7 @@ from client import mod_modules
 def add_params(parser):
     ftdb_group = parser.add_argument_group("FTDB generation arguments")
 
-    ftdb_group.add_argument('--create-ftdb', action='store_true', default=False, help='Create ftdb for modules')
+    ftdb_group.add_argument('--ftdb-create', action='store_true', default=False, help='Create ftdb for modules')
     ftdb_group.add_argument('--aot', action='store_true', default=False, help='Create ftdb for aot (creating cdm and using default macro replacements filenames)')
     ftdb_group.add_argument('--ftdb-output', type=str, default="db.json", help='Path and name of output file for ftdb (.img)')
 
@@ -24,7 +24,7 @@ def add_params(parser):
     ftdb_group.add_argument('-me', '--track-macro-expansions', required=False, action="store_true", help='Path to definitions of macro replacement')
     ftdb_group.add_argument('--preserve-cta', action='store_false', default=True, help='Do not merge compile time asserts into one declaration')
     ftdb_group.add_argument("-cdm", "--compilation-dependency-map", required=False, action="store_true", help="Switch for creating compilation dependency map and using it in ftdb creation (For modules output. Not dependencies)")
-    ftdb_group.add_argument('-cj', '--create-json', action='store_false', default=True, help='Create JSON database')
+    ftdb_group.add_argument('-cj', '--json-create', action='store_false', default=True, help='Create JSON database')
     ftdb_group.add_argument('--make-unique-compile-commands', action='store_true', default=False, help='Making compile commands to be unique')
 
 
@@ -121,7 +121,7 @@ class FtdbGenerator:
                          only_embed_fops=False, fops_record=None)
 
         jsonast = importlib.import_module("clang-proc.jsonast")
-        ret, dbj = jsonast.create_json_db_main(args, self.args.create_json)
+        ret, dbj = jsonast.create_json_db_main(args, self.args.json_create)
         base, _ = os.path.splitext(args.output)
         dbimg_path = base + ".img"
         print("\nINFO: Creating ftdb\n")
