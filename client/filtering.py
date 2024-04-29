@@ -155,7 +155,9 @@ class Filter:
         :return: list of splitted filter parts
         :rtype: List
         """
-
+        if len(filter_string) > 2:
+            if (filter_string[0] == "'" and filter_string[-1] == "'") or (filter_string[0] == '"' and filter_string[-1] == '"'):
+                filter_string = filter_string[1:-1]
         filter_string = filter_string.replace('[', '(').replace(']', ')').replace(')OR(', ')or(').replace(')AND(', ')and(')
         for _ in range(filter_string.count(" ")):
             filter_string = filter_string.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
