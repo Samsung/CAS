@@ -9602,6 +9602,136 @@ PyInit_libftdb(void)
         return 0;
     }
 
+    if (PyModule_AddObject(m, "ftdbModules", (PyObject *)&libftdb_ftdbModulesType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbModulesIter", (PyObject *)&libftdb_ftdbModulesIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbSources", (PyObject *)&libftdb_ftdbSourcesType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbSourcesIter", (PyObject *)&libftdb_ftdbSourcesIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncs", (PyObject *)&libftdb_ftdbFuncsType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncsIter", (PyObject *)&libftdb_ftdbFuncsIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncEntry", (PyObject *)&libftdb_ftdbFuncsEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncCallInfoEntry", (PyObject *)&libftdb_ftdbFuncCallInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncSwitchInfoEntry", (PyObject *)&libftdb_ftdbFuncSwitchInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncIfInfoEntry", (PyObject *)&libftdb_ftdbFuncIfInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncLocalInfoEntry", (PyObject *)&libftdb_ftdbFuncLocalInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncDerefInfoEntry", (PyObject *)&libftdb_ftdbFuncDerefInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncOffsetrefInfoEntry", (PyObject *)&libftdb_ftdbFuncOffsetrefInfoEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncdecls", (PyObject *)&libftdb_ftdbFuncdeclsType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFuncdeclEntry", (PyObject *)&libftdb_ftdbFuncdeclsEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbUnresolvedfuncs", (PyObject *)&libftdb_ftdbUnresolvedfuncsType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbUnresolvedfuncsIter", (PyObject *)&libftdb_ftdbUnresolvedfuncsIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbGlobals", (PyObject *)&libftdb_ftdbGlobalsType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbGlobalsIter", (PyObject *)&libftdb_ftdbGlobalsIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbGlobalEntry", (PyObject *)&libftdb_ftdbGlobalEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbTypes", (PyObject *)&libftdb_ftdbTypesType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbTypesIter", (PyObject *)&libftdb_ftdbTypesIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbTypeEntry", (PyObject *)&libftdb_ftdbTypeEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFops", (PyObject *)&libftdb_ftdbFopsType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFopsIter", (PyObject *)&libftdb_ftdbFopsIterType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
+    if (PyModule_AddObject(m, "ftdbFopsEntry", (PyObject *)&libftdb_ftdbFopsEntryType)<0) {
+        Py_DECREF(m);
+        return 0;
+    }
+
     libftdb_ftdbError = PyErr_NewException("libftdb.FtdbError",0,0);
     Py_XINCREF(libftdb_ftdbError);
     if (PyModule_AddObject(m, "FtdbError", libftdb_ftdbError) < 0) {
