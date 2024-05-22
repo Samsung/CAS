@@ -1510,197 +1510,168 @@ PyObject* libftdb_ftdb_funcs_mp_subscript(PyObject* self, PyObject* slice) {
 
 PyObject* libftdb_ftdb_funcs_entry_by_id(libftdb_ftdb_funcs_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_id = PyTuple_GetItem(args,0);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->frefmap, id);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function id not present in the array: %lu\n",id);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,func_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->frefmap, id);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function id not present in the array: %lu\n",id);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,func_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_funcs_contains_id_internal(libftdb_ftdb_funcs_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_funcs_contains_id_internal(libftdb_ftdb_funcs_object *self, unsigned long id) {
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->frefmap, id);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->frefmap, id);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcs_contains_id(libftdb_ftdb_funcs_object *self, PyObject *args) {
     
-    PyObject* py_id = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcs_contains_id_internal(self,py_id);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
+
+    return libftdb_ftdb_funcs_contains_id_internal(self,id);
 }
 
 PyObject* libftdb_ftdb_funcs_entry_by_hash(libftdb_ftdb_funcs_object *self, PyObject *args) {
 
     static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_hash = PyTuple_GetItem(args,0);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fhrefmap, hash);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function hash not present in the array: %s\n",hash);
-            PYASSTR_DECREF(hash);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(hash);
-        struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,func_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fhrefmap, hash);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function hash not present in the array: %s\n",hash);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,func_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_funcs_contains_hash_internal(libftdb_ftdb_funcs_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_funcs_contains_hash_internal(libftdb_ftdb_funcs_object *self, const char *hash) {
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fhrefmap, hash);
-        PYASSTR_DECREF(hash);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fhrefmap, hash);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcs_contains_hash(libftdb_ftdb_funcs_object *self, PyObject *args) {
     
-    PyObject* py_hash = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcs_contains_hash_internal(self,py_hash);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
+    
+    return libftdb_ftdb_funcs_contains_hash_internal(self,hash);
 }
 
 PyObject* libftdb_ftdb_funcs_entry_by_name(libftdb_ftdb_funcs_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_name = PyTuple_GetItem(args,0);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fnrefmap, name);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function name not present in the array: %s\n",name);
-            PYASSTR_DECREF(name);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(name);
-        struct ftdb_func_entry** func_entry_list = (struct ftdb_func_entry**)node->entry_list;
-        PyObject* entry_list = PyList_New(0);
-        for (unsigned long i=0; i<node->entry_count; ++i) {
-            struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)(func_entry_list[i]);
-            PyObject* args = PyTuple_New(2);
-            PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-            PYTUPLE_SET_ULONG(args,1,func_entry->__index);
-            PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, args);
-            Py_DecRef(args);
-            PyList_Append(entry_list,entry);
-            Py_DecRef(entry);
-        }
-        return entry_list;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fnrefmap, name);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function name not present in the array: %s\n",name);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_func_entry** func_entry_list = (struct ftdb_func_entry**)node->entry_list;
+    PyObject* entry_list = PyList_New(0);
+    for (unsigned long i=0; i<node->entry_count; ++i) {
+        struct ftdb_func_entry* func_entry = (struct ftdb_func_entry*)(func_entry_list[i]);
+        PyObject* args = PyTuple_New(2);
+        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
+        PYTUPLE_SET_ULONG(args,1,func_entry->__index);
+        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncsEntryType, args);
+        Py_DecRef(args);
+        PyList_Append(entry_list,entry);
+        Py_DecRef(entry);
+    }
+    return entry_list;
 }
 
-static PyObject* libftdb_ftdb_funcs_contains_name_internal(libftdb_ftdb_funcs_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_funcs_contains_name_internal(libftdb_ftdb_funcs_object *self, const char *name) {
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fnrefmap, name);
-        PYASSTR_DECREF(name);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fnrefmap, name);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcs_contains_name(libftdb_ftdb_funcs_object *self, PyObject *args) {
     
-    PyObject* py_name = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcs_contains_name_internal(self,py_name);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
+
+    return libftdb_ftdb_funcs_contains_name_internal(self,name);
 }
 
 int libftdb_ftdb_funcs_sq_contains(PyObject* self, PyObject* key) {
-
-    static char errmsg[ERRMSG_BUFFER_SIZE];
 
     libftdb_ftdb_funcs_object* __self = (libftdb_ftdb_funcs_object*)self;
 
     if (PyUnicode_Check(key)) {
         /* Check name */
-        PyObject* v = libftdb_ftdb_funcs_contains_name_internal(__self,key);
+        const char* name;
+        if(!PyArg_Parse(key, "s", &name))
+            return -1;
+
+        PyObject* v = libftdb_ftdb_funcs_contains_name_internal(__self,name);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyLong_Check(key)) {
         /* Check id */
-        PyObject* v = libftdb_ftdb_funcs_contains_id_internal(__self,key);
+        unsigned long id = PyLong_AsUnsignedLong(key);
+        PyObject* v = libftdb_ftdb_funcs_contains_id_internal(__self,id);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyTuple_Check(key)) {
         /* Check hash */
-        if (PyTuple_Size(key)!=1) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid size of contains check tuple: %ld (should be 1)",PyTuple_Size(key));
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PyObject* v = libftdb_ftdb_funcs_contains_hash_internal(__self,PyTuple_GetItem(key,0));
+        const char* hash;
+        if(!PyArg_ParseTuple(key, "s", &hash))
+            return -1;
+
+        PyObject* v = libftdb_ftdb_funcs_contains_hash_internal(__self,hash);
         if (v) {
             return PyObject_IsTrue(v);
         }
@@ -3392,6 +3363,7 @@ void libftdb_ftdb_func_callinfo_entry_dealloc(libftdb_ftdb_func_callinfo_entry_o
 
 PyObject* libftdb_ftdb_func_callinfo_entry_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
+
     static char errmsg[ERRMSG_BUFFER_SIZE];
     libftdb_ftdb_func_callinfo_entry_object* self;
 
@@ -4931,167 +4903,135 @@ PyObject* libftdb_ftdb_funcdecls_mp_subscript(PyObject* self, PyObject* slice) {
 
 PyObject* libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_id = PyTuple_GetItem(args,0);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->fdrefmap, id);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function decl id not present in the array: %lu\n",id);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        struct ftdb_funcdecl_entry* func_entry = (struct ftdb_funcdecl_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,func_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->fdrefmap, id);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function decl id not present in the array: %lu\n",id);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_funcdecl_entry* func_entry = (struct ftdb_funcdecl_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,func_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_funcdecls_object *self, unsigned long id) {
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->fdrefmap, id);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->fdrefmap, id);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    PyObject* py_id = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcdecls_contains_id_internal(self,py_id);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
+    return libftdb_ftdb_funcdecls_contains_id_internal(self,id);
 }
 
 PyObject* libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_hash = PyTuple_GetItem(args,0);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function decl hash not present in the array: %s\n",hash);
-            PYASSTR_DECREF(hash);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(hash);
-        struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,funcdecl_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function decl hash not present in the array: %s\n",hash);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,funcdecl_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_funcdecls_object *self, const char *hash) {
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
-        PYASSTR_DECREF(hash);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    PyObject* py_hash = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcdecls_contains_hash_internal(self,py_hash);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
+
+    return libftdb_ftdb_funcdecls_contains_hash_internal(self,hash);
 }
 
 PyObject* libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_name = PyTuple_GetItem(args,0);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function declaration name not present in the array: %s\n",name);
-            PYASSTR_DECREF(name);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(name);
-        struct ftdb_funcdecl_entry** funcdecl_entry_list = (struct ftdb_funcdecl_entry**)node->entry_list;
-        PyObject* entry_list = PyList_New(0);
-        for (unsigned long i=0; i<node->entry_count; ++i) {
-            struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)(funcdecl_entry_list[i]);
-            PyObject* args = PyTuple_New(2);
-            PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-            PYTUPLE_SET_ULONG(args,1,funcdecl_entry->__index);
-            PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
-            Py_DecRef(args);
-            PyList_Append(entry_list,entry);
-            Py_DecRef(entry);
-        }
-        return entry_list;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function declaration name not present in the array: %s\n",name);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_funcdecl_entry** funcdecl_entry_list = (struct ftdb_funcdecl_entry**)node->entry_list;
+    PyObject* entry_list = PyList_New(0);
+    for (unsigned long i=0; i<node->entry_count; ++i) {
+        struct ftdb_funcdecl_entry* funcdecl_entry = (struct ftdb_funcdecl_entry*)(funcdecl_entry_list[i]);
+        PyObject* args = PyTuple_New(2);
+        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
+        PYTUPLE_SET_ULONG(args,1,funcdecl_entry->__index);
+        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbFuncdeclsEntryType, args);
+        Py_DecRef(args);
+        PyList_Append(entry_list,entry);
+        Py_DecRef(entry);
+    }
+    return entry_list;
 }
 
-static PyObject* libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_funcdecls_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_funcdecls_object *self, const char *name) {
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
-        PYASSTR_DECREF(name);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
 
-    PyObject* py_name = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_funcdecls_contains_name_internal(self,py_name);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
+
+    return libftdb_ftdb_funcdecls_contains_name_internal(self,name);
 }
 
 int libftdb_ftdb_funcdecls_sq_contains(PyObject* self, PyObject* key) {
@@ -5100,14 +5040,19 @@ int libftdb_ftdb_funcdecls_sq_contains(PyObject* self, PyObject* key) {
 
     if (PyUnicode_Check(key)) {
         /* Check hash */
-        PyObject* v = libftdb_ftdb_funcdecls_contains_hash_internal(__self,key);
+        const char* hash;
+        if(!PyArg_ParseTuple(key, "s", &hash))
+            return -1;
+
+        PyObject* v = libftdb_ftdb_funcdecls_contains_hash_internal(__self,hash);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyLong_Check(key)) {
         /* Check id */
-        PyObject* v = libftdb_ftdb_funcdecls_contains_id_internal(__self,key);
+        unsigned long id = PyLong_AsUnsignedLong(key);
+        PyObject* v = libftdb_ftdb_funcdecls_contains_id_internal(__self,id);
         if (v) {
             return PyObject_IsTrue(v);
         }
@@ -5556,7 +5501,7 @@ void libftdb_ftdb_unresolvedfuncs_dealloc(libftdb_ftdb_unresolvedfuncs_object* s
 
 PyObject* libftdb_ftdb_unresolvedfuncs_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    libftdb_ftdb_unresolvedfuncs_object* self;
+   libftdb_ftdb_unresolvedfuncs_object* self;
 
     self = (libftdb_ftdb_unresolvedfuncs_object*)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
@@ -5613,7 +5558,7 @@ void libftdb_ftdb_unresolvedfuncs_iter_dealloc(libftdb_ftdb_unresolvedfuncs_iter
 
 PyObject* libftdb_ftdb_unresolvedfuncs_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    libftdb_ftdb_unresolvedfuncs_iter_object* self;
+   libftdb_ftdb_unresolvedfuncs_iter_object* self;
 
     self = (libftdb_ftdb_unresolvedfuncs_iter_object*)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
@@ -5657,7 +5602,7 @@ void libftdb_ftdb_globals_dealloc(libftdb_ftdb_globals_object* self) {
 
 PyObject* libftdb_ftdb_globals_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    libftdb_ftdb_globals_object* self;
+   libftdb_ftdb_globals_object* self;
 
     self = (libftdb_ftdb_globals_object*)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
@@ -5746,197 +5691,167 @@ PyObject* libftdb_ftdb_globals_mp_subscript(PyObject* self, PyObject* slice) {
 
 PyObject* libftdb_ftdb_globals_entry_by_id(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_id = PyTuple_GetItem(args,0);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->grefmap, id);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global id not present in the array: %lu\n",id);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,global_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->grefmap, id);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global id not present in the array: %lu\n",id);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,global_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_globals_contains_id_internal(libftdb_ftdb_globals_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_globals_contains_id_internal(libftdb_ftdb_globals_object *self, unsigned long id) {
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->grefmap, id);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->grefmap, id);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 
 }
 
 PyObject* libftdb_ftdb_globals_contains_id(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    PyObject* py_id = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_globals_contains_id_internal(self,py_id);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
+    return libftdb_ftdb_globals_contains_id_internal(self,id);
 }
 
 PyObject* libftdb_ftdb_globals_entry_by_hash(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_hash = PyTuple_GetItem(args,0);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->ghrefmap, hash);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global hash not present in the array: %s\n",hash);
-            PYASSTR_DECREF(hash);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(hash);
-        struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,global_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->ghrefmap, hash);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global hash not present in the array: %s\n",hash);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,global_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
-static PyObject* libftdb_ftdb_globals_contains_hash_internal(libftdb_ftdb_globals_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_globals_contains_hash_internal(libftdb_ftdb_globals_object *self, const char *hash) {
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->ghrefmap, hash);
-        PYASSTR_DECREF(hash);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->ghrefmap, hash);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_globals_contains_hash(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    PyObject* py_hash = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_globals_contains_hash_internal(self,py_hash);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
+    return libftdb_ftdb_globals_contains_hash_internal(self,hash);
 }
 
 PyObject* libftdb_ftdb_globals_entry_by_name(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_name = PyTuple_GetItem(args,0);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->gnrefmap, name);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global name not present in the array: %s\n",name);
-            PYASSTR_DECREF(name);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(name);
-        struct ftdb_global_entry** func_entry_list = (struct ftdb_global_entry**)node->entry_list;
-        PyObject* entry_list = PyList_New(0);
-        for (unsigned long i=0; i<node->entry_count; ++i) {
-            struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)(func_entry_list[i]);
-            PyObject* args = PyTuple_New(2);
-            PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-            PYTUPLE_SET_ULONG(args,1,global_entry->__index);
-            PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, args);
-            Py_DecRef(args);
-            PyList_Append(entry_list,entry);
-        }
-        return entry_list;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->gnrefmap, name);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid global name not present in the array: %s\n",name);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_global_entry** func_entry_list = (struct ftdb_global_entry**)node->entry_list;
+    PyObject* entry_list = PyList_New(0);
+    for (unsigned long i=0; i<node->entry_count; ++i) {
+        struct ftdb_global_entry* global_entry = (struct ftdb_global_entry*)(func_entry_list[i]);
+        PyObject* args = PyTuple_New(2);
+        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
+        PYTUPLE_SET_ULONG(args,1,global_entry->__index);
+        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbGlobalEntryType, args);
+        Py_DecRef(args);
+        PyList_Append(entry_list,entry);
+    }
+    return entry_list;
 }
 
-static PyObject* libftdb_ftdb_globals_contains_name_internal(libftdb_ftdb_globals_object *self, PyObject *py_name) {
+static PyObject* libftdb_ftdb_globals_contains_name_internal(libftdb_ftdb_globals_object *self, const char *name) {
 
-    if (PyUnicode_Check(py_name)) {
-        const char* name = PyString_get_c_str(py_name);
-        struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->gnrefmap, name);
-        PYASSTR_DECREF(name);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryListMap_node* node = stringRef_entryListMap_search(&self->ftdb->gnrefmap, name);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_globals_contains_name(libftdb_ftdb_globals_object *self, PyObject *args) {
 
-    PyObject* py_name = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_globals_contains_name_internal(self,py_name);
+    const char* name;
+    if(!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
+    
+    return libftdb_ftdb_globals_contains_name_internal(self,name);
+
 }
 
 int libftdb_ftdb_globals_sq_contains(PyObject* self, PyObject* key) {
-
-    static char errmsg[ERRMSG_BUFFER_SIZE];
 
     libftdb_ftdb_globals_object* __self = (libftdb_ftdb_globals_object*)self;
 
     if (PyUnicode_Check(key)) {
         /* Check name */
-        PyObject* v = libftdb_ftdb_globals_contains_name_internal(__self,key);
+        const char* name;
+        if(!PyArg_Parse(key, "s", &name))
+            return -1;
+
+        PyObject* v = libftdb_ftdb_globals_contains_name_internal(__self,name);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyLong_Check(key)) {
         /* Check id */
-        PyObject* v = libftdb_ftdb_globals_contains_id_internal(__self,key);
+        unsigned long id = PyLong_AsUnsignedLong(key);
+        PyObject* v = libftdb_ftdb_globals_contains_id_internal(__self,id);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyTuple_Check(key)) {
         /* Check hash */
-        if (PyTuple_Size(key)!=1) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"Invalid size of contains check tuple: %ld (should be 1)",PyTuple_Size(key));
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PyObject* v = libftdb_ftdb_globals_contains_hash_internal(__self,PyTuple_GetItem(key,0));
+        const char* hash;
+        if(!PyArg_ParseTuple(key, "s", &hash))
+            return -1;
+
+        PyObject* v = libftdb_ftdb_globals_contains_hash_internal(__self,hash);
         if (v) {
             return PyObject_IsTrue(v);
         }
@@ -5960,7 +5875,6 @@ void libftdb_ftdb_globals_iter_dealloc(libftdb_ftdb_globals_iter_object* self) {
 }
 
 PyObject* libftdb_ftdb_globals_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
-
 
     libftdb_ftdb_globals_iter_object* self;
 
@@ -6008,7 +5922,7 @@ void libftdb_ftdb_global_entry_dealloc(libftdb_ftdb_global_entry_object* self) {
 
 PyObject* libftdb_ftdb_global_entry_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    libftdb_ftdb_global_entry_object* self;
+   libftdb_ftdb_global_entry_object* self;
 
     self = (libftdb_ftdb_global_entry_object*)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
@@ -6450,7 +6364,7 @@ void libftdb_ftdb_types_dealloc(libftdb_ftdb_types_object* self) {
 }
 PyObject* libftdb_ftdb_types_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
 
-    libftdb_ftdb_types_object* self;
+   libftdb_ftdb_types_object* self;
 
     self = (libftdb_ftdb_types_object*)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
@@ -6538,108 +6452,87 @@ PyObject* libftdb_ftdb_types_mp_subscript(PyObject* self, PyObject* slice) {
 
 }
 
-static PyObject* libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_types_object *self, PyObject *py_hash) {
+static PyObject* libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_types_object *self, const char *hash) {
 
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->hrefmap, hash);
-        PYASSTR_DECREF(hash);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->hrefmap, hash);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_types_contains_hash(libftdb_ftdb_types_object *self, PyObject *args) {
 
-    PyObject* py_hash = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_types_contains_hash_internal(self,py_hash);
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
+    return libftdb_ftdb_types_contains_hash_internal(self,hash);
 }
 
-static PyObject* libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_types_object *self, PyObject *py_id) {
+static PyObject* libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_types_object *self, unsigned long id) {
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->refmap, id);
-        if (node) {
-            Py_RETURN_TRUE;
-        }
-        else {
-            Py_RETURN_FALSE;
-        }
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->refmap, id);
+    if (node) {
+        Py_RETURN_TRUE;
     }
     else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
-        return 0;
+        Py_RETURN_FALSE;
     }
 }
 
 PyObject* libftdb_ftdb_types_contains_id(libftdb_ftdb_types_object *self, PyObject *args) {
 
-    PyObject* py_id = PyTuple_GetItem(args,0);
-    return libftdb_ftdb_types_contains_id_internal(self,py_id);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
+    return libftdb_ftdb_types_contains_id_internal(self,id);
 }
 
 PyObject* libftdb_ftdb_types_entry_by_hash(libftdb_ftdb_types_object *self, PyObject *args) {
 
+    const char* hash;
+    if(!PyArg_ParseTuple(args, "s", &hash))
+        return NULL;
+
     static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_hash = PyTuple_GetItem(args,0);
-    if (PyUnicode_Check(py_hash)) {
-        const char* hash = PyString_get_c_str(py_hash);
-        struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->hrefmap, hash);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function hash not present in the array: %s\n",hash);
-            PYASSTR_DECREF(hash);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        PYASSTR_DECREF(hash);
-        struct ftdb_type_entry* types_entry = (struct ftdb_type_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,types_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbTypeEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    struct stringRef_entryMap_node* node = stringRef_entryMap_search(&self->ftdb->hrefmap, hash);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function hash not present in the array: %s\n",hash);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_type_entry* types_entry = (struct ftdb_type_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,types_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbTypeEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
 PyObject* libftdb_ftdb_types_entry_by_id(libftdb_ftdb_types_object *self, PyObject *args) {
 
-    static char errmsg[ERRMSG_BUFFER_SIZE];
-    PyObject* py_id = PyTuple_GetItem(args,0);
+    unsigned long id;
+    if(!PyArg_ParseTuple(args, "k", &id))
+        return NULL;
 
-    if (PyLong_Check(py_id)) {
-        unsigned long id = PyLong_AsUnsignedLong(py_id);
-        struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->refmap, id);
-        if (!node) {
-            snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function id not present in the array: %lu\n",id);
-            PyErr_SetString(libftdb_ftdbError, errmsg);
-            return 0;
-        }
-        struct ftdb_type_entry* types_entry = (struct ftdb_type_entry*)node->entry;
-        PyObject* args = PyTuple_New(2);
-        PYTUPLE_SET_ULONG(args,0,(uintptr_t)self);
-        PYTUPLE_SET_ULONG(args,1,types_entry->__index);
-        PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbTypeEntryType, args);
-        Py_DecRef(args);
-        return entry;
-    }
-    else {
-        PyErr_SetString(libftdb_ftdbError, "Invalid subscript argument");
+    static char errmsg[ERRMSG_BUFFER_SIZE];
+
+    struct ulong_entryMap_node* node = ulong_entryMap_search(&self->ftdb->refmap, id);
+    if (!node) {
+        snprintf(errmsg,ERRMSG_BUFFER_SIZE,"invalid function id not present in the array: %lu\n",id);
+        PyErr_SetString(libftdb_ftdbError, errmsg);
         return 0;
     }
+    struct ftdb_type_entry* types_entry = (struct ftdb_type_entry*)node->entry;
+    PyObject* _args = PyTuple_New(2);
+    PYTUPLE_SET_ULONG(_args,0,(uintptr_t)self);
+    PYTUPLE_SET_ULONG(_args,1,types_entry->__index);
+    PyObject *entry = PyObject_CallObject((PyObject *) &libftdb_ftdbTypeEntryType, _args);
+    Py_DecRef(_args);
+    return entry;
 }
 
 int libftdb_ftdb_types_sq_contains(PyObject* self, PyObject* key) {
@@ -6648,14 +6541,18 @@ int libftdb_ftdb_types_sq_contains(PyObject* self, PyObject* key) {
 
     if (PyUnicode_Check(key)) {
         /* Check hash */
-        PyObject* v = libftdb_ftdb_types_contains_hash_internal(__self,key);
+        const char* hash;
+        if(!PyArg_Parse(key, "s", &hash))
+            return -1;
+        PyObject* v = libftdb_ftdb_types_contains_hash_internal(__self,hash);
         if (v) {
             return PyObject_IsTrue(v);
         }
     }
     else if (PyLong_Check(key)) {
         /* Check id */
-        PyObject* v = libftdb_ftdb_types_contains_id_internal(__self,key);
+        unsigned long id = PyLong_AsUnsignedLong(key);
+        PyObject* v = libftdb_ftdb_types_contains_id_internal(__self,id);
         if (v) {
             return PyObject_IsTrue(v);
         }
@@ -9456,8 +9353,10 @@ uflat_error_exit:
 
 PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args) {
 
-    PyObject* py_fmt = PyTuple_GetItem(args,0);
-    const char* fmt =  PyString_get_c_str(py_fmt);
+    const char* fmt;
+    if(!PyArg_ParseTuple(args, "s", &fmt))
+        return NULL;
+        
     enum format_type* par_type = malloc(256*sizeof(enum format_type));
     int n = vsnprintf_parse_format(&par_type,256,fmt);
 
@@ -9473,7 +9372,6 @@ PyObject * libftdb_parse_c_fmt_string(PyObject *self, PyObject *args) {
     }
 
     free(par_type);
-    PYASSTR_DECREF(fmt);
     return argv;
 }
 

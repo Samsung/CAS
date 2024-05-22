@@ -344,11 +344,12 @@ parser.add_argument("--skip-function-tests", action="store_true", help="Skip per
 parser.add_argument("--skip-function-member-tests", action="store_true", help="Skip performing function member tests")
 parser.add_argument("--skip-function-mapping-tests", action="store_true", help="Skip performing function mapping tests")
 parser.add_argument("--only-ftdb-create", action="store_true", help="Only create ftdb cache")
+parser.add_argument("--seed", action="store", help="Input seed for entries sampling, by default this value is randomly chosen")
 parser.add_argument('db_path', action="store")
 args = parser.parse_args()
 
 # Allow for easier reproduction
-seed = random.randint(0, 100000)
+seed = random.randint(0, 100000) if args.seed is None else args.seed
 random.seed(seed)
 print(f'Initial random seed: {seed}')
 
