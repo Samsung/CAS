@@ -6,6 +6,8 @@ Pipe
 Open
 RenameFrom
 Rename2From
+Mount
+Umount
 LinkFrom
 LinkatFrom
 Symlink
@@ -24,6 +26,8 @@ flags
 mode
 fnamesize
 forigsize
+sourcenamesize
+typenamesize
 targetnamesize
 linknamesize
 resolvednamesize
@@ -57,6 +61,9 @@ LT
 ST
 SR
 SL
+MS
+MT
+MX
 PI[
 PP[
 CW[
@@ -69,6 +76,9 @@ LT[
 ST[
 SR[
 SL[
+MS[
+MT[
+MX[
 PI_end
 PP_end
 CW_end
@@ -81,3 +91,6 @@ LT_end
 ST_end
 SR_end
 SL_end
+MS_end
+MT_end
+MX_end

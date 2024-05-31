@@ -43,6 +43,42 @@ static int pipe_open_for_write(struct fdmap_node *from, struct fdmap_node *to, i
     return 0;
 }
 
+void print_mounts(ParsingResults& results, std::ostream& output) {
+    output << "{\n";
+
+    for (auto it = results.process_map.begin(), end_iter = results.process_map.end(); it != end_iter; ++it) {
+        auto& process = it->second;
+        output << "\"" << process.executions[0].pid << "\":[";
+
+        for (size_t i = 0; i < process.executions.size(); i++) {
+            auto& execution = process.executions[i];
+
+            auto mount_size = execution.mounts.size();
+            size_t curr = 0;
+            for (auto& [target, mount] : execution.mounts) {
+                curr++;
+                output << "\n\t{\"x\":" << execution.index;
+                output << ",\"t\":" << mount.target;
+                output << ",\"s\":" << mount.source;
+                output << ",\"y\":" << mount.type;
+                output << ",\"f\":" << mount.flags;
+                output << ",\"m\":" << mount.mount_stamps[0];
+                output << "}";
+                if (curr < mount_size)
+                    output << ",";
+                output << "\n";
+            }
+        }
+
+        if (std::next(it) == end_iter)
+            output << "]\n";
+        else
+            output << "],\n";
+    }
+
+    output << "}\n";
+}
+
 void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& output, size_t split = 0) {
     size_t progress_counter = 0;
     size_t process_map_size = results.process_map.size();
@@ -188,6 +224,7 @@ int parser_main(int argc, char **argv) {
     std::error_code err;
     std::ifstream input;
     std::ofstream output;
+    std::ofstream mounts;
 
     struct sigaction act;
     size_t thread_count = 1;
@@ -757,7 +794,14 @@ int parser_main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    mounts.open(".nfsdb.mounts.json");
+    if (!mounts.good()) {
+        std::cerr << "couldn't open .nfsdb.mounts.json for writing, quitting\n";
+        return EXIT_FAILURE;
+    }
+
     flush_entries(results, pipe_map, output, entry_split);
+    print_mounts(results, mounts);
 
     if (!interrupt)
         std::cout << "\r100%\r";

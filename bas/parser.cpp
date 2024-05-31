@@ -484,6 +484,47 @@ Errorable<ExitArguments> StreamParser::parse_exit_short_arguments(const eventTup
     return arguments;
 }
 
+Errorable<UmountArguments> StreamParser::parse_umount_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    UmountArguments arguments = {};
+
+    separator = std::strchr(event_line, '=');
+    if (!separator)
+        return BadSeparatorError(event.line_number, event_line);
+
+    tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+    switch (tag) {
+    case ShortArguments::Targetnamesize:
+        errno = 0;
+        value = std::strtoull(++separator, &endptr, 10);
+        if (errno) [[unlikely]]
+            return IntegerParseError(event.line_number, separator, errno);
+        else if (*endptr != ',') [[unlikely]]
+            return BadSeparatorError(event.line_number, separator);
+        arguments.targetnamesize = value;
+        event_line = ++endptr;
+        break;
+    case ShortArguments::Flags:
+        errno = 0;
+        value = std::strtoull(++separator, &endptr, 10);
+        if (errno) [[unlikely]]
+            return IntegerParseError(event.line_number, separator, errno);
+        else if (*endptr != 0) [[unlikely]]
+            return BadSeparatorError(event.line_number, separator);
+        arguments.flags = value;
+        goto ret;
+    default:
+        return UnexpectedTagError(event.line_number, tag);
+    }
+
+ret:
+    return arguments;
+}
+
 Errorable<RenameArguments> StreamParser::parse_rename2_short_arguments(const eventTuple_t &event) {
     char *endptr;
     char *separator;
@@ -675,6 +716,69 @@ ret:
     return arguments;
 }
 
+Errorable<MountArguments> StreamParser::parse_mount_short_arguments(const eventTuple_t &event) {
+    char *endptr;
+    char *separator;
+    char *event_line = const_cast<char *>(event.event_arguments.c_str());
+    uint64_t value;
+    ShortArguments tag;
+    MountArguments arguments = {};
+    arguments.typenamesize = -1;
+
+    for (;;) {
+        separator = std::strchr(event_line, '=');
+        if (!separator)
+            return BadSeparatorError(event.line_number, event_line);
+
+        tag = static_cast<ShortArguments>(hash(event_line, separator - event_line));
+        switch (tag) {
+        case ShortArguments::Targetnamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.targetnamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Sourcenamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != ',') [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.sourcenamesize = value;
+            event_line = ++endptr;
+            break;
+        case ShortArguments::Typenamesize:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.typenamesize = value;
+            break;
+        case ShortArguments::Flags:
+            errno = 0;
+            value = std::strtoull(++separator, &endptr, 10);
+            if (errno) [[unlikely]]
+                return IntegerParseError(event.line_number, separator, errno);
+            else if (*endptr != 0) [[unlikely]]
+                return BadSeparatorError(event.line_number, separator);
+            arguments.flags = value;
+            goto ret;
+        default:
+            return UnexpectedTagError(event.line_number, tag);
+        }
+    }
+
+ret:
+    return arguments;
+}
+
 size_t StreamParser::parse_arguments(std::vector<eventTuple_t>::iterator &it,
                                      const std::vector<eventTuple_t>::iterator &end_it,
                                      std::vector<std::string> &result)
@@ -844,6 +948,9 @@ Errorable<eventTuple_t> StreamParser::parse_generic_args(const char *line, size_
         case Tag::SymlinkTargetNameExtended:
         case Tag::SymlinkTargetPathExtended:
         case Tag::SymlinkPathExtended:
+        case Tag::MountTypeExtended:
+        case Tag::MountTargetExtended:
+        case Tag::MountSourceExtended:
             argument_bracket = std::strchr(event_separator + 1, '[');
             if (!argument_bracket)
                 return BadSeparatorError(line_number, event_separator + 1);
@@ -1051,6 +1158,77 @@ Errorable<void> StreamParser::process_events(Process &process) {
             append_syscall(syscall_raw(process.pid, syscall_raw::SYS_DUP, argnfo.oldfd,
                         argnfo.newfd, argnfo.flags, evln.timestamp - first_event_time()));
             it++;
+        } break;
+        case Tag::Mount: {
+            MountArguments argnfo = {};
+            std::string source;
+            std::string target;
+            std::string type;
+            auto result = StreamParser::parse_mount_short_arguments(evln);
+            if (result.is_error())
+                return result;
+
+            argnfo = result.value();
+            ++it;
+            bound_check_iter(it, end_it);
+            auto last_it = it;
+
+            size = StreamParser::parse_long_argument(it, end_it, Tag::MountSource,
+                    Tag::MountSourceExtended, Tag::MountSourceEnd, source);
+            bound_check_iter(it, end_it);
+
+            last_it = it;
+
+            size = StreamParser::parse_long_argument(it, end_it, Tag::MountTarget,
+                    Tag::MountTargetExtended, Tag::MountTargetEnd, target);
+            bound_check_iter(it, end_it);
+
+            if (argnfo.typenamesize != -1) {
+                last_it = it;
+                ssize_t size = StreamParser::parse_long_argument(it, end_it,
+                        Tag::MountType, Tag::MountTypeExtended,
+                        Tag::MountTypeEnd, type);
+
+                bound_check_iter(it, end_it);
+            }
+
+            Execution &execution = process.executions.back();
+            if (execution.mounts.find(target) == execution.mounts.end()) {
+                execution.mounts[target] = Mount(target, source, type, argnfo.flags);
+            }
+
+            execution.mounts[target].mount_stamps.push_back(evln.timestamp);
+            n_processed++;
+            _stats_collector.increment_mount();
+        } break;
+        case Tag::Umount: {
+            // TODO: We don't use umount info that much right now, add more?
+            UmountArguments argnfo = {};
+            std::string target;
+            auto result = StreamParser::parse_umount_short_arguments(evln);
+            if (result.is_error())
+                return result;
+
+            argnfo = result.value();
+
+            ++it;
+            bound_check_iter(it, end_it);
+
+            auto last_it = it;
+            size = StreamParser::parse_long_argument(it, end_it, Tag::MountTarget,
+                    Tag::MountTargetExtended, Tag::MountTargetEnd, target);
+
+            bound_check_iter(it, end_it);
+
+            if (size != argnfo.targetnamesize)
+                return SizeMismatchError(last_it->line_number, size, argnfo.targetnamesize);
+
+            Execution &execution = process.executions.back();
+            if (execution.mounts.find(target) == execution.mounts.end())
+                continue;
+
+            execution.mounts[target].mount_stamps.push_back(evln.timestamp);
+            n_processed++;
         } break;
         case Tag::Open: {
             OpenArguments argnfo = {};

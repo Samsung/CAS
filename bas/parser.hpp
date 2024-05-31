@@ -112,6 +112,18 @@ struct ExitArguments {
     char status;
 };
 
+struct MountArguments {
+    size_t targetnamesize;
+    size_t sourcenamesize;
+    ssize_t typenamesize;
+    unsigned long flags;
+};
+
+struct UmountArguments {
+    size_t targetnamesize;
+    unsigned long flags;
+};
+
 typedef struct eventTuple {
     upid_t pid;
     unsigned cpu;
@@ -172,6 +184,26 @@ struct Child {
     {};
 };
 
+struct Mount {
+    Mount() = default;
+    Mount(const Mount &) = default;
+    Mount(Mount &&) = default;
+    Mount(std::string source, std::string target, std::string type, unsigned long flags)
+        : source (source)
+        , target (target)
+        , type (type)
+        , flags (flags)
+    {};
+    Mount& operator=(const Mount &) = default;
+    Mount& operator=(Mount &&) = default;
+
+    std::string source;
+    std::string target;
+    std::string type;
+    unsigned long flags;
+    std::vector<uint64_t> mount_stamps;
+    std::vector<uint64_t> umount_stamps;
+};
 
 struct Execution {
     Execution() = default;
@@ -186,6 +218,7 @@ struct Execution {
     uint64_t elapsed_time;
 
     std::map<std::string, OpenFile> opened_files;
+    std::map<std::string, Mount> mounts;
     std::pair<upid_t, unsigned> parent;
     std::string program_path;
     std::string current_working_directory;
@@ -307,8 +340,13 @@ private:
     std::atomic<size_t> process_count;
     std::atomic<size_t> procs_at_exit;
     std::atomic<size_t> multilines_count;
+    std::atomic<size_t> mount_count;
 public:
     StatsCollector() = default;
+
+    void increment_mount(void) {
+        mount_count.fetch_add(1, std::memory_order_relaxed);
+    }
 
     void increment_exec(void) {
         exec_count.fetch_add(1, std::memory_order_relaxed);
@@ -458,6 +496,8 @@ protected:
     static Errorable<RenameArguments> parse_rename2_short_arguments(const eventTuple_t &);
     static Errorable<LinkArguments> parse_linkat_short_arguments(const eventTuple_t &);
     static Errorable<DupArguments> parse_dup_short_arguments(const eventTuple_t &);
+    static Errorable<MountArguments> parse_mount_short_arguments(const eventTuple_t &);
+    static Errorable<UmountArguments> parse_umount_short_arguments(const eventTuple_t &);
     static Errorable<SymlinkArguments> parse_symlink_short_arguments(const eventTuple_t &);
     static size_t parse_arguments(std::vector<eventTuple_t>::iterator &,
                             const std::vector<eventTuple_t>::iterator &,
