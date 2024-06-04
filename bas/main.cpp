@@ -44,39 +44,33 @@ static int pipe_open_for_write(struct fdmap_node *from, struct fdmap_node *to, i
 }
 
 void print_mounts(ParsingResults& results, std::ostream& output) {
-    output << "{\n";
+    output << "[\n";
 
-    for (auto it = results.process_map.begin(), end_iter = results.process_map.end(); it != end_iter; ++it) {
+    for (auto it = results.process_map.begin(), end_it = results.process_map.end(); it != end_it; ++it) {
         auto& process = it->second;
-        output << "\"" << process.executions[0].pid << "\":[";
 
         for (size_t i = 0; i < process.executions.size(); i++) {
             auto& execution = process.executions[i];
 
             auto mount_size = execution.mounts.size();
             size_t curr = 0;
-            for (auto& [target, mount] : execution.mounts) {
+            for (auto iter = execution.mounts.begin(), end_iter = execution.mounts.end(); iter != end_iter; iter++) {
+                auto& mount = *iter;
                 curr++;
-                output << "\n\t{\"x\":" << execution.index;
-                output << ",\"t\":" << mount.target;
-                output << ",\"s\":" << mount.source;
-                output << ",\"y\":" << mount.type;
+                output << "\t{\"p\":" << execution.pid;
+                output << ",\"x\":" << execution.index;
+                output << ",\"t\":\"" << mount.target << "\"";
+                output << ",\"s\":\"" << mount.source << "\"";
+                output << ",\"y\":\"" << mount.type << "\"";
                 output << ",\"f\":" << mount.flags;
-                output << ",\"m\":" << mount.mount_stamps[0];
-                output << "}";
-                if (curr < mount_size)
-                    output << ",";
-                output << "\n";
+                output << ",\"m\":" << mount.mount_timestamp;
+                output << "},\n";
             }
         }
-
-        if (std::next(it) == end_iter)
-            output << "]\n";
-        else
-            output << "],\n";
     }
 
-    output << "}\n";
+    output.seekp(output.tellp() - 2);
+    output << " \n]\n";
 }
 
 void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& output, size_t split = 0) {

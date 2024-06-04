@@ -1193,11 +1193,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
             }
 
             Execution &execution = process.executions.back();
-            if (execution.mounts.find(target) == execution.mounts.end()) {
-                execution.mounts[target] = Mount(target, source, type, argnfo.flags);
-            }
+            execution.mounts.push_back(Mount(target, source, type, argnfo.flags, evln.timestamp));
 
-            execution.mounts[target].mount_stamps.push_back(evln.timestamp);
             n_processed++;
             _stats_collector.increment_mount();
         } break;
@@ -1224,10 +1221,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 return SizeMismatchError(last_it->line_number, size, argnfo.targetnamesize);
 
             Execution &execution = process.executions.back();
-            if (execution.mounts.find(target) == execution.mounts.end())
-                continue;
-
-            execution.mounts[target].mount_stamps.push_back(evln.timestamp);
             n_processed++;
         } break;
         case Tag::Open: {
@@ -1479,7 +1472,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
         } break;
         default: {
             /* Try to ignore it */
-            return {};
+            // return {};
             it++;
             break;
         }

@@ -188,11 +188,12 @@ struct Mount {
     Mount() = default;
     Mount(const Mount &) = default;
     Mount(Mount &&) = default;
-    Mount(std::string source, std::string target, std::string type, unsigned long flags)
+    Mount(std::string source, std::string target, std::string type, unsigned long flags, uint64_t timestamp)
         : source (source)
         , target (target)
         , type (type)
         , flags (flags)
+        , mount_timestamp (timestamp)
     {};
     Mount& operator=(const Mount &) = default;
     Mount& operator=(Mount &&) = default;
@@ -201,8 +202,7 @@ struct Mount {
     std::string target;
     std::string type;
     unsigned long flags;
-    std::vector<uint64_t> mount_stamps;
-    std::vector<uint64_t> umount_stamps;
+    uint64_t mount_timestamp;
 };
 
 struct Execution {
@@ -218,7 +218,7 @@ struct Execution {
     uint64_t elapsed_time;
 
     std::map<std::string, OpenFile> opened_files;
-    std::map<std::string, Mount> mounts;
+    std::vector<Mount> mounts;
     std::pair<upid_t, unsigned> parent;
     std::string program_path;
     std::string current_working_directory;
