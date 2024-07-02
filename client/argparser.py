@@ -11,6 +11,7 @@ from client.misc import get_output_renderers
 from client.ide_generator.project_generator import add_params as ide_add_params
 from client.ftdb_generator.ftdb_generator import add_params as ftdb_add_params
 
+
 def get_api_modules() -> Dict[str, Any]:
     """
     Function used to get api keyword-module mapping.
@@ -22,13 +23,14 @@ def get_api_modules() -> Dict[str, Any]:
     from client.mod_dbops import ParseDB, Postprocess, StoreCache
     from client.mod_compilation import Compiled, CompilationInfo, RevCompsFor
     from client.mod_dependencies import DepsFor,  RevDepsFor
-    from client.mod_executables import Binaries, Commands
+    from client.mod_executables import Binaries, Commands, Execs
     from client.mod_modules import LinkedModules, ModDepsFor, RevModDepsFor
     from client.mod_opened_files import Faccess, ProcRef, RefFiles
     return {
         # Modules using database
         'binaries': Binaries, 'bins': Binaries, 'b': Binaries,
         'commands': Commands, 'cmds': Commands,
+        'execs': Execs, 'ex': Execs,
         'compilation_info_for': CompilationInfo, 'ci': CompilationInfo,
         'compiled': Compiled, 'cc': Compiled,
         'deps_for': DepsFor, 'deps': DepsFor,
@@ -197,16 +199,18 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
 
     return common_args, pipeline_args, parser
 
-def fix_arg(argument:str)-> List[str]:
+
+def fix_arg(argument: "str | List[str]") -> List[str]:
     """
     Function used to split ":" separated string into lists.
 
     :param argument: parameter value
-    :type argument: str
+    :type argument: str or List[str]
     :return: parameter values list
     :rtype: List[str]
     """
     return sum([p.replace("'", "").replace('"', '').split(":") for p in argument], [])
+
 
 def get_args(commandline: "str | List[str] | None" = None) -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
@@ -256,7 +260,7 @@ def get_bash_complete() -> str:
     actions = []
     if len(sys.argv) > 2:
         last_module = [x for x in reversed(sys.argv) if x in get_api_keywords()]
-        if  len(last_module) > 0:
+        if len(last_module) > 0:
             actions = [name for x in get_api_modules().get(last_module[0], Module).get_argparser()._actions for name in x.option_strings]
     return "\n".join(get_api_keywords() + common_actions + actions)
 
