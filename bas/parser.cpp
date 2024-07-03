@@ -875,6 +875,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
     long n_processed = 0;
     long n_execs = 0;
     uint64_t exe_start_time = process.first_event_time;
+    process.executions.back().timestamp = exe_start_time - first_event_time();
     size_t size = 0;
     auto& _stats_collector = stats_collector();
 
@@ -953,6 +954,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
             process.executions.push_back(execution);
 
             exe_start_time = evln.timestamp;
+            process.executions.back().timestamp = exe_start_time - first_event_time();
+
             append_syscall(syscall_raw(process.pid, syscall_raw::SYS_EXEC,
                         evln.timestamp - first_event_time()));
 

@@ -215,6 +215,7 @@ class Renderer(OutputRenderer):
                 "cmd": row.argv,
                 "cwd": row.cwd,
                 "pipe_eids": [f'[{o.pid},{o.index}]' for o in row.pipe_eids],
+                "stime": row.stime,
                 "etime": row.etime,
                 "children": len(self.origin_module.nfsdb.get_entries_with_pids([(c.pid,) for c in row.child_cids])),
                 "wpid": row.wpid if row.wpid else "",

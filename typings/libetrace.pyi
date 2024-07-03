@@ -663,6 +663,8 @@ class nfsdbEntry:
     """Index of executable in database"""
     eid: nfsdbEntryEid
     """Process extended pid"""
+    stime: int
+    """Execution timestamp in ms."""
     etime: int
     """Execution length in ms."""
     parent_eid: nfsdbEntryEid

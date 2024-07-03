@@ -61,6 +61,7 @@ BAS is a tool for extracting information regarding executed processes and opened
     {
       "p": <pid>,
       "x": <exeidx>, // index of program execution in this process (as one process can have multiple program executions through exec family syscalls)
+      "s": <stime>,  // start time (in nanoseconds) from the first event for this specific execution
       "e": <etime>,  // elapsed time (in nanoseconds) for this specific execution
       "r": {"p": <pid>, "x": <exeidx>}, // parent entry (pid==-1 means this is the root process execution)
       "c": [{"p":<pid>,"f": <flags>},...], // list of child processes spawned from this execution

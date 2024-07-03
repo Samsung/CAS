@@ -34,12 +34,12 @@ class Renderer(OutputRenderer):
             "binary_view": {
                 "fmt": "{L}",
                 "entry-fmt": "{b}",
-                "entry-detail-fmt": "{p}{sep}{x}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{o}",
+                "entry-detail-fmt": "{p}{sep}{x}{sep}{s}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{o}",
             },
             "commands_view": {
                 "fmt": "{L}",
-                "entry-fmt": "{p}{sep}{x}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{l}{sep}{c}{sep}{o}",
-                "entry-detail-fmt": "{p}{sep}{x}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{l}{sep}{c}{sep}{o}",
+                "entry-fmt": "{p}{sep}{x}{sep}{s}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{l}{sep}{c}{sep}{o}",
+                "entry-detail-fmt": "{p}{sep}{x}{sep}{s}{sep}{e}{sep}{r}{sep}{b}{sep}{w}{sep}{v}{sep}{l}{sep}{c}{sep}{o}",
             },
             "compiled_view": {
                 "fmt": "{L}",
@@ -172,6 +172,7 @@ class Renderer(OutputRenderer):
             r=f"{row.parent_eid.pid}:{row.parent_eid.index}",
             b=row.bpath,
             w=row.cwd,
+            s=row.stime,
             e=row.etime,
             v=" ".join(row.argv).replace("\n", "\\n"),
             n=",".join(row.openpaths),

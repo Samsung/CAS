@@ -182,6 +182,7 @@ struct Execution {
 
     upid_t pid;
     unsigned index = 0;
+    uint64_t timestamp;
     uint64_t elapsed_time;
 
     std::map<std::string, OpenFile> opened_files;
@@ -437,8 +438,8 @@ struct ParsingResults {
 
 class StreamParser {
 private:
-    uint64_t m_last_event_time;
-    uint64_t m_first_event_time;
+    uint64_t m_last_event_time = 0;
+    uint64_t m_first_event_time = 0;
     StatsCollector m_stats_collector;
     std::map<upid_t, Process> m_process_map;
     std::map<upid_t, std::pair<upid_t, unsigned>> m_parent_map;

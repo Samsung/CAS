@@ -13,7 +13,7 @@
  */
 #define NFSDB_MAGIC_NUMBER			0x424453464e42494cULL	/* b'LIBNFSDB' */
 #define NFSDB_DEPS_MAGIC_NUMBER		0x5350454442494cULL		/* b'LIBDEPS\0' */
-#define LIBETRACE_VERSION			3ULL
+#define LIBETRACE_VERSION			4ULL
 
 
 struct eid {
@@ -68,6 +68,7 @@ struct compilation_info {
 struct nfsdb_entry {
 	unsigned long nfsdb_index;
 	struct eid eid;
+	unsigned long stime;
 	unsigned long etime;
 	struct eid parent_eid;
 	struct cid* child_ids;

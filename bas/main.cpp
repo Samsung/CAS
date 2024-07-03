@@ -60,6 +60,7 @@ void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& 
 
         output << "{\"p\":" << execution.pid;
         output << ",\"x\":" << execution.index;
+        output << ",\"s\":" << execution.timestamp;
         output << ",\"e\":" << execution.elapsed_time;
         output << ",\"b\":\"" << execution.program_path << "\"";
         output << ",\"w\":\"" << execution.current_working_directory << "\"";

@@ -818,6 +818,13 @@ PyObject * libetrace_create_nfsdb(PyObject *self, PyObject *args, PyObject* kwar
 		/* pid */
 		new_entry->eid.pid = PyLong_AsUnsignedLong(PyDict_GetItem(item, PyUnicode_FromString("p")));
 		new_entry->eid.exeidx = PyLong_AsUnsignedLong(PyDict_GetItem(item, PyUnicode_FromString("x")));
+		/* start time */
+		if (PyDict_Contains(item, PyUnicode_FromString("s"))) {
+			new_entry->stime = PyLong_AsUnsignedLong(PyDict_GetItem(item, PyUnicode_FromString("s")));
+		}
+		else {
+			new_entry->stime = ULONG_MAX;
+		}
 		/* elapsed time */
 		if (PyDict_Contains(item, PyUnicode_FromString("e"))) {
 			new_entry->etime = PyLong_AsUnsignedLong(PyDict_GetItem(item, PyUnicode_FromString("e")));
@@ -4083,6 +4090,9 @@ PyObject* libetrace_nfsdb_entry_json(libetrace_nfsdb_entry_object *self, PyObjec
 
 	FTDB_SET_ENTRY_ULONG(json,p,self->entry->eid.pid);
 	FTDB_SET_ENTRY_ULONG(json,x,self->entry->eid.exeidx);
+	if (self->entry->stime!=ULONG_MAX) {
+		FTDB_SET_ENTRY_ULONG(json,s,self->entry->stime);
+	}
 	if (self->entry->etime!=ULONG_MAX) {
 		FTDB_SET_ENTRY_ULONG(json,e,self->entry->etime);
 	}
@@ -4306,6 +4316,13 @@ PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure) {
 
 	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
 	return PyLong_FromUnsignedLong(__self->nfsdb_index);
+}
+
+PyObject* libetrace_nfsdb_entry_get_stime(PyObject* self, void* closure) {
+
+	libetrace_nfsdb_entry_object* __self = (libetrace_nfsdb_entry_object*)self;
+
+	return PyLong_FromLong(__self->entry->stime);
 }
 
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure) {

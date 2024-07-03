@@ -396,6 +396,7 @@ PyObject* libetrace_nfsdb_entry_accessed_openfiles(PyObject* self, PyObject *arg
 PyObject* libetrace_nfsdb_entry_get_argvn(PyObject* self, PyObject *args);
 PyObject* libetrace_nfsdb_entry_get_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_ptr(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_get_stime(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_etime(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent_eid(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_parent(PyObject* self, void* closure);
@@ -443,6 +444,7 @@ static PyMemberDef libetrace_nfsdbEntry_members[] = {
 
 static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"eid",libetrace_nfsdb_entry_get_eid,0,"nfsdb entry eid value",0},
+	{"stime",libetrace_nfsdb_entry_get_stime,0,"nfsdb entry stime value",0},
 	{"etime",libetrace_nfsdb_entry_get_etime,0,"nfsdb entry etime value",0},
 	{"parent_eid",libetrace_nfsdb_entry_get_parent_eid,0,"nfsdb entry parent eid value",0},
 	{"parent",libetrace_nfsdb_entry_get_parent,0,"nfsdb entry parent entry",0},
