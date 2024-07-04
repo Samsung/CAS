@@ -1,117 +1,108 @@
-pub mod asms;
-pub mod deref;
-pub mod function;
-pub mod globalref;
-pub mod ifs;
-pub mod refcall;
-pub mod taint;
-use std::ffi::CString;
-
-pub use self::function::FunctionEntry;
-use crate::utils::ptr_to_slice;
-use ftdb_sys::ftdb::{
-    ftdb, ftdb_func_entry, stringRef_entryListMap_search, stringRef_entryMap_search,
-    ulong_entryMap_search,
+use super::{
+    collection::{BorrowedIterator, FtdbCollection, IntoOwnedIterator},
+    FtdbHandle, Handle, InnerRef, Owned,
 };
+use crate::{macros::impl_inner_handle, FunctionId};
+use ftdb_sys::ftdb::{ftdb, ftdb_func_entry, query::FuncEntryQuery};
+use std::{ptr::NonNull, sync::Arc};
 
-pub struct Functions<'a>(&'a ftdb);
+mod asms;
+mod borrowed;
+mod calls;
+mod deref;
+mod entry;
+mod extensions;
+mod globalref;
+mod ifs;
+mod location;
+mod owned;
+mod refcall;
+mod switches;
+mod taint;
 
-impl<'a> From<&'a ftdb> for Functions<'a> {
-    fn from(db: &'a ftdb) -> Self {
-        Functions(db)
+pub use self::asms::*;
+pub use self::calls::*;
+pub use self::deref::*;
+pub use self::entry::*;
+pub use self::extensions::DfsFunctionExt;
+pub use self::globalref::*;
+pub use self::ifs::*;
+pub use self::location::*;
+pub use self::refcall::*;
+pub use self::switches::*;
+pub use self::taint::*;
+
+pub use self::borrowed::FunctionEntry;
+pub use self::owned::FunctionEntry as OwnedFunctionEntry;
+
+///
+///
+pub struct Functions(Owned<ftdb>);
+
+impl FtdbCollection<ftdb_func_entry> for Functions {
+    #[inline]
+    unsafe fn get_ptr(&self, index: usize) -> *mut ftdb_func_entry {
+        self.inner_ref().get_ptr(index)
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        <ftdb as FtdbCollection<ftdb_func_entry>>::len(self.inner_ref())
     }
 }
 
-impl<'a> IntoIterator for Functions<'a> {
-    type Item = FunctionEntry<'a>;
-    type IntoIter = FunctionsIter<'a>;
+impl_inner_handle!(Functions);
+
+impl<'s> InnerRef<'s, 's, ftdb> for Functions {
+    #[inline]
+    fn inner_ref(&'s self) -> &'s ftdb {
+        self.0.inner_ref()
+    }
+}
+
+impl IntoIterator for Functions {
+    type Item = owned::FunctionEntry;
+    type IntoIter = IntoOwnedIterator<Self, Self::Item, ftdb_func_entry>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.iter()
+        IntoOwnedIterator::new(self)
     }
 }
 
-impl<'a> Functions<'a> {
+impl Functions {
+    pub(super) fn new(db: NonNull<ftdb>, handle: Arc<FtdbHandle>) -> Self {
+        Self(Owned { db, handle })
+    }
+
     /// Get function by its unique identifier
     ///
-    pub fn get_by_id(&self, id: u64) -> Option<FunctionEntry<'a>> {
-        let node = unsafe { ulong_entryMap_search(&self.0.frefmap, id) };
-        if node.is_null() {
-            return None;
-        }
-        let entry = unsafe {
-            let entry = (*node).entry;
-            &*(entry as *const ftdb_func_entry)
-        };
-        Some(entry.into())
+    #[inline]
+    pub fn get_by_id(&self, id: FunctionId) -> Option<FunctionEntry<'_>> {
+        self.0.func_by_id(id.0).map(FunctionEntry::from)
     }
 
     /// Get function by its hash
     ///
-    pub fn get_by_hash(&self, hash: &str) -> Option<FunctionEntry<'a>> {
-        // Rust strings are not null terminated but FFI expects NULL byte
-        let name = CString::new(hash).expect("Null byte in the middle");
-        let node =
-            unsafe { stringRef_entryMap_search(&self.0.fhrefmap, hash.as_ptr() as *const i8) };
-        if node.is_null() {
-            return None;
-        }
-        let entry = unsafe {
-            let entry = (*node).entry;
-            &*(entry as *const ftdb_func_entry)
-        };
-        Some(entry.into())
+    #[inline]
+    pub fn get_by_hash(&self, hash: &str) -> Option<FunctionEntry> {
+        self.0.func_by_hash(hash).map(FunctionEntry::from)
     }
 
     /// Get functions by a name
     ///
     ///
-    pub fn get_by_name(&self, name: &str) -> Vec<FunctionEntry<'a>> {
-        // Rust strings are not null terminated but FFI expects NULL byte
-        let name = CString::new(name).expect("Null byte in the middle");
-        let nodes =
-            unsafe { stringRef_entryListMap_search(&self.0.fnrefmap, name.as_ptr() as *const i8) };
-        if nodes.is_null() {
-            return Vec::new();
-        }
-        unsafe {
-            let nodes = *nodes;
-            let entries = nodes.entry_list;
-            let entries = &*(entries as *const *const ftdb_func_entry);
-            let count = nodes.entry_count;
-            ptr_to_slice(entries, count)
-                .iter()
-                .map(|x| {
-                    let node = x.as_ref().unwrap();
-                    node.into()
-                })
-                .collect()
-        }
+    #[inline]
+    pub fn get_by_name<'p>(
+        &'p self,
+        name: &'p str,
+    ) -> impl Iterator<Item = FunctionEntry<'_>> + 'p {
+        self.0.funcs_by_name(name).map(FunctionEntry::from)
     }
 
     /// Iterator through function entries
     ///
-    pub fn iter(&self) -> FunctionsIter<'a> {
-        FunctionsIter { db: self.0, cur: 0 }
-    }
-}
-
-pub struct FunctionsIter<'a> {
-    db: &'a ftdb,
-    cur: usize,
-}
-
-impl<'a> Iterator for FunctionsIter<'a> {
-    type Item = FunctionEntry<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.cur < self.db.funcs_count as usize {
-            let entry =
-                unsafe { self.db.funcs.add(self.cur).as_ref() }.expect("Pointer must not be null");
-            self.cur += 1;
-            Some(entry.into())
-        } else {
-            None
-        }
+    #[inline]
+    pub fn iter(&self) -> BorrowedIterator<'_, Functions, FunctionEntry<'_>, ftdb_func_entry> {
+        BorrowedIterator::new(self)
     }
 }

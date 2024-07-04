@@ -2,7 +2,7 @@ use crate::utils::{ptr_to_slice, ptr_to_str};
 use ftdb_sys::ftdb::{asm_info, ftdb_func_entry};
 use std::fmt::Display;
 
-pub struct Asms<'a>(&'a ftdb_func_entry);
+pub struct Asms<'a>(pub(crate) &'a ftdb_func_entry);
 
 impl<'a> From<&'a ftdb_func_entry> for Asms<'a> {
     fn from(inner: &'a ftdb_func_entry) -> Self {
@@ -13,7 +13,7 @@ impl<'a> From<&'a ftdb_func_entry> for Asms<'a> {
 impl<'a> Asms<'a> {
     /// Return iterator over asm entries
     ///
-    pub fn iter(&self) -> impl Iterator<Item = AsmEntry<'a>> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = AsmEntry<'a>> {
         ptr_to_slice(self.0.asms, self.0.asms_count)
             .iter()
             .map(|x| x.into())

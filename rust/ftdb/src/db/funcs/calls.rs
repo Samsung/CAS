@@ -1,5 +1,7 @@
-use super::ExprType;
-use crate::utils::{ptr_to_slice, ptr_to_str, try_ptr_to_str, try_ptr_to_type};
+use crate::{
+    db::{ExprType, FunctionId},
+    utils::{ptr_to_slice, ptr_to_str, try_ptr_to_str, try_ptr_to_type},
+};
 use ftdb_sys::ftdb::{call_info, callref_data, callref_info, ftdb_func_entry};
 use std::fmt::Display;
 
@@ -9,36 +11,69 @@ use std::fmt::Display;
 ///
 pub struct Calls<'a>(&'a ftdb_func_entry);
 
+impl<'a> Display for Calls<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Calls: {} entries>", self.0.calls_count)
+    }
+}
 impl<'a> From<&'a ftdb_func_entry> for Calls<'a> {
     fn from(inner: &'a ftdb_func_entry) -> Self {
         Self(inner)
     }
 }
 
-impl<'a> Display for Calls<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Calls: {} entries>", self.0.calls_count)
-    }
-}
-
 impl<'a> Calls<'a> {
-    pub fn iter(&self) -> impl Iterator<Item = CallEntry<'a>> {
-        (0..self.0.calls_count).into_iter().map(|idx| unsafe {
-            let id = self.0.calls.add(idx as usize);
-            let ci = self.0.call_info.add(idx as usize);
-            let cri = self.0.callrefs.add(idx as usize);
-            CallEntry {
-                id: *id,
-                ci: &*ci,
-                cr: &*cri,
-            }
-        })
+    pub fn iter(&self) -> CallEntryIterator<'a> {
+        CallEntryIterator { db: self.0, cur: 0 }
     }
 
     pub fn to_vec(&self) -> Vec<CallEntry<'a>> {
         self.iter().collect()
     }
 }
+
+impl<'a> IntoIterator for Calls<'a> {
+    type Item = CallEntry<'a>;
+    type IntoIter = CallEntryIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+pub struct CallEntryIterator<'a> {
+    db: &'a ftdb_func_entry,
+    cur: usize,
+}
+
+impl<'a> Iterator for CallEntryIterator<'a> {
+    type Item = CallEntry<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cur < self.db.calls_count as usize {
+            unsafe {
+                let id = self.db.calls.add(self.cur);
+                let ci = self.db.call_info.add(self.cur);
+                let cri = self.db.callrefs.add(self.cur);
+                self.cur += 1;
+                Some(CallEntry {
+                    id: FunctionId::from(*id),
+                    ci: &*ci,
+                    cr: &*cri,
+                })
+            }
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.db.calls_count as usize - self.cur;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a> ExactSizeIterator for CallEntryIterator<'a> {}
 
 /// Function call details
 ///
@@ -49,7 +84,7 @@ impl<'a> Calls<'a> {
 ///
 pub struct CallEntry<'a> {
     /// Id of a called function
-    pub id: u64,
+    pub id: FunctionId,
 
     /// Inner data structure, representing `call_info`
     ci: &'a call_info,
@@ -64,10 +99,13 @@ impl<'a> CallEntry<'a> {
     }
 
     pub fn refs(&self) -> Vec<CallEntryRefInfo<'a>> {
+        self.refs_iter().collect()
+    }
+
+    pub fn refs_iter(&self) -> impl ExactSizeIterator<Item = CallEntryRefInfo<'a>> {
         ptr_to_slice(self.cr.callarg, self.cr.callarg_count)
             .iter()
             .map(|x| x.into())
-            .collect()
     }
 }
 
@@ -146,5 +184,21 @@ impl<'a> CallEntryRefInfo<'a> {
 
     pub fn type_(&self) -> ExprType {
         self.0.type_.into()
+    }
+
+    /// Try to return data behind CallRefDataId::Id
+    ///
+    pub fn try_plain_id(&self) -> Option<u64> {
+        match self.id() {
+            CallRefDataId::Id(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Return data behind CallRefDataId::Id or panic
+    ///
+    /// This call expects CallRefDataId::Id variant
+    pub fn plain_id(&self) -> u64 {
+        self.try_plain_id().expect("Unexpected ref ID type!")
     }
 }

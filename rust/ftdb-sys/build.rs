@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let ftdb_include_dir = env::var("FTDB_INCLUDE_DIR").expect("FTDB_INCLUDE_DIR not set");
@@ -14,7 +14,7 @@ fn main() {
     println!("cargo:rerun-if-changed=ftdb.rs");
 }
 
-fn bindgen_ftdb(ftdb_include_dir: &str, out_path: &PathBuf) {
+fn bindgen_ftdb(ftdb_include_dir: &str, out_path: &Path) {
     let bindings = bindgen::Builder::default()
         .clang_arg(format!("-I/{}/bas", ftdb_include_dir))
         .clang_arg(format!("-I/{}/kflat/lib/include_priv", ftdb_include_dir))
@@ -60,8 +60,8 @@ fn bindgen_ftdb(ftdb_include_dir: &str, out_path: &PathBuf) {
     store(bindings, out_path, "ftdb.rs");
 }
 
-fn store(bindings: bindgen::Bindings, out_path: &PathBuf, path: &str) {
+fn store(bindings: bindgen::Bindings, out_path: &Path, path: &str) {
     bindings
         .write_to_file(out_path.join(path))
-        .expect(format!("Unable to write {} bindings", path).as_str());
+        .expect("Unable to write bindings");
 }

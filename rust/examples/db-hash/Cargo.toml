@@ -1,0 +1,12 @@
+[package]
+name = "db-hash"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+data-encoding = "2.5.0"
+ftdb = { path = "../../ftdb"}
+openssl = "0.10.64"
+
+[features]
+default = []

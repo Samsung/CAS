@@ -1,6 +1,5 @@
+use super::utils::{ptr_to_slice, ptr_to_str};
 use std::fmt::Display;
-
-use crate::utils::{ptr_to_slice, ptr_to_str};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprType {
@@ -40,9 +39,7 @@ impl From<ftdb_sys::ftdb::exprType> for ExprType {
             ftdb_sys::ftdb::exprType::EXPR_LOCALPARM => Self::LocalParm,
             ftdb_sys::ftdb::exprType::EXPR_STRINGLITERAL => Self::StringLiteral,
             ftdb_sys::ftdb::exprType::EXPR_CHARLITERAL => Self::CharLiteral,
-            ftdb_sys::ftdb::exprType::EXPR_INTEGERLITERAL => {
-                Self::IntegerLiteral
-            }
+            ftdb_sys::ftdb::exprType::EXPR_INTEGERLITERAL => Self::IntegerLiteral,
             ftdb_sys::ftdb::exprType::EXPR_FLOATLITERAL => Self::FloatLiteral,
             ftdb_sys::ftdb::exprType::EXPR_CALLREF => Self::CallRef,
             ftdb_sys::ftdb::exprType::EXPR_REFCALLREF => Self::RefCallRef,
@@ -137,25 +134,13 @@ pub struct Literals<'a> {
 impl<'a> From<&'a ftdb_sys::ftdb::ftdb_global_entry> for Literals<'a> {
     fn from(src: &'a ftdb_sys::ftdb::ftdb_global_entry) -> Self {
         Literals {
-            character: ptr_to_slice(
-                src.character_literals,
-                src.character_literals_count,
-            ),
-            floating: ptr_to_slice(
-                src.floating_literals,
-                src.floating_literals_count,
-            ),
-            integer: ptr_to_slice(
-                src.integer_literals,
-                src.integer_literals_count,
-            ),
-            string: ptr_to_slice(
-                src.string_literals,
-                src.string_literals_count,
-            )
-            .iter()
-            .map(|ptr| ptr_to_str(*ptr))
-            .collect(),
+            character: ptr_to_slice(src.character_literals, src.character_literals_count),
+            floating: ptr_to_slice(src.floating_literals, src.floating_literals_count),
+            integer: ptr_to_slice(src.integer_literals, src.integer_literals_count),
+            string: ptr_to_slice(src.string_literals, src.string_literals_count)
+                .iter()
+                .map(|ptr| ptr_to_str(*ptr))
+                .collect(),
         }
     }
 }
@@ -164,25 +149,13 @@ impl<'a> From<&'a ftdb_sys::ftdb::ftdb_global_entry> for Literals<'a> {
 impl<'a> From<&'a ftdb_sys::ftdb::ftdb_func_entry> for Literals<'a> {
     fn from(src: &'a ftdb_sys::ftdb::ftdb_func_entry) -> Self {
         Literals {
-            character: ptr_to_slice(
-                src.character_literals,
-                src.character_literals_count,
-            ),
-            floating: ptr_to_slice(
-                src.floating_literals,
-                src.floating_literals_count,
-            ),
-            integer: ptr_to_slice(
-                src.integer_literals,
-                src.integer_literals_count,
-            ),
-            string: ptr_to_slice(
-                src.string_literals,
-                src.string_literals_count,
-            )
-            .iter()
-            .map(|ptr| ptr_to_str(*ptr))
-            .collect(),
+            character: ptr_to_slice(src.character_literals, src.character_literals_count),
+            floating: ptr_to_slice(src.floating_literals, src.floating_literals_count),
+            integer: ptr_to_slice(src.integer_literals, src.integer_literals_count),
+            string: ptr_to_slice(src.string_literals, src.string_literals_count)
+                .iter()
+                .map(|ptr| ptr_to_str(*ptr))
+                .collect(),
         }
     }
 }
@@ -235,64 +208,34 @@ pub enum TypeClass {
 impl From<ftdb_sys::ftdb::TypeClass> for TypeClass {
     fn from(src: ftdb_sys::ftdb::TypeClass) -> Self {
         match src {
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_EMPTYRECORD => {
-                Self::EmptyRecord
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_EMPTYRECORD => Self::EmptyRecord,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_BUILTIN => Self::Builtin,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_POINTER => Self::Pointer,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_MEMBERPOINTER => {
-                Self::MemberPointer
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_MEMBERPOINTER => Self::MemberPointer,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_ATTRIBUTED => Self::Attributed,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_COMPLEX => Self::Complex,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_VECTOR => Self::Vector,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_EXTENDEDVECTOR => {
-                Self::ExtendedVector
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_DEPENDENT_SIZED_ARRAY => {
-                Self::DependentSizedArray
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_PACKEXPANSION => {
-                Self::PackExpansion
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_UNRESOLVEDUSING => {
-                Self::UnresolvedUsing
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_EXTENDEDVECTOR => Self::ExtendedVector,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_DEPENDENT_SIZED_ARRAY => Self::DependentSizedArray,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_PACKEXPANSION => Self::PackExpansion,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_UNRESOLVEDUSING => Self::UnresolvedUsing,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_AUTO => Self::Auto,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_TEMPLATETYPEPARM => {
-                Self::TemplateTypeParm
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_DEPENDENTNAME => {
-                Self::DependentName
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_TEMPLATETYPEPARM => Self::TemplateTypeParm,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_DEPENDENTNAME => Self::DependentName,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_SUBSTTEMPLATETYPEPARM => {
                 Self::SubstTemplateTypeParm
             }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDSPECIALIZATION => {
-                Self::RecordSpecialization
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDTEMPLATE => {
-                Self::RecordTemplate
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDSPECIALIZATION => Self::RecordSpecialization,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDTEMPLATE => Self::RecordTemplate,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORD => Self::Record,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDFORWARD => {
-                Self::RecordForward
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_RECORDFORWARD => Self::RecordForward,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_CONSTARRAY => Self::ConstArray,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_INCOMPLETEARRAY => {
-                Self::IncompleteArray
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_VARIABLEARRAY => {
-                Self::VariableArray
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_INCOMPLETEARRAY => Self::IncompleteArray,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_VARIABLEARRAY => Self::VariableArray,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_TYPEDEF => Self::Typedef,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_ENUM => Self::Enum,
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_ENUMFORWARD => {
-                Self::EnumForward
-            }
-            ftdb_sys::ftdb::TypeClass::TYPECLASS_DECAYEDPOINTER => {
-                Self::DecayedPointer
-            }
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_ENUMFORWARD => Self::EnumForward,
+            ftdb_sys::ftdb::TypeClass::TYPECLASS_DECAYEDPOINTER => Self::DecayedPointer,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_FUNCTION => Self::Function,
             _ => Self::Undef,
         }

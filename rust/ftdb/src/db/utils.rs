@@ -35,16 +35,6 @@ pub fn ptr_to_slice<'a, T>(data: *const T, len: u64) -> &'a [T] {
     unsafe { slice::from_raw_parts(data, len as usize) }
 }
 
-pub fn ptr_to_vec_str<'a>(
-    data: *const *const libc::c_char,
-    len: u64,
-) -> Vec<&'a str> {
-    ptr_to_slice(data, len)
-        .iter()
-        .map(|x| ptr_to_str(*x))
-        .collect()
-}
-
 /// Convert pointer to a slice
 ///
 /// If data is NULL, a None option is returned. Otherwise slice is wrapped

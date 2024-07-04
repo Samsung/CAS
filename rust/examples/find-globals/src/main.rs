@@ -1,10 +1,9 @@
-use ftdb::load_ftdb_cache;
+use ftdb::load;
 use std::path::Path;
 
-fn run<T: AsRef<Path>>(path: T, name: &str) -> ftdb::error::Result<()> {
-    let fdb = load_ftdb_cache(path)?;
-    let globals = fdb.globals();
-    for global in globals.entry_by_name(name).iter() {
+fn run<T: AsRef<Path>>(path: T, name: &str) -> ftdb::FtdbResult<()> {
+    let fdb = load(path)?;
+    for global in fdb.globals_by_name(name) {
         println!("{}:", global.location());
         println!("{}\n", global.defstring());
     }

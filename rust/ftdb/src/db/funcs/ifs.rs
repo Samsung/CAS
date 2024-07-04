@@ -21,13 +21,18 @@ impl<'a> If<'a> {
 
     ///
     ///
-    pub fn refs_iter(&self) -> impl Iterator<Item = IfRef> {
+    pub fn refs_iter(&self) -> impl ExactSizeIterator<Item = IfRef<'a>> {
         ptr_to_slice(self.0.refs, self.0.refs_count)
             .iter()
             .map(|x| x.into())
     }
-}
 
+    ///
+    ///
+    pub fn refs(&self) -> Vec<IfRef<'a>> {
+        self.refs_iter().collect()
+    }
+}
 pub struct IfRef<'a>(&'a ifref_info);
 
 impl<'a> From<&'a ifref_info> for IfRef<'a> {
@@ -43,8 +48,6 @@ impl<'a> IfRef<'a> {
         self.0.type_.into()
     }
 
-    ///
-    ///
     pub fn id(&self) -> IfRefId {
         if let Some(id) = try_ptr_to_type(self.0.id) {
             return IfRefId::Id(id);

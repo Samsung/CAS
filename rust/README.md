@@ -72,7 +72,7 @@ To start working with ftdb library open up flattened database file:
 ```rust
 use ftdb::load_ftdb_cache;
 
-fn run() -> ftdb::error::Result<()> {
+fn run() -> ftdb::FtdbResult<()> {
     let fdb = load_ftdb_cache(path)?;
     println!("Metadata:");
     println!("  Directory: {}", fdb.directory());

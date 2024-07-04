@@ -3,7 +3,14 @@ members = [
     "rust/ftdb-sys",
     "rust/ftdb",
     "rust/examples/ftdb-info",
-    "rust/examples/find-globals"
+    "rust/examples/find-globals",
+    "rust/examples/db-hash",
 ]
 
 resolver = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+strip = true
+# debug = 1

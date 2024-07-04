@@ -17,13 +17,16 @@ impl<'a> Taint<'a> {
     /// List of taint elements for this taint
     ///
     pub fn data(&self) -> Vec<TaintElement> {
+        self.data_iter().collect()
+    }
+
+    pub fn data_iter(&self) -> impl ExactSizeIterator<Item = TaintElement> {
         ptr_to_slice(self.inner.taint_list, self.inner.taint_list_count)
             .iter()
             .map(|x| TaintElement {
                 level: x.taint_level,
                 varid: x.varid,
             })
-            .collect()
     }
 }
 

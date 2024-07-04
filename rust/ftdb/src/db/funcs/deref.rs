@@ -1,15 +1,20 @@
-use ftdb_sys::ftdb::{deref_info, offsetref_info};
-
 use crate::{
-    db::ExprType,
+    db::{ExprType, InnerRef, TypeId},
     utils::{ptr_to_slice, ptr_to_str, try_ptr_to_slice, try_ptr_to_type},
 };
+use ftdb_sys::ftdb::{deref_info, offsetref_info};
 
 pub struct DerefInfo<'a>(&'a deref_info);
 
 impl<'a> From<&'a deref_info> for DerefInfo<'a> {
     fn from(inner: &'a deref_info) -> Self {
         Self(inner)
+    }
+}
+
+impl<'s, 'r> InnerRef<'s, 'r, deref_info> for DerefInfo<'r> {
+    fn inner_ref(&'s self) -> &'r deref_info {
+        self.0
     }
 }
 
@@ -69,10 +74,13 @@ impl<'a> DerefInfo<'a> {
     /// ftdb func derefinfo entry offsetrefs values
     ///
     pub fn offsetrefs(&self) -> Vec<OffsetRef> {
+        self.offsetrefs_iter().collect()
+    }
+
+    pub fn offsetrefs_iter(&self) -> impl ExactSizeIterator<Item = OffsetRef> {
         ptr_to_slice(self.0.offsetrefs, self.0.offsetrefs_count)
             .iter()
             .map(|x| x.into())
-            .collect()
     }
 
     ///
@@ -83,8 +91,8 @@ impl<'a> DerefInfo<'a> {
 
     ///
     ///
-    pub fn type_(&self) -> Option<&[u64]> {
-        try_ptr_to_slice(self.0.type_, self.0.type_count)
+    pub fn type_(&self) -> Option<&[TypeId]> {
+        try_ptr_to_slice(self.0.type_ as *const TypeId, self.0.type_count)
     }
 }
 
@@ -113,9 +121,7 @@ impl<'a> OffsetRef<'a> {
     ///
     pub fn id(&self) -> OffsetRefId {
         match self.kind() {
-            ExprType::String => {
-                OffsetRefId::String(ptr_to_str(self.0.id_string))
-            }
+            ExprType::String => OffsetRefId::String(ptr_to_str(self.0.id_string)),
             ExprType::Floating => OffsetRefId::Float(self.0.id_float),
             _ => OffsetRefId::Integer(self.0.id_integer),
         }
