@@ -180,3 +180,12 @@ def printdbg(msg, args, file=sys.stderr, flush=True):
 
 def printerr(msg, file=sys.stderr, flush=True):
     print(msg, file=file, flush=flush)
+
+def fix_body(body:str) -> str:
+    return body.replace("\\", "\\\\")\
+               .replace('"', '\\"')\
+               .replace("\b", "\\b")\
+               .replace("\f", "\\f")\
+               .replace("\n", "\\n")\
+               .replace("\r", "\\r")\
+               .replace("\t","\\t")

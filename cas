@@ -34,24 +34,25 @@ if __name__ == '__main__':
             browser = webbrowser.get()
         except webbrowser.Error:
             print ("NO BROWSER")
-        
-        from cas_server import app
-        from cas_server import translate_to_url
 
+        from cas_server import app, translate_to_url
+
+        port = 8383
         try:
             port_idx = list(map(lambda x: x.startswith("--port"), args)).index(True)
             port = int(args[port_idx].split('=')[1])
             args.pop(port_idx)
         except Exception:
-            port = 8383
+            pass
 
+        host = "0.0.0.0"
         try:
             host_idx = list(map(lambda x: x.startswith("--host"), args)).index(True)
-            host = int(args[port_idx].split('=')[1])
+            host = args[host_idx].split('=')[1]
             args.pop(host_idx)
         except Exception:
-            host = "0.0.0.0"
-        
+            pass
+
         url_args = translate_to_url(args)
         def browser_spawn():
             browser.open(f"http://{host}:{port}/{url_args}", new=2)
@@ -62,15 +63,21 @@ if __name__ == '__main__':
         import os
         from typing import Generator,  Iterator
         import libcas
+        from libft_db import FTDatabase
         from client.cmdline import process_commandline
+        from client.exceptions import MessageException
 
         cas_db = libcas.CASDatabase()
-        ret = process_commandline(cas_db)
-        if ret:
-            if isinstance(ret, Iterator):
-                print(*ret, sep=os.linesep)
-            elif isinstance(ret, Generator):
-                print(*ret, sep=os.linesep)
-            else:
-                print(ret, flush=True)
-        sys.exit(0)
+        ft_db = FTDatabase()
+        try:
+            ret = process_commandline(cas_db, ft_db=ft_db)
+            if ret:
+                if isinstance(ret, Iterator):
+                    print(*ret, sep=os.linesep)
+                elif isinstance(ret, Generator):
+                    print(*ret, sep=os.linesep)
+                else:
+                    print(ret, flush=True)
+        except MessageException as e :
+            print("ERROR: " + e.message)
+            sys.exit(2)

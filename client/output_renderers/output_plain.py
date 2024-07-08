@@ -1,6 +1,10 @@
 import os
 import json
+from typing import Tuple
+
 import libetrace
+import libftdb
+import libft_db
 import libcas
 
 from client.output_renderers.output import OutputRenderer
@@ -50,7 +54,12 @@ class Renderer(OutputRenderer):
                 "fmt": "{L}",
                 "entry-fmt": "<entry_format_spec>",
                 "entry-detail-fmt": "<entry_format_spec>"
-            }
+            },
+            "src_md_view": {
+                "fmt": "{L}",
+                "entry-fmt": "{f}",
+                "entry-detail-fmt": "{id}{sep}{f}",
+            },
         }
     }
 
@@ -123,6 +132,14 @@ class Renderer(OutputRenderer):
                 if "{L}" in fmt:
                     for row in self.data:
                         yield self._process_entry_format(row, entry_fmt)
+            elif isinstance(self.data[0],libft_db.ftdbSourceEntry) or isinstance(self.data[0],libft_db.ftdbModuleEntry):
+                if "{S}" in fmt:
+                    yield str(self.count)
+                if "{N}" in fmt:
+                    yield str(self.num_entries)
+                if "{L}" in fmt:
+                    for row in self.data:
+                        yield self._src_md_entry_format(row, entry_fmt)
             else:
                 assert False, "UNKNOWN RETURN DATA - This should never happend!"
         else:
@@ -184,6 +201,13 @@ class Renderer(OutputRenderer):
 
     def _process_entry_format(self, row, entry_fmt):
         return entry_fmt.format(p=row[0], m=access_from_code(get_file_info(row[1])[2]), sep=self.args.separator)
+    
+    def _src_md_entry_format(self, row:"libft_db.ftdbSourceEntry | libft_db.ftdbModuleEntry", entry_fmt: str) -> str:
+        return entry_fmt.format(
+            f=row.path,
+            sep=self.args.separator,
+            id=row.fid if type(row) == libft_db.ftdbSourceEntry else row.mid
+        )
 
     def linked_data_renderer(self):
         fmt, entry_fmt = self._get_configured_formatters("linked_view")
@@ -250,6 +274,15 @@ class Renderer(OutputRenderer):
 
     def dbversion_data_renderer(self):
         return self.data
+    
+    def modulename_data_renderer(self):
+        return self.data
+
+    def dirname_data_renderer(self):
+        return self.data
+
+    def releasename_data_renderer(self):
+        return self.data
 
     def stat_data_renderer(self):
         if isinstance(self.data, dict):
@@ -311,3 +344,47 @@ class Renderer(OutputRenderer):
 
     def compilation_db_data_renderer(self):
         return "Compilation db available in --json output"
+
+    def sources_data_renderer(self):
+        fmt, entry_fmt = self._get_configured_formatters("src_md_view")
+        return self.formatter(fmt, entry_fmt)
+
+    def function_data_renderer(self):
+        if self.args.body:
+            for func in self.data:
+                yield func.body
+
+        elif self.args.ubody:
+            for func in self.data:
+                yield func.unpreprocessed_body
+
+        else:
+            for func in self.data:
+                yield func.name
+    
+    def global_data_renderer(self):
+        if self.args.definition:
+            for glob in self.data:
+                yield glob.defstring
+        else:
+            for glob in self.data:
+                yield glob.name
+    
+    def modules_data_renderer(self):
+        fmt, entry_fmt = self._get_configured_formatters("src_md_view")
+        return self.formatter(fmt, entry_fmt)
+    
+    def funcdecl_data_renderer(self):
+        if self.args.declbody:
+            for fd in self.data:
+                yield fd.decl
+        else:
+            for fd in self.data:
+                yield fd.name
+    
+    def types_data_renderer(self):
+        for t in self.data:
+            try:
+                yield t.name
+            except libftdb.FtdbError:
+                pass

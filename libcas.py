@@ -194,6 +194,7 @@ class CASDatabase:
         self.db = libetrace.nfsdb()
         self.db_loaded = False
         self.cache_db_loaded = False
+        self.config = None
 
     def set_config(self, config: CASConfig):
         """

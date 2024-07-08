@@ -1,9 +1,11 @@
-import sys
-from client.mod_base import Module, PipedModule, FilterableModule
-from client.misc import printdbg
-from client.output_renderers.output import DataTypes
+
 from typing import Any, Tuple, Callable
 import libetrace
+from client.mod_base import Module, PipedModule, FilterableModule
+from client.misc import printdbg
+from client.exceptions import PipelineException
+from client.output_renderers.output import DataTypes
+
 
 class DepsFor(Module, PipedModule, FilterableModule):
     """Dependencies - returns list of all files that have been read in process of creating given file."""
@@ -80,8 +82,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
         if data_type == libetrace.nfsdbEntry:
-            print("ERROR: Wrong pipe input data {}.".format(data_type))
-            sys.exit(2)
+            raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         paths = self.get_ext_paths(self.args.path)
@@ -182,8 +183,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
         if data_type == libetrace.nfsdbEntry:
-            print("ERROR: Wrong pipe input data {}.".format(data_type))
-            sys.exit(2)
+            raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         rdeps = [ f

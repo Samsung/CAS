@@ -7,10 +7,12 @@ from typing import Any, List, Dict, Tuple, Optional, Generator, Type, Callable
 import argparse
 import libetrace
 import libcas
-from client.filtering import CommandFilter, OpenFilter, FilterException
+import libftdb
+from libft_db import FTDatabase
+from client.filtering import CommandFilter, OpenFilter, FilterException, FtdbSimpleFilter
 from client.misc import get_output_renderers, printdbg, printerr, fix_cmd
 from client.output_renderers.output import DataTypes
-
+from client.exceptions import ArgumentException, ParameterException, LibetraceException, PipelineException
 
 class ModulePipeline:
     def __init__(self, modules: list) -> None:
@@ -27,34 +29,28 @@ class ModulePipeline:
         pipe_type: "type | None" = None
         for mdl in self.modules:
             printdbg("DEBUG: START pipeline step {}".format(mdl.args.module.__name__), mdl.args)
-
             if mdl.args.is_piped and self.last_module is not None and pipe_type is not None:
                 printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, pipe_type.__name__, mdl.args.module.__name__), mdl.args)
                 if not isinstance(data, list):
-                    return "ERROR: Input data '{}' module is not list - cannot proceed with next pipeline step!".format(mdl.args.module.__name__)
+                    raise PipelineException("Input data '{}' module is not list - cannot proceed with next pipeline step!".format(mdl.args.module.__name__))
                 elif len(data) == 0:
-                    return "ERROR: Input data to '{}' module is empty - cannot proceed with next pipeline step!".format(mdl.args.module.__name__)
+                    raise PipelineException("Input data to '{}' module is empty - cannot proceed with next pipeline step!".format(mdl.args.module.__name__))
                 if isinstance(mdl, PipedModule):
                     mdl.set_piped_arg(data, pipe_type)
                 else:
-                    return "ERROR: Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__)
+                    raise PipelineException("Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__))
 
-            try:
-                mdl.check_required(mdl.required_args, mdl.args)
-            except ArgumentException as err:
-                return "ERROR: {}".format(err.message)
+
+            mdl.check_required(mdl.required_args, mdl.args)
 
             if "open_filter" in mdl.args and mdl.args.open_filter:
-                try:
-                    mdl.open_filter = OpenFilter(mdl.args.open_filter, mdl, mdl.config, mdl.source_root)
-                except FilterException as err:
-                    return "ERROR: {}".format(err.message)
+                mdl.open_filter = OpenFilter(mdl.args.open_filter, mdl, mdl.config, mdl.source_root)
 
             if "command_filter" in mdl.args and mdl.args.command_filter:
-                try:
-                    mdl.command_filter = CommandFilter(mdl.args.command_filter, mdl, mdl.config, mdl.source_root)
-                except FilterException as err:
-                    return "ERROR: {}".format(err.message)
+                mdl.command_filter = CommandFilter(mdl.args.command_filter, mdl, mdl.config, mdl.source_root)
+
+            if "ftdb_simple_filter" in mdl.args and mdl.args.ftdb_simple_filter:
+                mdl.ftdb_simple_filter = FtdbSimpleFilter(mdl.args.ftdb_simple_filter, mdl, mdl.config, mdl.source_root, mdl.ft_db)
 
             try:
                 printdbg("DEBUG:   generating data...", mdl.args)
@@ -63,10 +59,10 @@ class ModulePipeline:
                     printdbg("DEBUG:   data len == {}".format(len(data)), mdl.args)
                 printdbg("DEBUG:   data renderer == {}".format(renderer.name), mdl.args)
                 printdbg("DEBUG:   entry data type == {}".format(pipe_type), mdl.args)
-            except ParameterException as exc:
-                return exc.message
             except libetrace.error as exc:
-                return "ERROR: libetrace.error : {}".format(str(exc))
+                raise LibetraceException("libetrace.error : {}".format(str(exc))) from exc
+            except libftdb.FtdbError as exc:
+                raise LibetraceException("libftdb.FtdbError : {}".format(str(exc))) from exc
             self.last_module = mdl
             printdbg("DEBUG: END pipeline step {}".format(mdl.args.module.__name__), mdl.args)
         if self.last_module is not None:
@@ -84,16 +80,19 @@ class Module:
     required_args: List[str] = []
     open_filter = None
     command_filter = None
+    ftdb_simple_filter = None
 
-    def __init__(self, args: argparse.Namespace, nfsdb: libcas.CASDatabase, config) -> None:
+    def __init__(self, args: argparse.Namespace, nfsdb: libcas.CASDatabase, config, ft_db: FTDatabase = None) -> None:
         self.args: argparse.Namespace = args
         self.config = config
         self.nfsdb = nfsdb
+        self.ft_db = ft_db
         self.source_root = nfsdb.source_root if hasattr(nfsdb, "source_root") else ""
 
         self.has_pipe_path = True if "pipe_path" in self.args and self.args.pipe_path and len(self.args.pipe_path) > 0 else False
         self.has_open_filter = True if "open_filter" in self.args and self.args.open_filter else False
         self.has_command_filter = True if "command_filter" in self.args and self.args.command_filter else False
+        self.has_ftdb_simple_filter = True if "ftdb_simple_filter" in self.args and self.args.ftdb_simple_filter else False
         self.has_select = True if "select" in self.args and self.args.select and len(self.args.select) > 0 else False
         self.has_append = True if "append" in self.args and self.args.append and len(self.args.append) > 0 else False
         self.has_exclude = True if "exclude" in self.args and self.args.exclude and len(self.args.exclude) > 0 else False
@@ -316,6 +315,14 @@ class Module:
             ret = ret and (self.filename_matcher(self.select_subject(ent), self.args.select))
 
         return ret
+    
+    def filter_ftdb(self, ent) -> bool:
+
+        ret = True
+
+        if self.has_ftdb_simple_filter and self.ftdb_simple_filter is not None:
+            ret = ret and self.ftdb_simple_filter.resolve_filters(ent)
+        return ret
 
     def get_reverse_dependencies_opens(self, file_paths: "str | List[str]", recursive: bool = False) -> List[libetrace.nfsdbEntryOpenfile]:
         """
@@ -523,33 +530,20 @@ class Module:
         :rtype: str
         """
 
-        try:
-            self.check_required(self.required_args, self.args)
-        except ArgumentException as err:
-            printerr("ERROR: {}".format(err.message))
-            sys.exit(1)
+        self.check_required(self.required_args, self.args)
 
         if self.args.open_filter:
-            try:
-                self.open_filter = OpenFilter(self.args.open_filter, self, self.config, self.source_root)
-            except FilterException as err:
-                printerr("ERROR: {}".format(err.message))
-                sys.exit(1)
+            self.open_filter = OpenFilter(self.args.open_filter, self, self.config, self.source_root)
         if self.args.command_filter:
-            try:
-                self.command_filter = CommandFilter(self.args.command_filter, self, self.config, self.source_root)
-            except FilterException as err:
-                printerr("ERROR: {}".format(err.message))
-                sys.exit(1)
+            self.command_filter = CommandFilter(self.args.command_filter, self, self.config, self.source_root)
+        if self.args.ftdb_simple_filter:
+            self.ftdb_simple_filter = FtdbSimpleFilter(self.args.ftdb_simple_filter, self, self.config, self.source_root)
 
         try:
             data, output_type, sort_lambda, pipe_type = self.get_data()
-        except ParameterException as exc:
-            printerr("ERROR: {}".format(exc.message))
-            sys.exit(1)
         except libetrace.error as exc:
-            printerr("ERROR: libetrace.error : {}".format(str(exc)))
-            sys.exit(1)
+            raise LibetraceException("libetrace.error : {}".format(str(exc)))
+
 
         output_engine = self.get_output_engine()(data, self.args, self, output_type, sort_lambda)
         return output_engine.render_data()
@@ -600,15 +594,3 @@ class PipedModule:
 class UnknownModule(Module):
     def render(self):
         return "ERROR: Unknown Module '{}'".format(self.args.module)
-
-
-class ParameterException(Exception):
-    def __init__(self, message):
-        super(ParameterException, self).__init__(message)
-        self.message = message
-
-
-class ArgumentException(Exception):
-    def __init__(self, message):
-        super(ArgumentException, self).__init__(message)
-        self.message = message

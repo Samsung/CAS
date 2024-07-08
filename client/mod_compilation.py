@@ -1,6 +1,6 @@
-import sys
 from typing import Any, Tuple, Callable
 from client.mod_base import Module, PipedModule, FilterableModule
+from client.exceptions import PipelineException
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
 import libetrace
@@ -99,8 +99,7 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
         if data_type == libetrace.nfsdbEntry:
-            print("ERROR: Wrong pipe input data {}.".format(data_type))
-            sys.exit(2)
+            raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.args.show_commands or self.args.details:

@@ -1,8 +1,9 @@
-import sys
+
+from typing import Any, Tuple, Callable
 from client.mod_base import Module, PipedModule, FilterableModule
 from client.misc import printdbg
 from client.output_renderers.output import DataTypes
-from typing import Any, Tuple, Callable
+from client.exceptions import PipelineException
 import libetrace
 
 class Faccess(Module, PipedModule, FilterableModule):
@@ -34,8 +35,7 @@ class Faccess(Module, PipedModule, FilterableModule):
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = list({o.path for o in data})
         if data_type == libetrace.nfsdbEntry:
-            print("ERROR: Wrong pipe input data {}.".format(data_type))
-            sys.exit(2)
+            raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.args.show_commands:
@@ -95,14 +95,12 @@ class ProcRef(Module, PipedModule, FilterableModule):
                 self.args.pid = [int(d) for d in data]
                 printdbg("DEBUG: accepting {} as args.pid".format(data_type), self.args)
             except ValueError:
-                print("ERROR: Wrong pipe input data - not numerical!")
-                sys.exit(2)
+                raise PipelineException("Wrong pipe input data - not numerical!")
         elif data_type == libetrace.nfsdbEntry:
             printdbg("DEBUG: accepting {} as args.pid".format(data_type), self.args)
             self.args.pid = list({ex.eid.pid for ex in data})
         else:
-            print("ERROR: Wrong pipe input type {}".format(data_type))
-            sys.exit(2)
+            raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.args.show_commands:

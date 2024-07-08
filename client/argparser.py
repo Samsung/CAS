@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Any
 from client.misc import get_output_renderers
 from client.ide_generator.project_generator import add_params as ide_add_params
 from client.ftdb_generator.ftdb_generator import add_params as ftdb_add_params
+from client.exceptions import ArgumentException
 
 
 def get_api_modules() -> Dict[str, Any]:
@@ -19,13 +20,17 @@ def get_api_modules() -> Dict[str, Any]:
     :return: keyword - module map
     :rtype: dict
     """
-    from client.mod_misc import SourceRoot, CompilerPattern, LinkerPattern, VersionInfo, RootPid, ShowConfig, ShowStat
+    from client.mod_misc import (SourceRoot, CompilerPattern, LinkerPattern, VersionInfo, RootPid, ShowConfig, ShowStat,
+                                 FtdbDirectoryName, FtdbModuleName, FtdbVersion, FtdbReleaseName)
     from client.mod_dbops import ParseDB, Postprocess, StoreCache
     from client.mod_compilation import Compiled, CompilationInfo, RevCompsFor
     from client.mod_dependencies import DepsFor,  RevDepsFor
     from client.mod_executables import Binaries, Commands, Execs
     from client.mod_modules import LinkedModules, ModDepsFor, RevModDepsFor
     from client.mod_opened_files import Faccess, ProcRef, RefFiles
+    from client.mod_sources import SourcesModule, FTModules
+    from client.mod_funcs import FunctionsModule, FuncDeclModule
+    from client.mod_globals import GlobalsModule, TypesModule
     return {
         # Modules using database
         'binaries': Binaries, 'bins': Binaries, 'b': Binaries,
@@ -50,6 +55,18 @@ def get_api_modules() -> Dict[str, Any]:
         'source_root': SourceRoot, 'sroot': SourceRoot,
         'config': ShowConfig, 'cfg': ShowConfig,
         'stat': ShowStat,
+        # Show ftdb info
+        'ftdb-module': FtdbModuleName,
+        'ftdb-release': FtdbReleaseName,
+        'ftdb-dir': FtdbDirectoryName,
+        'ftdb-version': FtdbVersion,
+        #Ftdb commands
+        'sources': SourcesModule, 'srcs': SourcesModule,
+        'modules': FTModules, 'mds': FTModules,
+        'functions': FunctionsModule, 'funcs': FunctionsModule,
+        'globals': GlobalsModule, 'globs': GlobalsModule,
+        'funcdecls': FuncDeclModule,
+        'types': TypesModule,
         # Build database
         'parse': ParseDB,
         'postprocess': Postprocess, 'pp': Postprocess,
@@ -96,6 +113,9 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     common_group.add_argument("--database", type=str, default=".nfsdb.img", help="Path to data file (default: \".nfsdb.img\")")
     common_group.add_argument("--deps-database", type=str, default=".nfsdb.deps.img", help="Path to data file (default: \".nfsdb.deps.img\")")
     common_group.add_argument('--set-root', type=str, default=None,  help='Specify root dir - used during database generation')
+    
+    common_group.add_argument("--ftdb", type=str, action='store', default='vmlinux_db.img', help="Path to ftdb image file (default: \"vmlinux_db.img\")")
+    common_group.add_argument("--ftdb-dir", type=str, action="store", default='', help="Path to directory with ftdb database (default: \".\")")
 
     common_group.add_argument('--mp-safe', action='store_true', default=True, help='Loads cache file in read-only mode (dedicated for parallel processing)')
     common_group.add_argument('--jobs', '-j', type=int, default=None, help='')
@@ -133,6 +153,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     output_group.add_argument('--host', type=str, default="0.0.0.0", help='Local server host (used with --proc-tree)')
     output_group.add_argument('--output-file', '-o', type=str, default=None, help='Store results to file')
     output_group.add_argument('--generate-zip', '-z', type=str, default=None, help='Generate zip archive with results')
+    output_group.add_argument('--generate-zip-files', '-zf', type=str, default=None, help='Generate zip archive with result files')
     for name, module in output_renderers.items():
         output_group.add_argument('--{}-output'.format(name), '--{}'.format(name), dest=name, action='store_true', default=False, help=module.Renderer.help)
         module.Renderer.append_args(parser)
@@ -166,8 +187,7 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
     buff: List[str] = []
     for x in cmd:
         if len(buff) == 0 and x not in pipeline_split:
-            print("ERROR Unknown module '{}'! use one of {}".format(x, pipeline_split))
-            sys.exit(2)
+            raise ArgumentException ("Unknown module '{}'! use one of {}".format(x, pipeline_split))
         if x in pipeline_split:
             if len(buff) > 0:
                 pipelines.append(buff)
@@ -181,22 +201,29 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
         module_name = pipeline.pop(0).replace("--", "")
         mdl = get_api_modules().get(module_name, None)
         if mdl is None:
-            print("ERROR: unrecognized module '{}'.".format(mdl))
-            sys.exit(2)
+            raise ArgumentException ("Unrecognized module '{}'.".format(mdl))
         module_args, rest = mdl.get_argparser().parse_known_args(pipeline)
         if len(rest) > 0:
-            print("ERROR: commandline switches {} not recognized as arguments of module '{}'.".format(rest, module_name))
-            sys.exit(2)
+            raise ArgumentException ("Commandline switches {} not recognized as arguments of module '{}'.".format(rest, module_name))
         module_args.module = mdl
         module_args.name = module_name
         module_args.is_piped = True if len(pipeline_args) > 0 else False
         pipeline_args.append(module_args)
 
-    if os.environ.get("DB_DIR", False):
+    if common_args.dbdir != ".":
+        common_args.dbdir = os.path.abspath(os.path.expanduser(common_args.dbdir))
+    elif os.environ.get("DB_DIR", False):
         common_args.dbdir = os.path.abspath(os.environ.get("DB_DIR", ""))
     else:
-        common_args.dbdir = os.path.abspath(os.path.expanduser(common_args.dbdir))
-
+        common_args.dbdir = os.path.abspath(os.path.expanduser('.'))
+    
+    if common_args.ftdb_dir != ".":
+        common_args.ftdb_dir = os.path.abspath(os.path.expanduser(common_args.ftdb_dir))
+    elif os.environ.get("DB_DIR", False):
+        common_args.ftdb_dir = os.path.abspath(os.environ.get("FTDB_DIR", ""))
+    else:
+        common_args.ftdb_dir = os.path.abspath(os.path.expanduser('.'))
+    
     return common_args, pipeline_args, parser
 
 
@@ -328,6 +355,13 @@ args_map = {
         dest='command_filter',
         default=None,
         help='Filter commands results'
+    ),
+    "ftdb-simple-filter": lambda x: x.add_argument(
+        '--ftdb-filter',
+        type=str,
+        dest='ftdb_simple_filter',
+        default=None,
+        help='Filter ftdb source/modules results'
     ),
     "commands": lambda x: x.add_argument(
         '--commands', '--show-commands',
@@ -482,5 +516,29 @@ args_map = {
         action='append',
         default=None,
         help='Exclude patterns for compilation-dependency-map'
+    ),
+    "body": lambda x: x.add_argument(
+        '--body',
+        action='store_true',
+        default=False,
+        help="[FTDB] Display functions' body"
+    ),
+    "ubody": lambda x: x.add_argument(
+        '--ubody',
+        action='store_true',
+        default=False,
+        help="[FTDB] Display functions' unpreprocessed body"
+    ),
+    "declbody": lambda x: x.add_argument(
+        '--declbody',
+        action='store_true',
+        default=False,
+        help="[FTDB] Display function declarations' body"
+    ),
+    "definition": lambda x: x.add_argument(
+        '--definition',
+        action='store_true',
+        default=False,
+        help="[FTDB] Display globals' full definition"
     )
 }

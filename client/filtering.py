@@ -4,9 +4,9 @@ from fnmatch import translate as translate_wc_to_re
 from typing import List, Dict, Tuple, Optional, Any
 import libetrace
 from client.misc import get_file_info
-
+from client.exceptions import FilterException
 from libcas import CASConfig
-
+from libft_db import FTDatabase, ftdbModuleEntry, ftdbSourceEntry
 
 class Filter:
     """
@@ -20,7 +20,7 @@ class Filter:
     parameters_schema = {}
     typed_keywords = []
 
-    def __init__(self, flt:"str | List[List[Dict[str, Any]]]", origin, config: CASConfig, source_root: str) -> None:
+    def __init__(self, flt:"str | List[List[Dict[str, Any]]]", origin, config: CASConfig, source_root: str, ft_db:"FTDatabase | None"=None) -> None:
         self.filter_dict: List[List[Dict[str, Any]]] = flt if isinstance(flt, list) else self._filter_str_to_dict(flt)
         self.libetrace_filter = self.filter_to_libetrace(self.filter_dict)
         self.config = config
@@ -38,7 +38,17 @@ class Filter:
                     if self.parameters_schema[k] is not None and f_and[k] not in self.parameters_schema[k]:
                         raise FilterException("'{}' is not proper '{}=' parameter value! Allowed values: {} ".format(f_and[k], k, ", ".join(self.parameters_schema[k])))
 
-                typed_params = [x for x in ['path' in f_and, 'cwd' in f_and, 'bin' in f_and, 'cmd' in f_and] if x is True]
+                typed_params = [x for x in 
+                                ['path' in f_and,
+                                 'cwd' in f_and,
+                                 'bin' in f_and,
+                                 'cmd' in f_and,
+                                 'has_func' in f_and,
+                                 'has_global' in f_and,
+                                 'has_funcdecl' in f_and,
+                                 'name' in f_and,
+                                 'location' in f_and] if x is True]
+
                 if len(typed_params) > 1:
                     raise FilterException(f"More than one typed parameter! Choose between: {', '.join(self.typed_keywords)}")
 
@@ -48,38 +58,16 @@ class Filter:
                 if 'type' not in f_and and len(typed_params) > 0:
                     f_and['type'] = "sp"
 
-                if 'path' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "sp":
-                        if f_and['type'] == "sp":
-                            f_and["path"] = f'*{f_and["path"]}*'
-                        f_and['type'] = "re"
-                        f_and['path_pattern'] = re.compile(translate_wc_to_re(f_and["path"]))
-                    elif f_and['type'] == "re":
-                        f_and['path_pattern'] = re.compile(f_and["path"])
-                elif 'cwd' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "sp":
-                        if f_and['type'] == "sp":
-                            f_and["cwd"] = f'*{f_and["cwd"]}*'
-                        f_and['type'] = "re"
-                        f_and['cwd_pattern'] = re.compile(translate_wc_to_re(f_and["cwd"]))
-                    elif f_and['type'] == "re":
-                        f_and['cwd_pattern'] = re.compile(f_and["cwd"])
-                elif 'bin' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "sp":
-                        if f_and['type'] == "sp":
-                            f_and["bin"] = f'*{f_and["bin"]}*'
-                        f_and['type'] = "re"
-                        f_and['bin_pattern'] = re.compile(translate_wc_to_re(f_and["bin"]))
-                    elif f_and['type'] == "re":
-                        f_and['bin_pattern'] = re.compile(f_and["bin"])
-                elif 'cmd' in f_and:
-                    if f_and['type'] == "wc" or f_and['type'] == "sp":
-                        if f_and['type'] == "sp":
-                            f_and["cmd"] = f'*{f_and["cmd"]}*'
-                        f_and['type'] = "re"
-                        f_and['cmd_pattern'] = re.compile(translate_wc_to_re(f_and["cmd"]))
-                    elif f_and['type'] == "re":
-                        f_and['cmd_pattern'] = re.compile(f_and["cmd"])
+                for name in ('path', 'cwd', 'cmd', 'bin', 'has_func', 'has_global', 'has_funcdecl', 'name', 'location'):
+                    if name in f_and:
+                        if f_and['type'] == "wc" or f_and['type'] == "sp":
+                            if f_and['type'] == "sp":
+                                f_and[name] = f'*{f_and[name]}*'
+                            f_and['type'] = "re"
+                            f_and[name+'_pattern'] = re.compile(translate_wc_to_re(f_and[name]))
+                        elif f_and['type'] == "re":
+                            f_and[name+'_pattern'] = re.compile(f_and[name])
+                        break
 
                 if 'type' not in f_and and len(typed_params) > 0:
                     raise FilterException("'type' sub-parameter not present! Allowed values: {}".format(self.parameters_schema['type']))
@@ -109,6 +97,11 @@ class Filter:
                 f_and["filter_bin"] = 'bin' in f_and
                 f_and["filter_ppid"] = 'pid' in f_and
                 f_and["filter_negate"] = 'negate' in f_and
+                f_and["filter_has_func"] = 'has_func' in f_and
+                f_and["filter_has_global"] = 'has_global' in f_and
+                f_and["filter_has_funcdecl"] = 'has_funcdecl' in f_and
+                f_and["filter_name"] = 'name' in f_and
+                f_and["filter_location"] = 'location' in f_and
 
         self.ored = len(self.filter_dict) > 1
         self.anded = len([f_and for f_or in self.filter_dict for f_and in f_or]) > 1
@@ -571,13 +564,125 @@ class CommandFilter(Filter):
         return filter_list
 
 
-class FilterException(Exception):
+class FtdbSimpleFilter(Filter):
     """
-    Exception object used by `Filter` class
+        Filter class used to filter out ftdb related entries (ftdbSourceEntry, ftdbFuncEntry, etc.) based on provided filters.
 
-    :param message: Exception message
-    :type message: str
+        string example:
+        (path=/abs,type=wc)or(has_fun=test*,type=wc)and(path=*.c,type=wc)
     """
-    def __init__(self, message: str):
-        super(FilterException, self).__init__(message)
-        self.message = message
+
+    typed_keywords=["path", "has_func", "has_global", "has_funcdecl", "location"]
+    parameters_schema={
+        "path": None,
+        "type": ["re", "wc", "sp"],
+        "has_func": None,
+        "name": None,
+        "negate": ["true", "false", "0", "1"],
+        "has_global": None,
+        "has_funcdecl": None,
+        "location": None
+    }
+    def __init__(self, flt:"str | List[List[Dict[str, Any]]]", origin, config: CASConfig, source_root: str, ft_db:"FTDatabase") -> None:
+        super().__init__(flt, origin, config, source_root, ft_db)
+        for f_or in self.filter_dict:
+            for f_and in f_or:
+                if f_and['filter_has_func']:
+                        fids = set()
+                        mids = set()
+                        for func in ft_db.get_funcs():
+                            if f_and['has_func_pattern'] and f_and["has_func_pattern"].match(func.name) is not None:
+                                fids = fids.union(set(func.fids))
+                                mids = mids.union(set(func.mids))
+                        f_and['filtered_has_func'] = (
+                            list(fids),
+                            list(mids)
+                        )
+
+                if f_and['filter_has_global']:
+                    fids = set()
+                    mids = set()
+                    for glob in ft_db.get_globs():
+
+                        if f_and["has_global_pattern"] and f_and["has_global_pattern"].match(glob.name) is not None:
+                            fids.add(glob.fid)
+                            mids = mids.union(set(glob.mids))
+                    f_and['filtered_has_global'] = (
+                        list(fids),
+                        list(mids)
+                    )
+                if f_and['filter_has_funcdecl']:
+                    fids = set()
+                    for fd in ft_db.get_funcdecls():
+                        if f_and["has_funcdecl_pattern"] and f_and["has_funcdecl_pattern"].match(fd.name) is not None:
+                            fids.add(fd.fid)
+                    f_and['filtered_has_funcdecl'] = list(fids)
+
+    def _match_filter(self, ent, filter_part:Dict) -> bool:
+        ret: bool = True
+        if filter_part["filter_path"]:
+            if not isinstance(ent, ftdbModuleEntry) and not isinstance(ent, ftdbSourceEntry):
+                raise FilterException("""Filter option "path" can be used only for sources or modules""")
+            if "path_pattern" in filter_part:
+                ret = ret and (filter_part['path_pattern'].match(ent.path) is not None)
+            else:
+                ret = ret and (filter_part["path"] in ent.path)
+
+        if filter_part["filter_has_func"]:
+            if not isinstance(ent, ftdbModuleEntry) and not isinstance(ent, ftdbSourceEntry):
+                raise FilterException("""Filter option "has_func" can be used only for sources or modules""")
+            
+            if isinstance(ent, ftdbSourceEntry):
+                ret = ret and ent.fid in filter_part['filtered_has_func'][0]
+            elif isinstance(ent, ftdbModuleEntry):
+                ret = ret and ent.mid in filter_part['filtered_has_func'][1]
+
+        if filter_part["filter_has_global"]:
+            if not isinstance(ent, ftdbModuleEntry) and not isinstance(ent, ftdbSourceEntry):
+                raise FilterException("""Filter option "has_global" can be used only for sources or modules""")
+            
+            if isinstance(ent, ftdbSourceEntry):
+                ret = ret and ent.fid in filter_part['filtered_has_global'][0]
+            elif isinstance(ent, ftdbModuleEntry):
+                ret = ret and ent.mid in filter_part['filtered_has_global'][1]
+
+        if filter_part["filter_has_funcdecl"]:
+            if not isinstance(ent, ftdbSourceEntry):
+                raise FilterException("""Filter option "has_funcdecl" can be used only for sources""")
+            
+            ret = ret and ent.fid in filter_part['filtered_has_funcdecl']
+
+        if filter_part["filter_name"]:
+            if not hasattr(ent, 'name'):
+                raise FilterException("""Filter option "name" can be used only for functions, globals or funcdecls""")
+            if "name_pattern" in filter_part:
+                ret = ret and (filter_part['name_pattern'].match(ent.name) is not None)
+            else:
+                ret = ret and (filter_part["name"] in ent.name)
+        
+        if filter_part["filter_location"]:
+            if not hasattr(ent, 'location'):
+                raise FilterException("""Filter option "location" can be used only for functions, globals or funcdecls""")
+            if "location_pattern" in filter_part:
+                ret = ret and (filter_part['location_pattern'].match(ent.location) is not None)
+            else:
+                ret = ret and (filter_part["location"] in ent.location)
+
+        if filter_part["filter_negate"]:
+            ret = not ret
+        return ret
+
+    def resolve_filters(self, src)->bool:
+        if not self.anded:
+            return self._match_filter(src, self.filter_dict[0][0])
+        if self.ored:
+            return any([all([self._match_filter(src, f) for f in o]) for o in self.filter_dict])
+        else:
+            return all([self._match_filter(src, f) for f in self.filter_dict[0]])
+
+    @staticmethod
+    def filter_to_libftdb(filter_dict: List) -> List:
+        """
+            Method to potentialy translate filter to libftdb filtering 
+        """
+        pass

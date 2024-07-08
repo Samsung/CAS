@@ -4,12 +4,15 @@ import io
 import zipfile
 from typing import Generator, Iterator, Dict, List
 import libcas
+from libftdb import FtdbError
+import libetrace
+from libft_db import FTDatabase
 from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
 
 
-def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None) -> "str | Dict | None":
+def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None, ft_db:FTDatabase = None) -> "str | Dict | None":
     """
     Main function used to process commandline execution.
     By default it feeds arguments from sys.argv but can be overwritten by optional commandline value
@@ -22,19 +25,44 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
     :rtype: str | object | None
     """
     common_args, pipeline_args, common_parser = get_args(commandline)
-    config_file = get_config_path(os.path.join(common_args.dbdir, common_args.config))
-    config = libcas.CASConfig(config_file)
+    if not cas_db.config:
+        config_file = get_config_path(os.path.join(common_args.dbdir, common_args.config))
+        printdbg(f"DEBUG: Loading {config_file} config file...", common_args)
+        config = libcas.CASConfig(config_file)
+        cas_db.set_config(config)
 
-    cas_db.set_config(config)
-
-    db_required = not all([x.name in ["parse", "postprocess", "pp", "cache", "config", "cfg", "compiler_pattern", "linker_pattern"] for x in pipeline_args])
+    ftdb_cmds = ["ftdb-version",
+                 "ftdb-module",
+                 "ftdb-dir",
+                 "ftdb-release",
+                 "sources",
+                 "srcs",
+                 "modules",
+                 "mds",
+                 "functions",
+                 "funcs",
+                 "globals",
+                 "globs",
+                 "funcdecls",
+                 "types"]
 
     if len(pipeline_args) > 0:
+
+        if ft_db and not ft_db.db_loaded:
+            try:
+                ftdb_required = any([x.name in ftdb_cmds for x in pipeline_args])
+                if ftdb_required:
+                    ft_db.load_db(os.path.join(common_args.ftdb_dir, common_args.ftdb), debug=common_args.debug, quiet=True)
+            except FtdbError:
+                printerr("ERROR: Failed to load ftdb database. Check if {} is proper database file path.".format(os.path.join(common_args.ftdb_dir, common_args.ftdb)))
+                sys.exit(2)
+
         if not cas_db.db_loaded:
+            db_required = not all([x.name in ["parse", "postprocess", "pp", "cache", "config", "cfg", "compiler_pattern", "linker_pattern"]+ftdb_cmds for x in pipeline_args])
             try:
                 if db_required:
                     cas_db.load_db(os.path.join(common_args.dbdir, common_args.database), debug=common_args.debug)
-            except SystemError:
+            except libetrace.error:
                 printerr("ERROR: Failed to load database. Check if {} is proper database file path.".format(os.path.join(common_args.dbdir, common_args.database)))
                 sys.exit(2)
 
@@ -44,12 +72,12 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 try:
                     if db_required and cas_db is not None:
                         cas_db.load_deps_db(os.path.join(common_args.dbdir, common_args.deps_database), debug=common_args.debug)
-                except SystemError:
+                except libetrace.error:
                     print("ERROR: Failed to load deps database. Check if {} is proper database file path.".format(os.path.join(common_args.dbdir, common_args.deps_database)))
                     sys.exit(2)
 
         module_pipeline = ModulePipeline([
-            pipe_element.module(merge_args(common_args, pipe_element), cas_db, config)
+            pipe_element.module(merge_args(common_args, pipe_element), cas_db, cas_db.config, ft_db)
             for pipe_element in pipeline_args
             ])
 
@@ -91,6 +119,21 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 out_file.write(zip_buffer.getvalue())
                 print("Output zipped to {}".format(os.path.abspath(os.path.expanduser(common_args.generate_zip))))
             return None
+
+        elif common_args.generate_zip_files:
+            
+            ret = module_pipeline.render()
+            print("Writing files to archive ...")
+            with zipfile.ZipFile(common_args.generate_zip_files, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for filename in ret:
+                    if os.path.exists(filename):
+                        relative_path = filename[len(cas_db.source_root):]
+                        zip_file.write(filename, arcname=relative_path)
+                    else:
+                        print(f"WARNING: File does not exists: {filename}")
+            print(f"All files written to {common_args.generate_zip_files}")
+            return None
+
         elif common_args.ftdb_create:
             from client.ftdb_generator.ftdb_generator import FtdbGenerator
             latest_module = module_pipeline.modules[-1]

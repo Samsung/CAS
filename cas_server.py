@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from functools import lru_cache
 from typing import List, Dict
-from os import path
+from gevent.pywsgi import WSGIServer
+from os import path, environ
 import json
 import sys
 import math
@@ -15,8 +16,10 @@ from libetrace import nfsdbEntry
 from client.filtering import CommandFilter
 from client.cmdline import process_commandline
 from client.argparser import get_api_keywords
-from client.misc import access_from_code, get_file_info
+from client.misc import access_from_code, get_file_info, get_config_path
+from client.exceptions import MessageException,ArgumentException
 import libcas
+import libft_db
 
 try:
     import libetrace as _
@@ -28,12 +31,14 @@ except ModuleNotFoundError:
 app = Flask(__name__, template_folder='client/templates', static_folder='client/static')
 CORS(app)
 cas_db = libcas.CASDatabase()
-root_pid = int(json.loads(process_commandline(cas_db, "root_pid --json"))["root_pid"])
+ft_db = libft_db.FTDatabase()
+# root_pid = int(json.loads(process_commandline(cas_db, "root_pid --json"))["root_pid"])
 
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
 bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command",
              "extended", "dep-graph", "filerefs", "direct-global", "cached", "wrap-deps", "with-pipes", "original-path", "parent",
-             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree"]
+             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree",
+             "body", "ubody", "declbody", "definition"]
 
 
 def translate_to_cmdline(req: Request) -> List[str]:
@@ -87,43 +92,82 @@ def translate_to_url(commandline: List[str]) -> str:
     print(ret)
     return ret
 
+@app.route('/reload_ftdb')
+def reload_ftdb():
+    path = request.args.get('path', None)
+    if path is None:
+        return Response("Path to ftdb image not provided", mimetype='text/plain')
+    ft_db.unload_db()
+    ft_db.load_db(path)
+    return Response("DB reloaded")
+
+@app.route('/schema')
+def schema():
+    return Response(
+        json.dumps({
+            "modules": allowed_modules,
+            "bool_args": bool_args
+        }),
+        mimetype='text/json')
+
+@app.route('/raw_cmd')
+def get_raw_cmd():
+    org_url = request.url
+    raw_cmd = request.args.get('cmd', None)
+    if raw_cmd:
+        cmd = raw_cmd.split(" ")
+        if "--json" not in cmd:
+            cmd.append("--json")
+        try:
+            return process_cmdline(cmd, org_url)
+        except MessageException as exc:
+            return Response(json.dumps( {
+                "ERROR": exc.message
+            }), mimetype='text/json')
+    else:
+        return Response(json.dumps({"ERROR":"Empty raw command"}),
+        mimetype='text/json')
 
 @app.route('/<module>', methods=['GET'])
 def get_module(module: str) -> Response:
-    if module not in allowed_modules:
-        return Response(
-            "Module not available",
-            mimetype='text/plain')
     org_url = request.url
-    commandline = translate_to_cmdline(request)
-    if "entries-per-page" not in request.args and "n" not in request.args:
-        commandline.append("--entries-per-page=10")
-        org_url += "&entries-per-page=10"
-    if "page" not in request.args:
-        commandline.append("--page=0")
-        org_url += "&page=0"
+    try:
+        commandline = translate_to_cmdline(request)
+        return process_cmdline(commandline, org_url)
+    except MessageException as exc:
+        return Response(json.dumps( {
+            "ERROR": exc.message
+        }), mimetype='text/json')
+
+def process_cmdline(commandline:List[str], org_url):
+    if not any([ x for x in commandline if x.startswith("-n=") or x.startswith("--entries-per-page=")]):
+        commandline.append("-n=10")
+        org_url += "&n=10"
+    if not any([ x for x in commandline if x.startswith("-p=") or x.startswith("--page=")]):
+        commandline.append("-p=0")
+        org_url += "&p=0"
 
     if "--proc-tree" in commandline:
-        e: Dict = process_commandline(cas_db, commandline)
+        e: Dict = process_commandline(cas_db, commandline, ft_db)
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
             return Response(render_template('proc_tree.html', exe=e, diable_search=True), mimetype='text/html')
         else:
             return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
     if "--deps-tree" in commandline:
-        e: Dict = process_commandline(cas_db, commandline)
+        e: Dict = process_commandline(cas_db, commandline, ft_db)
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
             return Response(render_template('deps_tree.html', exe=e, diable_search=True), mimetype='text/html')
         else:
             return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
-    
+
     if "--cdb" in commandline:
-        return Response(process_commandline(cas_db, commandline), mimetype='text/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
+        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
     elif "--makefile" in commandline:
-        return Response(process_commandline(cas_db, commandline), mimetype='text/json', headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
+        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json', headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
     else:
-        return Response(process_commandline(cas_db, commandline), mimetype='text/json')
+        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json')
 
 
 def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
@@ -145,6 +189,7 @@ def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
         "wpid": exe.wpid if exe.wpid else "",
         "openfiles": [[access_from_code(get_file_info(o.mode)[2]), o.path] for o in exe.opens[page*maxEntry:(page+1)*maxEntry]],
         "files_pages": math.ceil(len(exe.opens)/maxEntry),
+        "open_len": len(exe.opens),
     }
 
     if ret['class'] == "compiler":
@@ -271,12 +316,34 @@ def children_of() -> Response:
     if page:
         resultNum = page*maxResults
         print(resultNum)
-        result = {"count": len(data), "pages": pages, "children": data[resultNum:resultNum+maxResults]}
+        result = {"count": len(data), "pages": pages, "page": page, "children": data[resultNum:resultNum+maxResults]}
     else:
-        result = {"count": len(data), "pages": pages, "children": data[:maxResults]}
+        result = {"count": len(data), "pages": pages, "page": 0, "children": data[:maxResults]}
     return Response(
         json.dumps(result),
         mimetype='text/json', direct_passthrough=True)
+
+@app.route('/ancestors_of', methods=['GET'])
+def ancestors_of() -> Response:
+    j = request.args
+    e = cas_db.get_exec(int(j["pid"]), int(j["idx"]))
+    path = [e]
+    try:
+        while (hasattr(e, "parent_eid")):
+            e = cas_db.get_exec(e.parent_eid.pid, e.parent_eid.index)
+            path.append(e)
+    except:
+        pass
+    data = [
+        child_renderer(ent)
+        for ent in reversed(path)
+    ]
+    result = {"ancestors": data}
+    return Response(
+        json.dumps(result),
+        mimetype='text/json',
+        direct_passthrough=True
+    )
 
 @app.route('/deps_of', methods=['GET'])
 def deps_of() -> Response:
@@ -400,7 +467,7 @@ def deps_tree() -> Response:
         j["path"] = j["path"].replace(" ", "+")
         entries=[]
         entry=""
-        for x in cas_db.db.mdeps(j["path"], direct=True): 
+        for x in cas_db.db.mdeps(j["path"], direct=True):
             if x.path in cas_db.linked_module_paths():
                 if x.path==j["path"]:
                     entry=x
@@ -479,7 +546,7 @@ def revdeps_tree() -> Response:
                         }
         for entry in entries[(page*maxResults):(page*maxResults+maxResults)]:
             rdeps = get_rdeps(entry)
-            first_modules["entries"].append({"path": entry, 
+            first_modules["entries"].append({"path": entry,
                                              "num_deps": len(rdeps),
                                              "class": entry in cas_db.linked_module_paths(),
                                              "parent": str(entry)
@@ -533,7 +600,7 @@ def revdeps_of() -> Response:
         result["page_max"] = math.ceil(result["count"]/result["num_entries"])
         for entry in entries[(page*maxResults):(page*maxResults+maxResults)]:
             h=len(get_rdeps(entry.path))
-            result["entries"].append({"path": entry.path, 
+            result["entries"].append({"path": entry.path,
                                     "num_deps": h,
                                     "class": entry.path in cas_db.linked_module_paths(),
                                     "parent": str(entry.parent.eid.pid)
@@ -543,7 +610,7 @@ def revdeps_of() -> Response:
         return Response(
             json.dumps(result),
             mimetype='text/json', direct_passthrough=True)
-    
+
     return Response(
         json.dumps({"ERROR": "No such path!"}),
         mimetype='text/json')
@@ -570,17 +637,44 @@ def favicon():
         mimetype='image/vnd.microsoft.icon')
 
 
-def get_arpgparser():
-    parser = argparse.ArgumentParser(description="CAS server arguments")
-    parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="server address")
-
-    return parser
-
 if __name__ == '__main__':
     if path.exists('config.json'):
         app.config.from_file('config.json', json.load)
 
-    parser = get_arpgparser()
-    args = parser.parse_args()
-    app.run(args.host, args.port, use_reloader=True)
+    arg_parser = argparse.ArgumentParser(description="CAS server arguments")
+    arg_parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
+    arg_parser.add_argument("--host", type=str, default="127.0.0.1", help="server address")
+    arg_parser.add_argument("--casdb", type=str, default=None, help="server nfsdb")
+    arg_parser.add_argument("--ftdb", type=str, default=None, help="server ftdb")
+    arg_parser.add_argument("--debug", action="store_true",  help="debug mode")
+    arg_parser.add_argument("--verbose", action="store_true",  help="verbose output")
+
+    args = arg_parser.parse_args()
+
+    if args.casdb:
+        db_file = path.normpath(args.casdb)
+        
+        if (path.isabs(db_file)  and path.isfile(db_file)):
+            config_file = path.join(path.dirname(db_file), ".bas_config")
+            config = libcas.CASConfig(get_config_path(config_file))
+            cas_db.set_config(config)
+            cas_db.load_db(db_file, debug=args.debug, quiet=not args.verbose)
+            cas_db.load_deps_db(db_file.replace(".img",".deps.img"), debug=args.debug, quiet=not args.verbose)
+
+        else:
+            print("Provide absolute path to database.")
+
+    if args.ftdb:
+        ftdb_file = path.normpath(args.ftdb)
+        if (path.isabs(ftdb_file)  and path.isfile(ftdb_file)):
+            ft_db.load_db(ftdb_file, debug=args.debug, quiet=not args.verbose)
+
+    try:
+        print ("Starting CAS server ... ")
+        if args.debug:
+            print ("Debug mode ON")
+            app.debug = args.debug
+        http_server = WSGIServer((args.host, args.port), app, log="default" if args.debug else None)
+        http_server.serve_forever()
+    except KeyboardInterrupt:
+        print ("Shutting down CAS server")

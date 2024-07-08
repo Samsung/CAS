@@ -10,7 +10,8 @@ import libcas
 
 from client.cmdline import process_commandline
 from client.argparser import get_api_modules, get_args, merge_args, get_bash_complete, get_api_keywords
-from client.filtering import OpenFilter, CommandFilter, FilterException
+from client.filtering import OpenFilter, CommandFilter
+from client.exceptions import PipelineException, FilterException, ArgumentException, MessageException
 
 DEF_TIMEOUT = 3
 RAW_SEP = "^^^"
@@ -101,9 +102,14 @@ def get_json_entries(cmd, len_min=0, len_max=sys.maxsize, check_func=None, timeo
 
 
 def get_error(cmd, error_keyword):
-    ret = get_main(cmd)
-    assert "ERROR" in ret and error_keyword in ret
-    return ret
+    try:
+        ret = get_main(cmd)
+    except MessageException as e:
+        assert error_keyword in e.message
+        return True
+    return False
+    # assert error_keyword in ret
+    # return ret
 
 
 def get_json_simple(cmd, len_min=0, len_max=sys.maxsize, check_func=None, timeout=DEF_TIMEOUT):
@@ -1443,6 +1449,18 @@ class TestFilters:
     def test_cmd_pid(self):
         assert get_json_simple(f"commands --command-filter=[ppid={nfsdb.db[0].eid.pid}] -l --json")['count'] > 0
 
+    def test_exceptions(self):
+        try:
+            get_raw("lm --filter=[]")
+            assert False
+        except FilterException as exc:
+            assert exc.message == "Empty filter part!"
+        try:
+            get_raw("lm --filter=[nonexist=1]")
+            assert False
+        except FilterException as exc:
+            assert exc.message.startswith("Unknown filter parameter nonexist !")
+
 class TestRefFiles:
     def test_plain(self):
         get_json_entries("ref_files -n=1000 --json", 1000000, 6000000, is_normpath)
@@ -1709,6 +1727,23 @@ class TestPipeline:
         ret = get_json_entries("linked_modules --filter=[path=*vmlinux,type=wc] deps_for --json", 13000, 25000, is_normpath)
         count = get_json_simple("linked_modules -l --filter=[path=*vmlinux,type=wc] deps_for --json")["count"]
         assert ret["count"] == count
+
+    def test_pipeline_error(self):
+        try:
+            get_json_simple("linked_modules procref")
+            return False
+        except PipelineException as e:
+            assert e.message  == 'Wrong pipe input data - not numerical!'
+        try:
+            get_json_simple("linked_modules --filter=[path=nonexisting,type=wc] deps")
+            return False
+        except PipelineException as e:
+            assert e.message  == "Input data to 'DepsFor' module is empty - cannot proceed with next pipeline step!"
+        try:
+            get_json_simple("linked_modules abc")
+            return False
+        except ArgumentException as e:
+            assert e.message  == "Commandline switches ['abc'] not recognized as arguments of module 'linked_modules'."
 
 
 class TestMiscModules:

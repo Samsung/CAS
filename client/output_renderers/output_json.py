@@ -1,9 +1,11 @@
 import json
 from typing import Dict
 from client.output_renderers.output import OutputRenderer
-from client.misc import fix_cmd, access_from_code, get_file_info
+from client.misc import fix_cmd, access_from_code, get_file_info, fix_body
 import libetrace
 import libcas
+import libftdb
+import libft_db
 
 
 class Renderer(OutputRenderer):
@@ -13,6 +15,7 @@ class Renderer(OutputRenderer):
 
     help = 'Prints output in json format (generated from output_renderers dir)'
     default_entries_count = 1000
+    INDENT=4
 
     entries_format = '''{{
     "count": {count},
@@ -196,6 +199,153 @@ class Renderer(OutputRenderer):
 
     def compilation_info_data_renderer(self):
         return self.formatter(self._compilation_info_entry_format)
+    
+    def function_data_renderer(self):
+        return self.formatter(self._function_entry_format)
+    
+    def global_data_renderer(self):
+        return self.formatter(self._global_entry_format)
+    
+    def funcdecl_data_renderer(self):
+        return self.formatter(self._funcdecl_entry_format)
+
+    def types_data_renderer(self):
+        return self.formatter(self._type_entry_format)
+
+    def _type_entry_format(self, t) -> str:
+        return ' ' * self.INDENT*2 + f'"{t.name}"'
+
+    def _funcdecl_entry_format(self, fd) -> str:
+        if self.args.details:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "location": "{location}"
+                "decl": "{decl}",
+                "linkage_string": "{ls}"
+                "nargs" {nargs}
+                "member" "{member}"
+                "template" "{template}"
+                "signature" "{sign}"
+                "refcount" {refcount}
+            }}""".format(
+                name=fd.name,
+                id=fd.id,
+                location=fd.location,
+                decl=fd.decl,
+                ls=fd.linkage_string,
+                nargs=fd.nargs,
+                member=fd.member,
+                template=fd.template,
+                sign=fd.signature,
+                refcount=fd.refcount
+            )
+        elif self.args.declbody:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "decl": "{decl}",
+            }}""".format(
+                name=fd.name,
+                id=fd.id,
+                decl=fd.decl,
+            )
+        return ' ' * self.INDENT*2 + f'"{fd.name}"' 
+
+    def _function_entry_format(self, func) -> str:
+        if self.args.details:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "hash": "{hash}",
+                "fid": {fid},
+                "fids": {fids},
+                "mids": {mids},
+                "location": "{location}",
+                "body": "{body}",
+                "unpreprocessed_body": "{ubody}"
+            }}""".format(
+                name=func.name,
+                id=func.id,
+                hash=func.hash,
+                fid=func.fid,
+                fids=func.fids,
+                mids=func.mids,
+                location=func.location,
+                body=fix_body(func.body),
+                ubody=fix_body(func.unpreprocessed_body)
+            )
+        elif self.args.body:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "body": "{body}",
+            }}""".format(
+                name=func.name,
+                id=func.id,
+                body=fix_body(func.body),
+            )
+        elif self.args.ubody:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "unpreprocessed_body": "{ubody}"
+            }}""".format(
+                name=func.name,
+                id=func.id,
+                ubody=fix_body(func.unpreprocessed_body)
+            )
+
+        return ' ' * self.INDENT*2 + f'"{func.name}"'
+    
+    def _global_entry_format(self, glob) -> str:
+        if self.args.details:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "hash": "{hash}",
+                "init": "{init}",
+                "location": "{location}",
+                "defstring": "{defstring}",
+                "literals": {literals}
+            }}""".format(
+                name=glob.name,
+                id=glob.id,
+                hash=glob.hash,
+                init=glob.init,
+                location=glob.location,
+                defstring=fix_body(glob.defstring),
+                literals=json.dumps(glob.literals)
+            )
+        elif self.args.definition:
+            return """        {{
+                "name": "{name}",
+                "id": {id},
+                "defstring": "{defstring}",
+            }}""".format(
+                name=glob.name,
+                id=glob.id,
+                defstring=fix_body(glob.defstring),
+            )
+        return ' ' * self.INDENT * 2 + f'"{glob.name}"'
+    
+    def _source_entry_format(self, src: libft_db.ftdbSourceEntry) -> str:
+        return """        {{
+            "fid": {fid},
+            "path": "{path}"
+        }}""".format(
+            fid=src.fid,
+            path=src.path
+        )
+
+    def _module_entry_format(self, md: libft_db.ftdbModuleEntry) -> str:
+        return """        {{
+            "mid": {mid},
+            "path": "{path}"
+        }}""".format(
+            mid=md.mid,
+            path=md.path
+        )
 
     # def _str_entry_format(self, row, escaped):
     #     if escaped:
@@ -450,6 +600,15 @@ class Renderer(OutputRenderer):
     def dbversion_data_renderer(self):
         return json.dumps({"version": self.data}, indent=4)
 
+    def modulename_data_renderer(self):
+        return json.dumps({"module_name": self.data}, indent=4)
+
+    def dirname_data_renderer(self):
+        return json.dumps({"directory": self.data}, indent=4)
+
+    def releasename_data_renderer(self):
+        return json.dumps({"release": self.data}, indent=4)
+
     def stat_data_renderer(self):
         return json.dumps(self.data, indent=4)
 
@@ -461,3 +620,9 @@ class Renderer(OutputRenderer):
 
     def config_part_data_renderer(self):
         return json.dumps(self.data, indent=4)
+
+    def sources_data_renderer(self):
+        return self.formatter(self._source_entry_format)
+
+    def modules_data_renderer(self):
+        return self.formatter(self._module_entry_format)

@@ -19,6 +19,12 @@ class DataTypes(Enum):
     dep_graph_data = 9
     cdm_data = 10
     compilation_db_data = 11
+    sources_data = 12
+    modules_data = 13
+    function_data = 14
+    global_data = 15
+    type_data = 16
+    funcdecl_data = 17
 
     # Dict view
     config_data = 21
@@ -29,6 +35,9 @@ class DataTypes(Enum):
     source_root_data = 101
     root_pid_data = 102
     dbversion_data = 103
+    module_name_data = 105
+    dir_name_data = 106
+    release_name_data = 107
 
     null_data = 104
 
@@ -67,10 +76,19 @@ class OutputRenderer:
             DataTypes.source_root_data: self.source_root_data_renderer,
             DataTypes.root_pid_data: self.root_pid_data_renderer,
             DataTypes.dbversion_data: self.dbversion_data_renderer,
+            DataTypes.module_name_data: self.modulename_data_renderer,
+            DataTypes.dir_name_data: self.dirname_data_renderer,
+            DataTypes.release_name_data: self.releasename_data_renderer,
             DataTypes.config_data: self.config_data_renderer,
             DataTypes.stat_data: self.stat_data_renderer,
             DataTypes.config_part_data: self.config_part_data_renderer,
-            DataTypes.null_data: self.null_data_renderer
+            DataTypes.null_data: self.null_data_renderer,
+            DataTypes.sources_data: self.sources_data_renderer,
+            DataTypes.modules_data: self.modules_data_renderer,
+            DataTypes.function_data: self.function_data_renderer,
+            DataTypes.global_data: self.global_data_renderer,
+            DataTypes.funcdecl_data: self.funcdecl_data_renderer,
+            DataTypes.type_data: self.types_data_renderer
         }[self.output_type]
 
     def get_sorting_lambda(self, original_sort_lambda):
@@ -205,6 +223,18 @@ class OutputRenderer:
     @abstractmethod
     def dbversion_data_renderer(self):
         self.assert_not_implemented()
+    
+    @abstractmethod
+    def modulename_data_renderer(self):
+        self.assert_not_implemented()
+
+    @abstractmethod
+    def dirname_data_renderer(self):
+        self.assert_not_implemented()
+
+    @abstractmethod
+    def releasename_data_renderer(self):
+        self.assert_not_implemented()
 
     @abstractmethod
     def config_data_renderer(self):
@@ -216,6 +246,30 @@ class OutputRenderer:
 
     @abstractmethod
     def config_part_data_renderer(self):
+        self.assert_not_implemented()
+    
+    @abstractmethod
+    def sources_data_renderer(self):
+        self.assert_not_implemented()
+    
+    @abstractmethod
+    def modules_data_renderer(self):
+        self.assert_not_implemented()
+
+    @abstractmethod
+    def function_data_renderer(self):
+        self.assert_not_implemented()
+    
+    @abstractmethod
+    def global_data_renderer(self):
+        self.assert_not_implemented()
+    
+    @abstractmethod
+    def funcdecl_data_renderer(self):
+        self.assert_not_implemented()
+    
+    @abstractmethod
+    def types_data_renderer(self):
         self.assert_not_implemented()
 
     def null_data_renderer(self):

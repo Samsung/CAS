@@ -1,5 +1,6 @@
 from client.mod_base import Module
 from client.output_renderers.output import DataTypes
+from typing import Tuple, Any, Callable
 
 
 class CompilerPattern(Module):
@@ -97,3 +98,44 @@ class ShowStat(Module):
             "compiled_paths": len(self.nfsdb.get_compiled_file_paths()),
             "linked_paths": len(self.nfsdb.get_linked_file_paths())
         }, DataTypes.stat_data, None, None
+
+
+class FtdbVersion(Module):
+    """ Ftdb Version - show Function Type Database version """
+    @staticmethod
+    def get_argparser():
+        return Module.add_args([], FtdbVersion)
+
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+        return self.ft_db.get_version(), DataTypes.dbversion_data, None, None
+
+
+class FtdbModuleName(Module):
+    """ Ftdb Module Name - show FTDB module name """
+    @staticmethod
+    def get_argparser():
+        return Module.add_args([], FtdbModuleName)
+
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+        return self.ft_db.get_module_name(), DataTypes.module_name_data, None, None
+
+
+class FtdbDirectoryName(Module):
+    """ Ftdb Directory Name - show base directiory of FTDB"""
+    @staticmethod
+    def get_argparser():
+        return Module.add_args([], FtdbDirectoryName)
+
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+        return self.ft_db.get_dir(), DataTypes.dir_name_data, None, None
+
+
+class FtdbReleaseName(Module):
+    """ Ftdb Release Name - show release name of FTDB """
+    @staticmethod
+    def get_argparser():
+        return Module.add_args([], FtdbReleaseName)
+
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+        return self.ft_db.get_release(), DataTypes.release_name_data, None, None
+
