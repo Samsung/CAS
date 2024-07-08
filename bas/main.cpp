@@ -145,6 +145,10 @@ void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& 
         for (size_t i = 0; i < process.executions.size(); i++) {
             auto& execution = process.executions[i];
 
+            /* ignore 0 pid, used as a placeholder pid in env branch */
+            if (!execution.pid)
+                continue;
+
             print_entry(execution);
             if (i == process.executions.size() - 1)
                 output << ",\"!\":" << +execution.exit_code;
