@@ -1009,14 +1009,14 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 				sizeof(fstype) - 1);
 
 		if (!err && regs->dx && source) {
-			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
-				    ",sourcenamesize=%ld,typenamesize=%ld,"
+			PRINT_TRACE(tpid->upid, "!Mount|sourcenamesize=%ld"
+				    ",targetnamesize=%ld,typenamesize=%ld,"
 				    "flags=%ld",
 				    strlen(source), strlen(target),
 				    strlen(fstype), flags);
 		} else if (source) {
-			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
-				    ",sourcenamesize=%ld,flags=%ld",
+			PRINT_TRACE(tpid->upid, "!Mount|sourcenamesize=%ld"
+				    ",targetnamesize=%ld,flags=%ld",
 				    strlen(source), strlen(target), flags);
 		} else if (!source) {
 			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld,flags=%ld",

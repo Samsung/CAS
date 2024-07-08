@@ -443,24 +443,26 @@ Arguments:
 #### mount
 Syntax:
 ```
-Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
-MS|/dev/sda1
-MT|/mnt/
-MX|ext4
+Mount|[sourcenamesize=nn,]targetnamesize=nn,[typenamesize=nn,]flags=nn
+[MS|/home/example_dir/source_dir]
+MT|/home/example_dir/target_dir
+[MX|example_fstype]
+[MountFailed|]
 
 OR (1):
 Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
 MS|/home/example_dir/source_dir
 MT|/home/example_dir/target_dir
+MX|example_fstype
 
 OR (2):
-Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+Mount|sourcenamesize=nn,targetnamesize=nn,flags=nn
 MS|/home/example_dir/source_dir
 MT|/home/example_dir/target_dir
 MountFailed|
 
 OR (3):
-Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+Mount|targetnamesize=nn,flags=nn
 MT|/home/example_dir/target_dir
 ```
 
@@ -488,6 +490,9 @@ MT|/mnt/
 OR (1):
 Umount|targetnamesize=nn,flags=nn
 MT|/mnt/
+UmountFailed|
+
+OR (2):
 UmountFailed|
 ```
 
