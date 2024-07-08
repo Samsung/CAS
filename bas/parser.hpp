@@ -114,7 +114,7 @@ struct ExitArguments {
 
 struct MountArguments {
     size_t targetnamesize;
-    size_t sourcenamesize;
+    ssize_t sourcenamesize;
     ssize_t typenamesize;
     unsigned long flags;
 };

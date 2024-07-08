@@ -69,7 +69,7 @@ void print_mounts(ParsingResults& results, std::ostream& output) {
         }
     }
 
-    output.seekp(output.tellp() - 2);
+    output.seekp(-2, std::ios_base::cur);
     output << " \n]\n";
 }
 

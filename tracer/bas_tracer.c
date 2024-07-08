@@ -953,22 +953,28 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		int err;
 		unsigned long flags = regs->r10;
 		struct path from, to;
-		char __user *source = (char __user *) regs->di;
-		char __user *target = (char __user *) regs->si;
-		char fstype[256] = {0}; /* fstype is unbound in kernel w*/
+		char __user *source_param = (char __user *) regs->di;
+		char __user *target_param = (char __user *) regs->si;
+		char *source = NULL, *target = NULL;
+		char fstype[256] = {0}; /* fstype is unbound in kernel */
 		char *tmp = NULL, *tmp2 = NULL;
-		int arbitrary_source = 0;
+		bool arbitrary_source = false;
 
 		if (!should_trace(&tpid))
 			return;
 
-		err = user_path_at(AT_FDCWD, source, 0, &from);
-		if (err) {
+		err = user_path_at(AT_FDCWD, source_param, 0, &from);
+		/* is source_param is not a pointer to actual path */
+		if (err && source_param) {
 			source = kzalloc(PATH_MAX, GFP_KERNEL);
-			err = copy_from_user(source, (char __user *) regs->di,
-					PATH_MAX - 1);
+			if (!source) {
+				pr_warn("sys_enter_mount: kzalloc() failed\n");
+				break;
+			}
+
+			err = copy_from_user(source, source_param, PATH_MAX - 1);
 			arbitrary_source = !arbitrary_source;
-		} else {
+		} else if (!err) {
 			source = get_pathstr_from_path(&from, &tmp);
 			path_put(&from);
 			if (!source) {
@@ -978,11 +984,12 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 			}
 		}
 
-		err = user_path_at(AT_FDCWD, target, 0, &to);
+		err = user_path_at(AT_FDCWD, target_param, 0, &to);
 		if (err) {
 			pr_warn("sys_enter_mount: user_path_at failed\n");
 			kfree(tmp);
-			kfree(tmp2);
+			if (arbitrary_source)
+				kfree(source);
 			break;
 		}
 
@@ -1001,20 +1008,24 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		err = strncpy_from_user(fstype, (char __user *) regs->dx,
 				sizeof(fstype) - 1);
 
-		if (!err && regs->dx) {
+		if (!err && regs->dx && source) {
 			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
 				    ",sourcenamesize=%ld,typenamesize=%ld,"
 				    "flags=%ld",
 				    strlen(source), strlen(target),
 				    strlen(fstype), flags);
-		} else {
+		} else if (source) {
 			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld"
 				    ",sourcenamesize=%ld,flags=%ld",
 				    strlen(source), strlen(target), flags);
+		} else if (!source) {
+			PRINT_TRACE(tpid->upid, "!Mount|targetnamesize=%ld,flags=%ld",
+				    strlen(target), flags);
 		}
 
-		print_long_string(tpid->upid, source, strlen(source), "!MS",
-				current);
+		if (source)
+			print_long_string(tpid->upid, source, strlen(source), "!MS",
+					current);
 		print_long_string(tpid->upid, target, strlen(target), "!MT",
 				current);
 		if (!err && regs->dx)
@@ -1028,15 +1039,14 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		}
 	case __NR_umount2: {
 		int flags = regs->si;
-		char __user *target = (char __user *) regs->di;
-		char *tmp = NULL;
+		char *tmp = NULL, *target = NULL;
 		struct path from;
 		int err;
 
 		if (!should_trace(&tpid))
 			return;
 
-		err = user_path_at(AT_FDCWD, target, 0, &from);
+		err = user_path_at(AT_FDCWD, (char __user *) regs->di, 0, &from);
 		if (err) {
 			pr_warn("sys_enter_umount: user_path_at failed\n");
 			break;

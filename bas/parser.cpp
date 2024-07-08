@@ -724,6 +724,7 @@ Errorable<MountArguments> StreamParser::parse_mount_short_arguments(const eventT
     ShortArguments tag;
     MountArguments arguments = {};
     arguments.typenamesize = -1;
+    arguments.sourcenamesize = -1;
 
     for (;;) {
         separator = std::strchr(event_line, '=');
@@ -1173,9 +1174,11 @@ Errorable<void> StreamParser::process_events(Process &process) {
             bound_check_iter(it, end_it);
             auto last_it = it;
 
-            size = StreamParser::parse_long_argument(it, end_it, Tag::MountSource,
-                    Tag::MountSourceExtended, Tag::MountSourceEnd, source);
-            bound_check_iter(it, end_it);
+            if (argnfo.sourcenamesize != -1) {
+                size = StreamParser::parse_long_argument(it, end_it, Tag::MountSource,
+                        Tag::MountSourceExtended, Tag::MountSourceEnd, source);
+                bound_check_iter(it, end_it);
+            }
 
             last_it = it;
 
@@ -1185,7 +1188,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
             if (argnfo.typenamesize != -1) {
                 last_it = it;
-                ssize_t size = StreamParser::parse_long_argument(it, end_it,
+                StreamParser::parse_long_argument(it, end_it,
                         Tag::MountType, Tag::MountTypeExtended,
                         Tag::MountTypeEnd, type);
 
@@ -1193,7 +1196,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
             }
 
             Execution &execution = process.executions.back();
-            execution.mounts.push_back(Mount(target, source, type, argnfo.flags, evln.timestamp));
+            execution.mounts.push_back(Mount(source, target, type, argnfo.flags, evln.timestamp));
 
             n_processed++;
             _stats_collector.increment_mount();
@@ -1220,7 +1223,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (size != argnfo.targetnamesize)
                 return SizeMismatchError(last_it->line_number, size, argnfo.targetnamesize);
 
-            Execution &execution = process.executions.back();
+            // Execution &execution = process.executions.back();
             n_processed++;
         } break;
         case Tag::Open: {

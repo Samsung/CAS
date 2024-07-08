@@ -458,6 +458,10 @@ Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
 MS|/home/example_dir/source_dir
 MT|/home/example_dir/target_dir
 MountFailed|
+
+OR (3):
+Mount|sourcenamesize=nn,targetnamesize=nn,typenamesize=nn,flags=nn
+MT|/home/example_dir/target_dir
 ```
 
 Arguments:
@@ -471,7 +475,7 @@ Arguments:
 Data events:
 | Tag | Description |
 |-----|-------------|
-| MS | Source passed to mount syscall, it does not have to by path (as specified by manpages) |
+| MS | Source passed to mount syscall, it does not have to by path (as specified by manpages), if it is not passed, then flags should contain MS_REMOUNT |
 | MT | Target mount path string |
 | MX | Filesystem for which mount is performed, does not have to appear if NULL was passed to mount() |
 
