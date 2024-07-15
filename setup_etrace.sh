@@ -26,7 +26,11 @@ if [ "$1" = "-f" ]; then
 	if [ "$?" -ne 0 ]; then exit "$?"; fi
 
 	# set buffers size
-	echo "262144" > /sys/kernel/debug/tracing/buffer_size_kb
+	if [ ! -z "${TRACING_BUFF_SIZE_KB}" ]; then
+		echo "${TRACING_BUFF_SIZE_KB}" > /sys/kernel/debug/tracing/buffer_size_kb
+	else
+		echo "262144" > /sys/kernel/debug/tracing/buffer_size_kb
+	fi
 	if [ "$?" -ne 0 ]; then
 		exit "$?"
 	fi
