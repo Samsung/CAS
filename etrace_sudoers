@@ -1,2 +1,3 @@
 # Allow to use kernel tracing technology for etrace command for any user
+Defaults env_keep += "TRACING_BUFF_SIZE_KB"
 ALL ALL = (root) NOPASSWD: /usr/bin/setup_etrace.sh
