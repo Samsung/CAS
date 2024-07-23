@@ -55,7 +55,7 @@ NPROC=$(expr $NPROC - 1)
 
 # -------- setting up ftrace
 if (( $EUID != 0 )); then
-    sudo -n setup_etrace.sh -f
+    sudo -n -E setup_etrace.sh -f
 else
     setup_etrace.sh -f
 fi
@@ -72,7 +72,7 @@ echo "INITCWD=$INITCWD" > "$WORK_DIR/.nfsdb"
 ${DIR}/cati "/sys/kernel/debug/tracing/trace_pipe" >> "$WORK_DIR/.nfsdb" &
 LISTENER_PID="$!"
 if (( $EUID != 0 )); then
-    sudo -n renice -n -18 -p $LISTENER_PID >/dev/null 2>&1
+    sudo -n -E renice -n -18 -p $LISTENER_PID >/dev/null 2>&1
 else
     renice -n -18 -p $LISTENER_PID >/dev/null 2>&1
 fi
@@ -85,7 +85,7 @@ fi
 # -------- install bas_tracer module
 MYPID="$$"
 if (( $EUID != 0 )); then
-    sudo -n setup_etrace.sh -i $MYPID $MODULE_PARAMS
+    sudo -n -E setup_etrace.sh -i $MYPID $MODULE_PARAMS
 else
     setup_etrace.sh -i $MYPID $MODULE_PARAMS
 fi
@@ -100,7 +100,7 @@ RV="$?"
 
 # -------- remove bas_tracer module
 if (( $EUID != 0 )); then
-    sudo -n setup_etrace.sh -r
+    sudo -n -E setup_etrace.sh -r
 else
     setup_etrace.sh -r
 fi
