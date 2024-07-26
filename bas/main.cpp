@@ -782,6 +782,19 @@ int parser_main(int argc, char **argv) {
     std::cout << "parent pipe count: " << parent_pipe_count << '\n';
 #endif
 
+    // Propagate arguments from parents to their children in the first execution
+    for (auto it = results.process_map.begin(); it != results.process_map.end(); ++it) {
+        auto& process = it->second;
+
+        for (auto& execution : process.executions)
+            for (auto& child : execution.children) {
+                auto found = results.process_map.find(child.pid);
+
+                if (found != results.process_map.end())
+                    found->second.executions[0].arguments = execution.arguments;
+            }
+    }
+
     output.open(output_path);
     if (!output.good()) {
         std::cerr << "couldn't open " << output_path << " for writing, quitting\n";
