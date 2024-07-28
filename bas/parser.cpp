@@ -758,9 +758,10 @@ Errorable<MountArguments> StreamParser::parse_mount_short_arguments(const eventT
             value = std::strtoull(++separator, &endptr, 10);
             if (errno) [[unlikely]]
                 return IntegerParseError(event.line_number, separator, errno);
-            else if (*endptr != 0) [[unlikely]]
+            else if (*endptr != ',') [[unlikely]]
                 return BadSeparatorError(event.line_number, separator);
             arguments.typenamesize = value;
+            event_line = ++endptr;
             break;
         case ShortArguments::Flags:
             errno = 0;
