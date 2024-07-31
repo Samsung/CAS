@@ -29,9 +29,11 @@ class FTDatabase:
     def __init__(self) -> None:
         self.db = libftdb.ftdb()
         self.db_loaded = False
+        self.db_path = None
     
     def load_db(self, db_path: str, quiet:bool=True, debug:bool=False) -> bool:
         self.db_loaded = self.db.load(db_path, quiet=quiet, debug=debug)
+        self.db_path = db_path
         return self.db_loaded
 
     def unload_db(self) -> bool:

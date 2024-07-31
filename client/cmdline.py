@@ -10,6 +10,7 @@ from libft_db import FTDatabase
 from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
+from client.exceptions import LibFtdbException
 
 
 def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None, ft_db:FTDatabase = None) -> "str | Dict | None":
@@ -54,8 +55,7 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 if ftdb_required:
                     ft_db.load_db(os.path.join(common_args.ftdb_dir, common_args.ftdb), debug=common_args.debug, quiet=True)
             except FtdbError:
-                printerr("ERROR: Failed to load ftdb database. Check if {} is proper database file path.".format(os.path.join(common_args.ftdb_dir, common_args.ftdb)))
-                sys.exit(2)
+                raise LibFtdbException("ERROR: Failed to load ftdb database. Check if {} is proper database file path.".format(os.path.join(common_args.ftdb_dir, common_args.ftdb)))
 
         if not cas_db.db_loaded:
             db_required = not all([x.name in ["parse", "postprocess", "pp", "cache", "config", "cfg", "compiler_pattern", "linker_pattern"]+ftdb_cmds for x in pipeline_args])

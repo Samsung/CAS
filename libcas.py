@@ -195,6 +195,7 @@ class CASDatabase:
         self.db_loaded = False
         self.cache_db_loaded = False
         self.config = None
+        self.db_path = None
 
     def set_config(self, config: CASConfig):
         """
@@ -223,6 +224,7 @@ class CASDatabase:
         self.source_root = self.db.source_root
         assert self.config is not None, "Please set config first. Use CASDatabase.set_config()"
         self.config.apply_source_root(self.source_root)
+        self.db_path = db_file
         return self.db_loaded
 
     def load_deps_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:

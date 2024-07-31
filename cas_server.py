@@ -2,7 +2,7 @@
 from functools import lru_cache
 from typing import List, Dict
 from gevent.pywsgi import WSGIServer
-from os import path, environ
+from os import path
 import json
 import sys
 import math
@@ -17,7 +17,7 @@ from client.filtering import CommandFilter
 from client.cmdline import process_commandline
 from client.argparser import get_api_keywords
 from client.misc import access_from_code, get_file_info, get_config_path
-from client.exceptions import MessageException,ArgumentException
+from client.exceptions import MessageException, LibFtdbException
 import libcas
 import libft_db
 
@@ -32,7 +32,6 @@ app = Flask(__name__, template_folder='client/templates', static_folder='client/
 CORS(app)
 cas_db = libcas.CASDatabase()
 ft_db = libft_db.FTDatabase()
-# root_pid = int(json.loads(process_commandline(cas_db, "root_pid --json"))["root_pid"])
 
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
 bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command",
@@ -108,7 +107,7 @@ def schema():
             "modules": allowed_modules,
             "bool_args": bool_args
         }),
-        mimetype='text/json')
+        mimetype='application/json')
 
 @app.route('/raw_cmd')
 def get_raw_cmd():
@@ -123,10 +122,10 @@ def get_raw_cmd():
         except MessageException as exc:
             return Response(json.dumps( {
                 "ERROR": exc.message
-            }), mimetype='text/json')
+            }), mimetype='application/json')
     else:
         return Response(json.dumps({"ERROR":"Empty raw command"}),
-        mimetype='text/json')
+        mimetype='application/json')
 
 @app.route('/<module>', methods=['GET'])
 def get_module(module: str) -> Response:
@@ -137,7 +136,7 @@ def get_module(module: str) -> Response:
     except MessageException as exc:
         return Response(json.dumps( {
             "ERROR": exc.message
-        }), mimetype='text/json')
+        }), mimetype='application/json')
 
 def process_cmdline(commandline:List[str], org_url):
     if not any([ x for x in commandline if x.startswith("-n=") or x.startswith("--entries-per-page=")]):
@@ -147,27 +146,32 @@ def process_cmdline(commandline:List[str], org_url):
         commandline.append("-p=0")
         org_url += "&p=0"
 
-    if "--proc-tree" in commandline:
+    try:
         e: Dict = process_commandline(cas_db, commandline, ft_db)
+    except (argparse.ArgumentError, LibFtdbException) as er:
+        return Response(json.dumps({"ERROR": er.message}), mimetype='text/json')
+
+    if "--proc-tree" in commandline:
         if isinstance(e, dict) and "entries" in e:
+
             e["origin_url"] = org_url
             return Response(render_template('proc_tree.html', exe=e, diable_search=True), mimetype='text/html')
         else:
-            return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
+            return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='application/json')
     if "--deps-tree" in commandline:
-        e: Dict = process_commandline(cas_db, commandline, ft_db)
+        
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
             return Response(render_template('deps_tree.html', exe=e, diable_search=True), mimetype='text/html')
         else:
-            return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='text/json')
+            return Response(json.dumps({"ERROR":"Returned data is not executable - add '&commands=true'"}), mimetype='application/json')
 
     if "--cdb" in commandline:
-        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
+        return Response(e, mimetype='application/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
     elif "--makefile" in commandline:
-        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json', headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
+        return Response(e, mimetype='text/plain', headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
     else:
-        return Response(process_commandline(cas_db, commandline, ft_db), mimetype='text/json')
+        return Response(e, mimetype='application/json')
 
 
 def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
@@ -271,10 +275,10 @@ def proc() -> Response:
         data = process_info_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])), page)
         return Response(
             json.dumps(data),
-            mimetype='text/json')
+            mimetype='application/json')
     return Response(
         json.dumps({"ERROR": "No such pid/idx!"}),
-        mimetype='text/json')
+        mimetype='application/json')
 
 
 @app.route('/proc_lookup', methods=['GET'])
@@ -284,10 +288,10 @@ def proc_lookup() -> Response:
         data = child_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])))
         return Response(
             json.dumps(data),
-            mimetype='text/json')
+            mimetype='application/json')
     return Response(
         json.dumps({"ERROR": "No such pid/idx!"}),
-        mimetype='text/json')
+        mimetype='application/json')
 
 @app.route('/children', methods=['GET'])
 def children_of() -> Response:
@@ -321,7 +325,7 @@ def children_of() -> Response:
         result = {"count": len(data), "pages": pages, "page": 0, "children": data[:maxResults]}
     return Response(
         json.dumps(result),
-        mimetype='text/json', direct_passthrough=True)
+        mimetype='application/json', direct_passthrough=True)
 
 @app.route('/ancestors_of', methods=['GET'])
 def ancestors_of() -> Response:
@@ -341,7 +345,7 @@ def ancestors_of() -> Response:
     result = {"ancestors": data}
     return Response(
         json.dumps(result),
-        mimetype='text/json',
+        mimetype='application/json',
         direct_passthrough=True
     )
 
@@ -375,11 +379,11 @@ def deps_of() -> Response:
         result["num_entries"] = len(result["entries"])
         return Response(
             json.dumps(result),
-            mimetype='text/json', direct_passthrough=True)
+            mimetype='application/json', direct_passthrough=True)
     
     return Response(
         json.dumps({"ERROR": "No such path!"}),
-        mimetype='text/json')
+        mimetype='application/json')
 
 
 @lru_cache(1)
@@ -436,7 +440,7 @@ def search_files() -> Response:
     if len(execs) == 0:
         return Response(
             json.dumps({"ERROR": "No matches!", "count": 0}),
-            mimetype='text/json')
+            mimetype='application/json')
 
     data= {
             "count": len(execs),
@@ -452,7 +456,7 @@ def search_files() -> Response:
 
     return Response(
         json.dumps(data),
-        mimetype='text/json')
+        mimetype='application/json')
 
 @app.route('/deps_tree/', methods=['GET'])
 @app.route('/deps_tree', methods=['GET'])
@@ -532,7 +536,7 @@ def revdeps_tree() -> Response:
         if not cas_db.db.path_exists(j["path"]):
             return Response(
             json.dumps({"ERROR": "No matches!", "count": 0}),
-            mimetype='text/json')
+            mimetype='application/json')
         j["path"] = j["path"].replace(" ", "+")
         entries = get_opens(j["path"])
         first_modules = {
@@ -609,17 +613,17 @@ def revdeps_of() -> Response:
         result["num_entries"] = len(result["entries"])
         return Response(
             json.dumps(result),
-            mimetype='text/json', direct_passthrough=True)
+            mimetype='application/json', direct_passthrough=True)
 
     return Response(
         json.dumps({"ERROR": "No such path!"}),
-        mimetype='text/json')
+        mimetype='application/json')
 
 @app.route('/db_list', methods=['GET'])
 def dblist() -> Response:
     return Response(
         json.dumps([]),
-        mimetype='text/json')
+        mimetype='application/json')
 
 
 @app.route('/', methods=['GET'])
@@ -636,6 +640,19 @@ def favicon():
         path.join(app.root_path, 'static'), 'favicon.ico',
         mimetype='image/vnd.microsoft.icon')
 
+@app.route('/status', methods=['GET'])
+def status():
+    return Response(
+        json.dumps({
+            "loaded_databases": {
+                "cas": cas_db.db_path,
+                "ftdb": ft_db.db_path,
+            },
+            "cas_ok": cas_db.db_loaded,
+            "ftdb_ok": ft_db.db_loaded
+        }),
+        mimetype="application/json"
+    )
 
 if __name__ == '__main__':
     if path.exists('config.json'):

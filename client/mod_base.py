@@ -3,16 +3,16 @@ from functools import lru_cache
 import sys
 import re
 from abc import abstractmethod
-from typing import Any, List, Dict, Tuple, Optional, Generator, Type, Callable
+from typing import Any, List, Dict, Tuple, Generator, Callable
 import argparse
 import libetrace
 import libcas
 import libftdb
 from libft_db import FTDatabase
 from client.filtering import CommandFilter, OpenFilter, FilterException, FtdbSimpleFilter
-from client.misc import get_output_renderers, printdbg, printerr, fix_cmd
+from client.misc import get_output_renderers, printdbg, fix_cmd
 from client.output_renderers.output import DataTypes
-from client.exceptions import ArgumentException, ParameterException, LibetraceException, PipelineException
+from client.exceptions import ArgumentException, LibFtdbException, LibetraceException, PipelineException
 
 class ModulePipeline:
     def __init__(self, modules: list) -> None:
@@ -62,7 +62,7 @@ class ModulePipeline:
             except libetrace.error as exc:
                 raise LibetraceException("libetrace.error : {}".format(str(exc))) from exc
             except libftdb.FtdbError as exc:
-                raise LibetraceException("libftdb.FtdbError : {}".format(str(exc))) from exc
+                raise LibFtdbException("libftdb.FtdbError : {}".format(str(exc))) from exc
             self.last_module = mdl
             printdbg("DEBUG: END pipeline step {}".format(mdl.args.module.__name__), mdl.args)
         if self.last_module is not None:

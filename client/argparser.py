@@ -98,7 +98,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         args = sys.argv[1:]
     else:
         args = list(args)
-    parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False)
+    parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False,exit_on_error=False)
     common_group = parser.add_argument_group("Common arguments")
 
     common_group.add_argument("--verbose", "-v", action="store_true", help="Verbalize action")
