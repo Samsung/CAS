@@ -145,6 +145,8 @@ void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfs
 
 const char* libetrace_nfsdb_string_handle_join(const struct nfsdb* nfsdb, unsigned long* argv, unsigned long argv_count, const char* sep);
 
+PyObject * libetrace_get_image_version(PyObject *self, PyObject *args);
+PyObject * libetrace_get_database_version(PyObject *self, PyObject *args);
 PyObject * libetrace_is_LLVM_BC_file(PyObject *self, PyObject *args);
 PyObject * libetrace_is_ELF_file(PyObject *self, PyObject *args);
 PyObject * libetrace_pytools_is_ELF_or_LLVM_BC_file(PyObject *self, PyObject *args);
@@ -170,6 +172,8 @@ PyObject * libetrace_parse_nfsdb(PyObject *self, PyObject *args);
 extern PyObject *libetrace_nfsdbError;
 
 static PyMethodDef libetrace_methods[] = {
+	{"image_version", (PyCFunction)libetrace_get_image_version, METH_VARARGS,"Get the version of the image file"},
+	{"database_version", (PyCFunction)libetrace_get_database_version, METH_VARARGS,"Get the version string of the database"},
 	{"is_LLVM_BC_file", (PyCFunction)libetrace_is_LLVM_BC_file, METH_VARARGS,"Checks whether the given file has a proper LLVM bitcode header"},
 	{"is_ELF_file", (PyCFunction)libetrace_is_ELF_file, METH_VARARGS,"Checks whether the given file has a proper ELF header"},
 	{"is_ELF_or_LLVM_BC_file", (PyCFunction)libetrace_pytools_is_ELF_or_LLVM_BC_file, METH_VARARGS,"Checks whether the given file has a proper ELF or LLVM bitcode header"},

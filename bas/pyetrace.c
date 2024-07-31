@@ -109,6 +109,157 @@ err:
 	return false;
 }
 
+PyObject * libetrace_get_image_version(PyObject *self, PyObject *args) {
+
+	const char* key;
+
+	if (!PyArg_ParseTuple(args, "s", &key)) {
+		PyErr_SetString(PyExc_TypeError, "Invalid argument for the image filename");
+		return 0;
+	}
+
+	FILE* f = fopen(key, "r");
+	if (!f) {
+		Py_RETURN_FALSE;
+	}
+
+	struct flatten_header HDR;
+
+	if (fread(&HDR,sizeof(struct flatten_header),1,f)!=1) {
+		goto err;
+	}
+
+	if (HDR.magic != KFLAT_IMG_MAGIC) {
+		PyErr_SetString(PyExc_TypeError, "Invalid magic while reading the flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	if (HDR.root_addr_count!=1) {
+		PyErr_SetString(PyExc_TypeError, "Invalid format of nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	size_t root_addr_offset;
+	if (fread(&root_addr_offset,sizeof(size_t),1,f)!=1) goto err;
+
+	if (HDR.root_addr_extended_count!=0) {
+		PyErr_SetString(PyExc_TypeError, "Invalid format of nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	size_t flatten_memory_offset = HDR.ptr_count * sizeof(size_t) + HDR.fptr_count * sizeof(size_t) + HDR.mcount * 2 * sizeof(size_t);
+	if (fseek(f,flatten_memory_offset+root_addr_offset,SEEK_CUR)) goto err;
+
+	unsigned long long db_magic;
+	if (fread(&db_magic,sizeof(unsigned long long),1,f)!=1) goto err;
+	if (db_magic!=NFSDB_MAGIC_NUMBER) {
+		PyErr_SetString(PyExc_TypeError, "Invalid magic in the nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	unsigned long long db_version;
+	if (fread(&db_version,sizeof(unsigned long long),1,f)!=1) goto err;
+
+	fclose(f);
+	return PyLong_FromLongLong(db_version);
+
+err:
+	fclose(f);
+	Py_RETURN_FALSE;
+
+}
+
+#define DB_VERSION_CHUNK_SIZE 4096
+
+PyObject * libetrace_get_database_version(PyObject *self, PyObject *args) {
+
+	const char* key;
+
+	if (!PyArg_ParseTuple(args, "s", &key)) {
+		PyErr_SetString(PyExc_TypeError, "Invalid argument for the image filename");
+		return 0;
+	}
+
+	FILE* f = fopen(key, "r");
+	if (!f) {
+		Py_RETURN_FALSE;
+	}
+
+	struct flatten_header HDR;
+
+	if (fread(&HDR,sizeof(struct flatten_header),1,f)!=1) {
+		goto err;
+	}
+
+	if (HDR.magic != KFLAT_IMG_MAGIC) {
+		PyErr_SetString(PyExc_TypeError, "Invalid magic while reading the flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	if (HDR.root_addr_count!=1) {
+		PyErr_SetString(PyExc_TypeError, "Invalid format of nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	size_t root_addr_offset;
+	if (fread(&root_addr_offset,sizeof(size_t),1,f)!=1) goto err;
+
+	if (HDR.root_addr_extended_count!=0) {
+		PyErr_SetString(PyExc_TypeError, "Invalid format of nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	size_t flatten_memory_offset = HDR.ptr_count * sizeof(size_t) + HDR.fptr_count * sizeof(size_t) + HDR.mcount * 2 * sizeof(size_t);
+	size_t flatten_memory_offset_in_file = ftell(f)+flatten_memory_offset;
+	if (fseek(f,flatten_memory_offset+root_addr_offset,SEEK_CUR)) goto err;
+
+	unsigned long long db_magic;
+	if (fread(&db_magic,sizeof(unsigned long long),1,f)!=1) goto err;
+	if (db_magic!=NFSDB_MAGIC_NUMBER) {
+		PyErr_SetString(PyExc_TypeError, "Invalid magic in the nfsdb flattened image");
+		fclose(f);
+		return 0;
+	}
+
+	if (fseek(f,offsetof(struct nfsdb,dbversion)-offsetof(struct nfsdb,db_version),SEEK_CUR)) goto err;
+	uintptr_t db_version_offset;
+	if (fread(&db_version_offset,sizeof(uintptr_t),1,f)!=1) goto err;
+
+	if (fseek(f,flatten_memory_offset_in_file,SEEK_SET)) goto err;
+	unsigned char* db_version = calloc(DB_VERSION_CHUNK_SIZE,1);
+	unsigned long curr_offset = 0;
+	size_t ssize = 0;
+	if (fseek(f,db_version_offset-HDR.last_mem_addr,SEEK_CUR)) goto err;
+
+	while (1) {
+		fread(db_version+curr_offset,1,DB_VERSION_CHUNK_SIZE,f);
+		size_t curr_size = strnlen((const char*)db_version+curr_offset,DB_VERSION_CHUNK_SIZE);
+		ssize+=curr_size;
+		if (curr_size!=DB_VERSION_CHUNK_SIZE) {
+			break;
+		}
+		db_version = realloc(db_version,ssize+DB_VERSION_CHUNK_SIZE);
+		memset(db_version+ssize,0,DB_VERSION_CHUNK_SIZE);
+		curr_offset+=curr_size;
+	}
+
+	PyObject* v = PyUnicode_FromStringAndSize((const char*)db_version,ssize);
+	free(db_version);
+	fclose(f);
+	return v;
+
+err:
+	fclose(f);
+	Py_RETURN_FALSE;
+}
+
 PyObject * libetrace_is_LLVM_BC_file(PyObject *self, PyObject *args) {
 
 	const char* key;

@@ -227,6 +227,26 @@ class CASDatabase:
         self.db_path = db_file
         return self.db_loaded
 
+    @staticmethod
+    def get_db_version(db_file: str) -> str:
+        """
+        Function returns version of given nfsdb file
+
+        :param db_file: Database file
+        :type db_file: str
+        """
+        return libetrace.database_version(db_file)
+
+    @staticmethod
+    def get_img_version(db_file: str) -> str:
+        """
+        Function returns version of given image file
+        
+        :param db_file: Database file
+        :type db_file: str
+        """
+        return libetrace.image_version(db_file)
+
     def load_deps_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
         """
         Function uses libetrace.load_deps to load database from given filename
