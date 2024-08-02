@@ -142,6 +142,9 @@ module_param(support_ns_pid, int, 0);
 static int bits_of_real_pid = 22;
 module_param(bits_of_real_pid, int, 0);
 
+static int enable_mount = 0;
+module_param(enable_mount, int, 0);
+
 // private global variables
 
 static DEFINE_MUTEX(list_mutex);
@@ -960,6 +963,9 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		char *tmp = NULL, *tmp2 = NULL;
 		bool arbitrary_source = false;
 
+		if (!enable_mount)
+			break;
+
 		if (!should_trace(&tpid))
 			return;
 
@@ -1042,6 +1048,9 @@ static void __tracepoint_probe_sys_enter(void* data, struct pt_regs *regs,
 		char *tmp = NULL, *target = NULL;
 		struct path from;
 		int err;
+
+		if (!enable_mount)
+			break;
 
 		if (!should_trace(&tpid))
 			return;
@@ -1188,6 +1197,9 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 	// TODO support creat()?
 	switch(syscall_nr) {
 	case __NR_mount: {
+		if (!enable_mount)
+			break;
+
 		if (!should_trace(&tpid))
 			return;
 
@@ -1198,6 +1210,9 @@ static void __tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 		break;
 	}
 	case __NR_umount2: {
+		if (!enable_mount)
+			break;
+
 		if (!should_trace(&tpid))
 			return;
 

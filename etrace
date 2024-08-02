@@ -5,7 +5,7 @@
 # etrace COMMAND ...
 
 print_usage () {
-    echo "Usage: etrace [-h] [-l] [-i] [-w WORK_DIR] [--] COMMAND ..."
+    echo "Usage: etrace [-hlim] [-w WORK_DIR] [--] COMMAND ..."
 }
 
 echo_err () {
@@ -23,7 +23,7 @@ WORK_DIR=$(pwd)
 INITCWD=$(pwd)
 MODULE_PARAMS=""
 
-while getopts "hilw:" opt; do
+while getopts "hilmw:" opt; do
     case "$opt" in
     h)
         print_usage
@@ -37,7 +37,10 @@ while getopts "hilw:" opt; do
         mkdir -p "$WORK_DIR"
         ;;
     i)
-        MODULE_PARAMS="ignore_repeated_opens=1"
+        MODULE_PARAMS="$MODULE_PARAMS ignore_repeated_opens=1"
+        ;;
+    m)
+        MODULE_PARAMS="$MODULE_PARAMS enable_mount=1"
         ;;
     esac
 done
