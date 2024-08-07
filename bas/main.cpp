@@ -52,7 +52,6 @@ void print_mounts(ParsingResults& results, std::ostream& output) {
         for (size_t i = 0; i < process.executions.size(); i++) {
             auto& execution = process.executions[i];
 
-            auto mount_size = execution.mounts.size();
             size_t curr = 0;
             for (auto iter = execution.mounts.begin(), end_iter = execution.mounts.end(); iter != end_iter; iter++) {
                 auto& mount = *iter;
@@ -146,6 +145,7 @@ void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& 
                 path_size += original_path.size();
             }
 
+            output << "\"b\":" << file.open_timestamp << ",\"e\":" << file.close_timestamp << ",";
             output << "\"m\":" << file.mode << ",\"s\":" << file.size << '}';
 
             if (split && path_size >= split && std::next(iter) != end_iter) {
@@ -425,6 +425,17 @@ int parser_main(int argc, char **argv) {
 
     auto results = parser->release_results();
     auto stats = parser->stats();
+
+    for (auto it = results.process_map.begin(); it != results.process_map.end(); ++it) {
+        auto& process = it->second;
+
+        for (auto& execution : process.executions)
+            for (auto& [fd, file] : execution.fd_table) {
+                file.close_timestamp = process.last_event_time;
+
+                execution.add_open_file(file);
+            }
+    }
 
     if (print_stats) {
         std::cout << "Parsing statistics: \n";

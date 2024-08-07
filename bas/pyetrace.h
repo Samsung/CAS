@@ -723,6 +723,8 @@ typedef struct {
     unsigned long mode;
     unsigned long size;
     unsigned long original_path;
+	unsigned long open_timestamp;
+	unsigned long close_timestamp;
     const struct nfsdb* nfsdb;
     unsigned long parent; /* Parent nfsdb entry that contains this openfile */
     unsigned long index; /* Index of this openfile in the parent nfsdb entry */
@@ -738,6 +740,8 @@ PyObject* libetrace_nfsdb_entry_openfile_repr(PyObject* self);
 PyObject* libetrace_nfsdb_entry_openfile_get_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_original_path(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_parent(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_openfile_get_open_timestamp(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_entry_openfile_get_close_timestamp(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_opaque(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_size(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_openfile_get_ptr(PyObject* self, void* closure);
@@ -778,6 +782,8 @@ static PyGetSetDef libetrace_nfsdbEntryOpenfile_getset[] = {
 	{"parent",libetrace_nfsdb_entry_openfile_get_parent,0,"nfsdb entry that contains this openfile entry",0},
 	{"opaque",libetrace_nfsdb_entry_openfile_get_opaque,0,"opaque nfsdb entry for this openfile",0},
 	{"size",libetrace_nfsdb_entry_openfile_get_size,0,"Returns the size of the existing file (otherwise returns None)",0},
+	{"open_timestamp",libetrace_nfsdb_entry_openfile_get_open_timestamp,0,"Returns timestamp of first open of this file in this execution",0},
+	{"close_timestamp",libetrace_nfsdb_entry_openfile_get_close_timestamp,0,"Returns timestamp file close",0},
 	{"ptr",libetrace_nfsdb_entry_openfile_get_ptr,0,"low level information about this openfile entry (tuple with nfsdb index and open index in the nfsdb entry)",0},
 	{0,0,0,0,0},
 };

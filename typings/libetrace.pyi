@@ -495,6 +495,9 @@ class nfsdbEntryOpenfile:
     opaque: nfsdbEntry
     """In case of compiled or linked file this value points to process where compilation or linking was processed."""
     path: str
+    """Timestamps of respectively: first open of this file in this execution, and a close timestamp"""
+    open_timestamp: int
+    close_timestamp: int
     """Open path"""
     original_path: str
     """If open was symlink this value points to symlink target location"""

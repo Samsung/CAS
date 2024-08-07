@@ -1178,6 +1178,17 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (result.is_error())
                 return result;
             argnfo = result.value();
+
+            Execution& execution = process.executions.back();
+
+            auto file_lookup = execution.fd_table.find(argnfo.fd);
+            if (file_lookup != execution.fd_table.end() && file_lookup->second.original_path != "") {
+                auto& file = file_lookup->second;
+
+                file.close_timestamp = evln.timestamp;
+                execution.add_open_file(file);
+            }
+
             n_processed++;
             _stats_collector.increment_close();
             append_syscall(syscall_raw(process.pid, syscall_raw::SYS_CLOSE, argnfo.fd, -1, 0,
@@ -1277,7 +1288,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
         } break;
         case Tag::Open: {
             OpenArguments argnfo = {};
-            auto opened_file = OpenFile();
+            auto opened_file = File();
             std::string absolute_path;
             std::string original_path;
             auto result = StreamParser::parse_open_short_arguments(evln);
@@ -1307,9 +1318,11 @@ Errorable<void> StreamParser::process_events(Process &process) {
             Execution &execution = process.executions.back();
 
             opened_file.mode = argnfo.flags & 0x03;
-            opened_file.absolute_path = std::move(absolute_path);
+            opened_file.absolute_path = absolute_path;
+            opened_file.original_path = original_path;
+            opened_file.open_timestamp = evln.timestamp;
 
-            execution.add_open_file(original_path, opened_file);
+            execution.fd_table.insert_or_assign(argnfo.fd, opened_file);
 
             n_processed++;
             _stats_collector.increment_open();
@@ -1318,8 +1331,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
         case Tag::Rename2From: {
             std::string from_path;
             std::string to_path;
-            auto from = OpenFile();
-            auto to = OpenFile();
+            auto from = File();
+            auto to = File();
             RenameArguments argnfo_RF = {};
             if (evln.tag == Tag::RenameFrom) {
                 auto result = StreamParser::parse_rename_short_arguments(evln);
@@ -1365,11 +1378,16 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
                 from.mode = O_RDONLY;
                 from.absolute_path = from_path;
+                from.original_path = from_path;
+                from.open_timestamp = evln.timestamp;
+
                 to.mode = O_WRONLY;
                 to.absolute_path = to_path;
+                to.original_path = to_path;
+                to.open_timestamp = evln.timestamp;
 
-                e.add_open_file(from_path, from);
-                e.add_open_file(to_path, to);
+                e.add_open_file(from);
+                e.add_open_file(to);
 
                 n_processed += 2;
                 _stats_collector.increment_rename();
@@ -1405,8 +1423,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
         case Tag::LinkatFrom: {
             std::string from_path;
             std::string to_path;
-            auto from = OpenFile();
-            auto to = OpenFile();
+            auto from = File();
+            auto to = File();
             LinkArguments argnfo_LF = {};
             if (evln.tag == Tag::LinkFrom) {
                 auto result = StreamParser::parse_link_short_arguments(evln);
@@ -1451,11 +1469,16 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
                 to.mode = O_WRONLY;
                 to.absolute_path = to_path;
-                from.mode = O_RDONLY;
-                from.absolute_path = to_path;
+                to.original_path = to_path;
+                to.open_timestamp = evln.timestamp;
 
-                e.add_open_file(to_path, to);
-                e.add_open_file(from_path, from);
+                from.mode = O_RDONLY;
+                from.absolute_path = from_path;
+                from.original_path = from_path;
+                from.open_timestamp = evln.timestamp;
+
+                e.add_open_file(to);
+                e.add_open_file(from);
 
                 n_processed += 2;
                 _stats_collector.increment_link();
@@ -1470,8 +1493,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
             std::string original_target;
             std::string absolute_target;
             std::string absolute_symlink;
-            auto from = OpenFile();
-            auto to = OpenFile();
+            auto from = File();
+            auto to = File();
             SymlinkArguments argnfo = {};
             auto result = StreamParser::parse_symlink_short_arguments(evln);
             if (result.is_error())
@@ -1509,15 +1532,19 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
             to.mode = O_WRONLY;
             to.absolute_path = absolute_symlink;
+            to.original_path = absolute_symlink;
+            to.open_timestamp = evln.timestamp;
 
             if (!absolute_target.empty()) {
                 from.mode = O_RDONLY;
                 from.absolute_path = absolute_target;
+                from.original_path = absolute_target;
+                from.open_timestamp = evln.timestamp;
 
-                e.add_open_file(absolute_target, from);
+                e.add_open_file(from);
             }
 
-            e.add_open_file(absolute_symlink, to);
+            e.add_open_file(to);
             n_processed += 2;
             _stats_collector.increment_symlink();
         } break;

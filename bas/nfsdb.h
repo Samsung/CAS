@@ -31,6 +31,8 @@ struct openfile {
 	unsigned long mode;
 	unsigned long size;
 	unsigned long* original_path;
+	unsigned long open_timestamp;
+	unsigned long close_timestamp;
 	const struct nfsdb_entry* opaque_entry;
 };
 

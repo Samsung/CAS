@@ -28,7 +28,7 @@ class Renderer(OutputRenderer):
             "file_view": {
                 "fmt": "{L}",
                 "entry-fmt": "{f}",
-                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{m}{sep}{e}{sep}{s}"
+                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{st}{sep}{cl}{sep}{m}{sep}{e}{sep}{s}"
             },
             "process_list_view": {
                 "fmt": "{L}",
@@ -173,6 +173,8 @@ class Renderer(OutputRenderer):
             c="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.has_compilations() and row.opaque.compilation_info.file_paths[0] == row.path else "plain",
             o=row.original_path,
             p=row.parent.eid.pid,
+            st=row.open_timestamp,
+            cl=row.close_timestamp,
             t=stat_from_code(get_file_info(row.mode)[1]),
             m=access_from_code(get_file_info(row.mode)[2]),
             e=1 if row.exists() else 0,

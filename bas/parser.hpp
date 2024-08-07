@@ -134,18 +134,21 @@ typedef struct eventTuple {
     std::string event_arguments;
 } eventTuple_t;
 
-struct OpenFile {
-    OpenFile(void) = default;
-    OpenFile(const OpenFile &) = default;
-    OpenFile(OpenFile &&) = default;
-    OpenFile& operator=(const OpenFile &) = default;
-    OpenFile& operator=(OpenFile &&) = default;
+struct File {
+    File(void) = default;
+    File(const File &) = default;
+    File(File &&) = default;
+    File& operator=(const File &) = default;
+    File& operator=(File &&) = default;
 
+    std::string original_path;
     std::string absolute_path;
     size_t size;
     int mode;
+    uint64_t open_timestamp;
+    uint64_t close_timestamp;
 
-    void resolve_runtime_variables(std::string &original_path) {
+    void resolve_runtime_variables() {
         int ret;
         struct statx stat_buf;
 
@@ -217,7 +220,8 @@ struct Execution {
     uint64_t timestamp;
     uint64_t elapsed_time;
 
-    std::map<std::string, OpenFile> opened_files;
+    std::unordered_map<unsigned int, File> fd_table;
+    std::map<std::string, File> opened_files;
     std::vector<Mount> mounts;
     std::pair<upid_t, unsigned> parent;
     std::string program_path;
@@ -226,26 +230,22 @@ struct Execution {
     std::vector<Child> children;
     uint8_t exit_code = 0;
 
-    void add_open_file(std::string &path, OpenFile &file) {
-        auto lookup = opened_files.find(path);
+    void add_open_file(File &file) {
+        auto lookup = opened_files.find(file.original_path);
         if (lookup == opened_files.end()) {
-            file.resolve_runtime_variables(path);
-            opened_files.insert_or_assign(std::move(path), std::move(file));
+            file.resolve_runtime_variables();
+            opened_files.insert_or_assign(file.original_path, file);
         } else if (lookup != opened_files.end() && (lookup->second.mode & 0x03) != (file.mode & 0x03)) {
             auto &registered_file = lookup->second;
             registered_file.mode = O_RDWR;
-            registered_file.resolve_runtime_variables(path);
+            registered_file.resolve_runtime_variables();
         }
     }
 };
 
 
-class Process {
-    friend StreamParser;
-    friend CachingParser;
-private:
+struct Process {
     std::vector<eventTuple_t> event_list;
-public:
     upid_t pid;
 
     uint64_t first_event_time;

@@ -486,6 +486,8 @@ class Renderer(OutputRenderer):
         return '''        {{
             "filename": "{filename}",
             "original_path": "{original_path}",
+            "open_timestamp": "{open_timestamp}",
+            "close_timestamp": "{close_timestamp}",
             "ppid": {ppid},
             "type": "{type}",
             "access": "{access}",
@@ -494,6 +496,8 @@ class Renderer(OutputRenderer):
         }}'''.format(
             filename=self.origin_module.get_path(row.path) if self.args.relative else row.path,
             original_path=row.original_path,
+            open_timestamp=row.open_timestamp,
+            close_timestamp=row.close_timestamp,
             ppid=row.parent.eid.pid,
             type="linked" if row.opaque and row.opaque.is_linking() and row.opaque.linked_path == row.path else "compiled" if row.opaque and row.opaque.compilation_info and row.path in row.opaque.compilation_info.file_paths else "plain",
             access=access_from_code(get_file_info(row.mode)[2]),
