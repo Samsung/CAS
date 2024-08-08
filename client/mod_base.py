@@ -70,6 +70,8 @@ class ModulePipeline:
                 return data
             if self.last_module.args.ftdb_create:
                 return data
+            if self.last_module.args.save_zip_archive or self.last_module.args.save_tar_archive:
+                return data
             output_engine = self.last_module.get_output_engine()(data, self.last_module.args, self.last_module, renderer, sort_lambda)
             return output_engine.render_data()
         return None

@@ -153,7 +153,8 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     output_group.add_argument('--host', type=str, default="0.0.0.0", help='Local server host (used with --proc-tree)')
     output_group.add_argument('--output-file', '-o', type=str, default=None, help='Store results to file')
     output_group.add_argument('--generate-zip', '-z', type=str, default=None, help='Generate zip archive with results')
-    output_group.add_argument('--generate-zip-files', '-zf', type=str, default=None, help='Generate zip archive with result files')
+    output_group.add_argument('--save-zip-archive', '-sz', type=str, default=None, help='Save result files to zip archive')
+    output_group.add_argument('--save-tar-archive', '-st', type=str, default=None, help='Save result files to tar archive')
     for name, module in output_renderers.items():
         output_group.add_argument('--{}-output'.format(name), '--{}'.format(name), dest=name, action='store_true', default=False, help=module.Renderer.help)
         module.Renderer.append_args(parser)

@@ -2,6 +2,7 @@ import sys
 import os
 import io
 import zipfile
+import tarfile
 from typing import Generator, Iterator, Dict, List
 import libcas
 from libftdb import FtdbError
@@ -120,18 +121,78 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 print("Output zipped to {}".format(os.path.abspath(os.path.expanduser(common_args.generate_zip))))
             return None
 
-        elif common_args.generate_zip_files:
+        elif common_args.save_zip_archive:
             
+            latest_module = module_pipeline.modules[-1]
+            if not latest_module.args.show_commands and not latest_module.args.details:
+                latest_module.args.details = True
+
             ret = module_pipeline.render()
+            if len(ret) > 0:
+                if isinstance(ret[0], libetrace.nfsdbEntry):
+                    data = [c for exe in ret for c in exe.compilation_info.files]
+                elif isinstance(ret[0], libetrace.nfsdbEntryOpenfile):
+                    data = ret
+                else:
+                    print("ERROR: returned data incompatible. Use --details or --commands argument.")
+                    return 1
+                
+            archive_name = f"{common_args.save_zip_archive}{'.zip' if not common_args.save_zip_archive.endswith('.zip') else ''}"
             print("Writing files to archive ...")
-            with zipfile.ZipFile(common_args.generate_zip_files, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for filename in ret:
-                    if os.path.exists(filename):
-                        relative_path = filename[len(cas_db.source_root):]
-                        zip_file.write(filename, arcname=relative_path)
+            with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as archive:
+                pbar = libcas.progressbar(data, total=len(data))
+                for r in pbar:
+                    if os.path.exists(r.path) and not r.is_symlink() and r.path.startswith(cas_db.source_root):
+                        relative_path = r.path[len(cas_db.source_root):]
+                        archive.write(r.path, arcname=relative_path)
                     else:
-                        print(f"WARNING: File does not exists: {filename}")
-            print(f"All files written to {common_args.generate_zip_files}")
+                        if not os.path.exists(r.path):
+                            print(f" WARNING: File does not exists: {r.path}")
+                        elif not r.path.startswith(cas_db.source_root):
+                            print(f" WARNING, File is outside the source root: {r.path}")
+                        else:
+                            print(f" WARNING: Given path is symlink: {r.path}")
+                    pbar.n += 1
+                    pbar.refresh()
+
+            print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
+            return None
+
+        elif common_args.save_tar_archive:
+
+            latest_module = module_pipeline.modules[-1]
+            if not latest_module.args.show_commands and not latest_module.args.details:
+                latest_module.args.details = True
+
+            ret = module_pipeline.render()
+            if len(ret) > 0:
+                if isinstance(ret[0], libetrace.nfsdbEntry):
+                    data = [c for exe in ret for c in exe.compilation_info.files]
+                elif isinstance(ret[0], libetrace.nfsdbEntryOpenfile):
+                    data = ret
+                else:
+                    print("ERROR: returned data incompatible. Use --details or --commands argument.")
+                    return 1
+
+            archive_name = f"{common_args.save_tar_archive}{'.tar' if not common_args.save_tar_archive.endswith('.tar') else ''}"
+            print("Writing files to archive ...")
+            with tarfile.open(name=archive_name, mode='w') as archive:
+                pbar = libcas.progressbar(data, total=len(data))
+                for r in pbar:
+                    if os.path.exists(r.path) and not r.is_symlink() and r.path.startswith(cas_db.source_root):
+                        relative_path = r.path[len(cas_db.source_root):]
+                        archive.add(r.path, arcname=relative_path, recursive=False)
+                    else:
+                        if not os.path.exists(r.path):
+                            print(f" WARNING: File does not exists: {r.path}")
+                        elif not r.path.startswith(cas_db.source_root):
+                            print(f" WARNING, File is outside the source root: {r.path}")
+                        else:
+                            print(f" WARNING: Given path is symlink: {r.path}")
+                    pbar.n += 1
+                    pbar.refresh()
+
+            print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
             return None
 
         elif common_args.ftdb_create:
