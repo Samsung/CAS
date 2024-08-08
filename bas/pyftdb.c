@@ -23,7 +23,7 @@ struct rb_root ftdb_image_map;
 static const char* PyString_get_c_str(PyObject* s) {
 
     if (PyUnicode_Check(s)) {
-        PyObject* us = PyUnicode_AsASCIIString(s);
+        PyObject* us = PyUnicode_AsUTF8String(s);
         if (us) {
             return PyBytes_AsString(us);
         }
