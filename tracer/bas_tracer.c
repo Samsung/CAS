@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/namei.h>
+#include <linux/prctl.h>
 #include <linux/radix-tree.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -142,6 +143,9 @@ module_param(support_ns_pid, int, 0);
 static int bits_of_real_pid = 22;
 module_param(bits_of_real_pid, int, 0);
 
+static bool trace_thread_names = false;
+module_param(trace_thread_names, bool, 0);
+
 static int enable_mount = 0;
 module_param(enable_mount, int, 0);
 
@@ -193,6 +197,7 @@ static struct tracepoint *tracepoint_sched_process_exit = NULL;
 static struct tracepoint *tracepoint_sched_process_exec = NULL;
 static struct tracepoint *tracepoint_sys_enter = NULL;
 static struct tracepoint *tracepoint_sys_exit = NULL;
+static struct tracepoint *tracepoint_task_rename = NULL;
 
 
 // ########## PIDS LIST MANAGEMENT ##########
@@ -212,22 +217,27 @@ static bool is_pid_on_list_locked(pid_t pid, struct traced_pid **tpid)
 	return false;
 }
 
-// If true is returned, tpid will be set (if it is not null) to
-// struct traced_pid of current process and its obj_lock will be acquired.
-// If false is returned, tpid is untouched.
-static bool should_trace(struct traced_pid **tpid)
+static bool should_trace_pid(pid_t pid, struct traced_pid **tpid)
 {
 	bool retval = false;
 	struct traced_pid *ret_traced_pid = NULL;
 
 	mutex_lock(&list_mutex);
-	retval = is_pid_on_list_locked(current->pid, &ret_traced_pid);
+	retval = is_pid_on_list_locked(pid, &ret_traced_pid);
 	mutex_unlock(&list_mutex);
 
 	if (retval && tpid)
 		*tpid = ret_traced_pid;
 
 	return retval;
+}
+
+// If true is returned, tpid will be set (if it is not null) to
+// struct traced_pid of current process and its obj_lock will be acquired.
+// If false is returned, tpid is untouched.
+static bool should_trace(struct traced_pid **tpid)
+{
+	return should_trace_pid(current->pid, tpid);
 }
 
 static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, pid_t nspid, bool force)
@@ -1718,6 +1728,33 @@ out:
 	release_traced_pid(tpid);
 }
 
+void __tracepoint_probe_task_rename(void* data, struct task_struct *task,
+					char *comm)
+{
+	struct traced_pid *tpid = NULL;
+	size_t comm_len = 0;
+
+	if (!task) {
+		pr_warn("task_rename: null task struct\n");
+		return;
+	}
+
+	// this is a specific case where the affected process (task) is not
+	// necessarily 'current' - someone may write straight to
+	// /proc/<pid>/comm, with <pid> of another task from the same thread
+	// group (e.g. pthread_setname_np() seems to do it this way).
+	if (!should_trace_pid(task->pid, &tpid))
+		return;
+
+	comm_len = strnlen(comm, TASK_COMM_LEN);
+
+	PRINT_TRACE_TASK(tpid->upid, task, "!Comm|size=%ld", comm_len);
+	print_long_string(tpid->upid, comm, comm_len, "!CN", task);
+
+	release_traced_pid(tpid);
+}
+
+
 static void tracepoint_probe_fork(void* data, struct task_struct* self,
 				  struct task_struct *task) {
 	preempt_enable_notrace();
@@ -1750,6 +1787,14 @@ static void tracepoint_probe_sys_exit(void *data, struct pt_regs *regs,
 				      long ret) {
 	preempt_enable_notrace();
 	__tracepoint_probe_sys_exit(data, regs, ret);
+	preempt_disable_notrace();
+}
+
+static void tracepoint_probe_task_rename(void *data, struct task_struct *task,
+					char *comm)
+{
+	preempt_enable_notrace();
+	__tracepoint_probe_task_rename(data, task, comm);
 	preempt_disable_notrace();
 }
 
@@ -1787,6 +1832,13 @@ static void register_tracepoints(struct tracepoint *tp, void *ignore)
 		pr_info("Attaching to tracepoint: %s\n", tp->name);
 		tracepoint_sys_exit = tp;
 		tracepoint_probe_register(tp, tracepoint_probe_sys_exit, NULL);
+	} else if (trace_thread_names &&
+			!strncmp(tp->name, "task_rename",
+				strlen("task_rename"))) {
+		pr_info("Attaching to tracepoint: %s\n", tp->name);
+		tracepoint_task_rename = tp;
+		tracepoint_probe_register(tp,
+				tracepoint_probe_task_rename, NULL);
 	}
 }
 
@@ -1798,6 +1850,10 @@ static int et_init(void)
 
 	if (ignore_repeated_opens) {
 		pr_info("Repeated open() calls will be ignored");
+	}
+
+	if (trace_thread_names) {
+		pr_info("Tracing changes of task names ('comm') is enabled");
 	}
 
 	// check if bits_of_real_pid is sane
@@ -1838,6 +1894,9 @@ static int et_init(void)
 	if (!tracepoint_sys_exit)
 		pr_warn("Not attached to sys_exit tracepoint");
 
+	if (trace_thread_names && !tracepoint_task_rename)
+		pr_warn("Not attached to task_rename tracepoint");
+
 	pr_info("Module loaded\n");
 
 	return 0;
@@ -1867,6 +1926,10 @@ static void et_exit(void)
 	if (tracepoint_sys_exit)
 		tracepoint_probe_unregister(tracepoint_sys_exit,
 					    tracepoint_probe_sys_exit, NULL);
+
+	if (tracepoint_task_rename) // regardless of trace_thread_names value
+		tracepoint_probe_unregister(tracepoint_task_rename,
+					    tracepoint_probe_task_rename, NULL);
 
 	clear_pids_list();
 	pr_info("Module unloaded\n");

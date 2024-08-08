@@ -5,7 +5,7 @@
 # etrace COMMAND ...
 
 print_usage () {
-    echo "Usage: etrace [-hlim] [-w WORK_DIR] [--] COMMAND ..."
+    echo "Usage: etrace [-hlimt] [-w WORK_DIR] [--] COMMAND ..."
 }
 
 echo_err () {
@@ -23,7 +23,7 @@ WORK_DIR=$(pwd)
 INITCWD=$(pwd)
 MODULE_PARAMS=""
 
-while getopts "hilmw:" opt; do
+while getopts "hilmtw:" opt; do
     case "$opt" in
     h)
         print_usage
@@ -38,6 +38,9 @@ while getopts "hilmw:" opt; do
         ;;
     i)
         MODULE_PARAMS="$MODULE_PARAMS ignore_repeated_opens=1"
+        ;;
+    t)
+        MODULE_PARAMS="$MODULE_PARAMS trace_thread_names=1"
         ;;
     m)
         MODULE_PARAMS="$MODULE_PARAMS enable_mount=1"

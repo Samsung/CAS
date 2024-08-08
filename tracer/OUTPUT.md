@@ -440,6 +440,7 @@ Arguments:
 | newfd | New file descriptor that is a copy of oldfd |
 | flags | The flags passed to or inferred from the syscalls. It is O_CLOEXEC (0x80000) in case of dup3() and fnctl(..., F_DUPFD_CLOEXEC, ...) or 0 otherwise |
 
+-----
 #### mount
 Syntax:
 ```
@@ -481,7 +482,8 @@ Data events:
 | MT | Target mount path string |
 | MX | Filesystem for which mount is performed, does not have to appear if NULL was passed to mount() |
 
-### umount
+-----
+#### umount
 Syntax:
 ```
 Umount|targetnamesize=nn,flags=nn
@@ -506,3 +508,31 @@ Data events:
 | Tag | Description |
 |-----|-------------|
 | MT | Target umount path string |
+
+-----
+#### prctl(PR_SET_NAME, ...), write("/proc/[pid]/comm", ...)
+
+Command change events will be printed only if tracer's `trace_thread_names` parameter is set to `true`.
+
+Syntax:
+```
+Comm|size=nn
+<data_event:CN>
+
+e.g.:
+
+Comm|size=8
+CN|new_name
+```
+Arguments:
+
+| Argument | Description |
+|---|---|
+| size | the length of new command (CN) |
+
+Data events:
+
+| Tag | Description |
+|---|---|
+| CN | New command string |
+
