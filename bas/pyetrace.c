@@ -1213,6 +1213,8 @@ flatten_start: ;
 		goto uflat_error_exit;
 	}
 
+	uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_COPY, 1);
+
 	if(verbose_mode)
 		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
 	if(debug_mode)
@@ -1414,6 +1416,8 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 		printf("uflat_set_option(SKIP_MEM_FRAGMENTS)\n");
 		goto uflat_error_exit;
 	}
+
+	uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_COPY, 1);
 
 	if(verbose_mode)
 		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);

@@ -9326,6 +9326,8 @@ PyObject * libftdb_create_ftdb(PyObject *self, PyObject *args, PyObject* kwargs)
         goto uflat_error_exit;
     }
 
+    uflat_set_option(uflat, UFLAT_OPT_SKIP_MEM_COPY, 1);
+
     if(verbose_mode)
         uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
     if(debug_mode)

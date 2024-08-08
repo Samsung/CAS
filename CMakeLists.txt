@@ -269,6 +269,36 @@ else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-address")
 endif()
 
+find_package(Git REQUIRED)
+
+if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/kflat/CMakeLists.txt)
+    message(STATUS "Initializing missing KFLAT submodule")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} submodule update --init
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    )
+else()
+    execute_process(
+        COMMAND sh -c "${GIT_EXECUTABLE} status | grep '(new commits)' -q"
+        RESULT_VARIABLE GREP_NOT_MATCHED
+    )
+
+    if (NOT GREP_NOT_MATCHED)
+        message(STATUS "Pulling in submodules updates")
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} submodule update
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        )
+        execute_process(
+            COMMAND rm -r kflat
+            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+        )
+    endif()
+endif()
+
+add_subdirectory(kflat)
+set_property(DIRECTORY kflat PROPERTY EXCLUDE_FROM_ALL YES)
+
 execute_process (
     COMMAND bash -c "gcc -print-file-name=plugin"
     OUTPUT_VARIABLE gcc_plugin_include_directory
@@ -336,8 +366,8 @@ target_compile_options(etrace PRIVATE "-DLIBRARY_BUILD=1")
 target_include_directories(etrace PRIVATE "kflat/lib")
 target_include_directories(etrace PRIVATE "kflat/include")
 target_include_directories(etrace PRIVATE "kflat/lib/include_priv")
-target_link_libraries(etrace PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
-add_dependencies(etrace uflat_library)
+target_link_libraries(etrace PRIVATE uflat_static)
+target_link_libraries(etrace PRIVATE unflatten_static)
 
 add_library(ftdb_c SHARED
     bas/ftdb.c
@@ -347,8 +377,8 @@ target_include_directories(ftdb_c PRIVATE "kflat/lib")
 target_include_directories(ftdb_c PRIVATE "kflat/include")
 target_include_directories(ftdb_c PRIVATE "kflat/lib/include_priv")
 target_link_libraries(ftdb_c PUBLIC stdc++)
-target_link_libraries(ftdb_c PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
-add_dependencies(ftdb_c uflat_library)
+target_link_libraries(ftdb_c PRIVATE unflatten_static)
+target_link_libraries(ftdb_c PRIVATE uflat_static)
 target_compile_options(ftdb_c PRIVATE $<$<CONFIG:Debug>:-O0>)
 target_compile_options(ftdb_c PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
 install(TARGETS ftdb_c DESTINATION .)
@@ -376,40 +406,6 @@ target_link_libraries(etrace PUBLIC ${Python3_LIBRARIES})
 target_link_libraries(etrace PRIVATE "-lrt")
 install(TARGETS etrace DESTINATION .)
 
-find_package(Git REQUIRED)
-
-if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/kflat/Makefile)
-    message(STATUS "Initializing missing KFLAT submodule")
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} submodule update --init
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    )
-else()
-    execute_process(
-        COMMAND sh -c "${GIT_EXECUTABLE} status | grep '(new commits)' -q"
-        RESULT_VARIABLE GREP_NOT_MATCHED
-    )
-
-    if (NOT GREP_NOT_MATCHED)
-        message(STATUS "Pulling in submodules updates")
-        execute_process(
-            COMMAND ${GIT_EXECUTABLE} submodule update
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        )
-        execute_process(
-            COMMAND rm -f libuflat_x86_64.a
-            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-        )
-    endif()
-endif()
-
-add_custom_command(OUTPUT libuflat_x86_64.a PRE_LINK
-                    COMMAND $(MAKE) clean
-                    COMMAND $(MAKE) uflat
-                    COMMAND ${CMAKE_COMMAND} -E copy lib/libuflat_x86_64.a ${PROJECT_BINARY_DIR}/.
-                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/kflat
-)
-add_custom_target(uflat_library DEPENDS libuflat_x86_64.a)
 
 
 target_include_directories(ftdb PRIVATE ${Python3_INCLUDE_DIRS})
@@ -417,8 +413,8 @@ target_link_libraries(ftdb PUBLIC ${Python3_LIBRARIES})
 target_include_directories(ftdb PRIVATE "kflat/lib")
 target_include_directories(ftdb PRIVATE "kflat/include")
 target_include_directories(ftdb PRIVATE "kflat/lib/include_priv")
-target_link_libraries(ftdb PRIVATE ${PROJECT_BINARY_DIR}/libuflat_x86_64.a)
-add_dependencies(ftdb uflat_library)
+target_link_libraries(ftdb PRIVATE uflat_static)
+target_link_libraries(ftdb PRIVATE unflatten_static)
 install(TARGETS ftdb DESTINATION .)
 
 add_library(gcc_input_name SHARED
