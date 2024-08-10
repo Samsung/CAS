@@ -117,6 +117,14 @@ BAS is a tool for extracting information regarding executed processes and opened
 
   Originally the parsed entries don't include the `"n"`, `"m"`, `"d"`, and `"l"` entries. These are produced and later added to the `.nfsdb.json` file in the post-processing step (more on that below).
 
+  Environmental variables which of traced processes are outputted to a `.nfsdb.env.json` file of following format:
+  ```json
+  {
+      "foo=bar": [pid1, pid2, pid3],
+      "bar=baz": [pid4, pid5, pid6]
+  }
+  ```
+
   Part of the BAS suite is also the support library: **libetrace.so**. This is the Python binding library that contains native implementation of selected functions. Currently it contains the code for processing compilations as well as dependency processing functions. It also contains Python bindings for operating on cached version of the database.
 
   In the Python code use:

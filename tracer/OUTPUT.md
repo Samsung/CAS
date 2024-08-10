@@ -536,3 +536,16 @@ Data events:
 |---|---|
 | CN | New command string |
 
+-----
+#### UPID/Env
+Syntax
+```
+UPID|<upid1>
+UPID|<upid2>
+UPID|<upid3>
+UPID|<upid4>
+UPID|<upid5>
+Env|foo=bar
+```
+
+This construct represents a set of upids which processes contain a certain environmental variable.

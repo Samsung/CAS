@@ -5,7 +5,7 @@
 # etrace COMMAND ...
 
 print_usage () {
-    echo "Usage: etrace [-hlimt] [-w WORK_DIR] [--] COMMAND ..."
+    echo "Usage: etrace [-hlimte] [-w WORK_DIR] [--] COMMAND ..."
 }
 
 echo_err () {
@@ -23,7 +23,7 @@ WORK_DIR=$(pwd)
 INITCWD=$(pwd)
 MODULE_PARAMS=""
 
-while getopts "hilmtw:" opt; do
+while getopts "hilmtew:" opt; do
     case "$opt" in
     h)
         print_usage
@@ -44,6 +44,9 @@ while getopts "hilmtw:" opt; do
         ;;
     m)
         MODULE_PARAMS="$MODULE_PARAMS enable_mount=1"
+        ;;
+    e)
+        MODULE_PARAMS="$MODULE_PARAMS trace_env_vars=1"
         ;;
     esac
 done

@@ -19,6 +19,7 @@
 #include <linux/tracepoint.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#include "trie.h"
 
 MODULE_DESCRIPTION("Module that tracks multiple syscalls via tracepoints infrastructure");
 MODULE_AUTHOR("SRPOL.MB.SEC");
@@ -51,9 +52,9 @@ static int bits_of_real_pid; // defined later
 // support 64-bit unsigned integers.
 // Assuming the PID doesn't exceed 2^22 (4 million, see PID_MAX_LIMIT in
 // threads.h).
-#define UNIQUE_PID_FOR_TASK(upid, tsk) \
+#define UNIQUE_PID_FOR_TASK(upid, pid) \
 	((s64)((upid << bits_of_real_pid & 0x7fffffffffffffff) \
-	 | (tsk->pid & BITMASK(bits_of_real_pid))))
+	 | (pid & BITMASK(bits_of_real_pid))))
 //#define UNIQUE_PID (UNIQUE_PID_FOR_TASK(current))
 
 #define INVALID_UPID ((u64)-1)
@@ -93,36 +94,36 @@ do {									\
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5,8,0)
 // if called directly, fmt should always come from SNPRINTF_TRACE
-#define PRINT_TRACE_TASK_RAW(upid, tsk, fmt, ...) \
+#define PRINT_TRACE_TASK_RAW(upid, pid, fmt, ...) \
 	do {  \
 		struct timespec64 ts;  \
 		ktime_get_ts64(&ts);  \
 		preempt_disable_notrace();  \
 		my_trace_printk(fmt,  \
-			UNIQUE_PID_FOR_TASK(upid, tsk), smp_processor_id(), \
+			UNIQUE_PID_FOR_TASK(upid, pid), smp_processor_id(), \
 			ts.tv_sec, ts.tv_nsec, ##__VA_ARGS__);  \
 		preempt_enable_notrace();  \
 	} while (0)
-#define PRINT_TRACE_TASK(upid, tsk, fmt, ...) \
-	PRINT_TRACE_TASK_RAW(upid, tsk, "%lld,%d,%lld,%ld" fmt "\n", ##__VA_ARGS__)
+#define PRINT_TRACE_TASK(upid, pid, fmt, ...) \
+	PRINT_TRACE_TASK_RAW(upid, pid, "%lld,%d,%lld,%ld" fmt "\n", ##__VA_ARGS__)
 #else
 // if called directly, fmt should always come from SNPRINTF_TRACE
-#define PRINT_TRACE_TASK_RAW(upid, tsk, fmt, ...) \
+#define PRINT_TRACE_TASK_RAW(upid, pid, fmt, ...) \
 	do {  \
 		struct timespec ts;  \
 		ktime_get_ts(&ts);  \
 		preempt_disable_notrace();  \
 		my_trace_printk(fmt,  \
-			UNIQUE_PID_FOR_TASK(upid, tsk), smp_processor_id(), \
+			UNIQUE_PID_FOR_TASK(upid, pid), smp_processor_id(), \
 			ts.tv_sec, ts.tv_nsec, ##__VA_ARGS__);  \
 		preempt_enable_notrace();  \
 	} while (0)
-#define PRINT_TRACE_TASK(upid, tsk, fmt, ...) \
-	PRINT_TRACE_TASK_RAW(upid, tsk, "%lld,%d,%ld,%ld" fmt "\n", ##__VA_ARGS__)
+#define PRINT_TRACE_TASK(upid, pid, fmt, ...) \
+	PRINT_TRACE_TASK_RAW(upid, pid, "%lld,%d,%ld,%ld" fmt "\n", ##__VA_ARGS__)
 #endif /* LINUX_VERSION_CODE > KERNEL_VERSION(5,8,0) */
 
 #define PRINT_TRACE(upid, fmt, ...) \
-	PRINT_TRACE_TASK(upid, current, fmt, ##__VA_ARGS__)
+	PRINT_TRACE_TASK(upid, current->pid, fmt, ##__VA_ARGS__)
 
 #define SNPRINTF_TRACE(buf, size, fmt, ...) \
 	snprintf(buf, size, "%%lld,%%d,%%ld,%%ld" fmt "\n", ##__VA_ARGS__)
@@ -149,9 +150,13 @@ module_param(trace_thread_names, bool, 0);
 static int enable_mount = 0;
 module_param(enable_mount, int, 0);
 
+static int trace_env_vars = 0;
+module_param(trace_env_vars, int, 0);
+
 // private global variables
 
 static DEFINE_MUTEX(list_mutex);
+static DEFINE_MUTEX(env_mutex);
 
 // access/change must be protected by list_mutex
 static u64 next_upid = 1;
@@ -191,6 +196,7 @@ struct traced_pid {
 };
 
 static RADIX_TREE(traced_pids, GFP_KERNEL);
+static DEFINE_TRIE(envs);
 
 static struct tracepoint *tracepoint_sched_process_fork = NULL;
 static struct tracepoint *tracepoint_sched_process_exit = NULL;
@@ -523,7 +529,7 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 
 	if (size < MAX_STR_LEN_PER_LINE) {
 		if (!new_line) {  // fast path
-			PRINT_TRACE_TASK(upid, task, "%s|%s", prefix, buffer);
+			PRINT_TRACE_TASK(upid, task->pid, "%s|%s", prefix, buffer);
 			return;
 		} else {
 			char* buf_iter, *buf_cpy, *buf_cpy_start;
@@ -535,12 +541,12 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 			}
 			buf_cpy_start = buf_cpy;
 			buf_iter = strsep(&buf_cpy, "\n");
-			PRINT_TRACE_TASK(upid, task, "%s|%s", prefix, buf_iter);
+			PRINT_TRACE_TASK(upid, task->pid, "%s|%s", prefix, buf_iter);
 			while ((buf_iter = strsep(&buf_cpy, "\n")) != NULL) {
-				PRINT_TRACE_TASK(upid, task,
+				PRINT_TRACE_TASK(upid, task->pid,
 						 "!Cont|%s", buf_iter);
 			}
-			PRINT_TRACE_TASK(upid, task, "!Cont_end|");
+			PRINT_TRACE_TASK(upid, task->pid, "!Cont_end|");
 			kfree(buf_cpy_start);
 			return;
 		}
@@ -548,7 +554,7 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 
 	if (!new_line) {  // fast path
 		while (remaining >= MAX_STR_LEN_PER_LINE) {
-			PRINT_TRACE_TASK(upid, task,
+			PRINT_TRACE_TASK(upid, task->pid,
 					"%s[%d]%."XSTR(MAX_STR_LEN_PER_LINE)"s",
 					prefix, idx, pos);
 			pos += MAX_STR_LEN_PER_LINE;
@@ -557,7 +563,7 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 		}
 
 		if (remaining) {
-			PRINT_TRACE_TASK(upid, task,
+			PRINT_TRACE_TASK(upid, task->pid,
 					"%s[%d]%s", prefix, idx, pos);
 		}
 
@@ -578,7 +584,7 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 			while (buf_iter_len) {
 				if (cont) {
 					// this is not the first line of string
-					PRINT_TRACE_TASK(upid, task,
+					PRINT_TRACE_TASK(upid, task->pid,
 							 "!Cont|%."XSTR(MAX_STR_LEN_PER_LINE)"s",
 							 pos);
 
@@ -597,11 +603,11 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 					should_print_cont_end = true;
 				} else {
 					if (should_print_cont_end) {
-						PRINT_TRACE_TASK(upid, task,
+						PRINT_TRACE_TASK(upid, task->pid,
 								 "!Cont_end|");
 						should_print_cont_end = false;
 					}
-					PRINT_TRACE_TASK(upid, task,
+					PRINT_TRACE_TASK(upid, task->pid,
 							 "%s[%d]%."XSTR(MAX_STR_LEN_PER_LINE)"s",
 							 prefix, idx, pos);
 					idx++;
@@ -617,14 +623,14 @@ static void print_long_string(u64 upid, const char* buffer, unsigned long size,
 			// the string
 			cont = true;
 			if (should_print_cont_end) {
-				PRINT_TRACE_TASK(upid, task, "!Cont_end|");
+				PRINT_TRACE_TASK(upid, task->pid, "!Cont_end|");
 				should_print_cont_end = false;
 			}
 		}
 		kfree(buf_cpy_start);
 	}
 
-	PRINT_TRACE_TASK(upid, task, "%s_end|", prefix);
+	PRINT_TRACE_TASK(upid, task->pid, "%s_end|", prefix);
 }
 
 // caller is responsible for freeing tmp_buf
@@ -685,8 +691,8 @@ static void __tracepoint_probe_fork(void* data, struct task_struct* self,
 	if (!should_trace(&tppid))
 		return;
 
-	PRINT_TRACE_TASK(tppid->upid, self, "!SchedFork|pid=%lld",
-			UNIQUE_PID_FOR_TASK(upid, task));
+	PRINT_TRACE_TASK(tppid->upid, self->pid, "!SchedFork|pid=%lld",
+			UNIQUE_PID_FOR_TASK(upid, task->pid));
 
 	release_traced_pid(tppid);
 }
@@ -701,7 +707,7 @@ static void __tracepoint_probe_exit(void* data, struct task_struct *task)
 	}
 
 	if (should_trace(&tpid)) {
-		PRINT_TRACE_TASK(tpid->upid, task, "!Exit|status=%d",
+		PRINT_TRACE_TASK(tpid->upid, task->pid, "!Exit|status=%d",
 				 (task->exit_code >> 8) & 0xff);
 	}
 
@@ -710,9 +716,9 @@ static void __tracepoint_probe_exit(void* data, struct task_struct *task)
 	remove_pid_from_list(task->pid);
 }
 
-static unsigned long print_args_from_buffer(u64 upid, char* buffer, size_t size,
+static unsigned long print_nulstrs_from_buffer(u64 upid, char* buffer, size_t size,
 					    unsigned long arg_num,
-					    struct task_struct* task)
+					    struct task_struct* task, char *prefix)
 {
 	char* ptr = buffer;
 	char* print_ptr, *new_line;
@@ -743,18 +749,19 @@ static unsigned long print_args_from_buffer(u64 upid, char* buffer, size_t size,
 			if (cont) {
 				SNPRINTF_TRACE(fmt, 64, "!Cont|%%.%lds",
 					       part_len);
-				PRINT_TRACE_TASK_RAW(upid, task, fmt, print_ptr);
+				PRINT_TRACE_TASK_RAW(upid, task->pid,
+						     fmt, print_ptr);
 				should_print_cont_end = true;
 			} else {
 				if (should_print_cont_end) {
-					PRINT_TRACE_TASK(upid, task,
+					PRINT_TRACE_TASK(upid, task->pid,
 							 "!Cont_end|");
 					should_print_cont_end = false;
 				}
-				SNPRINTF_TRACE(fmt, 64, "!A[%%ld]%%.%lds",
+				SNPRINTF_TRACE(fmt, 64, "!%%s[%%ld]%%.%lds",
 					       part_len);
-				PRINT_TRACE_TASK_RAW(upid, task, fmt, arg_num,
-						     print_ptr);
+				PRINT_TRACE_TASK_RAW(upid, task->pid, fmt,
+						     prefix, arg_num, print_ptr);
 			}
 
 			tmp_len -= part_len;
@@ -781,9 +788,9 @@ static unsigned long print_args_from_buffer(u64 upid, char* buffer, size_t size,
 				// of an argument. Print an empty line here to
 				// be consistent with how other strings are
 				// printed and to not lose info about that '\n'.
-				PRINT_TRACE_TASK(upid, task, "!Cont|");
+				PRINT_TRACE_TASK(upid, task->pid, "!Cont|");
 			}
-			PRINT_TRACE_TASK(upid, task, "!Cont_end|");
+			PRINT_TRACE_TASK(upid, task->pid, "!Cont_end|");
 			should_print_cont_end = false;
 		}
 
@@ -827,14 +834,114 @@ static void print_exec_args(u64 upid, struct task_struct* p,
 		if (got == 0)
 			break;
 
-		arg_num = print_args_from_buffer(upid, page, size, arg_num, p);
+		arg_num = print_nulstrs_from_buffer(upid, page, size, arg_num, p, "A");
 
 		pos += got;
 		left -= got;
 	}
-	PRINT_TRACE_TASK(upid, p, "!End_of_args|");
+	PRINT_TRACE_TASK(upid, p->pid, "!End_of_args|");
 
 	free_page((unsigned long) page);
+}
+
+struct __env_pid {
+	struct list_head head;
+	u64 pid;
+	u64 upid;
+};
+
+static void print_env_vars(u64 upid, struct task_struct *p,
+	unsigned long env_start, size_t env_size)
+{
+	char *buffer, *start;
+	int ret;
+	struct list_head *head;
+	struct __env_pid *cur, *pid = NULL;
+	struct trie_node *inserted;
+
+	mutex_lock(&env_mutex);
+	buffer = (char *) kvmalloc(env_size, GFP_KERNEL);
+	if (!buffer) {
+		pr_err("print_env_vars: allocation failed\n");
+		goto unlock;
+	}
+
+	ret = copy_from_user(buffer, (char __user *) env_start, env_size);
+	if (ret) {
+		pr_err("print_env_vars: copy_from_user failed\n");
+		goto dealloc;
+	}
+
+	start = buffer;
+	while (start < buffer + env_size) {
+		ret = trie_node_lookup(&envs, start, strlen(start), &inserted, NULL, NULL);
+		if (ret == -ENOENT) {
+			head = kvmalloc(sizeof(struct list_head), GFP_KERNEL);
+			if (!head)
+				goto dealloc;
+			INIT_LIST_HEAD(head);
+			{
+				pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+				if (!pid) {
+					kvfree(head);
+					goto dealloc;
+				}
+				INIT_LIST_HEAD(&pid->head);
+				pid->upid = upid;
+				pid->pid = p->pid;
+				list_add(&pid->head, head);
+			}
+			ret = trie_insert(&envs, start, strlen(start), head, NULL);
+			if (ret == -ENOMEM)
+				pr_err("print_env_vars: trie_insert failed, allocation failed\n");
+			continue;
+		} else if (ret < 0)
+			goto dealloc;
+
+		head = (struct list_head *) inserted->priv;
+		if (!head) {
+			head = kvmalloc(sizeof(struct list_head), GFP_KERNEL);
+			if (!head)
+				goto dealloc;
+			INIT_LIST_HEAD(head);
+			{
+				pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+				if (!pid) {
+					kvfree(head);
+					goto dealloc;
+				}
+				INIT_LIST_HEAD(&pid->head);
+				pid->upid = upid;
+				pid->pid = p->pid;
+				list_add(&pid->head, head);
+			}
+			inserted->priv = head;
+			continue;
+		}
+
+		// Create set over linked lists
+		list_for_each_entry(cur, head, head) {
+			if (cur->upid == upid)
+				pid = cur;
+		}
+
+		if (!pid) {
+			pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+			if (!pid)
+				goto dealloc;
+			INIT_LIST_HEAD(&pid->head);
+			pid->upid = upid;
+			pid->pid = p->pid;
+			list_add(&pid->head, head);
+		}
+
+		start += strlen(start) + 1;
+	}
+
+dealloc:
+	kvfree(buffer);
+unlock:
+	mutex_unlock(&env_mutex);
 }
 
 // based on fs/proc/base.c:get_mm_cmdline()
@@ -845,7 +952,7 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 
 	struct mm_struct *mm;
 	unsigned long arg_start, arg_end, args_size, interp_size,
-		      filename_size, cwd_size;
+		      filename_size, cwd_size, env_start, env_end, env_size;
 	struct path cwd_path, pp_path, pi_path;
 	int err;
 	char *pp_path_buf = NULL, *pp_tmp_buf = NULL,
@@ -882,6 +989,8 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 #endif
 	arg_start = mm->arg_start;
 	arg_end = mm->arg_end;
+	env_start = mm->env_start;
+	env_end = mm->env_end;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5,8,0)
 	spin_unlock(&mm->arg_lock);
 #else
@@ -894,6 +1003,14 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	args_size = arg_end - arg_start;
 	pr_debug("args start: %lx, end: %lx, len: %ld\n",
 		 arg_start, arg_end, args_size);
+
+	if (trace_env_vars) {
+		if (env_start >= env_end)
+			goto out;
+		env_size = env_end - env_start;
+		pr_debug("envp start: %lx, end: %lx, len: %ld\n",
+			 env_start, env_end, env_size);
+	}
 
 	task_lock(p);
 	if (p->fs) {
@@ -940,14 +1057,15 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 	}
 	interp_size = strlen(pi_path_buf);
 
-	PRINT_TRACE_TASK(tpid->upid, p,
+	PRINT_TRACE_TASK(tpid->upid, p->pid,
 			 "!New_proc|argsize=%ld,prognameisize=%ld,prognamepsize=%ld,cwdsize=%ld",
 			 args_size, interp_size, filename_size, cwd_size);
 	print_long_string(tpid->upid, pi_path_buf, interp_size, "!PI", p);
 	print_long_string(tpid->upid, pp_path_buf, filename_size, "!PP", p);
 	print_long_string(tpid->upid, cwd_path_buf, cwd_size, "!CW", p);
 	print_exec_args(tpid->upid, p, arg_start, args_size);
-
+	if (trace_env_vars)
+		print_env_vars(tpid->upid, p, env_start, env_size);
 
 out:
 	kfree(pi_tmp_buf);
@@ -1748,7 +1866,7 @@ void __tracepoint_probe_task_rename(void* data, struct task_struct *task,
 
 	comm_len = strnlen(comm, TASK_COMM_LEN);
 
-	PRINT_TRACE_TASK(tpid->upid, task, "!Comm|size=%ld", comm_len);
+	PRINT_TRACE_TASK(tpid->upid, task->pid, "!Comm|size=%ld", comm_len);
 	print_long_string(tpid->upid, comm, comm_len, "!CN", task);
 
 	release_traced_pid(tpid);
@@ -1903,6 +2021,86 @@ static int et_init(void)
 }
 module_init(et_init);
 
+static void clean_trie(struct trie_root *root, struct trie_node *iter)
+{
+	struct __env_pid *cur, *tmp;
+	struct list_head *head = iter->priv;
+
+	if (head) {
+		list_for_each_entry_safe(cur, tmp, head, head) {
+			list_del(&cur->head);
+			kvfree(cur);
+		}
+
+		kvfree(head);
+	}
+
+}
+
+static void print_keys(struct trie_root *root, struct trie_node *n)
+{
+	int cont = 0, contend = 0;
+	char *c, *linecur, *newline;
+	size_t sz, i = 0, printed = 0, linesz = 0;
+	struct __env_pid *cur;
+	struct list_head *head = n->priv;
+	struct timespec64 ts;
+
+	if (!head)
+		return;
+
+	trie_get_string(root, n, &c, &sz, GFP_KERNEL);
+	ktime_get_ts64(&ts);
+	preempt_disable_notrace();
+	list_for_each_entry(cur, head, head)
+		my_trace_printk("0,0,%lld,%ld!UPID|%lld\n", ts.tv_sec,
+				ts.tv_nsec,
+				UNIQUE_PID_FOR_TASK(cur->upid, cur->pid));
+	preempt_enable_notrace();
+
+	linecur = c;
+	while (printed < sz) {
+		linesz = sz > MAX_STR_LEN_PER_LINE ? MAX_STR_LEN_PER_LINE : sz;
+		newline = strnchr(linecur, sz, '\n');
+		if (newline)
+			linesz = min_t(size_t, linesz,
+					(size_t) (newline - linecur));
+		if (cont) {
+			ktime_get_ts64(&ts);
+			preempt_disable_notrace();
+			my_trace_printk("0,0,%lld,%ld!Cont|%.*s\n", ts.tv_sec,
+					ts.tv_nsec, (int) linesz, linecur);
+			preempt_enable_notrace();
+			contend = 1;
+		} else {
+			if (contend) {
+				ktime_get_ts64(&ts);
+				preempt_disable_notrace();
+				my_trace_printk("0,0,%lld,%ld!Cont_end|",
+						ts.tv_sec, ts.tv_nsec);
+				preempt_enable_notrace();
+				contend = 0;
+			}
+			ktime_get_ts64(&ts);
+			preempt_disable_notrace();
+			my_trace_printk("0,0,%lld,%ld!Env[%lu]%.*s\n", ts.tv_sec,
+					ts.tv_nsec, i, (int) linesz, linecur);
+			preempt_enable_notrace();
+		}
+		if (newline) {
+			cont = 1;
+			linecur++;
+		} else
+			cont = 0;
+
+		i++;
+		printed += linesz;
+		linecur += linesz;
+	}
+
+	kvfree(c);
+}
+
 static void et_exit(void)
 {
 	pr_info("et_exit called\n");
@@ -1932,6 +2130,10 @@ static void et_exit(void)
 					    tracepoint_probe_task_rename, NULL);
 
 	clear_pids_list();
+	if (trace_env_vars) {
+		trie_iter_val(&envs, &print_keys);
+		trie_purge(&envs, &clean_trie);
+	}
 	pr_info("Module unloaded\n");
 }
 module_exit(et_exit);

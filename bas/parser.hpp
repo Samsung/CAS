@@ -464,13 +464,16 @@ struct ParsingResults {
     std::map<upid_t, Process> process_map;
     std::map<upid_t, std::pair<upid_t, unsigned>> parent_map;
     std::vector<syscall_raw> syscalls;
+    std::map<std::string, std::set<upid_t>> envs;
 
     ParsingResults(std::map<upid_t, Process> &&process_map,
-            std::map<upid_t, std::pair<upid_t, unsigned>> &&parent_map,
-            std::vector<syscall_raw> &&syscalls)
+                   std::map<upid_t, std::pair<upid_t, unsigned>> &&parent_map,
+                   std::vector<syscall_raw> &&syscalls,
+                   std::map<std::string, std::set<upid_t>> envs)
         : process_map (std::move(process_map))
         , parent_map (std::move(parent_map))
         , syscalls (std::move(syscalls))
+        , envs (std::move(envs))
     {};
 };
 
@@ -481,6 +484,7 @@ private:
     StatsCollector m_stats_collector;
     std::map<upid_t, Process> m_process_map;
     std::map<upid_t, std::pair<upid_t, unsigned>> m_parent_map;
+    std::map<std::string, std::set<upid_t>> m_env_map;
     std::vector<syscall_raw> m_syscalls;
 
 protected:
@@ -499,6 +503,10 @@ protected:
     static Errorable<MountArguments> parse_mount_short_arguments(const eventTuple_t &);
     static Errorable<UmountArguments> parse_umount_short_arguments(const eventTuple_t &);
     static Errorable<SymlinkArguments> parse_symlink_short_arguments(const eventTuple_t &);
+    static upid_t parse_upid(const eventTuple_t &);
+    static size_t parse_env(std::vector<eventTuple_t>::iterator &,
+                            const std::vector<eventTuple_t>::iterator &,
+                            std::string &);
     static size_t parse_arguments(std::vector<eventTuple_t>::iterator &,
                             const std::vector<eventTuple_t>::iterator &,
                             std::vector<std::string> &);
@@ -511,6 +519,9 @@ protected:
     virtual void append_syscall(syscall_raw &&) = 0;
     virtual void register_child(upid_t, upid_t, size_t) = 0;
     virtual void schedule_processing(eventTuple_t &) = 0;
+    void add_env(std::string &key, std::set<upid_t> val) {
+        m_env_map[key] = val;
+    };
 
     Errorable<void> process_events(Process &);
 
@@ -552,7 +563,7 @@ public:
 
     ParsingResults release_results(void) {
         return ParsingResults(std::move(m_process_map),
-                std::move(m_parent_map), std::move(m_syscalls));
+                              std::move(m_parent_map), std::move(m_syscalls), std::move(m_env_map));
     };
 
     virtual size_t cache_lifetime(void) = 0;
@@ -598,6 +609,7 @@ protected:
 
     void cache_hit(Process &, bool pending = false);
     void cleanup_cache(void);
+
 public:
     size_t cache_lifetime(void) final override {
         return m_cache_lifetime;

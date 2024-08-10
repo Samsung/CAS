@@ -830,6 +830,53 @@ size_t StreamParser::parse_arguments(std::vector<eventTuple_t>::iterator &it,
 
     return size;
 }
+size_t StreamParser::parse_env(std::vector<eventTuple_t>::iterator &it,
+                                     const std::vector<eventTuple_t>::iterator &end_it,
+                                     std::string &result)
+{
+    ssize_t last_argument = NOT_INDEXED;
+    size_t size = 0;
+
+    for (;;) {
+        auto &event = *it;
+
+        if (it == end_it)
+            break;
+
+        if (event.tag != Tag::Cont && event.tag != Tag::ContEnd && event.tag != Tag::ArrayedEnvs)
+            break;
+
+        if (event.tag == Tag::Cont) {
+            result.append("\\n" + json_escape(event.event_arguments));
+            size += event.event_arguments.size() + 1;
+            it++;
+            continue;
+        }
+
+        if (event.tag == Tag::ContEnd) {
+            it++;
+            continue;
+        }
+
+        if (last_argument == event.argument_index) {
+            result.append(json_escape(event.event_arguments));
+            size += event.event_arguments.size();
+            it++;
+            continue;
+        } else if (last_argument + 1 != event.argument_index) {
+            size++;
+        }
+
+        if (event.tag == Tag::ArrayedEnvs)
+            last_argument = event.argument_index;
+
+        result.append(json_escape(event.event_arguments));
+        size += event.event_arguments.size() + 1;
+        it++;
+    }
+
+    return size;
+}
 
 size_t StreamParser::parse_long_argument(std::vector<eventTuple_t>::iterator &it,
         const std::vector<eventTuple_t>::iterator &end_it, Tag begin, Tag extended, Tag end,
@@ -933,7 +980,7 @@ Errorable<eventTuple_t> StreamParser::parse_generic_args(const char *line, size_
             return BadSeparatorError(line_number, line);
 
         tag = static_cast<Tag>(hash(line, (argument_bracket + 1) - line));
-        if (tag != Tag::ArrayedArguments)
+        if (tag != Tag::ArrayedArguments && tag != Tag::ArrayedEnvs)
            return UnexpectedArgumentEndError(line_number);
     } else if ((event_separator && argument_bracket && event_separator < argument_bracket) || (event_separator && !argument_bracket)) {
         tag = static_cast<Tag>(hash(line, event_separator - line));
@@ -975,7 +1022,8 @@ Errorable<eventTuple_t> StreamParser::parse_generic_args(const char *line, size_
     event.argument_index = argument_index;
     event.timestamp = time * 1000000000UL + timen;
     event.line_number = line_number;
-    event.event_arguments = tag == Tag::ArrayedArguments ? ++endptr : ++event_separator;
+    event.event_arguments = tag == Tag::ArrayedArguments || tag == Tag::ArrayedEnvs ? ++endptr
+        : ++event_separator;
 
     return event;
 }
@@ -1332,6 +1380,19 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 break;
             }
         } break;
+        case Tag::UPID: {
+            std::set<upid_t> pids;
+
+            while ((*it).tag == Tag::UPID)
+                pids.insert(parse_upid((*it++)));
+
+            if ((*it).tag != Tag::ArrayedEnvs)
+                return UnexpectedArgumentEndError((*it).line_number);
+
+            std::string env;
+            parse_env(it, end_it, env);
+            add_env(env, pids);
+        } break;
         case Tag::RenameFailed: {
             /* Sometimes it's just happening */
             it++;
@@ -1483,7 +1544,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
         }
     }
 
-
     auto &last_execution = process.executions.back();
     last_execution.elapsed_time = process.last_event_time - exe_start_time;
 
@@ -1508,4 +1568,10 @@ Errorable<void> StreamParser::process_events(Process &process) {
 //     return n_processed;
 //
     return {};
+}
+
+upid_t StreamParser::parse_upid(const eventTuple_t &evln)
+{
+    char *event_line = const_cast<char *>(evln.event_arguments.c_str());
+    return std::strtoull(event_line, NULL, 10);
 }

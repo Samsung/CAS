@@ -820,6 +820,28 @@ int parser_main(int argc, char **argv) {
 
     output.close();
 
+    std::ofstream envs(".nfsdb.env.json");
+
+    envs << "{\n";
+    for (auto iit = results.envs.begin(); iit != results.envs.end(); iit++) {
+        auto &env = iit->first;
+        auto &pids = iit->second;
+
+        envs << "\t\"" << env << "\":[";
+        for (auto it = pids.begin(); it != pids.end(); it++) {
+            envs << *it;
+            if (std::next(it) != pids.end())
+                envs << ",";
+        }
+        envs << "]";
+        if (std::next(iit) != results.envs.end())
+            envs << ",\n";
+        else
+            envs << "\n";
+    }
+    envs << "}\n";
+    envs.close();
+
     return 0;
 }
 

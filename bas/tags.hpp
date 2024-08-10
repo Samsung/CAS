@@ -10,7 +10,7 @@ enum class Tag {
     SysCloneFailed = 104,
     Close = 100,
     Pipe = 14,
-    Dup = 118,
+    Dup = 133,
     Open = 114,
     RenameFrom = 50,
     RenameTo = 38,
@@ -25,6 +25,7 @@ enum class Tag {
     Mount = 85,
     Umount = 76,
 
+    UPID = 119,                             // UPID
     ProgramInterpreter = 212,               // PI
     ProgramPath = 2,                        // PP
     CurrentWorkingDirectory = 122,          // CW
@@ -41,6 +42,7 @@ enum class Tag {
     MountTarget = 57,                       // MT
     MountType = 107,                        // MX
 
+    ArrayedEnvs = 39,                       // Env[
     ArrayedArguments = 37,                  // A[
     ProgramInterpreterExtended = 108,       // PI[
     ProgramPathExtended = 3,                // PP[
@@ -88,7 +90,7 @@ enum class ShortArguments {
     CwdSize = 132,
     Fd = 17,
     Fd1 = 138,
-    Fd2 = 133,
+    Fd2 = 118,
     Oldfd = 60,
     Newfd = 30,
     Flags = 90,
