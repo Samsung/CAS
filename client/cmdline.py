@@ -142,16 +142,19 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as archive:
                 pbar = libcas.progressbar(data, total=len(data))
                 for r in pbar:
-                    if os.path.exists(r.path) and not r.is_symlink() and r.path.startswith(cas_db.source_root):
-                        relative_path = r.path[len(cas_db.source_root):]
-                        archive.write(r.path, arcname=relative_path)
+                    src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
+                    cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
+
+                    if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
+                        relative_path = cur_path[len(src_root):]
+                        archive.write(cur_path, arcname=relative_path)
                     else:
-                        if not os.path.exists(r.path):
-                            print(f" WARNING: File does not exists: {r.path}")
-                        elif not r.path.startswith(cas_db.source_root):
-                            print(f" WARNING, File is outside the source root: {r.path}")
+                        if not os.path.exists(cur_path):
+                            print(f" WARNING: File does not exists: {cur_path}. Consider using --remap-source-root")
+                        elif not cur_path.startswith(src_root):
+                            print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
                         else:
-                            print(f" WARNING: Given path is symlink: {r.path}")
+                            print(f" WARNING: Given path is symlink: {cur_path}")
                     pbar.n += 1
                     pbar.refresh()
 
@@ -179,16 +182,19 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             with tarfile.open(name=archive_name, mode='w') as archive:
                 pbar = libcas.progressbar(data, total=len(data))
                 for r in pbar:
-                    if os.path.exists(r.path) and not r.is_symlink() and r.path.startswith(cas_db.source_root):
-                        relative_path = r.path[len(cas_db.source_root):]
-                        archive.add(r.path, arcname=relative_path, recursive=False)
+                    src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
+                    cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
+
+                    if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
+                        relative_path = cur_path[len(src_root):]
+                        archive.add(cur_path, arcname=relative_path, recursive=False)
                     else:
-                        if not os.path.exists(r.path):
-                            print(f" WARNING: File does not exists: {r.path}")
-                        elif not r.path.startswith(cas_db.source_root):
-                            print(f" WARNING, File is outside the source root: {r.path}")
+                        if not os.path.exists(cur_path):
+                            print(f" WARNING: File does not exists: {cur_path}")
+                        elif not cur_path.startswith(src_root):
+                            print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
                         else:
-                            print(f" WARNING: Given path is symlink: {r.path}")
+                            print(f" WARNING: Given path is symlink: {cur_path}")
                     pbar.n += 1
                     pbar.refresh()
 

@@ -220,7 +220,7 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
     
     if common_args.ftdb_dir != ".":
         common_args.ftdb_dir = os.path.abspath(os.path.expanduser(common_args.ftdb_dir))
-    elif os.environ.get("DB_DIR", False):
+    elif os.environ.get("FTDB_DIR", False):
         common_args.ftdb_dir = os.path.abspath(os.environ.get("FTDB_DIR", ""))
     else:
         common_args.ftdb_dir = os.path.abspath(os.path.expanduser('.'))
