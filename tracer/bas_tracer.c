@@ -3,6 +3,7 @@
 #include <asm/syscall.h>
 #include <linux/binfmts.h>
 #include <linux/dcache.h>
+#include <linux/delay.h>
 #include <linux/fdtable.h>
 #include <linux/fs_struct.h>
 #include <linux/kernel.h>
@@ -208,28 +209,53 @@ static struct tracepoint *tracepoint_task_rename = NULL;
 
 // ########## PIDS LIST MANAGEMENT ##########
 
-static bool is_pid_on_list_locked(pid_t pid, struct traced_pid **tpid)
+static bool is_pid_on_list_locked(pid_t pid, struct traced_pid **tpid,
+				bool nosleep)
 {
 	struct traced_pid *tmp = NULL;
 	tmp = radix_tree_lookup(&traced_pids, pid);
-	if (tmp) {
-		if (tpid) {
-			BUG_ON(mutex_is_locked(&tmp->obj_mutex));
+
+	if (!tmp)
+		return false;
+
+	if (tpid) {
+		if (unlikely(nosleep)) {
+			u64 count = 0;
+			while (!mutex_trylock(&tmp->obj_mutex)) {
+				if (count++ == 50000)
+					pr_warn("is_pid_on_list_locked: "
+						"attempt to get obj_mutex from "
+						"atomic context takes over "
+						"50ms\n");
+				udelay(1);
+			}
+		} else {
 			mutex_lock(&tmp->obj_mutex);
-			*tpid = tmp;
 		}
-		return true;
+		*tpid = tmp;
 	}
-	return false;
+	return true;
 }
 
-static bool should_trace_pid(pid_t pid, struct traced_pid **tpid)
+static bool should_trace_pid(pid_t pid, struct traced_pid **tpid, bool nosleep)
 {
 	bool retval = false;
 	struct traced_pid *ret_traced_pid = NULL;
 
-	mutex_lock(&list_mutex);
-	retval = is_pid_on_list_locked(pid, &ret_traced_pid);
+	if (unlikely(nosleep)) {
+		u64 count = 0;
+		while (!mutex_trylock(&list_mutex)) {
+			if (count++ == 50000)
+				pr_warn("should_trace_pid: attempt to get "
+					"list_mutex from atomic context takes "
+					"over 50ms\n");
+			udelay(1);
+		}
+	} else {
+		mutex_lock(&list_mutex);
+	}
+
+	retval = is_pid_on_list_locked(pid, &ret_traced_pid, nosleep);
 	mutex_unlock(&list_mutex);
 
 	if (retval && tpid)
@@ -243,7 +269,7 @@ static bool should_trace_pid(pid_t pid, struct traced_pid **tpid)
 // If false is returned, tpid is untouched.
 static bool should_trace(struct traced_pid **tpid)
 {
-	return should_trace_pid(current->pid, tpid);
+	return should_trace_pid(current->pid, tpid, false);
 }
 
 static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, pid_t nspid, bool force)
@@ -257,7 +283,8 @@ static u64 maybe_add_pid_to_list_locked(pid_t pid, pid_t ppid, pid_t nspid, bool
 		should_add = true;
 	else
 		// check if parent pid is tracked
-		should_add = is_pid_on_list_locked(ppid, NULL) || (nspid == (pid_t) root_pid);
+		should_add = is_pid_on_list_locked(ppid, NULL, false) ||
+				(nspid == (pid_t) root_pid);
 
 	if (!should_add)
 		return INVALID_UPID;
@@ -1012,13 +1039,18 @@ static void __tracepoint_probe_exec(void* data, struct task_struct *p,
 			 env_start, env_end, env_size);
 	}
 
+	err = -ENOENT;
 	task_lock(p);
 	if (p->fs) {
 		get_fs_pwd(p->fs, &cwd_path);
+		err = 0;
+	}
+	task_unlock(p);
+
+	if (!err) {
 		cwd_path_buf = get_pathstr_from_path(&cwd_path, &cwd_tmp_buf);
 		path_put(&cwd_path);
 	}
-	task_unlock(p);
 
 	if (!cwd_path_buf) {
 		pr_warn("tracepoint_probe_exec: failed to get cwd path\n");
@@ -1861,7 +1893,7 @@ void __tracepoint_probe_task_rename(void* data, struct task_struct *task,
 	// necessarily 'current' - someone may write straight to
 	// /proc/<pid>/comm, with <pid> of another task from the same thread
 	// group (e.g. pthread_setname_np() seems to do it this way).
-	if (!should_trace_pid(task->pid, &tpid))
+	if (!should_trace_pid(task->pid, &tpid, true))
 		return;
 
 	comm_len = strnlen(comm, TASK_COMM_LEN);
