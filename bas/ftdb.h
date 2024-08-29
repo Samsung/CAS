@@ -780,7 +780,7 @@ struct func_map_entry {
 
 struct size_dep_item {
     unsigned long id;
-    unsigned long add;
+    long add;
 };
 
 struct init_data_item {
@@ -798,6 +798,11 @@ struct init_data_item {
     long* value;
     const char* user_name;
     const char* protected_var;
+    const char** value_dep;
+    unsigned long value_dep_count;
+    unsigned long* fuzz_offset;
+    struct init_data_item* subitems;
+    unsigned long subitems_count;
 };
 
 struct init_data_entry {

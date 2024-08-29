@@ -634,6 +634,42 @@ PyObject* libftdb_ftdb_get_static_funcs_map(PyObject* self, void* closure) {
     return sfm;
 }
 
+PyObject* libftdb_ftdb_get_single_item_init_data(struct init_data_item* item) {
+    
+    PyObject* py_item = PyDict_New();
+    FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,id,item->id);
+    FTDB_SET_ENTRY_STRING_ARRAY(py_item,name,item->name);
+    FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,size,item->size);
+    if (item->size_dep) {
+        PyObject* py_size_dep = PyDict_New();
+        FTDB_SET_ENTRY_ULONG(py_size_dep,id,item->size_dep->id);
+        FTDB_SET_ENTRY_INT64(py_size_dep,add,item->size_dep->add);
+        FTDB_SET_ENTRY_PYOBJECT(py_item,size_dep,py_size_dep);
+    }
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,nullterminated,item->nullterminated);
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,tagged,item->tagged);
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,fuzz,item->fuzz);
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,pointer,item->pointer);
+    FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,max_value,item->max_value);
+    FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,min_value,item->min_value);
+    FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,value,item->value);
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,user_name,item->user_name);
+    FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,protected,item->protected_var);
+    FTDB_SET_ENTRY_STRING_ARRAY_OPTIONAL(py_item,value_dep,item->value_dep);
+    FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,fuzz_offset,item->fuzz_offset);
+    if (item->subitems) {
+        PyObject* py_subitems = PyList_New(0);
+        for (Py_ssize_t i=0; i<item->subitems_count; ++i) {
+            struct init_data_item* subitem = &item->subitems[i];
+            PyObject* py_subitem = libftdb_ftdb_get_single_item_init_data(subitem);
+            PYLIST_ADD_PYOBJECT(py_subitems,py_subitem);
+        }
+        FTDB_SET_ENTRY_PYOBJECT(py_item,subitems,py_subitems);
+    }
+
+    return py_item;
+}
+
 PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure) {
 
     libftdb_ftdb_object* __self = (libftdb_ftdb_object*)self;
@@ -653,25 +689,7 @@ PyObject* libftdb_ftdb_get_init_data(PyObject* self, void* closure) {
         PyObject* py_items = PyList_New(0);
         for (Py_ssize_t j=0; j<entry->items_count; ++j) {
             struct init_data_item* item = &entry->items[j];
-            PyObject* py_item = PyDict_New();
-            FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,id,item->id);
-            FTDB_SET_ENTRY_STRING_ARRAY(py_item,name,item->name);
-            FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,size,item->size);
-            if (item->size_dep) {
-                PyObject* py_size_dep = PyDict_New();
-                FTDB_SET_ENTRY_ULONG(py_size_dep,id,item->size_dep->id);
-                FTDB_SET_ENTRY_ULONG(py_size_dep,add,item->size_dep->add);
-                FTDB_SET_ENTRY_PYOBJECT(py_item,size_dep,py_size_dep);
-            }
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,nullterminated,item->nullterminated);
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,tagged,item->tagged);
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,fuzz,item->fuzz);
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,pointer,item->pointer);
-            FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,max_value,item->max_value);
-            FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,min_value,item->min_value);
-            FTDB_SET_ENTRY_INT64_OPTIONAL(py_item,value,item->value);
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,user_name,item->user_name);
-            FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,protected,item->protected_var);
+            PyObject* py_item = libftdb_ftdb_get_single_item_init_data(item);
             PYLIST_ADD_PYOBJECT(py_items,py_item);
         }
         FTDB_SET_ENTRY_PYOBJECT(py_init_data_entry,items,py_items);
@@ -8136,23 +8154,31 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(size_dep_item,
     // No recipes needed
 );
 
+FUNCTION_DECLARE_FLATTEN_STRUCT(init_data_item);
+
 FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_item,
-        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,id,1);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,id,1);
     AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,name,ATTR(name_count));
     FOREACH_POINTER(const char*,s,ATTR(name),ATTR(name_count),
         FLATTEN_STRING(s);
     );
-        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,size,1);
-        AGGREGATE_FLATTEN_STRUCT_ARRAY(size_dep_item,size_dep,1);
-        AGGREGATE_FLATTEN_STRING(nullterminated);
-        AGGREGATE_FLATTEN_STRING(tagged);
-        AGGREGATE_FLATTEN_STRING(fuzz);
-        AGGREGATE_FLATTEN_STRING(pointer);
-        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,min_value,1);
-        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,max_value,1);
-        AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,value,1);
-        AGGREGATE_FLATTEN_STRING(user_name);
-        AGGREGATE_FLATTEN_STRING(protected_var);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,size,1);
+    AGGREGATE_FLATTEN_STRUCT_ARRAY(size_dep_item,size_dep,1);
+    AGGREGATE_FLATTEN_STRING(nullterminated);
+    AGGREGATE_FLATTEN_STRING(tagged);
+    AGGREGATE_FLATTEN_STRING(fuzz);
+    AGGREGATE_FLATTEN_STRING(pointer);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,min_value,1);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,max_value,1);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,value,1);
+    AGGREGATE_FLATTEN_STRING(user_name);
+    AGGREGATE_FLATTEN_STRING(protected_var);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,value_dep,ATTR(value_dep_count));
+    FOREACH_POINTER(const char*,s,ATTR(value_dep),ATTR(value_dep_count),
+        FLATTEN_STRING(s);
+    );
+    AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,fuzz_offset,1);
+    AGGREGATE_FLATTEN_STRUCT_ARRAY(init_data_item,subitems,ATTR(subitems_count));
 );
 
 FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_entry,
@@ -8995,7 +9021,7 @@ static void fill_func_map_entry_entry(PyObject* func_map_entry, struct func_map_
 static void fill_size_dep_item_entry(PyObject* size_dep_item, struct size_dep_item* new_entry) {
 
     new_entry->id = FTDB_ENTRY_ULONG(size_dep_item,id);
-    new_entry->add = FTDB_ENTRY_ULONG(size_dep_item,add);
+    new_entry->add = FTDB_ENTRY_INT64(size_dep_item,add);
 }
 
 static void fill_init_data_item_entry(PyObject* data_item_entry, struct init_data_item* new_entry) {
@@ -9014,6 +9040,11 @@ static void fill_init_data_item_entry(PyObject* data_item_entry, struct init_dat
     new_entry->value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,value);
     new_entry->user_name = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,user_name);
     new_entry->protected_var = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,protected);
+    new_entry->value_dep_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry, value_dep);
+    new_entry->value_dep = FTDB_ENTRY_STRING_ARRAY_OPTIONAL(data_item_entry,value_dep);
+    new_entry->fuzz_offset = FTDB_ENTRY_ULONG_OPTIONAL(data_item_entry,fuzz_offset);
+    new_entry->subitems_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry,subitems);
+    new_entry->subitems = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(data_item_entry,subitems,init_data_item,new_entry->subitems_count);
 }
 
 static void fill_init_data_entry_entry(PyObject* init_data_entry, struct init_data_entry* new_entry) {
