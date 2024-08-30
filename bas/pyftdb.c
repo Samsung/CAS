@@ -657,6 +657,7 @@ PyObject* libftdb_ftdb_get_single_item_init_data(struct init_data_item* item) {
     FTDB_SET_ENTRY_STRING_OPTIONAL(py_item,protected,item->protected_var);
     FTDB_SET_ENTRY_STRING_ARRAY_OPTIONAL(py_item,value_dep,item->value_dep);
     FTDB_SET_ENTRY_ULONG_OPTIONAL(py_item,fuzz_offset,item->fuzz_offset);
+    FTDB_SET_ENTRY_STRING_ARRAY_OPTIONAL(py_item,always_init,item->always_init);
     if (item->subitems) {
         PyObject* py_subitems = PyList_New(0);
         for (Py_ssize_t i=0; i<item->subitems_count; ++i) {
@@ -8178,6 +8179,10 @@ FUNCTION_DEFINE_FLATTEN_STRUCT(init_data_item,
         FLATTEN_STRING(s);
     );
     AGGREGATE_FLATTEN_TYPE_ARRAY(unsigned long,fuzz_offset,1);
+    AGGREGATE_FLATTEN_TYPE_ARRAY(const char*,always_init,ATTR(always_init_count));
+    FOREACH_POINTER(const char*,s,ATTR(always_init),ATTR(always_init_count),
+        FLATTEN_STRING(s);
+    );
     AGGREGATE_FLATTEN_STRUCT_ARRAY(init_data_item,subitems,ATTR(subitems_count));
 );
 
@@ -9040,9 +9045,11 @@ static void fill_init_data_item_entry(PyObject* data_item_entry, struct init_dat
     new_entry->value = FTDB_ENTRY_INT64_OPTIONAL(data_item_entry,value);
     new_entry->user_name = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,user_name);
     new_entry->protected_var = FTDB_ENTRY_STRING_OPTIONAL(data_item_entry,protected);
-    new_entry->value_dep_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry, value_dep);
+    new_entry->value_dep_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry,value_dep);
     new_entry->value_dep = FTDB_ENTRY_STRING_ARRAY_OPTIONAL(data_item_entry,value_dep);
     new_entry->fuzz_offset = FTDB_ENTRY_ULONG_OPTIONAL(data_item_entry,fuzz_offset);
+    new_entry->always_init_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry,always_init);
+    new_entry->always_init = FTDB_ENTRY_STRING_ARRAY_OPTIONAL(data_item_entry,always_init);
     new_entry->subitems_count = FTDB_ENTRY_ARRAY_SIZE_OPTIONAL(data_item_entry,subitems);
     new_entry->subitems = FTDB_ENTRY_TYPE_ARRAY_OPTIONAL(data_item_entry,subitems,init_data_item,new_entry->subitems_count);
 }
