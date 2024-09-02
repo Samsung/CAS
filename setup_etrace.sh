@@ -61,6 +61,7 @@ elif [ "$1" = "-i" ]; then
 
 elif [ "$1" = "-r" ]; then
 	/sbin/rmmod bas_tracer
+	echo "1410" > /sys/kernel/debug/tracing/buffer_size_kb
 	exit "$?"
 else
 	print_usage
