@@ -984,16 +984,9 @@ class CASDatabase:
         :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
         """
         ret = []
-        simple_params: List[str] = [p for p in epaths if isinstance(p, str)]
-        extended_params: List[DepsParam] = [p for p in epaths if isinstance(p, DepsParam)]
-        ret = self.db.mdeps(simple_params, direct=direct_global)
-
-        if len(extended_params):
-            print(len(extended_params))
-            for epath in extended_params:
-                ret += self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph,
-                                        debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]
-            return list(set(ret))
+        for epath in epaths:
+            ret += self.get_deps(epath, direct_global=direct_global, dep_graph=dep_graph,
+                                    debug=debug, debug_fd=debug_fd, use_pipes=use_pipes, wrap_deps=wrap_deps)[2]
         return ret
 
     def get_dependency_graph(self, epaths:"List[DepsParam|str]", direct_global=False,
