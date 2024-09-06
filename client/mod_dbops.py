@@ -157,6 +157,16 @@ class StoreCache(Module):
     - .nfsdb.img
     - .nfsdb.deps.img
     """
+
+    MANIFEST_TEMPLATE = '''
+{{
+    "folders": [path: {SOURCE_ROOT}],
+    "CAS_MANIFEST":{{
+        "BAS_SERVER": {BAS_SERVER},
+        "SOURCE_REPO_TYPE": "type:local"
+        }}
+}}
+'''
     @staticmethod
     def get_argparser():
         module_parser = argparse.ArgumentParser(description="Module used for cache creation.")
@@ -167,6 +177,7 @@ class StoreCache(Module):
         arg_group.add_argument('--set-version', type=str, default="", help='Optional string used to identify database')
         arg_group.add_argument('--exclude-command-patterns', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
         arg_group.add_argument('--shared-argvs', type=str, default=None, help="Provide list of patterns to precompute matching with all commands (delimited by ':')")
+        arg_group.add_argument('--vscode', action='store_true', default=False, help='create simple Visual Studio Code manifest file')
         args_map["with-pipes"](arg_group)
         args_map["wrap-deps"](arg_group)
         return module_parser
@@ -212,6 +223,11 @@ class StoreCache(Module):
                                     ddepmap_filename=ddepmap_filename, use_pipes=self.args.with_pipes, wrap_deps=self.args.wrap_deps, jobs=self.args.jobs,
                                     deps_threshold=self.args.deps_threshold, debug=self.args.debug)
             print("deps stored [%.2fs]" % (time.time() - start_time))
+
+        if self.args.vscode:
+            with open(os.path.abspath(os.path.join(self.args.dbdir,"nfsdb.workspace")), "w") as f:
+                f.write(self.MANIFEST_TEMPLATE.format(BAS_SERVER=f'file://{cache_db_filename}',SOURCE_ROOT=src_root))
+            print(f"vscode manifest created, saved to {os.path.abspath(os.path.join(self.args.dbdir,'nfsdb.workspace'))}")
 
         print("Done cache [%.2fs]" % (time.time() - total_start_time))
         return None, DataTypes.null_data, None, None
