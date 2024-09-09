@@ -801,6 +801,7 @@ struct init_data_item {
     const char** value_dep;
     unsigned long value_dep_count;
     unsigned long* fuzz_offset;
+    const char* force_type;
     const char** always_init;
     unsigned long always_init_count;
     struct init_data_item* subitems;
