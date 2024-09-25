@@ -12,12 +12,13 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="MAIN_DESCRIPTION", formatter_class=argparse.RawDescriptionHelpFormatter)
 	
 	# execution control
-	parser.add_argument("-P", "--proc-binary", required=True, action="store", help="Path to the processor binary based on clang")
+	parser.add_argument("-P", "--proc-binary", action="store", help="Path to the processor binary based on clang")
 	parser.add_argument("-j", "--jobs", action="store", type=int, help="Run only with specific number of jobs", required=False)
 	parser.add_argument("-Q", "--unique-cdb", action="store_true", help="Make compilation database unique while processing",required=False)
 
 
 	# output control
+	parser.add_argument("-img", "--image", action="store_true", help="generate .img file for database")
 	parser.add_argument("-q", "--quiet", action="store_true", help="don't print any information on stdout")
 	parser.add_argument("-d", "--debug", action="store_true", help="print debug information")
 	parser.add_argument("-v", "--verbose", action="store_true", help="print verbose errors")

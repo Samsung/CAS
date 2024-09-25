@@ -10,6 +10,7 @@ import shutil
 import itertools
 from typing import Any, Optional, Iterable
 from threading import Thread
+import libftdb
 __version_string__ = "0.90"
 
 class progressbar:
@@ -135,25 +136,55 @@ def make_unique_compile_commands(cdbfile):
     with open(cdbfile,"w") as f:
         f.write(json.dumps(db,indent=4, separators=(',', ': ')))
 
+def find_processor_binary(proc_bin):
+    # user provided binary
+    if proc_bin:
+        if os.path.isdir(proc_bin):
+            proc_bin = os.path.join(proc_bin,"clang-proc")
+        proc_bin = os.path.abspath(proc_bin)
+        if os.path.exists(proc_bin):
+            return proc_bin
+        else:
+            print(f"Couldn't find expected clang processor binary: {proc_bin}")
+            return None
+    else:
+        # try local directory
+        proc_bin = os.path.abspath('./clang-proc')
+        if os.path.exists(proc_bin):
+            return proc_bin
+        # try script directory
+        proc_bin = os.path.abspath(os.path.join(os.path.dirname(__file__),"clang-proc"))
+        if os.path.exists(proc_bin):
+            return proc_bin
+        # try path
+        proc_bin = shutil.which("clang-proc")
+        if proc_bin and os.path.exists(proc_bin):
+            return proc_bin
+        print(f"Couldn't find clang processor binary. Provide path with '-P' option.")
+        return None
+
 def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    if not os.path.isabs(args.proc_binary):
-        print("Please provide full path to the clang processor binary (not {})".format(args.proc_binary))
+    
+    args.proc_binary = find_processor_binary(args.proc_binary)
+    if not args.proc_binary:
         return 1
+    print(f"Using clang processor binary: {args.proc_binary}")
+
 
     if not args.field_usage:
         args.field_usage = True
 
     if not args.taint:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
         args.taint = os.path.join(script_dir,"dbtaint.json")
 
 # output
     if not args.output:
         output = "db.json"
+        output_img = "db.img"
     else:
         output = args.output
+        output_img = ''.join([os.path.splitext(args.output)[0],'.img'])
 
     output_err = output+".err"
     if args.clean_slate:
@@ -445,6 +476,11 @@ def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
             json.dump(JDB,f,indent="\t")
             # f.write(json.dumps(JDB,indent="\t"))
         print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
+        if args.image:
+            print("Creating .img database")
+            libftdb.create_ftdb(JDB,output_img,True)
+            print("Done.")
+
     if mrrs+rv > 0:
         print("WARNING: Encountered some ERRORS!")
     
