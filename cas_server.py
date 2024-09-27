@@ -7,6 +7,7 @@ import json
 import sys
 import math
 import argparse
+from shlex import split as shell_split
 
 from flask import Flask, render_template, send_from_directory, request
 from flask.wrappers import Response, Request
@@ -114,7 +115,7 @@ def get_raw_cmd():
     org_url = request.url
     raw_cmd = request.args.get('cmd', None)
     if raw_cmd:
-        cmd = raw_cmd.split(" ")
+        cmd = shell_split(raw_cmd)
         if "--json" not in cmd:
             cmd.append("--json")
         try:
