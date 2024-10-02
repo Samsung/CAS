@@ -278,7 +278,7 @@ def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
     if args.with_cta:
         command.append("-a")
     if args.enable_static_assert:
-        command.apend("-sa")
+        command.append("-sa")
     MR = {}
     if args.macro_replacement:
         with open(args.macro_replacement,"rb") as f:
@@ -476,7 +476,7 @@ def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
             json.dump(JDB,f,indent="\t")
             # f.write(json.dumps(JDB,indent="\t"))
         print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
-        
+
         if args.image:
             print("Creating .img database")
             try:
