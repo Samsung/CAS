@@ -10,7 +10,7 @@ import shutil
 import itertools
 from typing import Any, Optional, Iterable
 from threading import Thread
-import libftdb
+
 __version_string__ = "0.90"
 
 class progressbar:
@@ -476,8 +476,14 @@ def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
             json.dump(JDB,f,indent="\t")
             # f.write(json.dumps(JDB,indent="\t"))
         print("Done. Written {} [{:.2f}MB]".format(output,float(os.stat(output).st_size)/1048576))
+        
         if args.image:
             print("Creating .img database")
+            try:
+                import libftdb
+            except ImportError:
+                print("Cannot generate .img database - libftdb not found")
+                raise
             libftdb.create_ftdb(JDB,output_img,True)
             print("Done.")
 
