@@ -96,7 +96,7 @@ Compile:
 
 ```bash
 env \
-    FTDB_INCLUDE_DIR=/media/storage/dev/CAS-OSS/bas \
+    FTDB_INCLUDE_DIR=/media/storage/dev/CAS-OSS \
     FTDB_LIB_DIR=/media/storage/dev/CAS-OSS/build   \
     cargo build -p ftdb-info
 ```
@@ -113,7 +113,7 @@ or compile and run:
 
 ```bash
 env \
-    FTDB_INCLUDE_DIR=/media/storage/dev/CAS-OSS/bas \
+    FTDB_INCLUDE_DIR=/media/storage/dev/CAS-OSS \
     FTDB_LIB_DIR=/media/storage/dev/CAS-OSS/build   \
     LD_LIBRARY_PATH=/media/storage/dev/CAS-OSS/build \
     cargo run -p ftdb-info -- /path/to/image/file.img

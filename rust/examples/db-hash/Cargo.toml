@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-data-encoding = "2.5.0"
+data-encoding = "2.6.0"
 ftdb = { path = "../../ftdb"}
 openssl = "0.10.64"
 

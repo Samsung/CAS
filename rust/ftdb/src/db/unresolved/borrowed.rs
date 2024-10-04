@@ -4,6 +4,7 @@ use super::unresolved_funcs_entry_impl;
 use crate::db::{FtdbHandle, InnerRef, Owned};
 use ftdb_sys::ftdb::ftdb_unresolvedfunc_entry;
 
+#[derive(Debug, Clone)]
 pub struct UnresolvedFuncEntry<'a>(&'a ftdb_unresolvedfunc_entry);
 
 unresolved_funcs_entry_impl!(UnresolvedFuncEntry<'a>);
@@ -21,7 +22,7 @@ impl<'a> From<&'a ftdb_unresolvedfunc_entry> for UnresolvedFuncEntry<'a> {
 }
 
 impl<'s, 'r> InnerRef<'s, 'r, ftdb_unresolvedfunc_entry> for UnresolvedFuncEntry<'r> {
-    fn inner_ref(&'s self) -> &'r ftdb_unresolvedfunc_entry {
+    fn as_inner_ref(&'s self) -> &'r ftdb_unresolvedfunc_entry {
         self.0
     }
 }

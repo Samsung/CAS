@@ -8,7 +8,7 @@
 ///
 /// Where 1:2 means line:index.
 ///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Copy, Hash)]
 pub struct Location<'a>(&'a str);
 
 impl<'a> Location<'a> {
@@ -17,7 +17,7 @@ impl<'a> Location<'a> {
     #[inline]
     pub fn file(&self) -> &'a str {
         let f = self.file_with_pos();
-        let index = f.find(':').unwrap_or(self.0.len());
+        let index = f.find(':').unwrap_or(f.len());
         &f[..index]
     }
 
@@ -77,6 +77,7 @@ mod tests {
 
     #[rstest]
     #[case::full_path("/opt/aosp/kernel/config.h:100:50", "config.h")]
+    #[case::full_path_no_pos("/opt/aosp/kernel/config.h", "config.h")]
     #[case::no_parent("config.h:100:50", "config.h")]
     #[case::no_parent_no_pos("config.h", "config.h")]
     #[case::empty("", "")]
@@ -87,6 +88,7 @@ mod tests {
 
     #[rstest]
     #[case::full_path("/opt/aosp/kernel/config.h:100:50", "/opt/aosp/kernel/config.h")]
+    #[case::full_path_no_pos("/opt/aosp/kernel/config.h", "/opt/aosp/kernel/config.h")]
     #[case::no_parent("config.h:100:50", "config.h")]
     #[case::no_parent_no_pos("config.h", "config.h")]
     #[case::empty("", "")]
@@ -97,6 +99,7 @@ mod tests {
 
     #[rstest]
     #[case::full_path("/opt/aosp/kernel/config.h:100:50", "config.h:100:50")]
+    #[case::full_path_no_pos("/opt/aosp/kernel/config.h", "config.h")]
     #[case::no_parent("config.h:100:50", "config.h:100:50")]
     #[case::no_parent_no_pos("config.h", "config.h")]
     #[case::empty("", "")]
@@ -107,6 +110,7 @@ mod tests {
 
     #[rstest]
     #[case::full_path("/opt/aosp/kernel/config.h:100:50", "/opt/aosp/kernel")]
+    #[case::full_path_no_pos("/opt/aosp/kernel/config.h", "/opt/aosp/kernel")]
     #[case::no_parent("config.h:100:50", "")]
     #[case::no_parent_no_pos("config.h", "")]
     #[case::empty("", "")]
@@ -117,6 +121,7 @@ mod tests {
 
     #[rstest]
     #[case::full_path("/opt/aosp/kernel/config.h:100:50", Some(100))]
+    #[case::full_path_no_pos("/opt/aosp/kernel/config.h", None)]
     #[case::no_parent("config.h:23:1", Some(23))]
     #[case::no_parent("config.h:25", Some(25))]
     #[case::no_parent_no_pos("config.h", None)]

@@ -1,7 +1,7 @@
 use super::utils::{ptr_to_slice, ptr_to_str};
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ExprType {
     Function,
     Global,
@@ -95,10 +95,17 @@ impl Display for ExprType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+/// Represents a linkage type
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Linkage {
+    /// Refers to a translation unit scope
     Internal,
+
+    /// Refers to combination of all translation units
     External,
+
+    /// Unknown or unsupported linkage type
     Unknown,
 }
 
@@ -123,7 +130,9 @@ impl Display for Linkage {
     }
 }
 
-#[derive(Debug, PartialEq)]
+/// Set of literals group by types
+///
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Literals<'a> {
     pub character: &'a [u32],
     pub floating: &'a [f64],
@@ -145,7 +154,6 @@ impl<'a> From<&'a ftdb_sys::ftdb::ftdb_global_entry> for Literals<'a> {
     }
 }
 
-// TODO: Macro as the code is common
 impl<'a> From<&'a ftdb_sys::ftdb::ftdb_func_entry> for Literals<'a> {
     fn from(src: &'a ftdb_sys::ftdb::ftdb_func_entry) -> Self {
         Literals {
@@ -173,11 +181,32 @@ impl<'a> Display for Literals<'a> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+/// Class of type
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TypeClass {
     EmptyRecord,
+
+    /// A builtin type
+    ///
+    /// Examples:
+    ///
+    /// ```c
+    /// int a;
+    /// char b;
+    /// long c;
+    /// ```
     Builtin,
+
+    /// A pointer type
+    ///
+    /// Examples:
+    ///
+    ///```c
+    /// const char* ptr;
+    /// ```
     Pointer,
+
     MemberPointer,
     Attributed,
     Complex,
@@ -192,16 +221,73 @@ pub enum TypeClass {
     SubstTemplateTypeParm,
     RecordSpecialization,
     RecordTemplate,
+
+    /// A 'struct' type
+    ///
+    /// Examples:
+    ///
+    /// ```c
+    /// struct color {
+    ///     uint8_t r;
+    ///     uint8_t g;
+    ///     uint8_t b;
+    /// };
+    /// ```
     Record,
+
+    /// Struct forward declaration (without definition)
+    ///
+    /// ```c
+    /// struct color;
+    /// ```
+    ///
     RecordForward,
+
+    /// A static array (of known size)
     ConstArray,
+
+    /// An incomplete array type
     IncompleteArray,
+
+    /// Variable Length Array (VLA) type
     VariableArray,
+
+    /// A type definition
     Typedef,
+
+    /// An enumeration
+    ///
+    /// Examples:
+    ///
+    /// ```c
+    /// enum level {
+    ///     LOW
+    ///     MEDIUM,
+    ///     HIGH,
+    /// };
+    /// ```
     Enum,
+
+    /// Enum forward declaration
+    ///
+    /// ```c
+    /// enum class level;
+    /// ```
     EnumForward,
+
+    /// A pointer which is decayed array type
     DecayedPointer,
+
+    /// A pointer to function
+    ///
+    /// Examples:
+    ///
+    /// ```c
+    /// int (struct severity *, unsigned long)
+    /// ```
     Function,
+
+    /// Other types
     Undef,
 }
 
@@ -237,6 +323,7 @@ impl From<ftdb_sys::ftdb::TypeClass> for TypeClass {
             ftdb_sys::ftdb::TypeClass::TYPECLASS_ENUMFORWARD => Self::EnumForward,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_DECAYEDPOINTER => Self::DecayedPointer,
             ftdb_sys::ftdb::TypeClass::TYPECLASS_FUNCTION => Self::Function,
+
             _ => Self::Undef,
         }
     }

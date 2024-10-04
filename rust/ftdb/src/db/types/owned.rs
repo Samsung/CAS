@@ -5,6 +5,7 @@ use crate::{
 };
 use ftdb_sys::ftdb::ftdb_type_entry;
 
+#[derive(Debug, Clone)]
 pub struct TypeEntry(Owned<ftdb_type_entry>);
 
 type_entry_impl!(TypeEntry);
@@ -24,8 +25,8 @@ impl From<Owned<ftdb_type_entry>> for TypeEntry {
 impl_inner_handle!(TypeEntry);
 
 impl<'s> InnerRef<'s, 's, ftdb_type_entry> for TypeEntry {
-    fn inner_ref(&'s self) -> &'s ftdb_type_entry {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb_type_entry {
+        self.0.as_inner_ref()
     }
 }
 
@@ -33,6 +34,6 @@ impl<'a> ToBorrowed<'a> for TypeEntry {
     type Type = super::TypeEntry<'a>;
 
     fn to_borrowed(&'a self) -> Self::Type {
-        self.inner_ref().into()
+        self.as_inner_ref().into()
     }
 }

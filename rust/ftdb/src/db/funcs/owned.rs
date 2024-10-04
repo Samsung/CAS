@@ -1,4 +1,4 @@
-use super::{asms::Asms, calls::Calls, entry::func_decl_entry_impl};
+use super::entry::func_entry_impl;
 use crate::{
     db::{FtdbHandle, Handle, InnerRef, Owned, ToBorrowed},
     macros::impl_inner_handle,
@@ -9,7 +9,7 @@ use std::fmt::Display;
 #[derive(Debug, Clone)]
 pub struct FunctionEntry(Owned<ftdb_func_entry>);
 
-func_decl_entry_impl!(FunctionEntry);
+func_entry_impl!(FunctionEntry);
 
 impl Display for FunctionEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,8 +27,8 @@ impl_inner_handle!(FunctionEntry);
 
 impl<'s> InnerRef<'s, 's, ftdb_func_entry> for FunctionEntry {
     #[inline]
-    fn inner_ref(&'s self) -> &'s ftdb_func_entry {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb_func_entry {
+        self.0.as_inner_ref()
     }
 }
 
@@ -37,6 +37,6 @@ impl<'a> ToBorrowed<'a> for FunctionEntry {
 
     #[inline]
     fn to_borrowed(&'a self) -> Self::Type {
-        self.inner_ref().into()
+        self.as_inner_ref().into()
     }
 }

@@ -42,7 +42,7 @@ pub trait TypesQuery {
 impl FuncDeclsQuery for ftdb {
     fn funcdecl_by_id(&self, id: u64) -> Option<&ftdb_funcdecl_entry> {
         unsafe {
-            let node = ulong_entryMap_search(&self.fdhrefmap, id);
+            let node = ulong_entryMap_search(&self.fdrefmap, id);
             if node.is_null() {
                 return None;
             }

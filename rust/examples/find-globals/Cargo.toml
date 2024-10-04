@@ -1,10 +1,10 @@
 [package]
+edition = "2021"
 name = "find-globals"
 version = "0.1.0"
-edition = "2021"
 
 [dependencies]
-ftdb = { path = "../../ftdb"}
+ftdb = {path = "../../ftdb"}
 
 [features]
 default = []

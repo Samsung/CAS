@@ -10,8 +10,49 @@ use std::fmt::Display;
 
 pub use self::borrowed::GlobalEntry;
 
-/// Structure providing access to global entries
+/// The 'globals' section of FTDB contains information regarding global variables in
+/// a source code.
 ///
+/// There are several ways to navigate through global entries:
+///
+/// 1. Use [`Ftdb`] instance
+///     * Iterate over [`crate::Ftdb::globals_iter`] iterator
+///     * Filter by global's id [`crate::Ftdb::global_by_id`]
+///     * Filter by global's hash [`crate::Ftdb::global_by_hash`]
+///     * Filter by global's name [`crate::Ftdb::globals_by_name`]
+/// 2. Use [`Globals`] instance
+///     * Iterate over [`Globals::iter`] iterator
+///     * Filter by global's id [`Globals::entry_by_id`]
+///     * Filter by global's hash [`Globals::entry_by_hash`]
+///
+/// `Types` instance shares ownership of FTDB database which means that it increases
+/// internal reference counters so as long as the `Types` instance exists the
+/// underlying FTDB pointers won't be free'd.
+///
+/// Because the use of reference counting structures (such as `std::sync::Arc`) it is
+/// safe to use this type in concurency scenarios. It is possible to process each type
+/// in a separate worker, just make sure to use "owned" variant of structures.
+///
+/// # Examples
+///
+/// Converting "borrowed" global entries to "owned" entries:
+///
+/// ```
+/// use ftdb::Handle;
+///
+/// # fn run(db: &ftdb::Ftdb, g: ftdb::GlobalEntry<'_>) {
+/// let handle = db.handle();
+/// let owned = g.into_owned(handle);
+/// # }
+/// ```
+///
+/// For an example on how to process globals in chunks in asynchronous environment,
+/// please refer to [`Types`] documentation as it contains similar example.
+///
+/// [`Ftdb`]: crate::Ftdb
+/// [`Types`]: crate::Types
+///
+#[derive(Debug, Clone)]
 pub struct Globals(Owned<ftdb>);
 
 impl Display for Globals {
@@ -23,12 +64,12 @@ impl Display for Globals {
 impl FtdbCollection<ftdb_global_entry> for Globals {
     #[inline]
     unsafe fn get_ptr(&self, index: usize) -> *mut ftdb_global_entry {
-        self.inner_ref().get_ptr(index)
+        self.as_inner_ref().get_ptr(index)
     }
 
     #[inline]
     fn len(&self) -> usize {
-        <ftdb as FtdbCollection<ftdb_global_entry>>::len(self.inner_ref())
+        <ftdb as FtdbCollection<ftdb_global_entry>>::len(self.as_inner_ref())
     }
 }
 
@@ -36,8 +77,8 @@ impl_inner_handle!(Globals);
 
 impl<'s> InnerRef<'s, 's, ftdb> for Globals {
     #[inline]
-    fn inner_ref(&'s self) -> &'s ftdb {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb {
+        self.0.as_inner_ref()
     }
 }
 
@@ -85,11 +126,11 @@ impl Globals {
     ///
     #[inline]
     pub fn iter(&self) -> BorrowedIterator<'_, ftdb, GlobalEntry<'_>, ftdb_global_entry> {
-        BorrowedIterator::new(self.inner_ref())
+        BorrowedIterator::new(self.as_inner_ref())
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GlobalDef<'a> {
     Declaration(&'a str),
     TentativeDefinition(&'a str),
@@ -119,145 +160,155 @@ macro_rules! global_entry_impl {
     };
 
     ($struct_name:ident $(<$struct_life:lifetime>)?, $ret_life:lifetime) => {
-        use $crate::utils::{ptr_to_slice, ptr_to_str};
-        use $crate::db::{FunctionId, GlobalDef, GlobalId, Linkage, TypeId};
-
         impl$(<$struct_life>)? $struct_name $(<$struct_life>)? {
 
-            //// ftdb global entry decls values
+            /// List of positions in refs - indicates nested definitions
             ///
             #[inline]
             pub fn decls(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().decls, self.inner_ref().decls_count)
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().decls,
+                    self.as_inner_ref().decls_count
+                )
             }
 
+            /// Global definition
+            ///
+            /// Consists of definition level and string
+            ///
             #[inline]
-            pub fn def(&self) -> GlobalDef {
+            pub fn def(&self) -> $crate::GlobalDef {
                 let defstring = self.defstring();
                 match self.deftype() {
-                    0 => GlobalDef::Declaration(defstring),
-                    1 => GlobalDef::TentativeDefinition(defstring),
-                    2 => GlobalDef::Definition(defstring),
-                    x => GlobalDef::Unknown(defstring, x),
+                    0 => $crate::GlobalDef::Declaration(defstring),
+                    1 => $crate::GlobalDef::TentativeDefinition(defstring),
+                    2 => $crate::GlobalDef::Definition(defstring),
+                    x => $crate::GlobalDef::Unknown(defstring, x),
                 }
             }
 
+            /// Global definition string
+            ///
             #[inline]
             pub fn defstring(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().def)
+                $crate::utils::ptr_to_str(self.as_inner_ref().def)
             }
 
+            /// Definition level
+            ///
+            /// * `0` - a declaration
+            /// * `1` - a tentative definition
+            /// * `2` - a definition
+            ///
             #[inline]
-            pub fn deftype(&self) -> u32 {
-                self.inner_ref().deftype
+            fn deftype(&self) -> u32 {
+                self.as_inner_ref().deftype
             }
 
-            /// ftdb global entry hash value
+            /// A global's hash value
             ///
             #[inline]
             pub fn hash(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().hash)
+                $crate::utils::ptr_to_str(self.as_inner_ref().hash)
             }
 
-            /// ftdb global entry fid value
+            /// Id of a file containing the global's definition
             ///
             #[inline]
-            pub fn fid(&self) -> u64 {
-                self.inner_ref().fid
+            pub fn fid(&self) -> $crate::FileId {
+                self.as_inner_ref().fid.into()
             }
 
-            /// ftdb global entry funrefs values
+            /// List of referenced functions
             ///
             #[inline]
-            pub fn funrefs(&self) -> &$ret_life [FunctionId] {
-                ptr_to_slice(
-                    self.inner_ref().funrefs as *const FunctionId,
-                    self.inner_ref().funrefs_count
+            pub fn funrefs(&self) -> &$ret_life [$crate::FunctionId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().funrefs as *const $crate::FunctionId,
+                    self.as_inner_ref().funrefs_count
                 )
             }
 
-            /// ftdb global entry globalrefs values
+            /// List of referenced globals
             ///
             #[inline]
-            pub fn globalrefs(&self) -> &$ret_life [GlobalId] {
-                ptr_to_slice(
-                    self.inner_ref().globalrefs as *const GlobalId,
-                    self.inner_ref().globalrefs_count,
+            pub fn globalrefs(&self) -> &$ret_life [$crate::GlobalId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().globalrefs as *const $crate::GlobalId,
+                    self.as_inner_ref().globalrefs_count,
                 )
             }
 
-            /// ftdb global entry id value
+            /// Unique identifier of a global
             ///
             #[inline]
-            pub fn id(&self) -> GlobalId {
-                self.inner_ref().id.into()
+            pub fn id(&self) -> $crate::GlobalId {
+                self.as_inner_ref().id.into()
             }
 
-            /// ftdb global entry init value
+            /// Source code of the init section of a global (is applicable)
             ///
             #[inline]
             pub fn init(&self) -> Option<&$ret_life str> {
-                match self.inner_ref().hasinit {
+                match self.as_inner_ref().hasinit {
                     0 => None,
-                    _ => Some(ptr_to_str(self.inner_ref().init)),
+                    _ => Some($crate::utils::ptr_to_str(self.as_inner_ref().init)),
                 }
             }
 
-            /// ftdb global entry linkage value
+            /// Linkage of a global variable
             ///
             #[inline]
-            pub fn linkage(&self) -> Linkage {
-                self.linkage_raw().into()
+            pub fn linkage(&self) -> $crate::Linkage {
+                self.as_inner_ref().linkage.into()
             }
 
-            #[inline]
-            pub fn linkage_raw(&self) -> ::ftdb_sys::ftdb::functionLinkage {
-                self.inner_ref().linkage
-            }
-
-            /// ftdb global entry literals value
+            /// Literals used in a global's init, group by their types
             ///
             #[inline]
-            pub fn literals(&self) -> Literals<$ret_life> {
-                self.inner_ref().into()
+            pub fn literals(&self) -> $crate::Literals<$ret_life> {
+                self.as_inner_ref().into()
             }
 
-            /// ftdb global entry location value
+            /// Location of the definition
             ///
             #[inline]
-            pub fn location(&self) -> Location<$ret_life> {
-                ptr_to_str(self.0.location).into()
+            pub fn location(&self) -> $crate::Location<$ret_life> {
+                $crate::utils::ptr_to_str(self.0.location).into()
             }
 
-            /// ftdb global entry mids values
+            /// List of modules with global definition
             ///
             #[inline]
-            pub fn mids(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().mids, self.inner_ref().mids_count)
-            }
-
-            /// ftdb global entry name value
-            ///
-            #[inline]
-            pub fn name(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().name)
-            }
-
-            /// ftdb global entry refs values
-            ///
-            #[inline]
-            pub fn refs(&self) -> &$ret_life [u64] {
-                ptr_to_slice(
-                    self.inner_ref().refs,
-                    self.inner_ref().refs_count
+            pub fn mids(&self) -> &$ret_life [$crate::ModuleId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().mids as *const $crate::ModuleId,
+                    self.as_inner_ref().mids_count
                 )
             }
 
-            /// ftdb global entry type value
+            /// Name of a global variable
             ///
             #[inline]
-            pub fn type_(&self) -> TypeId {
-                self.inner_ref().type_.into()
+            pub fn name(&self) -> &$ret_life str {
+                $crate::utils::ptr_to_str(self.as_inner_ref().name)
+            }
+
+            /// List of referenced types
+            ///
+            #[inline]
+            pub fn refs(&self) -> &$ret_life [$crate::TypeId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().refs as *const $crate::TypeId,
+                    self.as_inner_ref().refs_count
+                )
+            }
+
+            /// Id of a type of this global variable
+            ///
+            #[inline]
+            pub fn type_id(&self) -> $crate::TypeId {
+                self.as_inner_ref().type_.into()
             }
         }
     }

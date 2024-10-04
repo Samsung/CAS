@@ -32,6 +32,7 @@ pub trait FtdbCollection<Item> {
 /// Structure representing iterator over ReturnType elements that also guards FTDB
 /// database from being released
 ///
+#[derive(Debug, Clone)]
 pub struct IntoOwnedIterator<Db, ReturnType, InnerType> {
     /// Structure providing access to FTDB inner data
     db: Db,
@@ -39,7 +40,6 @@ pub struct IntoOwnedIterator<Db, ReturnType, InnerType> {
     /// Current iteration index
     cur: usize,
 
-    ///
     phantom: PhantomData<(ReturnType, InnerType)>,
 }
 
@@ -63,7 +63,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if self.cur < self.db.len() {
             let entry = unsafe { self.db.get_ptr(self.cur) };
-            assert!(
+            debug_assert!(
                 !entry.is_null(),
                 "Collection behind the pointer cannot contain null elements"
             );
@@ -91,6 +91,25 @@ where
 {
 }
 
+/// Iterator for inner FTDB structures
+///
+/// # Parameters
+///
+/// * `'a` - lifetime of database `Db`
+/// * `Db` - Type providing access to `InnerType` objects
+/// * `ReturnType` - a type of objects returned by this iterator
+/// * `InnerType` - an inner FTDB type on which to iterate
+///
+/// Access to inner elements is provided by guarantee that `Db` implemements
+/// `FtdbCollection` trait for `InnerType`. Also, because of this trait,
+/// the size of iterator is well-known so iterator also implements `ExactSizeIterator`
+/// trait.
+///
+/// Another guarantee is that `ReturnType` is able to create itself from `InnerType`
+/// because it is required to implement `From<&InnerType>` trait.
+///
+///
+#[derive(Debug, Clone)]
 pub struct BorrowedIterator<'a, Db, ReturnType, InnerType> {
     db: &'a Db,
     cur: usize,
@@ -98,6 +117,39 @@ pub struct BorrowedIterator<'a, Db, ReturnType, InnerType> {
 }
 
 impl<'a, Db, ReturnType, InnerType> BorrowedIterator<'a, Db, ReturnType, InnerType> {
+    /// Create new instance of the iterator
+    ///
+    /// # Example
+    ///
+    /// Iterate over `types` section entries
+    ///
+    /// ```
+    /// use ::ftdb::{BorrowedIterator, TypeEntry, Ftdb, InnerRef};
+    /// use ::ftdb_sys::ftdb::{ftdb, ftdb_type_entry};
+    ///
+    /// fn get_types_iter<'a>(
+    ///     db: &'a Ftdb
+    /// ) -> impl ExactSizeIterator<Item = TypeEntry<'a>> {
+    ///     BorrowedIterator::<
+    ///         'a,
+    ///         ftdb,
+    ///         TypeEntry<'a>,
+    ///         ftdb_type_entry,
+    ///     >::new(db.as_inner_ref())
+    /// }
+    ///
+    /// // [...]
+    ///
+    /// # fn run(db: &Ftdb) {
+    /// for t in get_types_iter(db) {
+    ///     if let Some(definition) = t.def() {
+    ///         println!("// Type {}", t.id());
+    ///         println!("{definition}");
+    ///     }
+    /// }
+    /// # }
+    /// ```
+    ///
     pub fn new(db: &'a Db) -> Self {
         Self {
             db,
@@ -143,8 +195,9 @@ where
 mod impls {
     use super::FtdbCollection;
     use ftdb_sys::ftdb::{
-        ftdb, ftdb_fops_entry, ftdb_fops_member_entry, ftdb_func_entry, ftdb_funcdecl_entry,
-        ftdb_global_entry, ftdb_type_entry, ftdb_unresolvedfunc_entry,
+        asm_info, callref_data, callref_info, ftdb, ftdb_fops_entry, ftdb_fops_member_entry,
+        ftdb_func_entry, ftdb_funcdecl_entry, ftdb_global_entry, ftdb_type_entry,
+        ftdb_unresolvedfunc_entry,
     };
 
     impl FtdbCollection<ftdb_fops_entry> for ftdb {
@@ -180,6 +233,16 @@ mod impls {
         #[inline(always)]
         fn len(&self) -> usize {
             self.funcs_count as usize
+        }
+    }
+
+    impl FtdbCollection<asm_info> for ftdb_func_entry {
+        unsafe fn get_ptr(&self, index: usize) -> *mut asm_info {
+            self.asms.add(index)
+        }
+
+        fn len(&self) -> usize {
+            self.asms_count as usize
         }
     }
 
@@ -228,6 +291,18 @@ mod impls {
         #[inline(always)]
         fn len(&self) -> usize {
             self.unresolvedfuncs_count as usize
+        }
+    }
+
+    impl FtdbCollection<callref_data> for callref_info {
+        #[inline(always)]
+        unsafe fn get_ptr(&self, index: usize) -> *mut callref_data {
+            self.callarg.add(index)
+        }
+
+        #[inline(always)]
+        fn len(&self) -> usize {
+            self.callarg_count as usize
         }
     }
 }

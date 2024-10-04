@@ -1,10 +1,8 @@
-use ::sqlx::{encode::IsNull, error::BoxDynError, Decode, Encode, Postgres, Type};
-use byteorder::{BigEndian, ByteOrder};
-
 #[cfg(feature = "postgres")]
 mod postgres {
-    use super::*;
-    use crate::{FunctionId, GlobalId, TypeId};
+    use crate::{FileId, FunctionId, GlobalId, TypeId};
+    use ::sqlx::{encode::IsNull, error::BoxDynError, Decode, Encode, Postgres, Type};
+    use byteorder::{BigEndian, ByteOrder};
     use sqlx::postgres::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef};
 
     macro_rules! impl_traits {
@@ -16,9 +14,9 @@ mod postgres {
             }
 
             impl Encode<'_, Postgres> for $TypeName {
-                fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> IsNull {
+                fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, BoxDynError> {
                     buf.extend(self.0.to_be_bytes());
-                    IsNull::No
+                    Ok(IsNull::No)
                 }
             }
 
@@ -42,4 +40,5 @@ mod postgres {
     impl_traits!(FunctionId);
     impl_traits!(GlobalId);
     impl_traits!(TypeId);
+    impl_traits!(FileId);
 }

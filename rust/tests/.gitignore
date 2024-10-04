@@ -1,0 +1,8 @@
+.cache
+.nfsdb*
+compile_commands.json
+db.img
+db.json
+*.[oas]
+main
+prepare.log

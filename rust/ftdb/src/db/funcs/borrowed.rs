@@ -1,16 +1,18 @@
-use super::{asms::Asms, calls::Calls, entry::func_decl_entry_impl};
+use super::entry::func_entry_impl;
 use crate::db::{FtdbHandle, InnerRef, Owned};
 use ftdb_sys::ftdb::ftdb_func_entry;
 use std::{fmt::Display, sync::Arc};
 
+/// Represents a function definition.
+///
 #[derive(Debug, Clone)]
 pub struct FunctionEntry<'a>(pub(crate) &'a ftdb_func_entry);
 
-func_decl_entry_impl!(FunctionEntry<'a>, 'a);
+func_entry_impl!(FunctionEntry<'a>, 'a);
 
 impl<'a> Display for FunctionEntry<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Function: {} | {}>", self.id(), self.name())
+        write!(f, "{}", self.unpreprocessed_body())
     }
 }
 
@@ -22,7 +24,7 @@ impl<'a> From<&'a ftdb_func_entry> for FunctionEntry<'a> {
 
 impl<'s, 'r> InnerRef<'s, 'r, ftdb_func_entry> for FunctionEntry<'r> {
     #[inline]
-    fn inner_ref(&'s self) -> &'r ftdb_func_entry {
+    fn as_inner_ref(&'s self) -> &'r ftdb_func_entry {
         self.0
     }
 }

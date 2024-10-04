@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         hasher.update(f.unpreprocessed_body().as_bytes());
 
         f.derefs().iter().for_each(|d| {
-            let kind = (d.inner_ref().kind as u64).to_le_bytes();
+            let kind = (d.as_inner_ref().kind as u64).to_le_bytes();
             hasher.update(&kind);
         });
 
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ftdb.globals_iter()
-        .filter_map(|g| ftdb.type_by_id(g.type_()))
+        .filter_map(|g| ftdb.type_by_id(g.type_id()))
         .for_each(|t| {
             if let Some(def) = t.def() {
                 hasher.update(def.as_bytes());

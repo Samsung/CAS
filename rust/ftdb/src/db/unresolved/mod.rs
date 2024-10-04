@@ -16,6 +16,7 @@ pub use self::owned::UnresolvedFuncEntry as OwnedUnresolvedFuncEntry;
 
 /// Structure providing access to collection of unresolved functions
 ///
+#[derive(Debug, Clone)]
 pub struct UnresolvedFuncs(Owned<ftdb>);
 
 impl Display for UnresolvedFuncs {
@@ -26,19 +27,19 @@ impl Display for UnresolvedFuncs {
 
 impl FtdbCollection<ftdb_unresolvedfunc_entry> for UnresolvedFuncs {
     unsafe fn get_ptr(&self, index: usize) -> *mut ftdb_unresolvedfunc_entry {
-        self.inner_ref().get_ptr(index)
+        self.as_inner_ref().get_ptr(index)
     }
 
     fn len(&self) -> usize {
-        <ftdb as FtdbCollection<ftdb_unresolvedfunc_entry>>::len(self.inner_ref())
+        <ftdb as FtdbCollection<ftdb_unresolvedfunc_entry>>::len(self.as_inner_ref())
     }
 }
 
 impl_inner_handle!(UnresolvedFuncs);
 
 impl<'s> InnerRef<'s, 's, ftdb> for UnresolvedFuncs {
-    fn inner_ref(&'s self) -> &'s ftdb {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb {
+        self.0.as_inner_ref()
     }
 }
 
@@ -60,22 +61,26 @@ impl UnresolvedFuncs {
     ///
     pub fn iter(&self) -> impl ExactSizeIterator<Item = UnresolvedFuncEntry<'_>> {
         BorrowedIterator::<'_, ftdb, UnresolvedFuncEntry<'_>, ftdb_unresolvedfunc_entry>::new(
-            self.inner_ref(),
+            self.as_inner_ref(),
         )
     }
 }
 
 macro_rules! unresolved_funcs_entry_impl {
     ($struct_name:ident $(<$struct_life:lifetime>)?) => {
-        use $crate::utils::ptr_to_str;
 
         impl$(<$struct_life>)? $struct_name $(<$struct_life>)? {
-            fn id(&self) -> $crate::db::FunctionId {
-                self.inner_ref().id.into()
+
+            /// Id of an unresolved function
+            ///
+            pub fn id(&self) -> $crate::db::FunctionId {
+                self.as_inner_ref().id.into()
             }
 
-            fn name(&self) -> &$($struct_life)? str {
-                ptr_to_str(self.inner_ref().name)
+            /// Name of an unresolved function
+            ///
+            pub fn name(&self) -> &$($struct_life)? str {
+                $crate::utils::ptr_to_str(self.as_inner_ref().name)
             }
         }
 

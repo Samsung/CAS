@@ -42,8 +42,8 @@
 //! use ftdb::load;
 //! use crate::ftdb::FtdbCollection;
 //!
-//! fn run(path: &str) -> ftdb::FtdbResult<()> {
-//!    let fdb = ftdb::load(path)?;
+//! # fn run() -> ftdb::FtdbResult<()> {
+//!    let fdb = ftdb::load("/path/to/database.img")?;
 //!    println!("\nMetadata:");
 //!    println!("  Directory:   {}", fdb.directory());
 //!    println!("  Module:      {}", fdb.module());
@@ -55,8 +55,8 @@
 //!    println!("  Functions:   {:>10}", fdb.funcs().iter().count());
 //!    println!("  Globals:     {:>10}", fdb.globals().len());
 //!    println!("  Types:       {:>10}", fdb.types().len());
-//!    Ok(())
-//! }
+//! #   Ok(())
+//! # }
 //! ````
 //!
 //! Consider visiting `examples/` directory for more use cases of this crate.
@@ -80,7 +80,34 @@ pub(crate) mod utils {
     pub use super::db::utils::*;
 }
 
-/// Load cache file
+/// Loads FTDB cache file to memory and returns a handle to it
+///
+/// # Arguments
+///
+/// * `path` - Path to FTDB cache file
+///
+/// # Errors
+///
+/// In case of file missing a valid magic number, the `FtdbError::InvalidMagicNumber`
+/// error is returned to indicate that this might not be a FTDB cache file.
+///
+/// If FTDB cache file is in older version, the `FtdbError::InvalidVersion`
+/// error is returned to state that the FTDB cache file might need to be regenerated
+/// with the recent software.
+///
+/// In case of other errors, the `FtdbError::LoadError` is returned with a string
+/// describing an issue that happened.
+///
+///
+/// # Examples
+///
+/// ```
+/// # fn test() -> ftdb::FtdbResult<()> {
+///     let db = ftdb::load("/tmp/my_database.img")?;
+///     println!("{}", db.module());
+/// # Ok(())
+/// # }
+/// ```
 ///
 pub fn load<T: AsRef<std::path::Path>>(path: T) -> FtdbResult<crate::Ftdb> {
     db::FtdbHandle::from_path(path).and_then(|handle| handle.into_ftdb())
@@ -88,7 +115,7 @@ pub fn load<T: AsRef<std::path::Path>>(path: T) -> FtdbResult<crate::Ftdb> {
 
 pub type FtdbResult<T> = std::result::Result<T, FtdbError>;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum FtdbError {
     #[error("Invalid magic number: {0}")]
     InvalidMagicNumber(u64),

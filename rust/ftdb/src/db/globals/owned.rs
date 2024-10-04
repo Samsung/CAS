@@ -1,12 +1,12 @@
 use super::global_entry_impl;
 use crate::{
-    db::{FtdbHandle, Handle, InnerRef, Literals, Location, Owned, ToBorrowed},
+    db::{FtdbHandle, Handle, InnerRef, Owned, ToBorrowed},
     macros::impl_inner_handle,
 };
 use ftdb_sys::ftdb::ftdb_global_entry;
 use std::fmt::Display;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GlobalEntry(Owned<ftdb_global_entry>);
 
 global_entry_impl!(GlobalEntry);
@@ -26,8 +26,8 @@ impl From<Owned<ftdb_global_entry>> for GlobalEntry {
 impl_inner_handle!(GlobalEntry);
 
 impl<'s> InnerRef<'s, 's, ftdb_global_entry> for GlobalEntry {
-    fn inner_ref(&'s self) -> &'s ftdb_global_entry {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb_global_entry {
+        self.0.as_inner_ref()
     }
 }
 
@@ -35,6 +35,6 @@ impl<'a> ToBorrowed<'a> for GlobalEntry {
     type Type = super::GlobalEntry<'a>;
 
     fn to_borrowed(&'a self) -> Self::Type {
-        self.inner_ref().into()
+        self.as_inner_ref().into()
     }
 }

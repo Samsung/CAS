@@ -1,61 +1,47 @@
-use crate::macros::impl_inner_display;
+//! This module contains structures representing various unique identifiers.
+//!
+//! Some of them
+//!
+//! Note that ID is unique within a database file. For two databases taken
+//! from a various points of development time, the same object in both databases
+//! might have different ID.
+//!
+use crate::macros::impl_identifier;
 
-/// Unique function identifier
-///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-#[repr(transparent)]
-pub struct FunctionId(pub u64);
+// Id of a function
+impl_identifier!(FunctionId);
 
-impl_inner_display!(FunctionId);
+// Id of a global variable
+impl_identifier!(GlobalId);
 
-impl From<u64> for FunctionId {
-    fn from(value: u64) -> Self {
-        FunctionId(value)
+// Id of a type
+impl_identifier!(TypeId);
+
+// Id of a file
+impl_identifier!(FileId);
+
+// Id of a module
+impl_identifier!(ModuleId);
+
+// Id of a local variable
+impl_identifier!(LocalId);
+
+// Compound Statement Id
+impl_identifier!(CsId);
+
+// Id of a function deref
+impl_identifier!(DerefId);
+
+impl FunctionId {
+    /// Create non-existing FunctionId
+    ///
+    pub fn none() -> Self {
+        FunctionId(0)
     }
-}
 
-impl From<&u64> for FunctionId {
-    fn from(value: &u64) -> Self {
-        FunctionId(*value)
-    }
-}
-
-/// Unique global identifier
-///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-#[repr(transparent)]
-pub struct GlobalId(pub u64);
-
-impl_inner_display!(GlobalId);
-
-impl From<u64> for GlobalId {
-    fn from(value: u64) -> Self {
-        GlobalId(value)
-    }
-}
-
-impl From<&u64> for GlobalId {
-    fn from(value: &u64) -> Self {
-        GlobalId(*value)
-    }
-}
-
-/// Unique Type identifier
-///
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-#[repr(transparent)]
-pub struct TypeId(pub u64);
-
-impl_inner_display!(TypeId);
-
-impl From<u64> for TypeId {
-    fn from(value: u64) -> Self {
-        TypeId(value)
-    }
-}
-
-impl From<&u64> for TypeId {
-    fn from(value: &u64) -> Self {
-        TypeId(*value)
+    /// Check whether this instance is a valid one or not
+    ///
+    pub fn is_none(&self) -> bool {
+        self.0 == 0
     }
 }

@@ -23,6 +23,7 @@ impl<'f> DfsFunctionExt<'f> for Functions {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BorrowedDfsFunctionIterator<'f> {
     db: &'f Functions,
     visited: HashSet<FunctionId>,
@@ -43,7 +44,7 @@ impl<'f> BorrowedDfsFunctionIterator<'f> {
             .copied()
             .filter_map(|fid| {
                 if !self.visited.contains(&fid) {
-                    self.db.get_by_id(fid)
+                    self.db.entry_by_id(fid)
                 } else {
                     None
                 }

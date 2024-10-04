@@ -26,16 +26,36 @@ pub use self::wrappers::*;
 // Re-import traits
 pub use ftdb_sys::ftdb::query::*;
 
-/// Access to innerFFI structure
+/// Access to inner FFI structure
 ///
 pub trait InnerRef<'s, 'r, T> {
-    fn inner_ref(&'s self) -> &'r T;
+    fn as_inner_ref(&'s self) -> &'r T;
 }
 
+/// Property of being a holder of a reference to a pointer to FTDB data
+///
 pub trait Handle {
     fn handle(&self) -> std::sync::Arc<FtdbHandle>;
 }
 
+/// Property of being able to create a borrowed instance of itself (different but
+/// related type).
+///
+/// # Examples
+///
+/// ```
+/// use ftdb::{OwnedFunctionEntry, FunctionEntry, ToBorrowed};
+///
+/// # fn get_function_entry() -> OwnedFunctionEntry {
+/// #    unimplemented!()
+/// # }
+/// #
+/// # fn example() {
+/// let owned : OwnedFunctionEntry = get_function_entry();
+/// let borrowed : FunctionEntry<'_> = owned.to_borrowed();
+/// # }
+/// ```
+///
 pub trait ToBorrowed<'a> {
     type Type;
 
@@ -50,9 +70,14 @@ pub trait ToBorrowed<'a> {
 pub struct Owned<T> {
     /// Pointer to inner data of FTDB database
     ///
+    /// This should be a pointer returned by a call to `libftdb_c_ftdb_object()`
+    ///
     pub(crate) db: std::ptr::NonNull<T>,
 
     /// A shared reference guarding inner data from being released
+    ///
+    /// This should be a handle storing pointer returned by a call to
+    /// `libftdb_c_ftdb_load()`
     ///
     pub(crate) handle: std::sync::Arc<FtdbHandle>,
 }
@@ -63,7 +88,7 @@ impl<T> std::ops::Deref for Owned<T> {
     fn deref(&self) -> &Self::Target {
         // Safety: Alignment and pointer being dereferencable guarantees are provided
         // by native library. All pointer are properly initialized during database load.
-        // Aliasing guarantee is met because of immutability of FTDB database.
+        // Aliasing guarantee is also met because of immutability of FTDB database.
         //
         unsafe { self.db.as_ref() }
     }
@@ -88,7 +113,7 @@ unsafe impl<T> Sync for Owned<T> {}
 
 impl<'s, T> InnerRef<'s, 's, T> for Owned<T> {
     #[inline]
-    fn inner_ref(&'s self) -> &'s T {
+    fn as_inner_ref(&'s self) -> &'s T {
         unsafe { self.db.as_ref() }
     }
 }

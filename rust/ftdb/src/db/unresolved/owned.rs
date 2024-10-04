@@ -2,6 +2,7 @@ use super::unresolved_funcs_entry_impl;
 use crate::db::{InnerRef, Owned, ToBorrowed};
 use ftdb_sys::ftdb::ftdb_unresolvedfunc_entry;
 
+#[derive(Debug, Clone)]
 pub struct UnresolvedFuncEntry(Owned<ftdb_unresolvedfunc_entry>);
 
 unresolved_funcs_entry_impl!(UnresolvedFuncEntry);
@@ -19,8 +20,8 @@ impl From<Owned<ftdb_unresolvedfunc_entry>> for UnresolvedFuncEntry {
 }
 
 impl<'s> InnerRef<'s, 's, ftdb_unresolvedfunc_entry> for UnresolvedFuncEntry {
-    fn inner_ref(&'s self) -> &'s ftdb_unresolvedfunc_entry {
-        self.0.inner_ref()
+    fn as_inner_ref(&'s self) -> &'s ftdb_unresolvedfunc_entry {
+        self.0.as_inner_ref()
     }
 }
 
@@ -28,6 +29,6 @@ impl<'a> ToBorrowed<'a> for UnresolvedFuncEntry {
     type Type = super::UnresolvedFuncEntry<'a>;
 
     fn to_borrowed(&'a self) -> Self::Type {
-        self.inner_ref().into()
+        self.as_inner_ref().into()
     }
 }

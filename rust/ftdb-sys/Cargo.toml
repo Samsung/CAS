@@ -7,7 +7,7 @@ exclude = ["ftdb_nopy.pc", "ftdb.pc", ".gitignore"]
 keywords = ["ftdb", "mbsec"]
 license-file = "LICENSE.md"
 name = "ftdb-sys"
-version = "0.7.0"
+version = "0.10.3"
 links = "ftdb_c"
 
 [features]
@@ -15,7 +15,7 @@ default = []
 stub = []
 
 [dependencies]
-libc = "0.2.153"
+libc = "0.2.155"
 
 [build-dependencies]
-bindgen = "0.69.4"
+bindgen = "0.70.1"

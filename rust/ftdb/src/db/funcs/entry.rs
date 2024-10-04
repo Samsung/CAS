@@ -1,10 +1,66 @@
 use super::Location;
 use crate::{
     utils::{ptr_to_str, try_ptr_to_str, try_ptr_to_type},
-    TypeId,
+    CsId, LocalId, TypeId,
 };
-use ftdb_sys::ftdb::{csitem, local_info};
+use ftdb_sys::ftdb::{asm_info, csitem, local_info};
+use std::fmt::Display;
 
+/// Represents asm block
+///
+#[derive(Debug, Clone)]
+pub struct AsmEntry<'a>(&'a asm_info);
+
+impl<'a> From<&'a asm_info> for AsmEntry<'a> {
+    fn from(inner: &'a asm_info) -> Self {
+        Self(inner)
+    }
+}
+
+impl<'a> AsmEntry<'a> {
+    /// Id of a compound statement this Asm block belongs to
+    ///
+    pub fn csid(&self) -> CsId {
+        CsId::try_from(self.0.csid).expect("csid expected >= 0")
+    }
+
+    /// Line of code in asm
+    ///
+    pub fn str_(&self) -> &'a str {
+        ptr_to_str(self.0.str_)
+    }
+}
+
+impl<'a> Display for AsmEntry<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.str_())
+    }
+}
+
+/// Represents a compound statement item
+///
+/// To define what compound statement in FTDB is, let's see an example:
+///
+/// ```c
+/// int func(int a) {
+///     // this whole block is <compound statement 0>
+///     int b = 0;      // local with csid 0;
+///     if(a)
+///     {
+///         // inside this 'if->true' block is a <compound statement 1>
+///         func(a-1);  // call with csid 1
+///     }
+///     else
+///     {
+///         // inside this else is <cs 2>
+///         int c;      // local with csid 2
+///         return b;   // return with csid 2
+///     }
+///     // [...]
+/// }
+/// ```
+///
+#[derive(Debug, Clone)]
 pub struct CsItem<'a>(&'a csitem);
 
 impl<'a> From<&'a csitem> for CsItem<'a> {
@@ -14,540 +70,620 @@ impl<'a> From<&'a csitem> for CsItem<'a> {
 }
 
 impl<'a> CsItem<'a> {
-    pub fn pid(&self) -> i64 {
-        self.0.pid
+    /// Id of a compound statement
+    ///
+    pub fn id(&self) -> CsId {
+        self.0.id.into()
     }
 
-    pub fn id(&self) -> u64 {
-        self.0.id
+    /// Id of a parent compound statement
+    ///
+    pub fn pid(&self) -> Option<CsId> {
+        if self.0.pid >= 0 {
+            Some(CsId::from(self.0.pid as u64))
+        } else {
+            None
+        }
     }
 
+    /// Block name (like if, do, switch, while) or 'none' if a root block
+    ///
     pub fn cf(&self) -> &'a str {
         ptr_to_str(self.0.cf)
     }
 }
 
+/// Describes function local variables
+///
+#[derive(Debug, Clone)]
 pub struct Local<'a>(pub(crate) &'a local_info);
 
 impl<'a> Local<'a> {
+    /// Id of a compound statement this local belongs to
     ///
+    /// Note that function parameters are not part of compound statements
     ///
-    pub fn csid(&self) -> Option<i64> {
+    #[inline]
+    pub fn csid(&self) -> Option<CsId> {
         try_ptr_to_type(self.0.csid)
+            .map(|csid| CsId::try_from(csid).expect("csid expected to be >= 0"))
     }
 
+    /// Id of a local variable
     ///
-    ///
-    pub fn id(&self) -> u64 {
-        self.0.id
+    #[inline]
+    pub fn id(&self) -> LocalId {
+        self.0.id.into()
     }
 
+    /// Returns true if variable is a function parameter
     ///
-    ///
+    #[inline]
     pub fn is_parm(&self) -> bool {
         self.0.isparm != 0
     }
 
-    ///
+    /// Returns true if variable is a static local variable
     ///
     pub fn is_static(&self) -> bool {
         self.0.isstatic != 0
     }
 
+    /// Returns true if variable is used within a function
     ///
-    ///
+    #[inline]
     pub fn is_used(&self) -> bool {
         self.0.isused != 0
     }
 
+    /// Location of variable definition
     ///
-    ///
+    #[inline]
     pub fn location(&self) -> Option<Location<'a>> {
         try_ptr_to_str(self.0.location).map(|l| l.into())
     }
 
+    /// Name of a variable
     ///
-    ///
+    #[inline]
     pub fn name(&self) -> &str {
         ptr_to_str(self.0.name)
     }
 
+    /// Id of variable's type
     ///
-    ///
+    #[inline]
     pub fn type_id(&self) -> TypeId {
         self.0.type_.into()
     }
 }
 
-macro_rules! func_decl_entry_impl {
+macro_rules! func_entry_impl {
     ($struct_name:ident) => {
-        func_decl_entry_impl!($struct_name, '_);
+        func_entry_impl!($struct_name, '_);
     };
 
     ($struct_name:ident<$struct_life:lifetime>) => {
-        func_decl_entry_impl!($struct_name<$struct_life>, $struct_life);
+        func_entry_impl!($struct_name<$struct_life>, $struct_life);
     };
 
     ($struct_name:ident$(<$struct_life:lifetime>)?, $ret_life:lifetime) => {
-        use super::{deref::*, globalref::*, ifs::*, refcall::*, switches::*, taint::*, Location};
-        use $crate::utils::{ptr_to_bool, ptr_to_slice, ptr_to_str, try_ptr_to_str, try_ptr_to_type};
-        use $crate::{CallEntryInfo, GlobalId, FunctionId, Linkage, Literals, TypeId, CsItem, Local};
-
 
         impl$(<$struct_life>)? $struct_name $(<$struct_life>)? {
-            /// ftdb func entry asms data
+
+            /// List of ASM sections
             ///
-            pub fn asms(&self) -> Asms<$ret_life> {
-                self.inner_ref().into()
+            pub fn asms(&self) -> Vec<$crate::AsmEntry> {
+                self.asms_iter().collect()
             }
 
-            /// ftdb func entry attributes value
+            /// Iterate over ASM sections
             ///
+            pub fn asms_iter(&self) -> impl ExactSizeIterator<Item = $crate::AsmEntry> {
+                $crate::BorrowedIterator::<
+                    ftdb_sys::ftdb::ftdb_func_entry,
+                    $crate::AsmEntry<$ret_life>,
+                    ftdb_sys::ftdb::asm_info
+                >::new(self.as_inner_ref())
+            }
+
+            /// List of function attributes
+            ///
+            #[inline]
             pub fn attributes(&self) -> Vec<&$ret_life str> {
                 self.attributes_iter().collect()
             }
 
+            /// Iterate over function attributes
+            ///
+            #[inline]
             pub fn attributes_iter(&self) -> impl ExactSizeIterator<Item = &$ret_life str> {
-                ptr_to_slice(
-                    self.inner_ref().attributes,
-                    self.inner_ref().attributes_count,
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().attributes,
+                    self.as_inner_ref().attributes_count,
                 )
                 .iter()
-                .map(|x| ptr_to_str(*x))
+                .map(|x| $crate::utils::ptr_to_str(*x))
             }
 
             /// Function body preprocessed and reformatted
             ///
             #[inline]
             pub fn body(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().body)
+                $crate::utils::ptr_to_str(self.as_inner_ref().body)
             }
 
-            /// Ids of other functions called within this function
+            /// Ids of functions called within this function
             ///
-            /// See also: [calls](FtdbFunctionEntry::calls)
             #[inline]
-            pub fn call_ids(&self) -> &$ret_life [FunctionId] {
-                ptr_to_slice(
-                    self.inner_ref().calls as *const FunctionId,
-                    self.inner_ref().calls_count
+            pub fn call_ids(&self) -> &$ret_life [$crate::db::FunctionId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().calls as *const $crate::db::FunctionId,
+                    self.as_inner_ref().calls_count
                 )
             }
 
             /// Function call details
             ///
             #[inline]
-            pub fn calls(&self) -> Calls<$ret_life> {
-                self.inner_ref().into()
+            pub fn calls(&self) -> Vec<$crate::CallEntry> {
+                self.calls_iter().collect()
             }
+
+            /// Iterate over function call details
+            ///
+            #[inline]
+            pub fn calls_iter(&self) -> impl ExactSizeIterator<Item = $crate::CallEntry> {
+                $crate::db::CallEntryIterator::new(self.as_inner_ref())
+            }
+
             /// Returns Compound statement hash
             ///
             /// It's a hash calculated from a function body (between '{' and '}')
             ///
+            #[inline]
             pub fn cshash(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().cshash)
+                $crate::utils::ptr_to_str(self.as_inner_ref().cshash)
             }
 
-            /// ftdb func entry csmap values
+            /// List of compound statements in a function
             ///
-            pub fn csmap(&self) -> Vec<CsItem> {
+            #[inline]
+            pub fn csmap(&self) -> Vec<$crate::db::CsItem> {
                 self.csmap_iter().collect()
             }
 
+            /// Iterate over compound statements in a function
             ///
-            ///
-            pub fn csmap_iter(&self) -> impl ExactSizeIterator<Item = CsItem> {
-                ptr_to_slice(self.inner_ref().csmap, self.inner_ref().csmap_count)
+            #[inline]
+            pub fn csmap_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::CsItem> {
+                $crate::utils::ptr_to_slice(self.as_inner_ref().csmap, self.as_inner_ref().csmap_count)
                     .iter()
                     .map(|x| x.into())
             }
 
-            /// ftdb func entry class value
-            ///
-            #[inline]
-            pub fn class(&self) -> Option<&$ret_life str> {
-                try_ptr_to_str(self.inner_ref().__class)
-            }
-
-            /// ftdb func entry classid value
-            ///
-            #[inline]
-            pub fn classid(&self) -> Option<u64> {
-                try_ptr_to_type(self.inner_ref().classid)
-            }
-
-            /// ftdb func entry classOuterFn value
-            ///
-            #[inline]
-            pub fn class_outer_fn(&self) -> Option<&$ret_life str> {
-                try_ptr_to_str(self.inner_ref().classOuterFn)
-            }
-
-            /// ftdb func entry declbody value
+            /// Returns a function declaration string
             ///
             #[inline]
             pub fn declbody(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().declbody)
+                $crate::utils::ptr_to_str(self.as_inner_ref().declbody)
             }
 
-            /// ftdb func entry declcount value
+            /// Returns number of variables declared in a function (without parameters)
             ///
             #[inline]
             pub fn declcount(&self) -> u64 {
-                self.inner_ref().declcount
+                self.as_inner_ref().declcount
             }
 
-            /// ftdb func entry declhash value
+            /// Returns hash of a function declaration
             ///
             #[inline]
             pub fn declhash(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().declhash)
+                $crate::utils::ptr_to_str(self.as_inner_ref().declhash)
             }
 
-            ///
+            /// List of positions in refs (indicates nested position)
             ///
             #[inline]
             pub fn decls(&self) -> &[u64] {
-                ptr_to_slice(self.inner_ref().decls, self.inner_ref().decls_count)
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn derefs(&self) -> Vec<DerefInfo> {
-                self.derefs_iter().collect()
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn derefs_iter(&self) -> impl Iterator<Item = DerefInfo> {
-                ptr_to_slice(self.inner_ref().derefs, self.inner_ref().derefs_count)
-                    .iter()
-                    .map(|x| x.into())
-            }
-
-            /// ftdb func entry end_loc value
-            ///
-            #[inline]
-            pub fn end_loc(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().end_loc)
-            }
-
-            /// ftdb func entry fid value
-            ///
-            #[inline]
-            pub fn fid(&self) -> u64 {
-                self.inner_ref().fid
-            }
-
-            /// ftdb func entry fids value
-            ///
-            #[inline]
-            pub fn fids(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().fids, self.inner_ref().fids_count)
-            }
-
-            /// ftdb func entry firstNonDeclStmt value
-            ///
-            #[inline]
-            pub fn first_non_decl_stmt(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().firstNonDeclStmt)
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn funrefs(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().funrefs, self.inner_ref().funrefs_count)
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn globalrefs(&self) -> &$ret_life [GlobalId] {
-                ptr_to_slice(
-                    self.inner_ref().globalrefs as *const GlobalId,
-                    self.inner_ref().globalrefs_count,
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().decls,
+                    self.as_inner_ref().decls_count
                 )
             }
 
-            ///
+            /// List of deref details
             ///
             #[inline]
-            pub fn globalref_info(&self) -> GlobalRefs {
-                let refs = self.globalrefs();
-                let data = ptr_to_slice(
-                    self.inner_ref().globalrefInfo,
-                    self.inner_ref().globalrefs_count,
-                );
-                GlobalRefs::new(refs, data)
+            pub fn derefs(&self) -> Vec<$crate::db::DerefInfo> {
+                self.derefs_iter().collect()
             }
 
-            /// ftdb func entry hash value
+            /// Iterate over deref details
             ///
             #[inline]
-            pub fn hash(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().hash)
-            }
-
-            /// ftdb func entry id value
-            ///
-            #[inline]
-            pub fn id(&self) -> FunctionId {
-                self.inner_ref().id.into()
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn ifs(&self) -> Vec<If> {
-                self.ifs_iter().collect()
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn ifs_iter(&self) -> impl ExactSizeIterator<Item = If<$ret_life>> {
-                ptr_to_slice(self.inner_ref().ifs, self.inner_ref().ifs_count)
+            pub fn derefs_iter(&self) -> impl Iterator<Item = $crate::db::DerefInfo> {
+                $crate::utils::ptr_to_slice(self.as_inner_ref().derefs, self.as_inner_ref().derefs_count)
                     .iter()
                     .map(|x| x.into())
             }
 
-            /// ftdb func entry is inline value
+            /// Returns location in a source code where function definition ends
+            ///
+            #[inline]
+            pub fn end_loc(&self) -> &$ret_life str {
+                $crate::utils::ptr_to_str(self.as_inner_ref().end_loc)
+            }
+
+            /// Returns id of a first file in which this function has been found
+            ///
+            #[inline]
+            pub fn fid(&self) -> $crate::db::FileId {
+                self.as_inner_ref().fid.into()
+            }
+
+            /// Return ids of all files in which this function has been found
+            ///
+            #[inline]
+            pub fn fids(&self) -> &$ret_life [$crate::db::FileId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().fids as *const $crate::db::FileId,
+                    self.as_inner_ref().fids_count
+                )
+            }
+
+            /// Returns a location of a first statement that is not a declaration
+            ///
+            /// Note: TBV
+            ///
+            #[inline]
+            pub fn first_non_decl_stmt(&self) -> $crate::db::Location<$ret_life> {
+                $crate::utils::ptr_to_str(self.as_inner_ref().firstNonDeclStmt).into()
+            }
+
+            /// List of referenced functions
+            ///
+            /// Note that some of these might be functions accessible from 'funcs'
+            /// section, but other might be from 'funcdecls'.
+            ///
+            #[inline]
+            pub fn funrefs(&self) -> &$ret_life [$crate::db::FunctionId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().funrefs as *const $crate::db::FunctionId,
+                    self.as_inner_ref().funrefs_count
+                )
+            }
+
+            /// List of referenced global variables
+            ///
+            #[inline]
+            pub fn globalrefs(&self) -> &$ret_life [$crate::db::GlobalId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().globalrefs as *const $crate::db::GlobalId,
+                    self.as_inner_ref().globalrefs_count,
+                )
+            }
+
+            /// List of reference locations from globals
+            ///
+            #[inline]
+            pub fn globalrefs_info(&self) -> $crate::db::GlobalRefs {
+                let refs = self.globalrefs();
+                let data = $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().globalrefInfo,
+                    self.as_inner_ref().globalrefs_count,
+                );
+                $crate::db::GlobalRefs::new(refs, data)
+            }
+
+            /// Hash of a function
+            ///
+            #[inline]
+            pub fn hash(&self) -> &$ret_life str {
+                $crate::utils::ptr_to_str(self.as_inner_ref().hash)
+            }
+
+            /// Identifier of a function within this database
+            ///
+            /// Note that the pool of `FunctionId` is shared with `funcdecl` entries
+            ///
+            #[inline]
+            pub fn id(&self) -> $crate::db::FunctionId {
+                self.as_inner_ref().id.into()
+            }
+
+            /// List of if statements within this function
+            ///
+            #[inline]
+            pub fn ifs(&self) -> Vec<$crate::db::If> {
+                self.ifs_iter().collect()
+            }
+
+            /// Iterate over if statements within this function
+            ///
+            #[inline]
+            pub fn ifs_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::If<$ret_life>> {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().ifs,
+                    self.as_inner_ref().ifs_count
+                )
+                .iter()
+                .map($crate::db::If::from)
+            }
+
+            /// Returns true if function is inline
             ///
             #[inline]
             pub fn is_inline(&self) -> bool {
-                ptr_to_bool(self.inner_ref().isinline)
+                $crate::utils::ptr_to_bool(self.as_inner_ref().isinline)
             }
 
-            /// ftdb func entry is member value
-            ///
-            #[inline]
-            pub fn is_member(&self) -> bool {
-                ptr_to_bool(self.inner_ref().ismember)
-            }
-
-            /// ftdb func entry is template value
-            ///
-            #[inline]
-            pub fn is_template(&self) -> bool {
-                ptr_to_bool(self.inner_ref().istemplate)
-            }
-
-            /// ftdb func entry is variadic value
+            /// Returns true if function has variadic parameters
             ///
             #[inline]
             pub fn is_variadic(&self) -> bool {
-                self.inner_ref().isvariadic != 0
+                self.as_inner_ref().isvariadic != 0
             }
 
-            /// ftdb func entry linkage value
+            /// Returns type of linkage
             ///
             #[inline]
-            pub fn linkage(&self) -> Linkage {
-                self.inner_ref().linkage.into()
+            pub fn linkage(&self) -> $crate::db::Linkage {
+                self.as_inner_ref().linkage.into()
             }
 
-            /// ftdb func entry linkage string value
+            /// Provides access to literals used within a function
             ///
             #[inline]
-            pub fn linkage_string(&self) -> String {
-                self.linkage().to_string()
+            pub fn literals(&self) -> $crate::db::Literals {
+                self.as_inner_ref().into()
             }
 
-            /// ftdb func entry literals values
+            /// List of function locals
             ///
             #[inline]
-            pub fn literals(&self) -> Literals {
-                self.inner_ref().into()
-            }
-
-            ///
-            ///
-            #[inline]
-            pub fn locals(&self) -> Vec<Local> {
+            pub fn locals(&self) -> Vec<$crate::db::Local> {
                 self.locals_iter().collect()
             }
 
+            /// Iterate over function locals
             ///
+            /// Note that order in which local variables are iterated is not guaranteed.
             ///
             #[inline]
-            pub fn locals_iter(&self) -> impl ExactSizeIterator<Item = Local> {
-                ptr_to_slice(self.inner_ref().locals, self.inner_ref().locals_count)
-                    .iter()
-                    .map(Local)
+            pub fn locals_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::Local> {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().locals,
+                    self.as_inner_ref().locals_count
+                )
+                .iter()
+                .map($crate::db::Local)
+            }
+
+            /// Find local by its id
+            ///
+            #[inline]
+            pub fn local_by_id(&self, id: $crate::db::LocalId) -> Option<$crate::db::Local> {
+                self.locals_iter().filter(|l| l.id() == id).next()
             }
 
             /// Absolute path to a file containing function
             ///
             #[inline]
-            pub fn location(&self) -> Location<$ret_life> {
-                ptr_to_str(self.inner_ref().location).into()
+            pub fn location(&self) -> $crate::db::Location<$ret_life> {
+                $crate::utils::ptr_to_str(self.as_inner_ref().location).into()
             }
 
-            /// ftdb func entry mids value
+            /// List of modules with function definition
             ///
             #[inline]
-            pub fn mids(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().mids, self.inner_ref().mids_count)
+            pub fn mids(&self) -> &$ret_life [$crate::db::ModuleId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().mids as *const $crate::db::ModuleId,
+                    self.as_inner_ref().mids_count
+                )
             }
 
-            /// ftdb func entry name value
+            /// Returns function name
             ///
             #[inline]
             pub fn name(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().name)
+                $crate::utils::ptr_to_str(self.as_inner_ref().name)
             }
 
-            /// ftdb func entry nargs value
+            /// Returns number of function arguments
+            ///
+            /// In case of variadic functions, additional arguments are not counted.
             ///
             #[inline]
             pub fn nargs(&self) -> u64 {
-                self.inner_ref().nargs
+                self.as_inner_ref().nargs
             }
 
-            /// ftdb func entry namespace value
-            ///
-            #[inline]
-            pub fn namespace(&self) -> Option<&$ret_life str> {
-                try_ptr_to_str(self.inner_ref().__namespace)
-            }
-
-            /// ftdb func entry refcount value
+            /// Number of files in which this function is defined
             ///
             #[inline]
             pub fn refcount(&self) -> u64 {
-                self.inner_ref().refcount
+                self.as_inner_ref().refcount
             }
 
-            ///
-            ///
-            #[inline]
-            pub fn refcallrefs(&self) -> ! {
-                todo!()
-            }
-
-            ///
+            /// List of calls by reference
             ///
             #[inline]
-            pub fn refcalls(&self) -> Vec<RefCallType> {
+            pub fn refcalls(&self) -> Vec<$crate::db::CallRefInfo> {
                 self.refcalls_iter().collect()
             }
 
-            ///
+            /// Iterate over calls by reference
             ///
             #[inline]
-            pub fn refcalls_iter(&self) -> impl ExactSizeIterator<Item = RefCallType> {
-                ptr_to_slice(self.inner_ref().refcalls, self.inner_ref().refcalls_count)
-                    .iter()
-                    .map(|rc| {
-                        if rc.ismembercall != 0 {
-                            RefCallType::MemberCall(rc.fid, rc.cid, rc.field_index)
-                        } else {
-                            RefCallType::Call(rc.fid)
-                        }
-                    })
+            pub fn refcalls_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::CallRefInfo> {
+                $crate::db::RefCallsIterator::new(self.as_inner_ref())
             }
 
-            ///
-            ///
-            #[inline]
-            pub fn refcall_info(&self) -> Vec<CallEntryInfo> {
-                self.refcall_info_iter().collect()
-            }
-
-            ///
+            /// List of referenced types
             ///
             #[inline]
-            pub fn refcall_info_iter(&self) -> impl ExactSizeIterator<Item = CallEntryInfo> {
-                ptr_to_slice(
-                    self.inner_ref().refcall_info,
-                    self.inner_ref().refcalls_count,
+            pub fn refs(&self) -> &$ret_life [$crate::db::TypeId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().refs as *const $crate::db::TypeId,
+                    self.as_inner_ref().refs_count
                 )
-                .iter()
-                .map(|x| x.into())
             }
 
-            /// ftdb func entry refs value
-            ///
-            #[inline]
-            pub fn refs(&self) -> &$ret_life [u64] {
-                ptr_to_slice(self.inner_ref().refs, self.inner_ref().refs_count)
-            }
-
-            /// ftdb func entry signature value
+            /// Returns function's signature
             ///
             #[inline]
             pub fn signature(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().signature)
+                $crate::utils::ptr_to_str(self.as_inner_ref().signature)
             }
 
-            /// ftdb func entry start_loc value
+            /// Returns location in a source code where function definition begins
             ///
             #[inline]
             pub fn start_loc(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().start_loc)
+                $crate::utils::ptr_to_str(self.as_inner_ref().start_loc)
             }
 
-            /// ftdb func entry switches data
+            /// List of switch-cases informations
             ///
             #[inline]
-            pub fn switches(&self) -> Vec<SwitchInfo> {
+            pub fn switches(&self) -> Vec<$crate::db::SwitchInfo> {
                 self.switches_iter().collect()
             }
 
+            /// Iterate over switch-cases statements data if available
             ///
+            /// # Examples
+            ///
+            /// Imagine this function:
+            ///
+            /// ```c
+            ///
+            /// enum my_enum {
+            ///     CASE_1,
+            ///     CASE_2 = 8,
+            ///     // [...]
+            /// };
+            ///
+            /// #define SECOND_CASE CASE_2
+            ///
+            /// u64 process_my_enum(enum my_enum type)
+            /// {
+            ///     [...]
+            ///     switch (type) {
+            ///     case CASE_1:
+            ///         // [...]
+            ///         break;
+            ///     case SECOND_CASE:
+            ///         // [...]
+            ///         break;
+            ///     case 10 ... 20:
+            ///         // [...]
+            ///         break;
+            ///     default:
+            ///         // [...]
+            ///     }
+            ///     // [...]
+            /// }
+            /// ```
+            ///
+            /// For FTDB representation of it, the following should be true:
+            ///
+            /// ```
+            /// use ftdb::Case;
+            ///
+            /// # fn run(db: &ftdb::Ftdb) {
+            /// let func = db.funcs_by_name("process_my_enum").next().unwrap();
+            /// let s = func.switches_iter().next().unwrap();
+            /// assert_eq!(s.condition(), "type");
+            ///
+            /// let mut cases = s.cases_iter();
+            /// match cases.next().unwrap() {
+            ///     Case::Value(lhs) => {
+            ///         assert_eq!(lhs.expr_value(), 0);
+            ///         assert_eq!(lhs.enum_code(), "CASE_1");
+            ///         assert_eq!(lhs.macro_code(), "");
+            ///         assert_eq!(lhs.raw_code(), "CASE_1");
+            ///     },
+            ///     _ => panic!()
+            /// }
+            ///
+            /// match cases.next().unwrap() {
+            ///     Case::Value(lhs) => {
+            ///         assert_eq!(lhs.expr_value(), 8);
+            ///         assert_eq!(lhs.enum_code(), "CASE_2");
+            ///         assert_eq!(lhs.macro_code(), "SECOND_CASE");
+            ///         assert_eq!(lhs.raw_code(), "CASE_2");
+            ///     },
+            ///     _ => panic!(),
+            /// }
+            ///
+            /// match cases.next().unwrap() {
+            ///     Case::Range(lhs, rhs) => {
+            ///         assert_eq!(lhs.expr_value(), 10);
+            ///         assert_eq!(lhs.enum_code(), "");
+            ///         assert_eq!(lhs.macro_code(), "");
+            ///         assert_eq!(lhs.raw_code(), "10");
+            ///         assert_eq!(rhs.expr_value(), 20);
+            ///         assert_eq!(rhs.enum_code(), "");
+            ///         assert_eq!(rhs.macro_code(), "");
+            ///         assert_eq!(rhs.raw_code(), "20");
+            ///     },
+            ///     _ => panic!(),
+            /// }
+            ///
+            /// # }
+            /// ```
             ///
             #[inline]
-            pub fn switches_iter(&self) -> impl ExactSizeIterator<Item = SwitchInfo> {
-                ptr_to_slice(self.inner_ref().switches, self.inner_ref().switches_count)
+            pub fn switches_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::SwitchInfo> {
+                $crate::utils::ptr_to_slice(self.as_inner_ref().switches, self.as_inner_ref().switches_count)
                     .iter()
                     .map(|x| x.into())
             }
 
-            /// ftdb func entry taint value
+            /// Returns list of taint info for function parameters
             ///
             #[inline]
-            pub fn taint(&self) -> Vec<Taint> {
+            pub fn taint(&self) -> Vec<$crate::db::Taint> {
                 self.taint_iter().collect()
             }
 
-            ///
+            /// Iterate over taint info for function parameters
             ///
             #[inline]
-            pub fn taint_iter(&self) -> impl ExactSizeIterator<Item = Taint> {
-                ptr_to_slice(self.inner_ref().taint, self.inner_ref().taint_count)
+            pub fn taint_iter(&self) -> impl ExactSizeIterator<Item = $crate::db::Taint> {
+                $crate::utils::ptr_to_slice(self.as_inner_ref().taint, self.as_inner_ref().taint_count)
                     .iter()
                     .enumerate()
-                    .map(|(index, data)| Taint::new(index, data))
+                    .map(|(index, data)| $crate::db::Taint::new(index.into(), data))
             }
 
-            /// ftdb func entry template_parameters value
+            /// Id of types used in the function signature
+            ///
+            /// Number of entries is equal to `nargs() + 1`.
+            /// First element represent returned type. Other elements are types of
+            /// function parameters.
             ///
             #[inline]
-            pub fn template_parameters(&self) -> Option<&$ret_life str> {
-                try_ptr_to_str(self.inner_ref().template_parameters)
-            }
-
-            /// ftdb func entry types value
-            ///
-            #[inline]
-            pub fn types(&self) -> &$ret_life [TypeId] {
-                ptr_to_slice(
-                    self.inner_ref().types as *const TypeId,
-                    self.inner_ref().types_count
+            pub fn types(&self) -> &$ret_life [$crate::db::TypeId] {
+                $crate::utils::ptr_to_slice(
+                    self.as_inner_ref().types as *const $crate::db::TypeId,
+                    self.as_inner_ref().types_count
                 )
             }
 
-            /// Unprocessed body of a function (as it is in a source file)
+            /// Body of a function before preprocessing (as it is in a source file)
             ///
             #[inline]
             pub fn unpreprocessed_body(&self) -> &$ret_life str {
-                ptr_to_str(self.inner_ref().unpreprocessed_body)
+                $crate::utils::ptr_to_str(self.as_inner_ref().unpreprocessed_body)
             }
         }
     }
+
 }
 
-pub(crate) use func_decl_entry_impl;
+pub(crate) use func_entry_impl;

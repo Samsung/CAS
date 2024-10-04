@@ -4,6 +4,7 @@ use crate::{
 };
 use ftdb_sys::ftdb::{globalref_data, globalref_info};
 
+#[derive(Debug, Clone)]
 pub struct GlobalRefs<'a>(&'a [GlobalId], &'a [globalref_data]);
 
 impl<'a> GlobalRefs<'a> {
@@ -16,9 +17,12 @@ impl<'a> GlobalRefs<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GlobalRef<'a> {
     /// Id of a global
     pub id: GlobalId,
+
+    // Data about global reference location
     info: &'a [globalref_info],
 }
 
@@ -35,6 +39,7 @@ impl<'a> GlobalRef<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GlobalRefInfo<'a>(&'a globalref_info);
 
 impl<'a> From<&'a globalref_info> for GlobalRefInfo<'a> {

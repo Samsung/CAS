@@ -2,9 +2,8 @@
 members = [
     "rust/ftdb-sys",
     "rust/ftdb",
-    "rust/examples/ftdb-info",
-    "rust/examples/find-globals",
-    "rust/examples/db-hash",
+    "rust/ftdb-ext",
+    "rust/examples/*",
 ]
 
 resolver = "2"

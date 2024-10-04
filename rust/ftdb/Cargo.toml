@@ -6,20 +6,29 @@ edition = "2021"
 keywords = ["ftdb", "mbsec", "ast"]
 license-file = "LICENSE.md"
 name = "ftdb"
-version = "0.7.0"
+version = "0.10.3"
 
 [dependencies]
 byteorder = { version = "1.5.0", optional = true }
 ftdb-sys = { path = "../ftdb-sys/" }
-lazy_static = "1.4.0"
-libc = "0.2.153"
-sqlx = { version = "0.7.3", optional = true }
-thiserror = "1.0.57"
+libc = "0.2.158"
+sqlx = { version = "0.8.1", optional = true }
+thiserror = "1.0.63"
+
+[dependencies.serde]
+version = "1.0.209"
+features = ["derive"]
+optional = true
 
 [dev-dependencies]
-rstest = "0.18"
+rstest = "0.22.0"
+itertools = "0.13.0"
+futures = "0.3.30"
+tokio = { version = "1.39.3", features = ["rt"] }
+ftdb-test = { path = "../ftdb-test" }
 
 [features]
-default = ["postgres"]
+default = []
 sqlx = ["dep:sqlx"]
 postgres = ["sqlx", "dep:byteorder", "sqlx/postgres"]
+serde = ["dep:serde"]

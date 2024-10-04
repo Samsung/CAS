@@ -2,6 +2,9 @@ use super::type_entry_impl;
 use crate::db::{FtdbHandle, InnerRef, Owned};
 use ftdb_sys::ftdb::ftdb_type_entry;
 
+/// Represents a type definition in the source code
+///
+#[derive(Debug, Clone)]
 pub struct TypeEntry<'a>(&'a ftdb_type_entry);
 
 type_entry_impl!(TypeEntry<'a>);
@@ -19,7 +22,7 @@ impl<'a> From<&'a ftdb_type_entry> for TypeEntry<'a> {
 }
 
 impl<'s, 'r> InnerRef<'s, 'r, ftdb_type_entry> for TypeEntry<'r> {
-    fn inner_ref(&'s self) -> &'r ftdb_type_entry {
+    fn as_inner_ref(&'s self) -> &'r ftdb_type_entry {
         self.0
     }
 }
