@@ -57,7 +57,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
             "dry-run",
             "debug-fd",
             "match",
-            "cached", "cdb"
+            "cached", "cdb", "deep"
             ], DepsFor)
 
     def select_subject(self, ent) -> str:
@@ -102,28 +102,45 @@ class DepsFor(Module, PipedModule, FilterableModule):
                 return data, DataTypes.compilation_db_data, lambda x: x['filename'],str
             return data, DataTypes.commands_data, lambda x: x.eid.pid,libetrace.nfsdbEntry
         elif self.args.details:
-            data = list({
-                d
-                for d in self.get_multi_deps(paths)
-                if self.filter_open(d)
-            })
+            if self.args.deep:
+                data = list({
+                    f
+                    for d in self.get_multi_deps(paths)
+                    for f in self.get_deep_comps(d)
+                    if self.filter_open(f)
+                })
+            else:
+                data = list({
+                    d
+                    for d in self.get_multi_deps(paths)
+                    if self.filter_open(d)
+                })
             return data, DataTypes.file_data, lambda x: x.path, libetrace.nfsdbEntryOpenfile
         else:
-            data = list({
-                d.path
-                for d in self.get_multi_deps(paths)
-                if self.filter_open(d)
-            })
+            if self.args.deep:
+                data = list({
+                    f.path
+                    for d in self.get_multi_deps(paths)
+                    for f in self.get_deep_comps(d)
+                    if self.filter_open(f)
+                })
+            else:
+                data = list({
+                    d.path
+                    for d in self.get_multi_deps(paths)
+                    if self.filter_open(d)
+                })
+
             if self.args.rdm:
                 data = self.get_rdm(data)
-                return data, DataTypes.rdm_data, lambda x: x[0],None
+                return data, DataTypes.rdm_data, lambda x: x[0], None
             if self.args.cdm:
                 data = self.get_cdm(data)
-                return data, DataTypes.cdm_data, lambda x: x[0],None
+                return data, DataTypes.cdm_data, lambda x: x[0], None
             if self.args.revdeps:
                 data = self.get_revdeps(data)
-                return data, DataTypes.file_data, None,str
-            return data, DataTypes.file_data, None,str
+                return data, DataTypes.file_data, None, str
+            return data, DataTypes.file_data, None, str
 
 
 class RevDepsFor(Module, PipedModule, FilterableModule):

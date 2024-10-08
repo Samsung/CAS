@@ -3,7 +3,7 @@ from functools import lru_cache
 import sys
 import re
 from abc import abstractmethod
-from typing import Any, List, Dict, Tuple, Generator, Callable
+from typing import Any, List, Dict, Tuple, Generator, Callable, Set
 import argparse
 import libetrace
 import libcas
@@ -494,6 +494,16 @@ class Module:
                         path = path.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
                     paths[i] = self.expand_to_deps_param(path if path.startswith("(") else "(file={})".format(path))
         return paths
+
+    def get_deep_comps(self, comp_open: libetrace.nfsdbEntryOpenfile) -> Set[libetrace.nfsdbEntryOpenfile]:
+        ret: Set = {comp_open}
+        if comp_open.opaque is not None and comp_open.opaque.compilation_info is not None:
+            if comp_open.parent.is_wrapped():
+                for wrapped_exe in self.nfsdb.get_entries_with_pid(comp_open.parent.wpid):
+                    ret.update(wrapped_exe.opens_with_children)
+            else:
+                ret.update(comp_open.parent.opens_with_children)
+        return ret
 
     @staticmethod
     def check_required(required_args:List[str], args: argparse.Namespace):

@@ -98,7 +98,10 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         args = sys.argv[1:]
     else:
         args = list(args)
-    parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False,exit_on_error=False)
+    try:
+        parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False, exit_on_error=False)
+    except TypeError:
+        parser = argparse.ArgumentParser(description="CAS Client Arguments", add_help=False)
     common_group = parser.add_argument_group("Common arguments")
 
     common_group.add_argument("--verbose", "-v", action="store_true", help="Verbalize action")
@@ -541,5 +544,12 @@ args_map = {
         action='store_true',
         default=False,
         help="[FTDB] Display globals' full definition"
+    ),
+    "deep": lambda x:x.add_argument(
+        '--deep-comps',
+        dest="deep",
+        action='store_true',
+        default=False,
+        help='Enable deep compilation dependency analysis'
     )
 }
