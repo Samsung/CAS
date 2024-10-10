@@ -2941,8 +2941,8 @@ PyObject* libetrace_nfsdb_filtered_opens_paths(libetrace_nfsdb_object *self, PyO
 	struct rb_node * p = rb_first(&self->nfsdb->filemap);
     while(p) {
         struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-		if ((fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,fflts,fflts_size,1) : true) &&
-			((cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,cflts,cflts_size,filter_count) : true)) {
+		if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,fflts,fflts_size,1) : true) &&
+			((cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,cflts,cflts_size,filter_count) : true))) {
 			/* filter returned true */
 			PyObject* s = PyUnicode_FromString(self->nfsdb->string_table[data->key]);
 	        PyList_Append(paths,s);
@@ -3177,8 +3177,8 @@ PyObject* libetrace_nfsdb_filtered_opens(libetrace_nfsdb_object *self, PyObject 
 		struct rb_node * p = rb_first(&self->nfsdb->filemap);
 		while(p) {
 			struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-			if ((fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,fflts,fflts_size,1) : true) &&
-				((cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,cflts,cflts_size,filter_count) : true)) {
+			if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,fflts,fflts_size,1) : true) &&
+				((cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self,data,cflts,cflts_size,filter_count) : true))) {
 				/* filter returned true */
 				for (unsigned long i=0; i<data->ga_entry_count; ++i) {
 					struct nfsdb_entry* entry = data->ga_entry_list[i];
@@ -5275,8 +5275,8 @@ PyObject* libetrace_nfsdb_filtered_opens_paths_iter_new(PyTypeObject *subtype, P
 		self->filemap_node = rb_first(&self->nfsdb->nfsdb->filemap);
 		while(self->filemap_node) {
 			struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)self->filemap_node;
-			if ((self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->fflts,self->fflts_size,1) : true) &&
-				((self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->cflts,self->cflts_size,self->filter_count) : true)) {
+			if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->fflts,self->fflts_size,1) : true) &&
+				((self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->cflts,self->cflts_size,self->filter_count) : true))) {
 				/* filter returned true */
 				break;
 			}
@@ -5295,8 +5295,8 @@ Py_ssize_t libetrace_nfsdb_filtered_opens_paths_iter_sq_length(PyObject* self) {
 	struct rb_node * p = rb_first(&__self->nfsdb->nfsdb->filemap);
 	while(p) {
 		struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-		if ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
-			((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true)) {
+		if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
+			((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true))) {
 			/* filter returned true */
 			entry_count++;
 		}
@@ -5327,8 +5327,8 @@ PyObject* libetrace_nfsdb_filtered_opens_paths_iter_next(PyObject *self) {
 	/* Find more entries to fill the 'patch_size' paths */
 	while(__self->filemap_node) {
 		struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)__self->filemap_node;
-		if ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
-			((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true)) {
+		if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
+			((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true))) {
 			/* filter returned true */
 			if (__self->patch_size>PyList_Size(paths)) {
 				PyObject* s = PyUnicode_FromString(__self->nfsdb->nfsdb->string_table[data->key]);
@@ -5432,8 +5432,8 @@ PyObject* libetrace_nfsdb_filtered_opens_iter_new(PyTypeObject *subtype, PyObjec
 			self->filemap_node = rb_first(&self->nfsdb->nfsdb->filemap);
 			while(self->filemap_node) {
 				struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)self->filemap_node;
-				if ((self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->fflts,self->fflts_size,1) : true) &&
-					((self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->cflts,self->cflts_size,self->filter_count) : true)) {
+				if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->fflts,self->fflts_size,1) : true) &&
+					((self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(self->nfsdb,data,self->cflts,self->cflts_size,self->filter_count) : true))) {
 					/* filter returned true */
 					break;
 				}
@@ -5468,8 +5468,8 @@ Py_ssize_t libetrace_nfsdb_filtered_opens_iter_sq_length(PyObject* self) {
 	if (pure_paths_filter_only(__self->cflts,__self->cflts_size,__self->filter_count,__self->fast_filter)) {
 		while(p) {
 			struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)p;
-			if ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
-				((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true)) {
+			if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
+				((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true))) {
 				/* filter returned true */
 				entry_count+=data->ga_entry_count;
 			}
@@ -5532,8 +5532,8 @@ PyObject* libetrace_nfsdb_filtered_opens_iter_next(PyObject *self) {
 			    __self->filemap_node = rb_next(__self->filemap_node);
 			    while(__self->filemap_node) {
 					struct nfsdb_fileMap_node* data = (struct nfsdb_fileMap_node*)__self->filemap_node;
-					if ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
-						((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true)) {
+					if ((data->access_type!=FILE_ACCESS_TYPE_EXEC) && ((__self->fast_filter ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->fflts,__self->fflts_size,1) : true) &&
+						((__self->cflts_size > 0) ? libetrace_nfsdb_filtered_opens_paths_filter_once(__self->nfsdb,data,__self->cflts,__self->cflts_size,__self->filter_count) : true))) {
 						/* filter returned true */
 						break;
 					}
