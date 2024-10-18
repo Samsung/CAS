@@ -10,7 +10,7 @@ class GlobalsModule(Module, FilterableModule, PipedModule):
     @staticmethod
     def get_argparser() -> ArgumentParser:
         return Module.add_args(["details", "ftdb-simple-filter", "definition"], GlobalsModule)
-    
+
     def set_piped_arg(self, data, data_type: type) -> None:
         if data_type in (libft_db.ftdbSourceEntry, libft_db.ftdbModuleEntry):
             self.args.fids = [d.fid for d in data]
@@ -28,7 +28,7 @@ class TypesModule(Module, FilterableModule):
     @staticmethod
     def get_argparser() -> ArgumentParser:
         return Module.add_args(["details", "ftdb-simple-filter"], TypesModule)
-    
+
     def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
         if self.has_ftdb_simple_filter:
             types = [t for t in self.ft_db.get_types() if self.filter_ftdb(t)]

@@ -118,7 +118,7 @@ function search_renderer(proc, node, highestParent = false) {
         div.append(($(`<span class="bin ${proc['class']}" />`)).text(proc['bin']));
     }
     if (proc["children"] > 0) {
-        div.append($('<span />').append($(`<a href=/proc_tree?pid=${proc["pid"]}&idx=${proc["idx"]} target="_blank" title="Start from this process" style="text-decoration:none" />`).text(" ↸ ")));
+        div.append($('<span />').append($(`<a href="${ctx}/proc_tree?pid=${proc["pid"]}&idx=${proc["idx"]}" target="_blank" title="Start from this process" style="text-decoration:none" />`).text(" ↸ ")));
     }
     li.append(div);
     return li;
@@ -128,7 +128,7 @@ function get_childs(pid, idx, node, page = 0) {
     if(document.getElementById('nav'+pid+':'+idx)){
         document.getElementById('nav'+pid+':'+idx).remove();
     }
-    let children_url = `/children?pid=${pid}&idx=${idx}&page=${page}`;
+    let children_url = `${ctx}/children?pid=${pid}&idx=${idx}&page=${page}`;
     let etime_sorting_selected = document.getElementById("etimeSorting").checked;
     if (etime_sorting_selected) {
         children_url += "&etime_sort=true";
@@ -405,7 +405,7 @@ function get_childs(pid, idx, node, page = 0) {
             div.append(($('<span class="bin ' + childrenArray[i]['class'] + '" />')).text(childrenArray[i]['bin']));
         }
         if (childrenArray[i]["children"] > 0) {
-            div.append($('<span />').append($('<a href=/proc_tree?pid=' + childrenArray[i]["pid"] + '&idx=' + childrenArray[i]["idx"] + ' target="_blank" title="Start from this process" style="text-decoration:none" />').text(" ↸ ")));
+            div.append($('<span />').append($(`<a href="${ctx}/proc_tree?pid=${childrenArray[i]["pid"]}&idx=${childrenArray[i]["idx"]}" target="_blank" title="Start from this process" style="text-decoration:none" />`).text(" ↸ ")));
         }
         li.append(div);
         process.append(li);
@@ -452,7 +452,7 @@ $(document).ready(function () {
 function upperParent(elem) {
     let child = elem.parentNode.parentNode;
     if (!document.getElementById($(elem).data('value'))) {
-        let process_url = `/proc_lookup?pid=${$(elem).data('value').split(":")[0]}&idx=${$(elem).data('value').split(":")[1]}`;
+        let process_url = `${ctx}/proc_lookup?pid=${$(elem).data('value').split(":")[0]}&idx=${$(elem).data('value').split(":")[1]}`;
         const request = new XMLHttpRequest();
         request.open("GET", process_url, false);
         request.send(null);
@@ -510,7 +510,7 @@ function search(page = 0) {
             class_name = ele[i].value;
     }
     let negate = document.getElementById("filter_negate").checked;
-    let search_url = '/search?';
+    let search_url = `${ctx}/search?`;
 
     let filterString = ""
     if (bin_cwd_cmd && search_text && wc_re_m){

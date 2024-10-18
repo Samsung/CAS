@@ -57,4 +57,20 @@ class LibFtdbException(MessageException):
 
     :param message: Exception message
     :type message: str
-    """    
+    """
+
+class EndpointException(MessageException):
+    """
+    Exception object used when user points to not existing url endpoint
+
+    :param message: Exception message
+    :type message: str
+    """
+
+class DatabaseException(MessageException):
+    """
+    Exception object used when database error occurs
+
+    :param message: Exception message
+    :type message: str
+    """

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}Database List{% endblock %}
+{% block head %}
+    {{ super() }}
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script>let ctx = "{{web_ctx}}"</script>
+    <script src="{{ url_for('static', filename = 'dbs.js') }}"></script>
+{% endblock %}
+{% block content %}
+    <div class="text-center" style="display:flex;justify-content: center">
+    <table class="table table-hover table-bordered align-middle table-responsive-sm" style="width: fit-content;padding: 20px">
+        <thead class="table-dark">
+        <tr>
+            <th scope="col">DB name</th>
+            <th scope="col">Image version</th>
+            <th scope="col" style="width: 70px">config<br/>file</th>
+            <th scope="col" style="width: 70px">config<br/>loaded</th>
+            <th scope="col" style="width: 70px">nfsdb<br/>file</th>
+            <th scope="col" style="width: 70px">nfsdb<br/>loaded</th>
+            <th scope="col" style="width: 70px">deps<br/>loaded</th>
+            <th scope="col" style="width: 70px">ftdb<br/>files</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for k,v in dbs.items() %}
+            <tr>
+                <td class="text-start fw-bolder"><a href='{{ web_ctx }}{{ k }}'>{{ k }}</a></td>
+                <td class="text-center">{{ v['image_version'] }}</td>
+                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['config_file'] is not none else "bi-circle" }}"></i></td>
+                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['config'] is not none else "bi-circle" }}"></i></td>
+                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['nfsdb'] is not none and v['nfsdb'].db_path else "bi-circle" }}"></i></td>
+                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['nfsdb']  is not none and v['nfsdb'].db_loaded else "bi-circle" }}"></i></td>
+                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['nfsdb'] is not none and v['nfsdb'].cache_db_loaded else "bi-circle" }}"></i></td>
+                <td class="text-center" title="{%  for k in v['ftdb_files'] %}{{k}}&#10;{%endfor%}">{{ v['ftdb_files'] | length }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}

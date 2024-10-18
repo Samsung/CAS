@@ -378,7 +378,7 @@ class Renderer(OutputRenderer):
             "num_deps": len([x for x in mdeps if x in self.origin_module.nfsdb.linked_module_paths() and x!=row.linked_path]),
             "parent": str(row.eid.pid)+":"+str(row.eid.index)
             }
-    
+
     def _command_entry_format(self, row: libetrace.nfsdbEntry):
         return '''        {{
             "class": "{cls}",
@@ -393,8 +393,8 @@ class Renderer(OutputRenderer):
             cls="compiler" if row.compilation_info is not None else "linker" if row.linked_file is not None else "command",
             pid=row.eid.pid,
             idx=row.eid.index,
-            ppid=row.parent_eid.pid,
-            pidx=row.parent_eid.index,
+            ppid=row.parent_eid.pid if row.parent else "",
+            pidx=row.parent_eid.index if row.parent else "",
             bin=row.bpath,
             cwd=row.cwd,
             command=fix_cmd(row.argv, join=not ("raw_command" in self.args and self.args.raw_command)),

@@ -37,7 +37,7 @@ function get_childs(path,id, node, page = 0, lm) {
     if(node.parentNode.parentNode.getElementsByClassName('navigation').length > 0){
         node.parentNode.parentNode.getElementsByClassName('navigation')[0].remove();
     }
-    let deps_url = `/revdeps_of?path=${encodeURIComponent(path)}&page=${page}&details=true`;
+    let deps_url = `${ctx}/revdeps_of?path=${encodeURIComponent(path)}&page=${page}&details=true`;
     const request = new XMLHttpRequest();
     request.open("GET", deps_url, false);
     request.send(null);
@@ -296,7 +296,7 @@ function get_childs(path,id, node, page = 0, lm) {
         div.append($('<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#proc_info_modal" data-len=' + depArray[i]["path"] + ' data-bs-path=' + depArray[i]["path"] + ' data-bs-pid="' + depArray[i]["parent"]+ '">i</button>'));
         div.append($('<span />').text(depArray[i]["path"]));
         if (depArray[i]["num_deps"] > 0) {
-            div.append($('<span />').append($('<a href=/revdeps_tree?path=' + depArray[i]["path"] + ' target="_blank" title="Start from this process" style="text-decoration:none" />').text(" ↸ ")));
+            div.append($('<span />').append($(`<a href="${ctx}/revdeps_tree?path=${depArray[i]["path"]}" target="_blank" title="Start from this process" style="text-decoration:none" />`).text(" ↸ ")));
         }
         li.append(div);
         process.append(li);
@@ -359,5 +359,5 @@ function render_pagination(container_id, cur_page, max_page, count, entries_per_
 
 function searchModule(btn){
     let search_str = btn.previousElementSibling.value;
-    window.location.replace("/revdeps_tree?filter="+search_str)
+    window.location.replace(`${ctx}/revdeps_tree?filter=${search_str}`)
 }

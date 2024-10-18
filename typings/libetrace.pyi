@@ -421,6 +421,23 @@ class nfsdb:
         :rtype: dict | None
         """
 
+def image_version(image_filename: str) -> str:
+    """Function returns database image version
+
+    :param image_filename: image file path
+    :type image_filename: str
+    Returns:
+        str: database image version
+    """
+
+def database_version(image_filename: str) -> str:
+    """Function returns database version
+
+    :param image_filename: image file path
+    :type image_filename: str
+    Returns:
+        str: database version
+    """
 
 def parse_nfsdb(tracer_db_filename:str, json_db_filename:str, threads:str) -> Optional[int]:
     """

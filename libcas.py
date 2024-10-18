@@ -216,13 +216,13 @@ class CASDatabase:
         :type debug: bool, optional
         :param quiet: suppress verbose prints, defaults to True
         :type quiet: bool, optional
-        :return: True if load succed otherwise False
+        :return: True if load succeed otherwise False
         :rtype: bool
         """
 
         self.db_loaded = self.db.load(db_file, debug=debug, quiet=quiet)
         self.source_root = self.db.source_root
-        assert self.config is not None, "Please set config first. Use CASDatabase.set_config()"
+        assert self.config is not None, "Config is empty!"
         self.config.apply_source_root(self.source_root)
         self.db_path = db_file
         return self.db_loaded
@@ -245,13 +245,16 @@ class CASDatabase:
         :param db_file: Database file
         :type db_file: str
         """
-        return libetrace.image_version(db_file)
+        try:
+            return libetrace.image_version(db_file)
+        except:
+            return "UNKNOWN"
 
     def load_deps_db(self, db_file:str, debug: bool=False, quiet: bool=True, mp_safe: bool=True, no_map_memory: bool = False) -> bool:
         """
         Function uses libetrace.load_deps to load database from given filename
 
-        :param cache_filename: database file path
+        :param db_file: database file path
         :type db_file: str
         :param debug: print debug information, defaults to False
         :type debug: bool, optional
@@ -261,7 +264,7 @@ class CASDatabase:
         :type mp_safe: bool, optional
         :param no_map_memory: prevents memory mapping, defaults to False
         :type no_map_memory: bool, optional
-        :return: True if load succed otherwise False
+        :return: True if load succeed otherwise False
         :rtype: bool
         """
 
@@ -316,7 +319,7 @@ class CASDatabase:
         :rtype: List[libetrace.nfsdbEntry]
         """
 
-        return self.db[tuple([pid])]
+        return self.db[(pid,)]
 
     def get_entries_with_pids(self, pidlist: "List[Tuple[int, int]]| List[Tuple[int,]]") -> List[libetrace.nfsdbEntry]:
         """

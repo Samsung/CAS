@@ -3,13 +3,14 @@
 {% block head %}
 {{ super() }}
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-    <script src="{{url_for('static', filename = 'main.js')}}"></script>
+    <script>let ctx = "{{web_ctx}}" </script>
+    <script src="{{ url_for('static', filename = 'main.js')}}"></script>
 {% endblock %}
 {% block content %}
 <div class="sticky">
   <nav class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
-      <a class="navbar-brand" href="/proc_tree">Process Tree</a>
+      <a class="navbar-brand" href="{{web_ctx}}/proc_tree">Process Tree</a>
       <form class="container-fluid justify-content-start">
       <div class="form-check form-switch">
         <input class="form-check-input" type="checkbox" id="nonChildFilter" name="nonChildFilter" onchange="deleteElements('nested', 'child_len', this)">
@@ -172,7 +173,7 @@
     </div>
   </div>
 </div>
-<script src="{{url_for('static', filename = 'modal.js')}}"></script>
+<script src="{{ url_for('static', filename = 'modal.js')}}"></script>
 
 <div class="modal fade" id="search_modal" tabindex="-1" aria-labelledby="search_modalLabel" aria-hidden="true"  data-bs-backdrop="static">
   <div class="modal-dialog modal-xl">
@@ -281,7 +282,7 @@
           {%endif%}
           {%if exe['entries'][i]['children'] %}
             <span>
-              <a href="/proc_tree?pid={{exe['entries'][i]['pid']}}&idx={{exe['entries'][i]['idx']}}" title="Start from this process" style="text-decoration:none" target="_blank">^</a>
+              <a href="{{web_ctx}}/proc_tree?pid={{exe['entries'][i]['pid']}}&idx={{exe['entries'][i]['idx']}}" title="Start from this process" style="text-decoration:none" target="_blank">^</a>
             </span>
           {%endif%}
         </div>

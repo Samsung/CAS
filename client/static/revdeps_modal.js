@@ -7,7 +7,7 @@ function nextFiles(maxResults=50) {
     let page = parseInt(files_pages.innerText.split("/")[0]) - 1;
     if (page < (parseInt(files_pages.innerText.split("/")[1]) - 1)) {
         page++;
-        let request = '/revdeps_for?path=' + modalTitle.getAttribute("data-path") +"&page=" + page+'&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
+        let request = `${ctx}/revdeps_for?path=${modalTitle.getAttribute("data-path")}&page=${page}&entries-per-page=${maxResults}&recursive=true&relative=true&sorted=true`;
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -33,7 +33,7 @@ function prevFiles(maxResults=50) {
     let page = parseInt(files_pages.innerText.split("/")[0]) - 1;
     if (page > 0) {
         page--;
-        let request = '/revdeps_for?path=' + modalTitle.getAttribute("data-path") +"&page=" + page+'&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
+        let request = `${ctx}/revdeps_for?path=${modalTitle.getAttribute("data-path")}&page=${page}&entries-per-page=${maxResults}&recursive=true&relative=true&sorted=true`;
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -71,7 +71,7 @@ fileModal.addEventListener('show.bs.modal', function (event) {
     let files_pages = fileModal.querySelector('.files_page_numbers')
     fileModal.querySelector('#prevFilesButton').setAttribute('disabled', '');
     fileModal.querySelector('#nextFilesButton').removeAttribute('disabled');
-    let request = '/linked_modules?filter=[path='+deps_path+']&details=true';
+    let request = `${ctx}/linked_modules?filter=[path=${deps_path}]&details=true`;
     filename.innerText = "";
     original_path.innerText = "";
     ppid.innerHTML = "";
@@ -90,13 +90,13 @@ fileModal.addEventListener('show.bs.modal', function (event) {
         }
         filename.innerText = entry.filename;
         original_path.innerText = entry.original_path;
-        ppid.innerHTML = "<a href =/proc_tree?pid="+entry.ppid+' target="_blank" >'+entry.ppid+"</a>";
+        ppid.innerHTML = `<a href="${ctx}/proc_tree?pid=${entry.ppid}" target="_blank" >${entry.ppid}</a>`;
         type.innerText = entry.type;
         access.innerText = entry.access;
         exists.innerText = entry.exists;
         link.innerText = entry.link;
     });
-    request = '/revdeps_for?path=' + deps_path + "&page=" + page + '&entries-per-page='+maxResults+ "&recursive=true&relative=true&sorted=true";
+    request = `${ctx}/revdeps_for?path=${deps_path}&page=${page}&entries-per-page=${maxResults}&recursive=true&relative=true&sorted=true`;
     $.get(request, function (data) {
         if (Math.ceil(data.count/maxResults) < 2) {
             fileModal.querySelector('#nextFilesButton').setAttribute('disabled', '');
