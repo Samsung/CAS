@@ -1,9 +1,13 @@
+from argparse import ArgumentParser, Namespace
 import sys
 import os
 import io
 import zipfile
 import tarfile
+from shlex import split as shell_split
 from typing import Generator, Iterator, Dict, List, Optional
+
+from flask import Response
 import libcas
 from libftdb import FtdbError
 import libetrace
@@ -11,10 +15,11 @@ from libft_db import FTDatabase
 from client.misc import printdbg, printerr, get_config_path
 from client.mod_base import ModulePipeline
 from client.argparser import get_args, merge_args, get_api_keywords
-from client.exceptions import MessageException
+from client.exceptions import MessageException, PipelineException
 from client.exceptions import LibFtdbException
 
-def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None, ft_db:Optional[FTDatabase] = None) -> "str | Dict | None":
+
+def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str] | None" = None, ft_db:Optional[FTDatabase] = None, is_server:bool = False) -> "str | Dict | List | Response | None":
     """
     Main function used to process commandline execution.
     By default it feeds arguments from sys.argv but can be overwritten by optional commandline value
@@ -26,7 +31,16 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
     :return: rendered string output, object (object renderer) or None
     :rtype: str | object | None
     """
+
+    if commandline is None:
+        commandline = sys.argv[1:]
+    elif isinstance(commandline, str):
+        commandline = shell_split(commandline)
+
     common_args, pipeline_args, common_parser = get_args(commandline)
+    common_args.cmd = commandline
+    common_args.is_server = is_server
+
     if not cas_db.config:
         config_file = get_config_path(os.path.join(common_args.dbdir, common_args.config))
         printdbg(f"DEBUG: Loading {config_file} config file...", common_args)
@@ -79,38 +93,28 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             for pipe_element in pipeline_args
             ])
 
-        if common_args.ide:
-            from client.ide_generator.project_generator import project_generator_map, ProjectGenerator
-            project_generator: ProjectGenerator = project_generator_map[common_args.ide](args=common_args, cas_db=cas_db)
-            latest_module = module_pipeline.modules[-1]
-
-            if not latest_module.args.show_commands and not latest_module.args.details:
-                latest_module.args.details = True
-            project_generator.generate(data=module_pipeline.render())
-            return None
-
-        elif common_args.output_file:
+        if common_args.output_file:
             with open(os.path.abspath(os.path.expanduser(common_args.output_file)), "w", encoding=sys.getdefaultencoding()) as output_file:
                 if output_file.writable():
                     ret = module_pipeline.render()
-                    if isinstance(ret, Iterator) or isinstance(ret, Generator):
+                    if isinstance(ret, List) or isinstance(ret, Iterator) or isinstance(ret, Generator):
                         output_file.write(os.linesep.join(ret))
                         print("Output written to {}".format(os.path.abspath(os.path.expanduser(common_args.output_file))))
                     elif isinstance(ret, str):
                         output_file.write(ret)
                         print("Output written to {}".format(os.path.abspath(os.path.expanduser(common_args.output_file))))
-                    else:
-                        pass
+
             return None
+
         elif common_args.generate_zip:
             zip_buffer = io.BytesIO()
             out_file_name = "results.json" if common_args.json else "results.txt"
 
             with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                 ret = module_pipeline.render()
-                if isinstance(ret, Iterator) or isinstance(ret, Generator):
+                if isinstance(ret, List) or isinstance(ret, Iterator) or isinstance(ret, Generator):
                     zip_file.writestr(out_file_name, os.linesep.join(ret))
-                else:
+                elif isinstance(ret,str):
                     zip_file.writestr(out_file_name, ret)
 
             with open(os.path.abspath(os.path.expanduser(common_args.generate_zip)), 'wb') as out_file:
@@ -119,43 +123,41 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             return None
 
         elif common_args.save_zip_archive:
-            
             latest_module = module_pipeline.modules[-1]
             if not latest_module.args.show_commands and not latest_module.args.details:
                 latest_module.args.details = True
 
             ret = module_pipeline.render()
-            if len(ret) > 0:
+            if isinstance(ret, list) and len(ret) > 0:
                 if isinstance(ret[0], libetrace.nfsdbEntry):
                     data = [c for exe in ret for c in exe.compilation_info.files]
                 elif isinstance(ret[0], libetrace.nfsdbEntryOpenfile):
                     data = ret
                 else:
-                    print("ERROR: returned data incompatible. Use --details or --commands argument.")
-                    return 1
+                    raise PipelineException("ERROR: returned data incompatible. Use --details or --commands argument.")
 
-            archive_name = f"{common_args.save_zip_archive}{'.zip' if not common_args.save_zip_archive.endswith('.zip') else ''}"
-            print("Writing files to archive ...")
-            with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as archive:
-                pbar = libcas.progressbar(data, total=len(data))
-                for r in pbar:
-                    src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
-                    cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
+                archive_name = f"{common_args.save_zip_archive}{'.zip' if not common_args.save_zip_archive.endswith('.zip') else ''}"
+                print("Writing files to archive ...")
+                with zipfile.ZipFile(archive_name, "w", zipfile.ZIP_DEFLATED) as archive:
+                    pbar = libcas.progressbar(data, total=len(data))
+                    for r in pbar:
+                        src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
+                        cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
 
-                    if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
-                        relative_path = cur_path[len(src_root):]
-                        archive.write(cur_path, arcname=relative_path)
-                    else:
-                        if not os.path.exists(cur_path):
-                            print(f" WARNING: File does not exists: {cur_path}. Consider using --remap-source-root")
-                        elif not cur_path.startswith(src_root):
-                            print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
+                        if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
+                            relative_path = cur_path[len(src_root):]
+                            archive.write(cur_path, arcname=relative_path)
                         else:
-                            print(f" WARNING: Given path is symlink: {cur_path}")
-                    pbar.n += 1
-                    pbar.refresh()
+                            if not os.path.exists(cur_path):
+                                print(f" WARNING: File does not exists: {cur_path}. Consider using --remap-source-root")
+                            elif not cur_path.startswith(src_root):
+                                print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
+                            else:
+                                print(f" WARNING: Given path is symlink: {cur_path}")
+                        pbar.n += 1
+                        pbar.refresh()
 
-            print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
+                print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
             return None
 
         elif common_args.save_tar_archive:
@@ -165,37 +167,36 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
                 latest_module.args.details = True
 
             ret = module_pipeline.render()
-            if len(ret) > 0:
+            if isinstance(ret, list) and len(ret) > 0:
                 if isinstance(ret[0], libetrace.nfsdbEntry):
                     data = [c for exe in ret for c in exe.compilation_info.files]
                 elif isinstance(ret[0], libetrace.nfsdbEntryOpenfile):
                     data = ret
                 else:
-                    print("ERROR: returned data incompatible. Use --details or --commands argument.")
-                    return 1
+                    raise PipelineException("ERROR: returned data incompatible. Use --details or --commands argument.")
 
-            archive_name = f"{common_args.save_tar_archive}{'.tar' if not common_args.save_tar_archive.endswith('.tar') else ''}"
-            print("Writing files to archive ...")
-            with tarfile.open(name=archive_name, mode='w') as archive:
-                pbar = libcas.progressbar(data, total=len(data))
-                for r in pbar:
-                    src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
-                    cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
+                archive_name = f"{common_args.save_tar_archive}{'.tar' if not common_args.save_tar_archive.endswith('.tar') else ''}"
+                print("Writing files to archive ...")
+                with tarfile.open(name=archive_name, mode='w') as archive:
+                    pbar = libcas.progressbar(data, total=len(data))
+                    for r in pbar:
+                        src_root = common_args.remap_source_root if common_args.remap_source_root else cas_db.source_root
+                        cur_path = r.path.replace(cas_db.source_root, common_args.remap_source_root) if common_args.remap_source_root else r.path
 
-                    if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
-                        relative_path = cur_path[len(src_root):]
-                        archive.add(cur_path, arcname=relative_path, recursive=False)
-                    else:
-                        if not os.path.exists(cur_path):
-                            print(f" WARNING: File does not exists: {cur_path}")
-                        elif not cur_path.startswith(src_root):
-                            print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
+                        if os.path.exists(cur_path) and not r.is_symlink() and cur_path.startswith(src_root):
+                            relative_path = cur_path[len(src_root):]
+                            archive.add(cur_path, arcname=relative_path, recursive=False)
                         else:
-                            print(f" WARNING: Given path is symlink: {cur_path}")
-                    pbar.n += 1
-                    pbar.refresh()
+                            if not os.path.exists(cur_path):
+                                print(f" WARNING: File does not exists: {cur_path}")
+                            elif not cur_path.startswith(src_root):
+                                print(f" WARNING, File is outside the source root and remapped source root: {cur_path}")
+                            else:
+                                print(f" WARNING: Given path is symlink: {cur_path}")
+                        pbar.n += 1
+                        pbar.refresh()
 
-            print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
+                print(f"\nAll files written to {os.path.abspath(os.path.expanduser(archive_name))}")
             return None
 
         elif common_args.ftdb_create:
@@ -204,7 +205,9 @@ def process_commandline(cas_db: libcas.CASDatabase, commandline: "str | List[str
             ftdb_generator = FtdbGenerator(args=common_args, cas_db=cas_db, latest_module=latest_module)
             if not latest_module.args.show_commands and not latest_module.args.details:
                 latest_module.args.details = True
-            ftdb_generator.create_ftdb(module_pipeline.render())
+            data = module_pipeline.render()
+            if isinstance(data, list):
+                ftdb_generator.create_ftdb(data)
         else:
             return module_pipeline.render()
     else:

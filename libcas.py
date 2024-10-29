@@ -196,6 +196,7 @@ class CASDatabase:
         self.cache_db_loaded = False
         self.config = None
         self.db_path = None
+        self.cache_db_path= None
 
     def set_config(self, config: CASConfig):
         """
@@ -269,6 +270,7 @@ class CASDatabase:
         """
 
         self.cache_db_loaded = self.db.load_deps(db_file, debug=debug, quiet=quiet, mp_safe=mp_safe, no_map_memory=no_map_memory)
+        self.cache_db_path = db_file
         return self.cache_db_loaded
 
     @lru_cache(maxsize=1)
@@ -736,7 +738,7 @@ class CASDatabase:
         :return: version string
         :rtype: str
         """
-        return self.db.dbversion
+        return self.db.dbversion if self.db.dbversion else "_unset_"
 
     def get_opens_of_path(self, file_path: str) -> List[libetrace.nfsdbEntryOpenfile]:
         """

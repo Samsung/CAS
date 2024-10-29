@@ -1,10 +1,21 @@
+from argparse import Namespace
 import json
 import os
 import sys
-from typing import Tuple, Dict
+from typing import Any, List, Optional, TextIO, Tuple, Dict
 from types import ModuleType
 from functools import lru_cache
 
+from client.exceptions import LibetraceException
+
+
+@staticmethod
+@lru_cache(maxsize=1)
+def get_def_ip():
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(('8.8.8.8', 80))
+    return s.getsockname()[0]
 
 @lru_cache(maxsize=1024)
 def get_file_info(mode: int) -> Tuple[bool, int, int]:
@@ -40,7 +51,7 @@ def get_file_info(mode: int) -> Tuple[bool, int, int]:
 
 
 @lru_cache(maxsize=1024)
-def access_from_code(opn_value) -> str:
+def access_from_code(opn_value:"int | List[int]") -> str:
     """
     Function returns string representation of open value(s).
     `opn_value` can be single value or list of values.
@@ -89,7 +100,7 @@ def stat_from_code(stat_value: int) -> str:
     }[stat_value]
 
 
-def fix_cmd(cmd: list, join: bool = True) -> str:
+def fix_cmd(cmd: "List[str] | str", join: bool = True) -> str:
     """
     Function used to escape special char in command line and returns them in json-friendly version.
 
@@ -105,11 +116,11 @@ def fix_cmd(cmd: list, join: bool = True) -> str:
             return json.dumps(" ".join([x.rstrip().replace("\\", "\\\\").replace("\"", "\\\"").replace(" ", "\\ ") for x in cmd]))
         else:
             return json.dumps([x.rstrip().replace("\\", "\\\\").replace("\"", "\\\"").replace(" ", "\\ ") for x in cmd])
-    if isinstance(cmd, str):
+    else:
         return json.dumps(cmd.rstrip().replace("\\", "\\\\").replace("\"", "\\\"").replace(" ", "\\ "))
 
 
-def fix_cmd_makefile(cmd: list, static: bool = False) -> str:
+def fix_cmd_makefile(cmd: "List[str] | str", static: bool = False) -> str:
     """
     Function used to escape special char in command line and returns them in makefile-friendly version.
 
@@ -135,7 +146,7 @@ def get_output_renderers() -> Dict[str, ModuleType]:
     :return: map with output name and Renderer object
     :rtype: dict
     """
-    ret = dict()
+    ret:Dict[str, ModuleType] = dict()
     output_renderers_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'output_renderers')
     sys.path.append(output_renderers_dir)
     for name in os.listdir(output_renderers_dir):
@@ -170,15 +181,17 @@ def get_config_path(config_file: str) -> str:
         for pyth_path in os.environ["PYTHONPATH"].split(":"):
             if os.path.exists(f"{pyth_path}bas/.bas_config"):
                 return f"{pyth_path}bas/.bas_config"
-    assert False, "Config not found!"
+    raise LibetraceException("Config not found!")
 
+def printcli(msg:str, args:Namespace, end:str="\n", flush:bool=True):
+    if not args.is_server:
+        print(msg, end=end, flush=flush)
 
-def printdbg(msg, args, file=sys.stderr, flush=True):
-    if args.debug:
+def printdbg(msg:Any, args:Namespace, file:Optional[TextIO]=sys.stderr, flush:bool=True):
+    if args.debug and not args.is_server:
         print(msg, file=file, flush=flush)
 
-
-def printerr(msg, file=sys.stderr, flush=True):
+def printerr(msg:str, file:Optional[TextIO]=sys.stderr, flush:bool=True):
     print(msg, file=file, flush=flush)
 
 def fix_body(body:str) -> str:

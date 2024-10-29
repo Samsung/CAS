@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-from argparse import Namespace
-from functools import lru_cache
-from typing import List, Dict
-
-from os import path
-import json
 import sys
-import math
-import argparse
-from shlex import split as shell_split
-
-from flask import Flask, Blueprint, render_template, send_from_directory, request
-from flask.wrappers import Response, Request
-from flask_cors import CORS
-from urllib.parse import unquote
-from libetrace import nfsdbEntry
-import libetrace
-from gevent.pywsgi import WSGIServer
-from client.server import DBProvider
-from client.filtering import CommandFilter
-from client.argparser import get_api_keywords
-from client.misc import access_from_code, get_file_info
-from client.exceptions import MessageException, LibFtdbException
 
 try:
     import libetrace as _
@@ -30,48 +8,89 @@ except ModuleNotFoundError:
     print("eg. export PYTHONPATH=/home/j.doe/CAS/:$PYTHONPATH")
     sys.exit(2)
 
+from argparse import Namespace
+from functools import lru_cache
+from typing import List
+
+from os import path
+import json
+import math
+import argparse
+from shlex import split as shell_split
+from urllib.parse import parse_qsl
+
+from flask import Flask, Blueprint, render_template, send_from_directory, request
+from flask.wrappers import Response
+from flask_cors import CORS
+from gevent.pywsgi import WSGIServer
+from libetrace import nfsdbEntry
+import libetrace
+from client.server import DBProvider
+from client.filtering import CommandFilter
+from client.argparser import get_api_keywords
+from client.misc import access_from_code, get_file_info
+from client.exceptions import MessageException, LibFtdbException
+
+
 cas_single = Blueprint('cas', __name__, template_folder='client/templates', static_folder='client/static')
 cas_multi = Blueprint('cas', __name__, template_folder='client/templates', static_folder='client/static')
 
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
-bool_args = ["commands", "details", "cdm", "revdeps", "rdm", "recursive", "with-children", "direct", "raw-command",
-             "extended", "dep-graph", "filerefs", "direct-global", "cached", "wrap-deps", "with-pipes", "original-path", "parent",
-             "sorted", "sort", "reverse", "relative", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree",
-             "body", "ubody", "declbody", "definition"]
+bool_args = [ "commands", "show-commands", "details", "t", "cdm", "compilation-dependency-map", "revdeps", "V", "reverse-dependency-map", "rdm", "recursive", "r", "with-children", "direct", "raw-command",
+             "extended", "e", "dep-graph", "G", "filerefs", "F", "direct-global", "Dg", "cached", "wrap-deps", "w", "with-pipes", "P", "original-path", "parent", "match", "m"
+             "sorted", "sort", "s", "reverse", "relative", "R", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree",
+             "body", "ubody", "declbody", "definition", "skip-linked", "skip-objects", "skip-asm", "deep-comps" ]
 
-args = Namespace()
-dbs: DBProvider
-bp: Blueprint
+args: Namespace = Namespace()
+dbs: DBProvider = DBProvider()
 
 
-def translate_to_cmdline(req: Request, ctx: str, db: str) -> List[str]:
+def translate_to_cmdline(url: str, query_str:str, ctx: str, db: str) -> List[str]:
     """
-    Function translates url request to client argument list.
+    Function translates url to client argument list.
+
+    :param url: url string
+    :type url: str
+    :param query_str: url query part
+    :type query_str: str
+    :param ctx: web context
+    :type ctx: str
+    :param db: databse name
+    :type db: str
+    :return: list of arguments
+    :rtype: List[str]
     """
-    url_path = req.path.lstrip("/").removeprefix(ctx.lstrip("/")).lstrip("/").removeprefix(db).lstrip("/")
+
+    url_path = url.lstrip("/")
+    if url_path.startswith(ctx.lstrip("/")):
+        url_path = url_path.replace(ctx.lstrip("/"),"").lstrip("/")
+    if url_path.startswith(db):
+        url_path = url_path.replace(db,"").lstrip("/")
 
     ret = [url_path]
-
-    for parts in unquote(req.query_string.decode()).split("&"):
-        k_v = parts.replace('%22', '').replace('%27', '').split("=", maxsplit=1)
+    q = parse_qsl(query_str, keep_blank_values=True)
+    for k_v in q:
         if len(k_v) == 2:
             if k_v[0] in bool_args:
-                if "true" in k_v[1]:
+                if "true" in k_v[1] or k_v[1] == '':
                     ret.append(f"--{k_v[0]}" if len(k_v[0]) > 1 else f"-{k_v[0]}")
             else:
-                ret.append(f"--{k_v[0]}={k_v[1]}" if len(k_v[0]) > 1 else f"-{k_v[0]}={k_v[1]}")
-
-        elif len(k_v) == 1:
-            if k_v[0] in bool_args:
-                ret.append(f"--{k_v[0]}" if len(k_v[0]) > 1 else f"-{k_v[0]}")
-            elif k_v[0] in allowed_modules:
-                ret.append(k_v[0])
-
-    ret.append("--json")
+                if k_v[1] == '':
+                    ret.append(k_v[0])
+                else:
+                    ret.append(f"--{k_v[0]}={k_v[1]}" if len(k_v[0]) > 1 else f"-{k_v[0]}={k_v[1]}")
     return ret
 
 
 def translate_to_url(commandline: List[str]) -> str:
+    """
+    Function translates commandline list to url string
+
+    :param commandline: list of command items
+    :type commandline: List[str]
+    :return: generated url
+    :rtype: str
+    """
     print(commandline)
     ret = commandline[0] + "?"
 
@@ -107,19 +126,20 @@ def process_request(db: str, commandline: List[str], org_url):
         org_url += "&p=0"
 
     try:
-        e: Dict = dbs.process_command(db, commandline)
+        e = dbs.process_command(db, commandline)
     except (argparse.ArgumentError, LibFtdbException) as er:
         return Response(json.dumps({"ERROR": er.message}), mimetype='text/json')
 
+    if isinstance(e, Response):
+        return e
+
     if "--proc-tree" in commandline:
         if isinstance(e, dict) and "entries" in e:
-
             e["origin_url"] = org_url
             return Response(render_template('proc_tree.html', exe=e, web_ctx=get_webctx(args.ctx, db), diable_search=True), mimetype='text/html')
         else:
             return Response(json.dumps({"ERROR": "Returned data is not executable - add '&commands=true'"}), mimetype='application/json')
     if "--deps-tree" in commandline:
-
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
             return Response(render_template('deps_tree.html', exe=e, web_ctx=get_webctx(args.ctx, db), diable_search=True), mimetype='text/html')
@@ -215,9 +235,9 @@ def get_ebins(db, binpath, sort_by_time):
 
 
 @lru_cache()
-def get_opens(db, path, filter=False):
+def get_opens(db, path, opn_filter=False):
     cas_db = dbs.get_nfsdb(db)
-    if filter:
+    if opn_filter:
         return sorted([x for x in cas_db.db.opens_paths() if path in x])
     return sorted([x for x in cas_db.db.opens_paths() if path == x])
 
@@ -234,16 +254,16 @@ def get_rdeps(db, path):
 @lru_cache()
 def get_webctx(ctx, db):
     ret = path.join(ctx, db)
-    return ret if ret != '/' else ''
+    return ret if ret.endswith("/") else ret + "/"
 
 
 @cas_single.route('/reload_ftdb/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
 @cas_multi.route('/<db>/reload_ftdb/', methods=['GET'], strict_slashes=False)
 def reload_ftdb(db: str):
-    path = request.args.get('path', None)
-    if path is None:
+    ftd_path = request.args.get('path', None)
+    if ftd_path is None:
         return Response("Path to ftdb image not provided", mimetype='text/plain')
-    dbs.switch_ftdb(db, path)
+    dbs.switch_ftdb(db, ftd_path)
     return Response("DB reloaded")
 
 
@@ -488,7 +508,7 @@ def deps_tree(db: str) -> Response:
     if "path" in j:
         j["path"] = j["path"].replace(" ", "+")
         entries = []
-        entry: libetrace.nfsdbEntryOpenfile
+        entry: "libetrace.nfsdbEntryOpenfile | None" = None
         for x in cas_db.db.mdeps(j["path"], direct=True):
             if x.path in cas_db.linked_module_paths():
                 if x.path == j["path"]:
@@ -505,7 +525,7 @@ def deps_tree(db: str) -> Response:
             "origin_url": None,
             "entries": [{"path": j["path"],
                          "num_deps": len(entries),
-                         "parent": str(entry.parent.eid.pid) + ":" + str(entry.parent.eid.index)
+                         "parent": f"{entry.parent.eid.pid}:{entry.parent.eid.index}" if entry else ":"
                          }]
         }
     elif "filter" in j and len(j["filter"]) > 0:
@@ -665,8 +685,11 @@ def status(db: str):
 @cas_multi.route('/<db>/<module>/', strict_slashes=False)
 def get_module(db: str, module: str) -> Response:
     org_url = request.url
+    query = request.query_string.decode()
     try:
-        commandline = translate_to_cmdline(request, args.ctx, db)
+        commandline = translate_to_cmdline(module, query, args.ctx, db)
+        if "--json" not in commandline:
+            commandline.append("--json")
         return process_request(db, commandline, org_url)
     except MessageException as exc:
         return Response(json.dumps({
@@ -680,7 +703,10 @@ def get_module(db: str, module: str) -> Response:
 
 @cas_multi.route('/<db>/', methods=['GET'], strict_slashes=False)
 def print_api(db: str) -> Response:
-    return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    if db in dbs.db_map:
+        return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    else:
+        return Response(json.dumps({ "ERROR": "database not found" }), mimetype='text/json')
 
 
 @cas_single.route('/', methods=['GET'], strict_slashes=False)
@@ -689,7 +715,26 @@ def main() -> Response:
     if dbs and dbs.multi_instance:
         return Response(render_template('dbs.html', dbs=dbs.db_map, web_ctx=args.ctx), mimetype="text/html")
     else:
-        return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=args.ctx), mimetype="text/html")
+        return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=get_webctx(args.ctx, "")), mimetype="text/html")
+
+
+def get_app(arg, is_test=False):
+    if is_test:
+        # pytests require global access to args 
+        # pylint: disable-next=global-statement
+        global args
+        args = arg
+    dbs.lazy_init(args)
+    _app = Flask(__name__, template_folder='client/templates', static_folder='client/static', static_url_path=path.join(args.ctx, 'static'))
+    if path.exists('config.json'):
+        _app.config.from_file('config.json', json.load)
+    CORS(_app)
+    if args.debug:
+        print("Debug mode ON")
+        _app.debug = args.debug
+    args.ctx  = args.ctx if args.ctx.endswith("/") else args.ctx + "/"
+    _app.register_blueprint(cas_single if not args.dbs else cas_multi, url_prefix=args.ctx)
+    return _app
 
 if __name__ == '__main__':
 
@@ -706,20 +751,8 @@ if __name__ == '__main__':
 
     args = arg_parser.parse_args()
 
-    dbs = DBProvider(args)
-
     try:
-        app = Flask(__name__, template_folder='client/templates', static_folder='client/static', static_url_path=path.join(args.ctx, 'static'))
-        if path.exists('config.json'):
-            app.config.from_file('config.json', json.load)
-        CORS(app)
-        if args.debug:
-            print("Debug mode ON")
-            app.debug = args.debug
-        args.ctx = args.ctx if args.ctx.endswith("/") else args.ctx + "/"
-        bp = cas_single if not args.dbs else cas_multi
-        app.register_blueprint(bp, url_prefix=args.ctx)
-
+        app = get_app(args)
         http_server = WSGIServer((args.host, args.port), app, log="default" if args.debug else None)
         if args.debug:
             print(app.url_map)

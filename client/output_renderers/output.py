@@ -1,12 +1,13 @@
 from abc import abstractmethod
 import itertools
-from enum import Enum
+from enum import IntEnum
 from typing import Iterator, Callable
 
 import libetrace
+from client.exceptions import ParameterException
 from client.misc import fix_cmd_makefile
 
-class DataTypes(Enum):
+class DataTypes(IntEnum):
     # List values
     linked_data = 1
     file_data = 2
@@ -102,8 +103,7 @@ class OutputRenderer:
                     elif self.args.sorting_key == "cmd":
                         return lambda x: " ".join(x.argv)
                     else:
-                        print("Wrong sorted-key value! Allowed [ bin, cwd, cmd ]")
-                        exit(1)
+                        raise ParameterException("Wrong sorted-key value! Allowed [ bin, cwd, cmd ]")
 
             if isinstance(self.data[0], libetrace.nfsdbEntryOpenfile):
                 if self.args.sorting_key is not None:
@@ -114,8 +114,8 @@ class OutputRenderer:
                     if self.args.sorting_key == "original_path":
                         return lambda x: x.original_path
                     else:
-                        print("Wrong sorted-key value! Allowed [ path, original_path, mode ]")
-                        exit(1)
+                        raise ParameterException("Wrong sorted-key value! Allowed [ path, original_path, mode ]")
+
         return original_sort_lambda
 
     def render_data(self):
@@ -142,7 +142,9 @@ class OutputRenderer:
                 elif len(parts) == 3:
                     self.data = self.data[start:stop:step]
                 else:
-                    assert False, "Wrong range!"
+                    raise ParameterException("Wrong range!")
+
+
             elif isinstance(self.data, Iterator):
                 if len(parts) == 1:
                     self.data = list(itertools.islice(self.data, start, start))
@@ -151,9 +153,10 @@ class OutputRenderer:
                 elif len(parts) == 3:
                     self.data = list(itertools.islice(self.data, start, stop, step))
                 else:
-                    assert False, "Wrong range!"
+                    raise ParameterException("Wrong range!")
+
         elif self.args.entries_per_page != 0:
-            if (isinstance(self.data, list) or isinstance(self.data, Iterator)):
+            if isinstance(self.data, list) or isinstance(self.data, Iterator):
                 if self.count < (self.args.page * self.args.entries_per_page):
                     self.args.page = int(self.count/self.args.entries_per_page)
 
@@ -167,6 +170,10 @@ class OutputRenderer:
         if self.args.count:
             return self.count_renderer()
         return self.output_renderer()
+
+    @abstractmethod
+    def count_renderer(self):
+        self.assert_not_implemented()
 
     @abstractmethod
     def linked_data_renderer(self):

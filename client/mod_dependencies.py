@@ -74,7 +74,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
         else:
             return ent
 
-    def set_piped_arg(self, data, data_type:type):
+    def set_piped_arg(self, data, data_type: type):
         if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
@@ -84,7 +84,7 @@ class DepsFor(Module, PipedModule, FilterableModule):
         if data_type == libetrace.nfsdbEntry:
             raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
-    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable | None", "type|None"]:
         paths = self.get_ext_paths(self.args.path)
         self.args.path = None
 
@@ -99,8 +99,8 @@ class DepsFor(Module, PipedModule, FilterableModule):
             })
             if self.args.cdb:
                 data = list(self.cdb_fix_multiple(data))
-                return data, DataTypes.compilation_db_data, lambda x: x['filename'],str
-            return data, DataTypes.commands_data, lambda x: x.eid.pid,libetrace.nfsdbEntry
+                return data, DataTypes.compilation_db_data, lambda x: x['filename'], str
+            return data, DataTypes.commands_data, lambda x: x.eid.pid, libetrace.nfsdbEntry
         elif self.args.details:
             if self.args.deep:
                 data = list({
@@ -192,7 +192,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
         else:
             return ent.path
 
-    def set_piped_arg(self, data, data_type:type):
+    def set_piped_arg(self, data, data_type: type):
         if data_type == str:
             printdbg("DEBUG: accepting {} as args.path".format(data_type), self.args)
             self.args.path = data
@@ -202,8 +202,8 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
         if data_type == libetrace.nfsdbEntry:
             raise PipelineException("Wrong pipe input data {}.".format(data_type))
 
-    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
-        rdeps = [ f
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable | None", "type|None"]:
+        rdeps = [f
             for fp in self.nfsdb.db.rdeps(self.args.path, recursive=self.args.recursive)
             for f in self.nfsdb.db.filemap[fp]
         ]
@@ -212,7 +212,7 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
             data = list({
                 self.get_exec_of_open(o)
                 for o in rdeps
-                if self.filter_exec(self.get_exec_of_open(o)) and self.filter_exec(o.opaque)
+                if self.filter_exec(self.get_exec_of_open(o))
             })
 
             return data, DataTypes.commands_data, lambda x: x.eid.pid, libetrace.nfsdbEntry
@@ -235,4 +235,4 @@ class RevDepsFor(Module, PipedModule, FilterableModule):
                 data = self.get_cdm(data)
                 return data, DataTypes.cdm_data, lambda x: x[0], None
 
-            return data, DataTypes.file_data, None,str
+            return data, DataTypes.file_data, None, str

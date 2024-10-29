@@ -1,9 +1,9 @@
 import os
 import json
-from typing import Tuple
 
 import libetrace
 import libftdb
+from client.exceptions import ParameterException
 import libft_db
 import libcas
 
@@ -23,7 +23,7 @@ class Renderer(OutputRenderer):
             "linked_view": {
                 "fmt": "{L}",
                 "entry-fmt": "{f}",
-                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{m}{sep}{e}{sep}{s}"
+                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{st}{sep}{cl}{sep}{m}{sep}{e}{sep}{s}"
             },
             "file_view": {
                 "fmt": "{L}",
@@ -48,7 +48,7 @@ class Renderer(OutputRenderer):
             "compiled_view": {
                 "fmt": "{L}",
                 "entry-fmt": "{f}",
-                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{m}{sep}{e}{sep}{s}"
+                "entry-detail-fmt": "{f}{sep}{o}{sep}{p}{sep}{t}{sep}{st}{sep}{cl}{sep}{m}{sep}{e}{sep}{s}"
             },
             "compilation_info_view": {
                 "fmt": "{L}",
@@ -141,7 +141,7 @@ class Renderer(OutputRenderer):
                     for row in self.data:
                         yield self._src_md_entry_format(row, entry_fmt)
             else:
-                assert False, "UNKNOWN RETURN DATA - This should never happend!"
+                raise ParameterException("UNKNOWN RETURN DATA - This should never happend!")
         else:
             return None
 

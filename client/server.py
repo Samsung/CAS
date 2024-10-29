@@ -6,37 +6,54 @@ from argparse import Namespace
 from typing import Dict, List, Optional
 from client.cmdline import process_commandline
 from client.exceptions import EndpointException, DatabaseException
+from client.misc import get_config_path
 import libcas
 import libft_db
 
 
 class DBProvider:
-    db_map: Dict = {}
+    db_map: Dict[str, Dict] = {}
+    def __init__(self) -> None:
+        self.args = Namespace()
+        self.multi_instance = False
 
-    def __init__(self, args: Namespace):
+    def lazy_init(self, args:Namespace):
         self.args = args
         self.multi_instance = args.dbs is not None
         self.refresh_dbs()
 
     def refresh_dbs(self):
-        print("Reading dbs ")
+        print("Reading dbs")
         if self.multi_instance:
             files = glob(f'{self.args.dbs}/*/.nfsdb.img')
         else:
-            files = glob(f'{os.getcwd()}/.nfsdb.img')
+            if self.args.casdb:
+                files = [self.args.casdb]
+            elif "DB_DIR" in os.environ:
+                files = glob(os.path.abspath(f'{os.environ["DB_DIR"]}/.nfsdb.img'))
+            else:
+                files = glob(os.path.abspath(f'{os.getcwd()}/.nfsdb.img'))
 
         if self.multi_instance and self.args.ftd:
             ftfiles = glob(f'{self.args.ftd}/*/*.img')
         else:
-            ftfiles = glob(f'{os.getcwd()}/*.img')
+            if self.args.ftdb:
+                ftfiles = [self.args.ftdb]
+            elif "FTDB_DIR" in os.environ:
+                ftfiles = glob(f'{os.environ["FTDB_DIR"]}/*.img')
+            else:
+                ftfiles = glob(f'{os.getcwd()}/*.img')
+
+            ftfiles = [os.path.abspath(f) for f in ftfiles]
 
         for nfsdb_path in files:
             db_dir = dirname(abspath(nfsdb_path))
             db_key = basename(db_dir).replace("_DONE", "") if self.multi_instance else ""
+            ft_dir = self.args.ftd if self.args.ftd else os.environ["FTDB_DIR"] if "FTDB_DIR" in os.environ else os.getcwd()
             if db_key not in self.db_map:
-                config_file = join(db_dir, ".bas_config")
+                config_file = get_config_path(join(db_dir, ".bas_config"))
                 deps_file = join(db_dir, ".nfsdb.deps.img")
-                ftdb_files = [x for x in ftfiles if os.path.join(self.args.ftd, db_key) in x ]
+                ftdb_files = [x for x in ftfiles if os.path.join(ft_dir, db_key) in x ]
                 self.db_map[db_key] = {
                     "db_dir": db_dir,
                     "nfsdb_path": nfsdb_path,
@@ -51,8 +68,7 @@ class DBProvider:
                     "image_version": libcas.CASDatabase.get_img_version(nfsdb_path)
                 }
             else:
-                self.db_map[db_key]["ftdb_files"] = [x for x in ftfiles if os.path.join(self.args.ftd, db_key) in x ]
-        #print(self.db_map)
+                self.db_map[db_key]["ftdb_files"] = [x for x in ftfiles if os.path.join(ft_dir, db_key) in x ]
 
     def ensure_db(self, db_name):
         if db_name not in self.db_map:
@@ -79,7 +95,7 @@ class DBProvider:
     def process_command(self, db_name: Optional[str], cmd: List[str]):
         self.ensure_db(db_name)
         self.db_map[db_name]["last_access"] = time.time()
-        return process_commandline(self.db_map[db_name]["nfsdb"], cmd, None)
+        return process_commandline(self.db_map[db_name]["nfsdb"], cmd, None, is_server=True)
 
     def get_nfsdb(self, db_name: str) -> libcas.CASDatabase:
         self.ensure_db(db_name)

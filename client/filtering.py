@@ -73,7 +73,7 @@ class Filter:
                     raise FilterException("'type' sub-parameter not present! Allowed values: {}".format(self.parameters_schema['type']))
 
                 if 'type' in f_and and f_and['type'] == "wc":
-                    assert False, "DEBUG! Some wildcards not cached to re! - this should never happen! {}".format(f_and)
+                    raise FilterException("DEBUG! Some wildcards not cached to re! - this should never happen! {}".format(f_and))
 
                 if 'class' in f_and and f_and['class'] == 'compiler':
                     self.comp_re = "|".join([x+"$" for x in self.config.config_info["gcc_spec"] + self.config.config_info["gpp_spec"]

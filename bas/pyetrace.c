@@ -799,10 +799,11 @@ static int scan_openfile_precompute_linked_file(struct nfsdb_entry* entry, const
 void libetrace_nfsdb_entry_precompute_linked_file(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
 
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->eid.pid);
-
-	for (unsigned long i=0; i<node->entry_count; ++i) {
-		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
-		if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_linked_file,entry,0)) {
+	if (node){
+		for (unsigned long i=0; i<node->entry_count; ++i) {
+			struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
+			if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_linked_file,entry,0)) {
+			}
 		}
 	}
 }
@@ -864,11 +865,12 @@ static int scan_openfile_precompute_object_file(struct nfsdb_entry* entry, const
 void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
 
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->eid.pid);
-
-	for (unsigned long i=0; i<node->entry_count; ++i) {
-		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
-		for (unsigned long u=0; u<entry->compilation_info->compiled_count; ++u) {
-			if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_compiled_file,entry,&u)) {
+	if (node){
+		for (unsigned long i=0; i<node->entry_count; ++i) {
+			struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
+			for (unsigned long u=0; u<entry->compilation_info->compiled_count; ++u) {
+				if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_compiled_file,entry,&u)) {
+				}
 			}
 		}
 	}
@@ -877,11 +879,12 @@ void libetrace_nfsdb_entry_precompute_compilation_info_files(struct nfsdb* nfsdb
 void libetrace_nfsdb_entry_precompute_compilation_info_headers(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
 
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->eid.pid);
-
-	for (unsigned long i=0; i<node->entry_count; ++i) {
-		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
-		for (unsigned long u=0; u<entry->compilation_info->header_list_count; ++u) {
-			if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_header_file,entry,&u)) {
+	if (node){
+		for (unsigned long i=0; i<node->entry_count; ++i) {
+			struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
+			for (unsigned long u=0; u<entry->compilation_info->header_list_count; ++u) {
+				if (!scan_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_header_file,entry,&u)) {
+				}
 			}
 		}
 	}
@@ -890,11 +893,12 @@ void libetrace_nfsdb_entry_precompute_compilation_info_headers(struct nfsdb* nfs
 void libetrace_nfsdb_entry_precompute_compilation_info_objects(struct nfsdb* nfsdb, struct nfsdb_entry* entry) {
 
 	struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->eid.pid);
-
-	for (unsigned long i=0; i<node->entry_count; ++i) {
-		struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
-		for (unsigned long u=0; u<entry->compilation_info->object_list_count; ++u) {
-			if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_object_file,entry,&u)) {
+	if (node){
+		for (unsigned long i=0; i<node->entry_count; ++i) {
+			struct nfsdb_entry* nfsdb_entry = node->entry_list[i];
+			for (unsigned long u=0; u<entry->compilation_info->object_list_count; ++u) {
+				if (!scan_wr_openfile_list_with_children(nfsdb,nfsdb_entry,scan_openfile_precompute_object_file,entry,&u)) {
+				}
 			}
 		}
 	}
@@ -4774,9 +4778,11 @@ static void fill_openfile_list_with_children(const struct nfsdb* nfsdb, PyObject
 
 	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
-		for (unsigned long j=0; j<node->entry_count; ++j) {
-			struct nfsdb_entry* child_entry = node->entry_list[j];
-			fill_openfile_list_with_children(nfsdb,opens,child_entry);
+		if (node) {
+			for (unsigned long j=0; j<node->entry_count; ++j) {
+				struct nfsdb_entry* child_entry = node->entry_list[j];
+				fill_openfile_list_with_children(nfsdb,opens,child_entry);
+			}
 		}
 	}
 }
@@ -4818,9 +4824,11 @@ static void fill_wr_openfile_list_with_children(const struct nfsdb* nfsdb, PyObj
 
 	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
-		for (unsigned long j=0; j<node->entry_count; ++j) {
-			struct nfsdb_entry* child_entry = node->entry_list[j];
-			fill_wr_openfile_list_with_children(nfsdb,opens,child_entry);
+		if (node) {
+			for (unsigned long j=0; j<node->entry_count; ++j) {
+				struct nfsdb_entry* child_entry = node->entry_list[j];
+				fill_wr_openfile_list_with_children(nfsdb,opens,child_entry);
+			}
 		}
 	}
 }
@@ -4850,9 +4858,11 @@ static void fill_openpath_list_with_children(const struct nfsdb* nfsdb, PyObject
 
 	for (unsigned long i=0; i<entry->child_ids_count; ++i) {
 		struct nfsdb_entryMap_node* node = nfsdb_entryMap_search(&nfsdb->procmap,entry->child_ids[i].pid);
-		for (unsigned long j=0; j<node->entry_count; ++j) {
-			struct nfsdb_entry* child_entry = node->entry_list[j];
-			fill_openpath_list_with_children(nfsdb,openpaths,child_entry);
+		if (node) {
+			for (unsigned long j=0; j<node->entry_count; ++j) {
+				struct nfsdb_entry* child_entry = node->entry_list[j];
+				fill_openpath_list_with_children(nfsdb,openpaths,child_entry);
+			}
 		}
 	}
 }

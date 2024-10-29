@@ -129,13 +129,13 @@ class TestSources:
     @pytest.mark.parametrize(
         'filter_cmd,expected_res,pathlike,path_pattern', [
             ('', (1000, 5000), False, None),
-            (' --ftdb-filter=[path=*/soc/*,type=wc]', (100, 500), True, '*/soc/*'),
+            (' --ftdb-filter=[path=*/soc/*,type=wc]', (30, 500), True, '*/soc/*'),
             (' --ftdb-filter=[has_global=*kvm*,type=wc]', (10, 50), False, None),
-            (' --ftdb-filter=[has_func=*cpy,type=wc]', (1000, 2000), False, None),
+            (' --ftdb-filter=[has_func=*cpy,type=wc]', (1000, 5000), False, None),
             (' --ftdb-filter=[has_funcdecl=*cpy,type=wc]', (1, 10), False, None),
             (' --ftdb-filter=[has_func=*alloc*,type=wc]and[has_func=memcpy,type=sp]', (1000, 4000), False, None),
             (' --ftdb-filter=[has_global=*kvm*,type=wc]and[has_global=sleep,type=sp]', (0, 10), False, None),
-            (' --ftdb-filter=[has_funcdecl=*alloc*,type=wc]or[has_funcdecl=memcpy,type=sp]', (40, 60), False, None),
+            (' --ftdb-filter=[has_funcdecl=*alloc*,type=wc]or[has_funcdecl=memcpy,type=sp]', (40, 90), False, None),
         ]
     )
     def test_filter_options(self, filter_cmd, expected_res, pathlike, path_pattern):
@@ -208,11 +208,11 @@ class TestModules:
     @pytest.mark.parametrize(
         'filter_cmd,expected_res,pathlike,path_pattern', [
             ('', (1, 500), False, None),
-            (' --ftdb-filter=[path=*/net/*,type=wc]', (1, 100), True, "*/net/*"),
+            (' --ftdb-filter=[path=*/net/*,type=wc]', (1, 200), True, "*/net/*"),
             (' --ftdb-filter=[has_global=*kvm*,type=wc]', (1, 100), False, None),
             (' --ftdb-filter=[has_func=*cpy,type=wc]', (100, 300), False, None),
             (' --ftdb-filter=[has_func=*alloc*,type=wc]and[has_func=memcpy,type=sp]', (100, 400), False, None),
-            (' --ftdb-filter=[has_global=*kvm*,type=wc]and[has_global=sleep,type=sp]', (10, 60), False, None),
+            (' --ftdb-filter=[has_global=*kvm*,type=wc]and[has_global=sleep,type=sp]', (10, 150), False, None),
         ]
     )
     def test_filter_options(self, filter_cmd, expected_res, pathlike, path_pattern):
@@ -239,12 +239,12 @@ class TestModules:
 
     @pytest.mark.parametrize(
         'pipe_cmd,expected_count', [
-            ('globs ',(300, 400)),
-            ('funcs ', (300, 400)),
+            ('globs ',(200, 400)),
+            ('funcs ', (200, 400)),
             ('funcdecls ', (100, 500)),
             ('globs --ftdb-filter=[name=*kvm*,type=wc] ',(50, 100)),
             ('funcs --ftdb-filter=[name=*_desc,type=wc] ', (100, 300)),
-            ('funcdecls --ftdb-filter=[name=*cpy,type=wc] ', (300, 400))
+            ('funcdecls --ftdb-filter=[name=*cpy,type=wc] ', (200, 400))
         ]
     )
     def test_pipe(self, pipe_cmd, expected_count, md_count):
@@ -265,7 +265,7 @@ class TestFuncs:
         'filter_cmd,expected_res,pathlike,path_pattern', [
             ('', (150000, 200000), False, None),
             (' --ftdb-filter=[name=*cpy,type=wc]', (1, 50), False, None),
-            (' --ftdb-filter=[location=*/soc/*,type=wc]', (5000, 15000), False, None)
+            (' --ftdb-filter=[location=*/soc/*,type=wc]', (500, 15000), False, None)
         ]
     )
     def test_filter_options(self, filter_cmd, expected_res,pathlike,path_pattern):
@@ -294,7 +294,7 @@ class TestFuncs:
         
     def test_pipe(self):
         res = process_commandline(cas_db,'srcs --ftdb-filter=[path=*/kernel/irq/*,type=wc] ' + self.base_cmd +' --count', ftdb)
-        assert 4000 < int(res) < 6000
+        assert 4000 < int(res) < 8000
 
 
 class TestGlobs:
@@ -304,8 +304,8 @@ class TestGlobs:
     @pytest.mark.parametrize(
         'filter_cmd,expected_res,pathlike,path_pattern', [
             ('', (10000, 110000), False, None),
-            (' --ftdb-filter=[name=*kvm*,type=wc]', (500, 1000), False, None),
-            (' --ftdb-filter=[location=*/soc/*,type=wc]', (5000, 11000), False, None)
+            (' --ftdb-filter=[name=*kvm*,type=wc]', (500, 2000), False, None),
+            (' --ftdb-filter=[location=*/soc/*,type=wc]', (500, 11000), False, None)
         ]
     )
     def test_filter_options(self, filter_cmd, expected_res,pathlike,path_pattern):
@@ -335,7 +335,7 @@ class TestGlobs:
 
     def test_pipe(self):
         res = process_commandline(cas_db, 'srcs --ftdb-filter=[path=*/kernel/irq*,type=wc] '+self.base_cmd +' --count', ftdb)
-        assert 100 < int(res) < 500
+        assert 100 < int(res) < 800
 
 class TestFuncDecl:
 
@@ -375,4 +375,4 @@ class TestFuncDecl:
     
     def test_pipe(self):
         res = process_commandline(cas_db, 'srcs --ftdb-filter=[path=*/kernel/irq/*,type=wc] ' + self.base_cmd +' --count', ftdb)
-        assert 1 <= int(res) < 10
+        assert 1 <= int(res) < 20

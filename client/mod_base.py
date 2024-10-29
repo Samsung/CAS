@@ -1,10 +1,10 @@
 import fnmatch
 from functools import lru_cache
-import sys
 import re
 from abc import abstractmethod
-from typing import Any, List, Dict, Tuple, Generator, Callable, Set
+from typing import Any, List, Dict, Optional, Tuple, Generator, Callable, Set
 import argparse
+from flask import Response
 import libetrace
 import libcas
 import libftdb
@@ -14,9 +14,12 @@ from client.misc import get_output_renderers, printdbg, fix_cmd
 from client.output_renderers.output import DataTypes
 from client.exceptions import ArgumentException, LibFtdbException, LibetraceException, PipelineException
 
+
 class ModulePipeline:
     def __init__(self, modules: list) -> None:
         self.modules: List[Module] = modules
+        for m in modules:
+            m.set_pipeline(self)
         self.last_module = None
 
     def subject(self, ent) -> "str | None":
@@ -31,15 +34,14 @@ class ModulePipeline:
             printdbg("DEBUG: START pipeline step {}".format(mdl.args.module.__name__), mdl.args)
             if mdl.args.is_piped and self.last_module is not None and pipe_type is not None:
                 printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, pipe_type.__name__, mdl.args.module.__name__), mdl.args)
-                if not isinstance(data, list):
-                    raise PipelineException("Input data '{}' module is not list - cannot proceed with next pipeline step!".format(mdl.args.module.__name__))
+                if not isinstance(data, list) and not isinstance(data, libetrace.nfsdbOpensIter):
+                    raise PipelineException("Input data '{}' module is not list ({}) - cannot proceed with next pipeline step!".format(mdl.args.module.__name__, type(data)))
                 elif len(data) == 0:
                     raise PipelineException("Input data to '{}' module is empty - cannot proceed with next pipeline step!".format(mdl.args.module.__name__))
                 if isinstance(mdl, PipedModule):
                     mdl.set_piped_arg(data, pipe_type)
                 else:
                     raise PipelineException("Can't pipe to '{}' module - this module is not accepting any input data.".format(mdl.args.module.__name__))
-
 
             mdl.check_required(mdl.required_args, mdl.args)
 
@@ -49,7 +51,7 @@ class ModulePipeline:
             if "command_filter" in mdl.args and mdl.args.command_filter:
                 mdl.command_filter = CommandFilter(mdl.args.command_filter, mdl, mdl.config, mdl.source_root)
 
-            if "ftdb_simple_filter" in mdl.args and mdl.args.ftdb_simple_filter:
+            if "ftdb_simple_filter" in mdl.args and mdl.args.ftdb_simple_filter and mdl.ft_db:
                 mdl.ftdb_simple_filter = FtdbSimpleFilter(mdl.args.ftdb_simple_filter, mdl, mdl.config, mdl.source_root, mdl.ft_db)
 
             try:
@@ -66,7 +68,7 @@ class ModulePipeline:
             self.last_module = mdl
             printdbg("DEBUG: END pipeline step {}".format(mdl.args.module.__name__), mdl.args)
         if self.last_module is not None:
-            if self.last_module.args.ide:
+            if isinstance(data, Response):
                 return data
             if self.last_module.args.ftdb_create:
                 return data
@@ -84,12 +86,13 @@ class Module:
     command_filter = None
     ftdb_simple_filter = None
 
-    def __init__(self, args: argparse.Namespace, nfsdb: libcas.CASDatabase, config, ft_db: FTDatabase = None) -> None:
+    def __init__(self, args: argparse.Namespace, nfsdb: libcas.CASDatabase, config, ft_db: Optional[FTDatabase] = None) -> None:
         self.args: argparse.Namespace = args
-        self.config = config
-        self.nfsdb = nfsdb
-        self.ft_db = ft_db
-        self.source_root = nfsdb.source_root if hasattr(nfsdb, "source_root") else ""
+        self.config:libcas.CASConfig = config
+        self.nfsdb: libcas.CASDatabase = nfsdb
+        self.ft_db: Optional[FTDatabase] = ft_db
+        self.source_root:str = nfsdb.source_root if hasattr(nfsdb, "source_root") else ""
+        self.module_pipeline: Optional[ModulePipeline] = None
 
         self.has_pipe_path = True if "pipe_path" in self.args and self.args.pipe_path and len(self.args.pipe_path) > 0 else False
         self.has_open_filter = True if "open_filter" in self.args and self.args.open_filter else False
@@ -104,6 +107,9 @@ class Module:
         self.has_all = True if "all" in self.args and self.args.all else False
         self.relative_path = True if "relative" in self.args and self.args.relative else False
         self.original_path = True if "original_path" in self.args and self.args.original_path else False
+
+    def set_pipeline(self, module_pipeline):
+        self.module_pipeline = module_pipeline
 
     @abstractmethod
     def subject(self, ent) -> str:
@@ -141,7 +147,7 @@ class Module:
     @staticmethod
     def add_args(args: List, mod):
         from client.argparser import args_map
-        parser = argparse.ArgumentParser(description=mod.__doc__)
+        parser = argparse.ArgumentParser(description=mod.__doc__, allow_abbrev=True)
         arg_group = parser.add_argument_group("Module specific arguments")
         for arg in args:
             args_map[arg](arg_group)
@@ -158,11 +164,11 @@ class Module:
         """
 
     @abstractmethod
-    def get_data(self) -> Tuple[Any, DataTypes, "Callable|None", "type|None"]:
+    def get_data(self) -> Tuple[Any, DataTypes, "Callable | None", "type | None"]:
         """
         Function returns `data` records with `DataType` and optional pipe type and sorting lambda.
 
-        :return: _description_
+        :return: Tuple with data
         :rtype: tuple ( list, DataType, type, Callable )
         """
 
@@ -172,7 +178,7 @@ class Module:
 
         :param open_path: path to process
         :type open_path: str
-        :return: relative path or original path if there where no source root in it
+        :return: relative path or original path if there is no source root in it
         :rtype: str
         """
         if self.relative_path:
@@ -217,9 +223,9 @@ class Module:
                     return True
         return False
 
-    def filter_output(self, data:List) -> List["libetrace.nfsdbEntryOpenfile | str"]:
+    def filter_output(self, data: List) -> List["libetrace.nfsdbEntryOpenfile | str"]:
         """
-        Function check all data paths and matches it with --unique-output-list parttern,
+        Function check all data paths and matches it with --unique-output-list pattern,
         if more than one record matches it is dropped from data list.
 
         :param data: data list to check
@@ -378,12 +384,12 @@ class Module:
                 if self.filter_open(o):
                     yield o
 
-    def get_multi_deps(self, epaths:"List[libcas.DepsParam | str]") -> List[libetrace.nfsdbEntryOpenfile]:
+    def get_multi_deps(self, epaths: "List[libcas.DepsParam | str]") -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function runs proper dependency generation function based on --cache argument.
 
-        :param paths: list of extended deps parameters or single path
-        :type paths: List[libcas.DepsParam|str]
+        :param epaths: list of extended deps parameters or single path
+        :type epaths: List[libcas.DepsParam | str]
         :return: list of opens objects
         :rtype: List[List[libetrace.nfsdbEntryOpenfile]]
         """
@@ -394,7 +400,7 @@ class Module:
                                             debug=self.args.debug, debug_fd=self.args.debug_fd, use_pipes=self.args.with_pipes,
                                             wrap_deps=self.args.wrap_deps)
 
-    def get_dependency_graph(self, epaths:"List[libcas.DepsParam | str]"):
+    def get_dependency_graph(self, epaths: "List[libcas.DepsParam | str]"):
         """
         Function returns dependency graph of given file list
 
@@ -413,7 +419,7 @@ class Module:
     def get_rdm(self, file_paths):
         return self.nfsdb.get_rdm(file_paths, recursive=self.args.recursive, sort=self.args.sorted, reverse=self.args.reverse)
 
-    def get_cdm(self, file_paths)-> List[List]:
+    def get_cdm(self, file_paths) -> List[List]:
         cdm_exclude_patterns = None
         if self.args.cdm_exclude_patterns is not None:
             cdm_exclude_patterns = []
@@ -506,7 +512,7 @@ class Module:
         return ret
 
     @staticmethod
-    def check_required(required_args:List[str], args: argparse.Namespace):
+    def check_required(required_args: List[str], args: argparse.Namespace):
         """
         Function check if required parameters are valid.
 
@@ -548,16 +554,15 @@ class Module:
             self.open_filter = OpenFilter(self.args.open_filter, self, self.config, self.source_root)
         if self.args.command_filter:
             self.command_filter = CommandFilter(self.args.command_filter, self, self.config, self.source_root)
-        if self.args.ftdb_simple_filter:
-            self.ftdb_simple_filter = FtdbSimpleFilter(self.args.ftdb_simple_filter, self, self.config, self.source_root)
+        if self.args.ftdb_simple_filter and self.ft_db:
+            self.ftdb_simple_filter = FtdbSimpleFilter(self.args.ftdb_simple_filter, self, self.config, self.source_root, self.ft_db)
 
         try:
             data, output_type, sort_lambda, pipe_type = self.get_data()
         except libetrace.error as exc:
-            raise LibetraceException("libetrace.error : {}".format(str(exc)))
+            raise LibetraceException("libetrace.error : {}".format(str(exc))) from exc
 
-
-        output_engine = self.get_output_engine()(data, self.args, self, output_type, sort_lambda)
+        output_engine = self.get_output_engine()(data, self.args, self, output_type, sort_lambda, pipe_type)
         return output_engine.render_data()
 
     def get_output_engine(self):
@@ -596,12 +601,14 @@ class Module:
 class FilterableModule:
     pass
 
+
 class PipedModule:
     @abstractmethod
-    def set_piped_arg(self, data, data_type:type) -> None:
+    def set_piped_arg(self, data, data_type: type) -> None:
         """
         Function modifies input path argument considering previous data.
         """
+
 
 class UnknownModule(Module):
     def render(self):

@@ -74,3 +74,11 @@ class DatabaseException(MessageException):
     :param message: Exception message
     :type message: str
     """
+
+class IDEGenerationException(MessageException):
+    """
+    Exception object used when IDE project generation error occurs
+
+    :param message: Exception message
+    :type message: str
+    """

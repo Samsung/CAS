@@ -8,7 +8,6 @@ import sys
 import re
 from typing import Dict, List, Tuple, Any
 from client.misc import get_output_renderers
-from client.ide_generator.project_generator import add_params as ide_add_params
 from client.ftdb_generator.ftdb_generator import add_params as ftdb_add_params
 from client.exceptions import ArgumentException
 
@@ -21,7 +20,7 @@ def get_api_modules() -> Dict[str, Any]:
     :rtype: dict
     """
     from client.mod_misc import (SourceRoot, CompilerPattern, LinkerPattern, VersionInfo, RootPid, ShowConfig, ShowStat,
-                                 FtdbDirectoryName, FtdbModuleName, FtdbVersion, FtdbReleaseName)
+                                FtdbDirectoryName, FtdbModuleName, FtdbVersion, FtdbReleaseName)
     from client.mod_dbops import ParseDB, Postprocess, StoreCache
     from client.mod_compilation import Compiled, CompilationInfo, RevCompsFor
     from client.mod_dependencies import DepsFor,  RevDepsFor
@@ -31,6 +30,7 @@ def get_api_modules() -> Dict[str, Any]:
     from client.mod_sources import SourcesModule, FTModules
     from client.mod_funcs import FunctionsModule, FuncDeclModule
     from client.mod_globals import GlobalsModule, TypesModule
+    from client.mod_ide import VSCodeProjectGenerator
     return {
         # Modules using database
         'binaries': Binaries, 'bins': Binaries, 'b': Binaries,
@@ -55,6 +55,7 @@ def get_api_modules() -> Dict[str, Any]:
         'source_root': SourceRoot, 'sroot': SourceRoot,
         'config': ShowConfig, 'cfg': ShowConfig,
         'stat': ShowStat,
+        'vscode': VSCodeProjectGenerator,
         # Show ftdb info
         'ftdb-module': FtdbModuleName,
         'ftdb-release': FtdbReleaseName,
@@ -146,7 +147,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     view_group.add_argument('--makefile', action='store_true', default=False, help='Transform generated list of commands to makefile (req. commands view --generate)')
     view_group.add_argument('--all', action='store_true', default=False, help='Generate entries of all commands not only compilations (req. commands view --generate)')
     view_group.add_argument('--openrefs', action='store_true', default=False, help='Adds opened file list to generated compilation entries (req. commands view --generate)')
-    view_group.add_argument('--static', action='store_true', default=False, help='')
+    view_group.add_argument('--static', action='store_true', default=False, help='Generate makefile with static')
 
     output_renderers = get_output_renderers()
     output_group = parser.add_argument_group("Output selection arguments")
@@ -162,7 +163,6 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
         output_group.add_argument('--{}-output'.format(name), '--{}'.format(name), dest=name, action='store_true', default=False, help=module.Renderer.help)
         module.Renderer.append_args(parser)
 
-    ide_add_params(parser)
     ftdb_add_params(parser)
 
     will_run_api_key = len([x for x in get_api_keywords() if x in args]) > 0
@@ -172,7 +172,7 @@ def get_common_parser(args=None) -> argparse.ArgumentParser:
     return parser
 
 
-def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
+def get_argparser_pipeline(args: "str | List[str] | None") -> Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]:
     """
     Function takes args and splits them into common args and list of pipeline args.
 
@@ -191,7 +191,7 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
     buff: List[str] = []
     for x in cmd:
         if len(buff) == 0 and x not in pipeline_split:
-            raise ArgumentException ("Unknown module '{}'! use one of {}".format(x, pipeline_split))
+            raise ArgumentException("Unknown module '{}'! use one of {}".format(x, pipeline_split))
         if x in pipeline_split:
             if len(buff) > 0:
                 pipelines.append(buff)
@@ -205,10 +205,10 @@ def get_argparser_pipeline(args: "List[str] | None") -> Tuple[argparse.Namespace
         module_name = pipeline.pop(0).replace("--", "")
         mdl = get_api_modules().get(module_name, None)
         if mdl is None:
-            raise ArgumentException ("Unrecognized module '{}'.".format(mdl))
+            raise ArgumentException("Unrecognized module '{}'.".format(mdl))
         module_args, rest = mdl.get_argparser().parse_known_args(pipeline)
         if len(rest) > 0:
-            raise ArgumentException ("Commandline switches {} not recognized as arguments of module '{}'.".format(rest, module_name))
+            raise ArgumentException("Commandline switches {} not recognized as arguments of module '{}'.".format(rest, module_name))
         module_args.module = mdl
         module_args.name = module_name
         module_args.is_piped = True if len(pipeline_args) > 0 else False
@@ -252,10 +252,7 @@ def get_args(commandline: "str | List[str] | None" = None) -> Tuple[argparse.Nam
     :return: tuple with organized arguments
     :rtype: Tuple[argparse.Namespace, List[argparse.Namespace], argparse.ArgumentParser]
     """
-    if commandline is None:
-        commandline = sys.argv[1:]
-    elif isinstance(commandline, str):
-        commandline = commandline.split()
+
 
     common_args, pipeline_args, common_parser = get_argparser_pipeline(commandline)
 
@@ -347,14 +344,14 @@ args_map = {
         help='Manually add result(s) - can be used multiple times, or with ":" separator.'
     ),
     "filter": lambda x: x.add_argument(
-        '--filter', '-f',
+        '--filter', '--fo',
         type=str,
         dest='open_filter',
         default=None,
         help='Filter opens results'
     ),
     "command-filter": lambda x: x.add_argument(
-        '--command-filter', '-fc',
+        '--command-filter', '--fc',
         type=str,
         dest='command_filter',
         default=None,
@@ -545,7 +542,7 @@ args_map = {
         default=False,
         help="[FTDB] Display globals' full definition"
     ),
-    "deep": lambda x:x.add_argument(
+    "deep": lambda x: x.add_argument(
         '--deep-comps',
         dest="deep",
         action='store_true',
