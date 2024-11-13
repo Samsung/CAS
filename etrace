@@ -23,7 +23,7 @@ WORK_DIR=$(pwd)
 INITCWD=$(pwd)
 MODULE_PARAMS=""
 
-while getopts "hilmtew:" opt; do
+while getopts "hilmtefw:c:" opt; do
     case "$opt" in
     h)
         print_usage
@@ -32,9 +32,15 @@ while getopts "hilmtew:" opt; do
     l)
         SAVE_KERNEL_LOG=y
         ;;
+    f)
+        FORCED=y
+        ;;
     w)
         WORK_DIR="$OPTARG"
         mkdir -p "$WORK_DIR"
+        ;;
+    c)
+        CORE_RANGE="-c $OPTARG"
         ;;
     i)
         MODULE_PARAMS="$MODULE_PARAMS ignore_repeated_opens=1"
@@ -57,14 +63,28 @@ shift $((OPTIND-1))
 # If arguments were separated from the command by "--", remove it too
 [ "${1:-}" = "--" ] && shift
 
-
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 NPROC=$(nproc)
 NPROC=$(expr $NPROC - 1)
 
+TRACING_CMD="${DIR}/cati /sys/kernel/debug/tracing/trace_pipe"
+
+cat_proc_pid=$(pgrep "cati")
+if [ -n "${cat_proc_pid}" ]; then
+    if [ -n "${FORCED}" ]; then
+        for c_pid in $(pgrep "cati"); do
+            kill -9 "${cat_proc_pid}"
+        done
+    else
+        echo "ERROR: cat on trace_pipe already running! exiting..."
+        echo "Hint - etrace can be forced using -f arg"
+        exit 2
+    fi
+fi
+
 # -------- setting up ftrace
 if (( $EUID != 0 )); then
-    sudo -n setup_etrace.sh -f
+    sudo -n setup_etrace.sh -f $CORE_RANGE
 else
     setup_etrace.sh -f
 fi
@@ -77,8 +97,7 @@ fi
 echo "INITCWD=$INITCWD" > "$WORK_DIR/.nfsdb"
 
 # -------- set up event listener
-#${DIR}/etrace_cat "/sys/kernel/debug/tracing/trace_pipe" > "$WORK_DIR/.nfsdb" &
-${DIR}/cati "/sys/kernel/debug/tracing/trace_pipe" >> "$WORK_DIR/.nfsdb" &
+${TRACING_CMD} >> "$WORK_DIR/.nfsdb" &
 LISTENER_PID="$!"
 if (( $EUID != 0 )); then
     sudo -n renice -n -18 -p $LISTENER_PID >/dev/null 2>&1
@@ -104,7 +123,12 @@ if [ "$?" -ne 0 ]; then
 fi
 
 # -------- run the command
-"$@"
+if [ ! -z "${CORE_RANGE}" ]; then
+    taskset ${CORE_RANGE} "$@"
+else
+    "$@"
+fi
+
 RV="$?"
 
 # -------- remove bas_tracer module
@@ -137,7 +161,7 @@ if [ -f "${WORK_DIR}/.nfsdb" ]; then
     done
 fi
 
-kill -SIGINT "${LISTENER_PID}"
+kill %1
 
 # -------- stop kernel logger
 if [ "$SAVE_KERNEL_LOG" = "y" ]; then

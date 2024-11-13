@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# following will be set to all cpu during tracing 
+SAFE_BUFFER_SIZE="262144" 
+
+# following will overwrite safe buffer with TRACING_BUFF_SIZE_KB env
+# in case of running etrace -c %RANGE% will be applied only to %RANGE%
+BUFFER_SIZE="${TRACING_BUFF_SIZE_KB:-262144}" 
+
+# following will be set to all cpu after tracing
+DEFAULT_BUFFER_SIZE="1410"
+
 print_usage () {
     echo "Usage: $0 (-i ROOT_PID [...]|-r|-f)"
 }
@@ -26,17 +36,26 @@ if [ "$1" = "-f" ]; then
 	if [ "$?" -ne 0 ]; then exit "$?"; fi
 
 	# set buffers size
-	if [ ! -z "${TRACING_BUFF_SIZE_KB}" ]; then
-		echo "${TRACING_BUFF_SIZE_KB}" > /sys/kernel/debug/tracing/buffer_size_kb
-	else
-		echo "262144" > /sys/kernel/debug/tracing/buffer_size_kb
+	if [ "$2" == "-c" ]; then
+		CORE_RANGE=$(seq ${3/-/' '})
+		# reset buffers size
+		echo "${SAFE_BUFFER_SIZE}" > /sys/kernel/debug/tracing/buffer_size_kb
+		for cpu_buff_file in /sys/kernel/debug/tracing/per_cpu/cpu*/buffer_size_kb ; do 
+			echo "${SAFE_BUFFER_SIZE}" > "$cpu_buff_file"; 
+		done
+		# per-cpu setup
+		for i in $CORE_RANGE ; do
+			echo ${BUFFER_SIZE} > "/sys/kernel/debug/tracing/per_cpu/cpu${i}/buffer_size_kb";
+		done
+	else 
+		echo "${BUFFER_SIZE}" > /sys/kernel/debug/tracing/buffer_size_kb
 	fi
 	if [ "$?" -ne 0 ]; then
 		exit "$?"
 	fi
 
-        # Remove log headers
-        echo "nocontext-info" > /sys/kernel/debug/tracing/trace_options
+	# Remove log headers
+	echo "nocontext-info" > /sys/kernel/debug/tracing/trace_options
 
 	# clear buffers
 	echo "dummy" > "/sys/kernel/debug/tracing/trace"
@@ -61,7 +80,7 @@ elif [ "$1" = "-i" ]; then
 
 elif [ "$1" = "-r" ]; then
 	/sbin/rmmod bas_tracer
-	echo "1410" > /sys/kernel/debug/tracing/buffer_size_kb
+	echo "${DEFAULT_BUFFER_SIZE}" > /sys/kernel/debug/tracing/buffer_size_kb
 	exit "$?"
 else
 	print_usage
