@@ -536,13 +536,7 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
-			[CE,this](const DereferenceInfo_t *d){
-				llvm::raw_string_ostream exprstream(d->Expr);
-				exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-				CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-				exprstream.flush();
-			};
-
+			[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
 		return true;
 	}
 	return false;
@@ -642,12 +636,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
 							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
-								[CE,this](const DereferenceInfo_t *d){
-									llvm::raw_string_ostream exprstream(d->Expr);
-									exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-									CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-									exprstream.flush();
-								};
+								[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
 							return true;
 						}
 					}
@@ -687,12 +676,7 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo->ord);
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
-						[CE,this](const DereferenceInfo_t *d){
-							llvm::raw_string_ostream exprstream(d->Expr);
-							exprstream << "[" << getAbsoluteLocation(CE->getBeginLoc()) << "]: ";
-							CE->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-							exprstream.flush();
-						};
+						[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
 					return true;
 				}
 			}

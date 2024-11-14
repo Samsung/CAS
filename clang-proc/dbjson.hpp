@@ -1196,7 +1196,7 @@ public:
    * vVR: list of variables referenced in offset expressions
    * Expr: raw textual expression
    */
-
+  
   struct DereferenceInfo_t {
     VarRef_t VR;
     int64_t i;
@@ -1265,6 +1265,35 @@ public:
     	return "";
     }
   };
+
+  void evalExpr(const Stmt *E,const DereferenceInfo_t*d){
+    llvm::raw_string_ostream exprstream(d->Expr);
+    auto &SM = Context.getSourceManager();
+    int last_tok_len = Lexer::MeasureTokenLength(SM.getSpellingLoc(E->getEndLoc()),SM,Context.getLangOpts());
+    exprstream << "[" << getAbsoluteLocation(E->getBeginLoc());
+    if(isa<BinaryOperator>(E)){
+      exprstream << ':' << SM.getFileOffset(cast<BinaryOperator>(E)->getOperatorLoc());
+    }
+    exprstream << ':' << SM.getFileOffset(E->getEndLoc()) + last_tok_len
+    << ':' << SM.getFileOffset(E->getBeginLoc())
+    << ':' << E->getBeginLoc().isMacroID()
+    << "]: ";
+    E->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
+    exprstream.flush();
+  }
+
+  void evalExpr(const ValueDecl *E,const DereferenceInfo_t*d){
+    llvm::raw_string_ostream exprstream(d->Expr);
+    auto &SM = Context.getSourceManager();
+    int last_tok_len = Lexer::MeasureTokenLength(SM.getSpellingLoc(E->getEndLoc()),SM,Context.getLangOpts());
+    exprstream << "[" << getAbsoluteLocation(E->getBeginLoc())
+    << ':' << SM.getFileOffset(E->getEndLoc()) + last_tok_len
+    << ':' << SM.getFileOffset(E->getBeginLoc())
+    << ':' << E->getBeginLoc().isMacroID()
+    << "]: ";
+    E->print(exprstream);
+    exprstream.flush();
+  }
 
   struct FuncDeclData{
     ObjectID id;
