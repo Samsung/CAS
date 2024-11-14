@@ -1864,6 +1864,14 @@ static inline QualType walkTypedefType(QualType T) {
     const ElaboratedType *tp = cast<ElaboratedType>(T);
     return walkTypedefType(tp->getNamedType());
   }
+  else if(T->getTypeClass()==Type::TypeOf){
+    const TypeOfType *tp = cast<TypeOfType>(T);
+    return walkTypedefType(tp->getUnmodifiedType());
+  }
+  else if(T->getTypeClass()==Type::TypeOfExpr){
+    const TypeOfExprType *tp = cast<TypeOfExprType>(T);
+    return walkTypedefType(tp->getUnderlyingExpr()->getType());
+  }
   else {
 	  return T;
   }

@@ -239,7 +239,6 @@ int main(int argc, const char **argv)
     }
 
     multi::directory = optionsParser.getCompilations().getCompileCommands(optionsParser.getSourcePathList().front())[0].Directory;
-    // multi::directory = optionsParser.getCompilations().getAllCompileCommands().front().Directory;
     multi::files.resize(AllFiles.size());
     if(MultiOption.getValue()){
       unsigned int threadcount = ThreadCount.getValue() ?: std::thread::hardware_concurrency();
