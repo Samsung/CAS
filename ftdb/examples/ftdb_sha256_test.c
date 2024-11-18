@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "openssl/sha.h"
-#include "ftdb.h"
+#include <openssl/sha.h>
+#include <ftdb.h>
 
 int main(int argc, char** argv) {
 
@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
         printf("%02x",digest[i]);
     }
     printf("\n");
-    
+
     libftdb_c_ftdb_unload(ftdb_c);
     return EXIT_SUCCESS;
 }

@@ -1,0 +1,5 @@
+add_subdirectory(nfsdb)
+add_subdirectory(cati)
+add_subdirectory(etrace_parser)
+add_subdirectory(gcc_input_name)
+add_subdirectory(worker)

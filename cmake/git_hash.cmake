@@ -1,0 +1,12 @@
+find_package(Git REQUIRED)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+  execute_process(
+    COMMAND git log -1 --format=%H
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+else()
+  set(GIT_COMMIT_HASH "")
+endif()
