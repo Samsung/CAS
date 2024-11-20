@@ -1,10 +1,11 @@
 [package]
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+authors = ["Marcin Glinski <m.glinski@samsung.com>"]
 name = "find-globals"
 version = "0.1.0"
 
 [dependencies]
-ftdb = {path = "../../ftdb"}
-
-[features]
-default = []
+ftdb = { path = "../../ftdb", version = "0.11.0" }

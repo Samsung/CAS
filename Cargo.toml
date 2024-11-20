@@ -1,15 +1,25 @@
 [workspace]
+default-members = ["rust/ftdb"]
 members = [
     "rust/ftdb-sys",
     "rust/ftdb",
-    "rust/ftdb-ext",
     "rust/examples/*",
 ]
-
 resolver = "2"
+
+[workspace.package]
+authors = [
+    "Marcin Glinski <m.glinski@samsung.com>",
+    "Michal Knapik <m.knapik@samsung.com>",
+    "Kacper Omielianczyk <k.omieliancz@samsung.com>",
+]
+edition = "2021"
+license = "Apache-2.0"
+readme = "rust/README.md"
+repository = "https://github.com/Samsung/CAS"
+version = "0.11.0"
 
 [profile.release]
 codegen-units = 1
 lto = "fat"
 strip = true
-# debug = 1

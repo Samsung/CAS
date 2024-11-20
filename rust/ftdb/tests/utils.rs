@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ftdb::{Ftdb, FuncDeclEntry, FunctionEntry, GlobalEntry, TypeEntry};
 use std::path::{Path, PathBuf};
 

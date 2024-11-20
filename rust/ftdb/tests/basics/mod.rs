@@ -1,5 +1,5 @@
+use crate::utils::load_test_case;
 use ftdb::Linkage;
-use ftdb_test::load_test_case;
 
 #[test]
 fn source_info_works() {

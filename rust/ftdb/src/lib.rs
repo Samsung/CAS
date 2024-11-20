@@ -15,13 +15,21 @@
 //! towards FTDB (CAS) installation.
 //!
 //! * `FTDB_INCLUDE_DIR` - points to include paths to find headers from.
-//!   This should be set to root directory of CAS project.
+//!   This should be set to root directory of CAS project. If you skip
+//!   this env, ftdb-sys will use its own copy of headers.
 //! * `FTDB_LIB_DIR` - points to location of a directory containing
 //!   `libftdb_c.so` file. This path is only used for building purposes.
 //!
 //! # Adding dependency
 //!
 //! To add `ftdb`, modify your `Cargo.toml` file with following snippet:
+//!
+//! ```toml
+//! [dependencies]
+//! ftdb = "0.11.0"
+//! ```
+//!
+//! or use the most recent github:
 //!
 //! ```toml
 //! [dependencies.ftdb]
@@ -32,7 +40,7 @@
 //! # Running
 //!
 //! When running your program remember to put `libftdb_c.so` in a place
-//! available to `ld` or use `LD_LIBRARY_PATH`.
+//! available to the linker.
 //!
 //! # Example
 //!

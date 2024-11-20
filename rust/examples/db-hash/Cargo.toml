@@ -1,12 +1,16 @@
 [package]
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+authors = [
+    "Blazej Jaworowski <b.jaworowski@samsung.com>",
+    "Marcin Glinski <m.glinski@samsung.com>"
+]
 name = "db-hash"
-version = "0.1.0"
-edition = "2021"
+version = "0.1.1"
 
 [dependencies]
 data-encoding = "2.6.0"
-ftdb = { path = "../../ftdb"}
-openssl = "0.10.64"
-
-[features]
-default = []
+ftdb = { path = "../../ftdb", version = "0.11.0" }
+openssl = "0.10.66"
