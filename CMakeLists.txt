@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(cas)
 
-include(cmake/llvm-config.cmake)
+include(cmake/llvm_setup.cmake)
 include(cmake/git_hash.cmake)
 
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
