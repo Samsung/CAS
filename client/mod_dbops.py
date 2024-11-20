@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import libcas
+from pathlib import Path
 
 from client.mod_base import Module
 from client.output_renderers.output import DataTypes
@@ -109,6 +110,7 @@ class Postprocess(Module):
         workdir = os.path.dirname(json_db_filename)
 
         src_root = self.args.set_root if self.args.set_root is not None else libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
+        src_root = str(Path(src_root).expanduser().resolve())
 
         if not src_root:
             print("ERROR: source_root is empty - check first line of tracer_database or provide it with --set-root")
@@ -193,6 +195,7 @@ class StoreCache(Module):
         ddepmap_filename = os.path.join(workdir, ".nfsdb.ddepmap.json")
 
         src_root = self.args.set_root if self.args.set_root is not None else libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
+        src_root = str(Path(src_root).expanduser().resolve())
 
         if not src_root:
             print("ERROR: source_root is empty - check first line of tracer_database or provide it with --set-root")
