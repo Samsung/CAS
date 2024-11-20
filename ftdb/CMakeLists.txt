@@ -5,19 +5,19 @@ set(FTDB_SOURCES
     ftdbmaps.cpp
 )
 
-add_library(ftdb_shared SHARED ${FTDB_SOURCES})
+add_library(ftdb SHARED ${FTDB_SOURCES})
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(ftdb_shared PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
+    target_compile_options(ftdb PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-Wno-c99-designator>)
 endif()
-target_compile_options(ftdb_shared PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
-target_compile_options(ftdb_shared PRIVATE $<$<CONFIG:Debug>:-O0>)
-target_compile_options(ftdb_shared PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
-target_include_directories(ftdb_shared PRIVATE ${Python3_INCLUDE_DIRS})
-target_link_libraries(ftdb_shared PUBLIC ${Python3_LIBRARIES})
-target_link_libraries(ftdb_shared PRIVATE uflat_static)
-target_link_libraries(ftdb_shared PRIVATE unflatten_static)
-set_target_properties(ftdb_shared PROPERTIES OUTPUT_NAME ftdb)
-install(TARGETS ftdb_shared DESTINATION ${PROJECT_SOURCE_DIR})
+target_compile_options(ftdb PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>)
+target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-O0>)
+target_compile_options(ftdb PRIVATE $<$<CONFIG:Debug>:-DDEBUG>)
+target_include_directories(ftdb PRIVATE ${Python3_INCLUDE_DIRS})
+target_link_libraries(ftdb PUBLIC ${Python3_LIBRARIES})
+target_link_libraries(ftdb PRIVATE uflat_static)
+target_link_libraries(ftdb PRIVATE unflatten_static)
+set_target_properties(ftdb PROPERTIES OUTPUT_NAME ftdb)
+install(TARGETS ftdb DESTINATION ${PROJECT_SOURCE_DIR})
 
 set(FTDB_C_SOURCES
     ftdb.c
