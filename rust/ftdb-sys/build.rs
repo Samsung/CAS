@@ -44,7 +44,7 @@ fn build_native_lib(out_dir: &Path) {
         let cmake_dir = cmake::Config::new(cas_dir).build_target("ftdb_c").build();
         println!(
             "cargo:rustc-link-search=native={}",
-            cmake_dir.join("build").display()
+            cmake_dir.join("build/ftdb").display()
         );
     }
 }
