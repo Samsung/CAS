@@ -57,10 +57,9 @@ def is_integrated_clang_compiler(compiler_path):
     return " (in-process)" in out.decode("utf-8")
 
 
-class clang(libetrace.clang):
+class clang:
 
     def __init__(self,verbose,debug,clang_compilers,clangpp_compilers,integrated_clang_compilers,debug_compilations=False,allow_pp_in_compilations=False):
-        super(clang, self).__init__(verbose,debug,debug_compilations)
         self.c_compilers = clang_compilers
         self.c_preprocessors = clang_compilers
         self.c_include_paths = list()

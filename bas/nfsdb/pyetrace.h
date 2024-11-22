@@ -13,6 +13,22 @@ extern "C" {
 #include <stdbool.h>
 #include <string.h>
 
+static const char* PyString_get_c_str(PyObject* s) {
+
+	if (PyUnicode_Check(s)) {
+		PyObject* us = PyUnicode_AsASCIIString(s);
+		if (us) {
+			return PyBytes_AsString(us);
+		}
+		else {
+			return 0;
+		}
+	}
+	else {
+		return (const char*)0xdeadbeef;
+	}
+}
+
 // Necessary to use "rbtree.h" library
 #ifndef container_of
 #define container_of(ptr, type, member) ({			\

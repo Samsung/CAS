@@ -6,11 +6,7 @@ BAS is a tool for extracting information regarding executed processes and opened
   $ etrace_parser .nfsdb .nfsdb.json
   ```
 
-  The entries in the parsed `.nfsdb.json` file describe single program execution (i.e. events around single execve syscall) and contain processed and combined information from various syscall events. To keep the raw syscall log in the JSON format use the following command (which should produce `.nfsdb.raw.json` file along the way):
-
-  ```bash
-  $ etrace_parser .nfsdb .nfsdb.json -r
-  ```  
+  Entries in parsed `.nfsdb.json` file describe single program execution (i.e. events around single execve syscall) and contain processed and combined information from variosu syscall events.
 
   The tracer tracks (and the raw output JSON contains information about) the following events:
 
@@ -135,7 +131,7 @@ BAS is a tool for extracting information regarding executed processes and opened
   libetrace.nfsdb() # To create the base object for cached database operation
   ```
   
-  Please keep in mind that the `PYTONPATH` variable should be pointing to the directory that contains the `libetrace.so` file (i.e the CAS root directory where the library is installed).
+  Please keep in mind that the `PYTHONPATH` variable should be pointing to the directory that contains the `libetrace.so` file (i.e the CAS root directory where the library is installed).
   
   Other parts of BAS suite are listed below.
 
@@ -147,11 +143,12 @@ BAS is a tool for extracting information regarding executed processes and opened
 
   This is a simple cat utility with slight modification to exit the reading/writing loop whenever SIGINT signal is send to the process. The `cat` implementation was originally taken from the CoreUtils package.
 
-* **postprocess.py**
+* Postprocessing phase
 
-  This is a support program that does post processing of the original JSON database adding missing information about linked modules, compilations, precomputed command patterns and reverse binary mappings. It udpates the `.nfsdb.json` file with additional entries (`"n"`, `"m"`, `"d"`, and `"l"`). The following should be executed after `etrace_parser` does its job:
-  ```bash
-  $ python3 postprocess.py .nfsdb.json
+  The postprocessing phase adds missing information to `.nfsdb.json`, like data about linked modules, compilations, precomputed command patterns and reverse binary mappings. It updates `.nfsdb.json` with additional entries (`"n"`, `"m"`, `"d"` and `"l"`).
+  Previously, we used a separate `postprocess.py` script to do that, nowadays this is done by the CAS client:
+  ```sh
+  $ cas pp
   ```
 
 The post-processing stage performs some additional steps:

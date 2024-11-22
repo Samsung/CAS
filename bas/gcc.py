@@ -43,10 +43,9 @@ def parse_config(out):
         pass
     return includes
 
-class gcc(libetrace.gcc):
+class gcc:
 
     def __init__(self,verbose,debug,gcc_compilers,gpp_compilers,debug_compilations=False):
-        super(gcc, self).__init__(verbose,debug,debug_compilations)
         self.c_compilers = gcc_compilers
         self.c_preprocessors = list()
         self.c_include_paths = list()
@@ -159,7 +158,7 @@ class gcc(libetrace.gcc):
         So far only first specification of -x (if any) is applied to all source files; proper parsing of command line is required to handle that well
         """
         cmd_lan_spec = cmd[comp_lan_indices[0]+1] if len(comp_lan_indices)>0 else None
-            
+
         if cmd_lan_spec:
             if cmd_lan_spec in ["c","c-header","cpp-output"]:
                 return COMPILER_C

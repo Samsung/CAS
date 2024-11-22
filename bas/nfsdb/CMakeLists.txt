@@ -1,10 +1,5 @@
 set(NFSDB_SOURCES
-    strnstr.c
     base64.c
-    compiler.c
-    compiler_gcc.c
-    compiler_clang.c
-    compiler_armcc.c
     pyetrace.c
     maps.c
     utils.c

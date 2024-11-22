@@ -1,5 +1,4 @@
 #include "pyetrace.h"
-#include "compiler.h"
 
 #include <fcntl.h>
 #include <stdbool.h>
@@ -8,10 +7,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include "uflat.h"
-
-DEFINE_COMPILER(gcc);
-DEFINE_COMPILER(clang);
-DEFINE_COMPILER(armcc);
 
 volatile int interrupt;
 void intHandler(int v) {
@@ -1433,7 +1428,7 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 		uflat_set_option(uflat, UFLAT_OPT_VERBOSE, 1);
 	if(debug_mode)
 		uflat_set_option(uflat, UFLAT_OPT_DEBUG, 1);
-	
+
 	FOR_ROOT_POINTER(&nfsdb_deps,
 		FLATTEN_STRUCT(nfsdb_deps,&nfsdb_deps);
 	);
@@ -3847,7 +3842,7 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 		goto done;
 	}
 	if(self->nfsdb->db_version != LIBETRACE_VERSION) {
-		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)", 
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)",
 						self->nfsdb->db_version, LIBETRACE_VERSION);
 		unflatten_deinit(self->unflatten);
 		goto done;
@@ -3860,7 +3855,7 @@ done:
 	Py_DecRef(py_debug);
 	Py_DecRef(py_quiet);
 	PYASSTR_DECREF(cache_filename);
-	if (err) 
+	if (err)
 		return NULL;	/* Indicate that an error has occurred */
 	Py_RETURN_TRUE;
 }
@@ -3935,7 +3930,7 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 		goto done;
 	}
 	if(self->nfsdb_deps->db_version != LIBETRACE_VERSION) {
-		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)", 
+		PyErr_Format(libetrace_nfsdbError, "Failed to parse cache file - unsupported image version %p (required: %p)",
 						self->nfsdb_deps->db_version, LIBETRACE_VERSION);
 		unflatten_deinit(self->unflatten);
 		goto done;
@@ -6700,7 +6695,7 @@ int libetrace_nfsdb_entry_has_shared_argv(const struct nfsdb_entry * entry) {
 }
 
 int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
-	
+
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
 	unsigned long arg_class = (unsigned long)arg;
 
@@ -6821,7 +6816,7 @@ int libetrace_nfsdb_entry_openfile_filter_is_class(void *self, const struct nfsd
 }
 
 int libetrace_nfsdb_entry_openfile_filter_file_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
-	
+
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
 	(void)__self;
 
@@ -6846,7 +6841,7 @@ int libetrace_nfsdb_entry_openfile_filter_file_exists(void *self, const struct n
 }
 
 int libetrace_nfsdb_entry_openfile_filter_file_not_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
-	
+
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
 	(void)__self;
 
@@ -6871,7 +6866,7 @@ int libetrace_nfsdb_entry_openfile_filter_file_not_exists(void *self, const stru
 }
 
 int libetrace_nfsdb_entry_openfile_filter_dir_exists(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
-	
+
 	libetrace_nfsdb_object* __self = (libetrace_nfsdb_object*)self;
 	(void)__self;
 
@@ -6939,7 +6934,7 @@ int libetrace_nfsdb_entry_openfile_filter_not_at_source_root(void *self, const s
 }
 
 int libetrace_nfsdb_entry_openfile_filter_source_type(void *self, const struct nfsdb_fileMap_node* data, const void* arg, unsigned long index) {
-	
+
 	unsigned long srctype = (unsigned long)arg;
 
 	if (index==ULONG_MAX) {
@@ -7267,10 +7262,6 @@ PyInit_libetrace(void)
 		return 0;
 	Py_XINCREF(&libetrace_nfsdbFileMapType);
 
-    COMPILER_READY(gcc);
-    COMPILER_READY(clang);
-    COMPILER_READY(armcc);
-
 	if (PyModule_AddObject(m, "nfsdb", (PyObject *)&libetrace_nfsdbType)<0) {
 		Py_DECREF(m);
 		return 0;
@@ -7330,10 +7321,6 @@ PyInit_libetrace(void)
 		Py_DECREF(m);
 		return 0;
 	}
-
-    COMPILER_REGISTER(gcc);
-    COMPILER_REGISTER(clang);
-    COMPILER_REGISTER(armcc);
 
     libetrace_nfsdbError = PyErr_NewException("libetrace.error",0,0);
     Py_XINCREF(libetrace_nfsdbError);

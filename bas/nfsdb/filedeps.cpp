@@ -8,22 +8,6 @@ extern "C" {
 #include <map>
 #include <vector>
 
-static const char* PyString_get_c_str(PyObject* s) {
-
-	if (PyUnicode_Check(s)) {
-		PyObject* us = PyUnicode_AsASCIIString(s);
-		if (us) {
-			return PyBytes_AsString(us);
-		}
-		else {
-			return 0;
-		}
-	}
-	else {
-		return (const char*)0xdeadbeef;
-	}
-}
-
 static inline int SET_MSB_INT(int i) {
 	return i|(1<<(CHAR_BIT*sizeof(int)-1));
 }
