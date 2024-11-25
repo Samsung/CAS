@@ -110,11 +110,11 @@ class Postprocess(Module):
         workdir = os.path.dirname(json_db_filename)
 
         src_root = self.args.set_root if self.args.set_root is not None else libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
-        src_root = str(Path(src_root).expanduser().resolve())
 
         if not src_root:
             print("ERROR: source_root is empty - check first line of tracer_database or provide it with --set-root")
             sys.exit(2)
+        src_root = str(Path(src_root).expanduser().resolve())
 
         self.config.apply_source_root(src_root)
 
@@ -195,11 +195,11 @@ class StoreCache(Module):
         ddepmap_filename = os.path.join(workdir, ".nfsdb.ddepmap.json")
 
         src_root = self.args.set_root if self.args.set_root is not None else libcas.CASDatabase.get_src_root_from_tracefile(tracer_db_filename)
-        src_root = str(Path(src_root).expanduser().resolve())
 
         if not src_root:
             print("ERROR: source_root is empty - check first line of tracer_database or provide it with --set-root")
             sys.exit(2)
+        src_root = str(Path(src_root).expanduser().resolve())
 
         if self.args.create or (not self.args.deps_create and not self.args.create):
             if self.args.exclude_command_patterns is None:

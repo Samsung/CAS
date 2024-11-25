@@ -719,6 +719,7 @@ class nfsdbEntry:
     linked_ptr: int
     linked_type: int
     compilation_info: nfsdbEntryCompilationInfo
+    return_code: int
 
     def json(self) -> Dict:
         """

@@ -329,6 +329,13 @@ args_map = {
         default=None,
         help='Parameter idx(s) - can be used multiple times, or with ":" separator.'
     ),
+    "pos": lambda x: x.add_argument(
+        '--pos',
+        type=int,
+        action='append',
+        default=None,
+        help='Parameter pos(s) - can be used multiple times, or with ":" separator.'
+    ),
     "select": lambda x: x.add_argument(
         '--select', '-S',
         type=str,

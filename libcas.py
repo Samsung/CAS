@@ -34,6 +34,8 @@ except ModuleNotFoundError:
             self.total = total
             if disable is None:
                 self.disable = not sys.stdout.isatty()
+            else:
+                self.disable = disable
 
         def __iter__(self):
             return iter(self.data) if self.data else iter([])
@@ -1383,6 +1385,8 @@ class CASDatabase:
             pn = subprocess.Popen(["file", path], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             out, _ = pn.communicate()
             return set([x.strip(",") for x in out.decode("utf-8").split()])
+        else:
+            return set()
 
     @staticmethod
     @lru_cache(maxsize=1024)
@@ -1478,6 +1482,7 @@ class CASDatabase:
         clang_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.clang_spec]))
         clangpp_spec_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in self.config.clangpp_spec]))
         cc1_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in ["*cc1", "*cc1plus"]]))
+        coll_patterns = re.compile("|".join([fnmatch.translate(pattern) for pattern in ["*/collect*"]]))
         comps_filename = os.path.join(workdir, ".nfsdb.comps.json")
         rbm_filename = os.path.join(workdir, ".nfsdb.rbm.json")
         pcp_filename = os.path.join(workdir, ".nfsdb.pcp.json")
@@ -1620,6 +1625,31 @@ class CASDatabase:
                 out_linked = dict()
 
         if do_compilations:
+
+
+            diag_files={}
+            if os.path.exists(".nfsdb.diags/"):
+                shutil.move(".nfsdb.diags/",f".nfsdb.diags_{time.time()}/")
+
+            def get_diag_file(exe_idx):
+                if not os.path.exists(".nfsdb.diags/"):
+                    os.makedirs(".nfsdb.diags", exist_ok= True)
+                if exe_idx not in diag_files:
+                    diag_files[exe_idx] = open(f".nfsdb.diags/diag_{exe_idx}.txt", "w")
+                return diag_files[exe_idx]
+
+            def printd(msg, exe_idx, stdout=False):
+                print (msg, file=get_diag_file(exe_idx), flush=True)
+                if stdout:
+                    print (f"\n[.nfsdb.diags/diag_{exe_idx}.txt] {msg}", flush=True)
+
+            def store_output(exe_idx, msg, cmd, stdout, stderr, ret, show_in_log=True):
+                printd (msg, exe_idx, show_in_log)
+                printd (f"cmd = {cmd}\n" + f"ret = {ret}\n" +
+                f"---STDOUT----------------------------\n{stdout}\n" +
+                f"---STDERR----------------------------\n{stderr}\n" +
+                "-------------------------------------\n", exe_idx)
+
             start_time = time.time()
             libetrace_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -1637,7 +1667,14 @@ class CASDatabase:
 
                 clangxx_compilers: Set[str] = set()
 
-                for ex in progressbar(self.db.iter(), disable=None):
+                pbar = progressbar(total=len(self.db), disable=None)
+
+                # region execs collection
+                for n, ex in enumerate(self.db):
+                    pbar.n = n
+                    pbar.refresh()
+                    if ex.return_code != 0:
+                        continue
                     written_paths = {op.path for op in ex.opens if op.mode & 3 >= 1}
 
                     if len(written_paths) > 0:
@@ -1707,11 +1744,19 @@ class CASDatabase:
                 start_time = time.time()
                 print_mem_usage(debug)
 
+                def failed():
+                    with failed_comps.get_lock():
+                        failed_comps.value += 1
+                def skipped():
+                    with skipped_comps.get_lock():
+                        skipped_comps.value += 1
+
                 computation_finished = multiprocessing.Value("b")
                 computation_finished.value = False
                 execs_to_process = len(clangpp_execs) + len(clang_execs) + len(gcc_input_execs) + len(gpp_input_execs)
-                write_queue = multiprocessing.Queue(maxsize=execs_to_process)
+                write_queue = multiprocessing.JoinableQueue(maxsize=execs_to_process)
 
+                # region writer
                 def writer():
                     printdbg("Starting writer process...", debug)
                     is_first = True
@@ -1719,7 +1764,8 @@ class CASDatabase:
                         of.write("{\n")
                         while not computation_finished.value:
                             try:
-                                rec:Dict = write_queue.get(timeout=3)
+                                rec:Dict = write_queue.get(timeout=5)
+                                write_queue.task_done()
                                 if not rec:
                                     continue
                                 ptr = next(iter(rec.keys()))
@@ -1733,12 +1779,12 @@ class CASDatabase:
                                     break
                         of.write("}")
                     os.sync()
-                    print("Writer process ends", debug)
+                    printdbg("Writer process ends", debug)
 
                 writer_process = multiprocessing.Process(target=writer)
                 writer_process.start()
-
-                if True:  # clang compilations section
+                # region clang compilations
+                if True:  
                     start_time = time.time()
                     clang_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in clang_input_execs])) if self.is_elf_executable(u) or self.is_elf_interpreter(u)]
                     clangpp_compilers = [u for u in list(set([os.path.join(x.cwd, self.maybe_compiler_binary(x.binary)) for x in clangpp_input_execs])) if self.is_elf_executable(u) or self.is_elf_interpreter(u)]
@@ -1768,37 +1814,31 @@ class CASDatabase:
                     del clangxx_compilers
 
                     if len(clangxx_input_execs) > 0:
-                        clang_work_queue = multiprocessing.Queue(maxsize=len(clangxx_input_execs))
-                        for input_index in range(len(clangxx_input_execs)):
-                            clang_work_queue.put(input_index)
 
                         clang_c = clang.clang(verbose, debug, clang_compilers, clangpp_compilers, integrated_clang_compilers, debug_compilations, allow_pp_in_compilations)
-
+                        
+                        #region clang_executor
                         def clang_executor(worker_idx):
                             worker = exec_worker.ExecWorker(os.path.join(libetrace_dir, "worker"))
 
                             printdbg("Worker {} starting...".format(worker_idx), debug)
-                            no_o_args = 0
-                            not_exist = 0
-                            empty_output = 0
-                            not_allow_pp = 0
-                            parsing_fail = 0
-                            cc1as_skipped = 0
-                            quick_skipped = 0
-                            while not clang_work_queue.empty():
-                                try:
-                                    pos = clang_work_queue.get(timeout=3)
-                                except Exception:
-                                    continue
+
+                            while True:
+                                with cur_iter.get_lock():
+                                    if cur_iter.value < max_iter:
+                                        qpos = cur_iter.value
+                                        cur_iter.value += 1
+                                    else:
+                                        break
                                 with processed.get_lock():
                                     processed.value += 1
                                     pbar.n = processed.value
                                     pbar.refresh()
-                                ptr, compiler_type = clangxx_input_execs[pos]
-                                exe = self.get_exec_at_pos(ptr)
+                                ptr, compiler_type = clangxx_input_execs[qpos]
+                                exe:libetrace.nfsdbEntry = self.get_exec_at_pos(ptr)
 
                                 if not clang_c.quickcheck(exe.binary, exe.argv):
-                                    quick_skipped += 1
+                                    skipped()
                                     continue
 
                                 argv: List[str] = exe.argv.copy()
@@ -1806,18 +1846,19 @@ class CASDatabase:
                                 try:
                                     have_int_cc1 = self.have_integrated_cc1(os.path.join(exe.cwd, exe.binary), "-fno-integrated-cc1" not in argv, test_file)
                                 except FileNotFoundError:
-                                    not_exist += 1
+                                    failed()
                                     continue
                                 
                                 try:
-                                    _, stderr, ret_code = worker.runCmd(exe.cwd, exe.binary, argv[1:] + ["-###"])
+                                    stdout0, stderr0, ret_code0 = worker.runCmd(exe.cwd, exe.binary, argv[1:] + ["-###"])
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
                                     print("Exception while running -###")
                                     print ("[%s] %s" % (exe.cwd, " ".join(argv[1:] + ["-###"])))
+                                    failed()
                                     continue
 
-                                lns = stderr.split("\n")
+                                lns = stderr0.splitlines()
                                 idx = [k for k, u in enumerate(lns) if "(in-process)" in u]
                                 if idx and len(lns) >= idx[0] + 2:
                                     ncmd = lns[idx[0] + 1]
@@ -1833,7 +1874,7 @@ class CASDatabase:
                                         print(ncmd, flush=True)
 
                                 if "-cc1as" in argv:
-                                    cc1as_skipped += 1
+                                    skipped()
                                     # Remove clang invocations with -cc1as (it's not actual C/C++ compilation which generates errors later)
                                     continue
 
@@ -1845,41 +1886,43 @@ class CASDatabase:
 
                                 if not os.path.exists(fn):
                                     if "tmp" not in fn:
-                                        print("Error: {} - does not exist".format(fn), flush=True)
-                                        print("Original cmd: {}".format(exe.argv), flush=True)
-                                    not_exist += 1
+                                        printd (f"Error: {fn} - does not exist", ptr, True)
+                                        printd (f"Original cmd: {exe.argv}", ptr)
+                                        failed()
+                                    else:
+                                        skipped()
                                     continue
                                 # fn - the path to the compiled file that exists
                                 try:
                                     argv = clang_c.fix_argv(argv, compiler_type, arg_fn)
                                 except IndexError:
-                                    print("****\nno -o arg \n{}\n{}\n****".format(argv, stderr), flush=True)
-                                    no_o_args += 1
+                                    store_output(ptr, "Parameter error - no -o arg ", argv, stdout0, stderr0, ret_code0)
+                                    failed()
                                     continue
 
                                 try:
-                                    stdout, stderr, ret_code = worker.runCmd(exe.cwd, exe.binary, argv[1:], "")  # last parameter is empty stdin for clang
-                                    if ret_code != 0 and debug:
-                                        print(f"[ERROR] - running \ncwd: {exe.cwd} \nbin: {exe.binary} \nargs: {argv[1:]}\nstdout:\n {stdout}\nstderr:\n {stderr}", flush=True)
+                                    stdout1, stderr1, ret_code1 = worker.runCmd(exe.cwd, exe.binary, argv[1:], "")  # last parameter is empty stdin for clang
+                                    if ret_code1 != 0 and debug:
+                                        print(f"[ERROR] - running \ncwd: {exe.cwd} \nbin: {exe.binary} \nargs: {argv[1:]}\nstdout:\n {stdout1}\nstderr:\n {stderr1}", flush=True)
 
                                 except exec_worker.ExecWorkerException as e:
                                     worker.initialize()
-                                    print(e)
-                                    print("cwd  =  {}".format(exe.cwd))
-                                    print("bin  =  {}".format(exe.binary))
-                                    print("argv =  {}".format(" ".join(argv[1:])))
+                                    printd (f"Failed to process defs from clang output.", ptr, True)
+                                    printd (f"cmd = {argv}", ptr)
+                                    printd (f"err = {e}", ptr)
+                                    failed()                                    
                                     continue
 
                                 if not clang_c.allow_pp_in_compilations and '-E' in exe.argv:
-                                    not_allow_pp += 1
+                                    store_output(ptr, "PP in compilations are not allowed", argv, stdout1, stderr1, ret_code1, show_in_log=False)
+                                    skipped()
                                     continue
 
                                 compiler_path = os.path.join(exe.cwd, self.maybe_compiler_binary(exe.binary))
-                                json_repr = exe.json()
                                 comp_objs = clang_c.get_object_files(exe.eid.pid, have_int_cc1, fork_map, rev_fork_map, wr_map)
 
                                 try:
-                                    includes, defs, undefs = clang_c.parse_defs(stderr.splitlines(), stdout.splitlines())
+                                    includes, defs, undefs = clang_c.parse_defs(stderr1.splitlines(), stdout1.splitlines())
                                     includes = [os.path.realpath(os.path.normpath(os.path.join(exe.cwd, x))) for x in includes]
                                     ipaths = clang_c.compiler_include_paths(compiler_path)
                                     for u in ipaths:
@@ -1887,11 +1930,8 @@ class CASDatabase:
                                             includes.append(u)
                                     ifiles = clang_c.parse_include_files(exe.argv, exe.cwd, includes)
                                 except clang.IncludeParseException as e:
-                                    print("[ERROR] - Failed to process defs from clang output.\nstdout: {}\nstderr: {}".format(stdout, stderr), flush=True)
-                                    parsing_fail += 1
-                                    with open(".nfsdb.log.err", "a") as ef:
-                                        ef.write("ERROR: Exception while processing compilation:\n%s\n" % (json_repr))
-                                        ef.write("%s\n\n" % (str(e)))
+                                    store_output(ptr, "Failed to process defs from clang output",argv, stdout1, stderr1, ret_code1)
+                                    failed()
                                     continue
 
                                 src_type = clang_c.get_source_type(argv, compiler_type, os.path.splitext(fn)[1])
@@ -1899,8 +1939,8 @@ class CASDatabase:
 
                                 if absfn.startswith("/dev/"):
                                     printdbg("\nSkipping bogus file {} ".format(absfn), debug)
+                                    skipped()
                                     continue
-
                                 write_queue.put({ptr: {
                                         "f": [absfn],
                                         "i": includes,
@@ -1910,11 +1950,9 @@ class CASDatabase:
                                         "s": src_type,
                                         "o": comp_objs,
                                         "p": have_int_cc1
-                                    }})
-                                found_comps.value += 1
-
-                            printdbg("Worker {} finished! ok={} quick_skipped={} no_o_args={} not_exist={} empty_output={} not_allow_pp ={} parsing_fail={} cc1as_skipped={}".format(
-                                        worker_idx, processed.value, quick_skipped, no_o_args, not_exist, empty_output, not_allow_pp, parsing_fail, cc1as_skipped), debug)
+                                    }},True,5)
+                                with found_comps.get_lock():
+                                    found_comps.value += 1
 
                         print("Searching for clang compilations ... (%d candidates; %d jobs)" % (len(clangxx_input_execs), jobs))
                         print_mem_usage(debug)
@@ -1925,9 +1963,16 @@ class CASDatabase:
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
                         found_comps.value = 0
+                        failed_comps = multiprocessing.Value("i")
+                        failed_comps.value = 0           
+                        skipped_comps = multiprocessing.Value("i")
+                        skipped_comps.value = 0                              
+                        cur_iter = multiprocessing.Value("i")
+                        cur_iter.value = 0          
+                        max_iter = len(clangxx_input_execs)              
                         sstart = time.time()
                         procs = []
-                        for i in range(jobs-1):
+                        for i in range(jobs):
                             p = multiprocessing.Process(target=clang_executor, args=(i,))
                             procs.append(p)
                             p.start()
@@ -1940,7 +1985,9 @@ class CASDatabase:
                         pbar.close()
 
                         print(flush=True)
-                        print(f"Workers finished in [{time.time() - sstart:.2f}s] - found {found_comps.value} compilations.")
+                        print(f"Workers finished in {time.time() - sstart:.2f}s - found={found_comps.value} failed={failed_comps.value} skipped={skipped_comps.value} compilations.")
+                        if (found_comps.value + failed_comps.value + skipped_comps.value) != len(clangxx_input_execs):
+                            print ("ERROR: Found + skipped + error != all.")
                         print_mem_usage(debug)
 
                     print("finished searching for clang compilations [%.2fs]" % (time.time()-start_time))
@@ -1970,45 +2017,44 @@ class CASDatabase:
                     del gpp_input_execs
 
                     if len(gxx_input_execs) > 0:
-                        gcc_work_queue = multiprocessing.Queue(maxsize=len(gxx_input_execs))
-                        for input_index in range(len(gxx_input_execs)):
-                            gcc_work_queue.put(input_index)
+
                         gcc_c = gcc.gcc(verbose, debug, gcc_compilers, gpp_compilers, debug_compilations)
 
                         plugin_insert = "-fplugin=" + os.path.realpath(os.path.join(libetrace_dir, "libgcc_input_name.so"))
 
                         input_compiler_path = None # TODO -make parameter of this!
-
+                        #region gcc_executor
                         def gcc_executor(worker_idx):
                             worker = exec_worker.ExecWorker(os.path.join(libetrace_dir, "worker"))
                             printdbg("Worker {} starting...".format(worker_idx),debug)
 
-                            while not gcc_work_queue.empty():
-                                try:
-                                    pos = gcc_work_queue.get(timeout=3)
-                                except Exception:
-                                    continue
+                            while True:
+                                with cur_iter.get_lock():
+                                    if cur_iter.value < max_iter:
+                                        qpos = cur_iter.value
+                                        cur_iter.value += 1
+                                    else:
+                                        break
                                 with processed.get_lock():
                                     processed.value += 1
                                     pbar.n = processed.value
                                     pbar.refresh()
-                                ptr, compiler_type = gxx_input_execs[pos]
-                                exe = self.get_exec_at_pos(ptr)
+                                ptr, compiler_type = gxx_input_execs[qpos]
+                                exe:libetrace.nfsdbEntry = self.get_exec_at_pos(ptr)
                                 argv: List[str] = exe.argv.copy()
                                 bin = exe.binary
                                 cwd = exe.cwd
-
-                                if len(argv) == 2 and (argv[1] == "--version" or argv[1] == "-dumpmachine"):
+                                # GET TRIPLE HASH
+                                if len(argv) == 2 and (argv[1] == "--version" or argv[1] == "-dumpmachine" or argv[1] == "-print-file-name=plugin"):
+                                    skipped()
                                     continue
                                 try:
-                                    # print (bin)
-                                    # bin = str(Path(shutil.which(bin)).resolve())
-                                    # print (bin)
                                     if os.path.exists(cwd) and os.path.exists(bin):
-                                        stdout, stderr, ret = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
-                                        out = stdout + "\n" + stderr
+                                        stdout0, stderr0, ret0 = worker.runCmd(cwd, bin, argv[1:] + ["-###"])
+                                        out0 = stdout0 + "\n" + stderr0
                                     else:
-                                        print("Command or cwd does not exist cwd={} bin={}".format(cwd,bin))
+                                        print(f"Command or cwd does not exist cwd={cwd} bin={bin} ptr={ptr}")
+                                        failed()
                                         continue
                                 except exec_worker.ExecWorkerException as e:
                                     worker.initialize()
@@ -2018,78 +2064,88 @@ class CASDatabase:
                                         "bin   = {}\n"\
                                         "argv  = {}\n"\
                                         "**********************************".format(e,cwd,bin," ".join(argv[1:] + ["-###"])))
-                                    continue
-                                if ret != 0:
-                                    if debug:
-                                        print ("ret  =  {}:".format(ret))
-                                        print ("cwd  =  {}".format(cwd))
-                                        print ("bin  =  {}".format(bin))
-                                        print ("argv =  {}".format(" ".join(argv[1:] + ["-###"])))
-                                        print ("----------------------------------------")
-                                        print (out)
-                                        print ("----------------------------------------")
+                                    failed()
                                     continue
 
                                 lns = [shlex.split(x)
-                                        for x in out.split("\n")
+                                        for x in out0.splitlines()
                                         if x.startswith(" ") and re.match(cc1_patterns, x.split()[0])]
 
                                 if len(lns) == 0:
-                                    # print("No cc1 \n{}".format(lns))
+                                    collect = [shlex.split(x)
+                                        for x in out0.splitlines()
+                                        if x.startswith(" ") and re.match(coll_patterns, x.split()[0])]
+                                    if len(collect) > 0:
+                                        skipped()
+                                    else:
+                                        store_output(ptr, f"ERROR: No CC1 patterns gcc compilation command", [bin] + argv[1:] + ['-###'], stdout0, stderr0, ret0)
+                                        failed()
                                     continue
 
                                 nargv = [bin if input_compiler_path is None else input_compiler_path] + argv[1:]
+                                if '-D__ASSEMBLY__' in nargv:
+                                        skip = False
+                                        for x in nargv:
+                                            if x.endswith(".S"):
+                                                skip=True
+                                        if skip:
+                                            skipped()
+                                            continue
+                                        else:
+                                            print( " ".join(nargv))
+                                            pass
                                 if '-o' in nargv:
                                     i = nargv.index('-o')
                                     nargv.pop(i)
                                     nargv.pop(i)
                                 nargv.append(plugin_insert)
-                                if '-pipe' in nargv:
+                                while '-pipe' in nargv:
                                     nargv.remove('-pipe')
-                                if '-E' in nargv:
+                                while '-E' in nargv:
                                     nargv.remove('-E')
                                 if '-c' not in nargv:
                                     nargv.append('-c')
-
+                                if "-E" in nargv or "-pipe" in nargv or "-o" in nargv or "-c" not in nargv:
+                                    printd(f"Params issue: {nargv}", ptr, True)
+                                    failed()
+                                    continue
+                                # GET PLUGIN OUTPUT
                                 try:
-                                    stdout, stderr, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
-                                    out = stdout + "\n" + stderr
+                                    stdout1, stderr1, ret1 = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    output = stdout1 + "\n" + stderr1
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
-                                    print("Exception while running gcc -fplugin command:")
-                                    print ("[%s] %s" % (cwd, " ".join(nargv)))
+                                    printd(f"Exception while running gcc -fplugin command: {nargv}", ptr, True)
+                                    failed()
                                     continue
-                                if ret != 0:
-                                    if "Permission denied" in out:
+                                if ret1 != 0:
+                                    if "Permission denied" in output:
                                         try:
-                                            stdout, stderr, ret = worker.runCmd("/tmp/", nargv[0], nargv[1:], "")
-                                            out = stdout + "\n" + stderr
+                                            stdout1, stderr1, ret2 = worker.runCmd("/tmp/", nargv[0], nargv[1:], "")
+                                            output = stdout1 + "\n" + stderr1
                                         except exec_worker.ExecWorkerException:
                                             worker.initialize()
-                                            print("Exception while running gcc -fplugin command:")
-                                            print ("[%s] %s"%(cwd," ".join(nargv)))
+                                            printd ("Exception while running gcc -fplugin command: {nargv}", ptr, True)
+                                            failed()
                                             continue
-                                        if ret != 0:
-                                            print ("Error getting input files from gcc compilation command (%d):"%(ret))
-                                            print ("----------------------------------------")
-                                            print (out)
-                                            print ("----------------------------------------")
+                                        if ret2 != 0:
+                                            store_output(ptr, f"Error getting input files from gcc compilation command (permission retry)", nargv, stdout1, stderr1, ret2)
+                                            failed()
                                             continue
-                                    else:
-                                        print ("Error getting input files from gcc compilation command (%d):"%(ret))
-                                        print ("----------------------------------------")
-                                        print (out)
-                                        print ("----------------------------------------")
-                                        continue
+                                    # else:
+                                    #     store_output(pos, f"Error getting input files from gcc compilation command", nargv, stdout1, stderr1, ret1)
+                                    #     failed()
+                                    #     continue
 
-                                fns = out.strip().split("\n")
+                                fns = output.strip().splitlines()
 
                                 if not all((os.path.exists(os.path.join(cwd, x)) for x in fns)):
-                                    print ("args: {}".format(nargv))
-                                    print ("Missing gcc compilation input files:")
-                                    for x in fns:
-                                        if not os.path.exists(os.path.join(cwd,x)):
-                                            print ("  [%s] %s"%(cwd,x))
+                                    store_output(ptr, f"Missing gcc compilation input files", nargv, stdout1, stderr1, ret1)
+                                    failed()
+                                    continue
+                                if len(fns) == 0:
+                                    store_output(ptr, f"Error getting input files from gcc compilation command", nargv, stdout1, stderr1, ret1)
+                                    failed()
                                     continue
                                 # Spawn the child to read all include paths and preprocessor definitions
                                 nargv = [bin] + argv[1:]
@@ -2110,22 +2166,21 @@ class CASDatabase:
                                     if len(li):
                                         nargv.pop(li[-1])
                                     else:
-                                        print("CAN'T POP FILENAME \n{}\n{}".format(fns, nargv))
+                                        printd(f"CAN'T POP FILENAME \n{fns}\n{nargv}", ptr, True)
                                 nargv.append('-')
+                                # GET COMPILATION DATA
                                 try:
-                                    stdout, stderr, ret = worker.runCmd(cwd, nargv[0], nargv[1:], "")
-                                    out = stdout + "\n" + stderr
+                                    stdout3, stderr3, ret3 = worker.runCmd(cwd, nargv[0], nargv[1:], "")
+                                    out3 = stdout3 + "\n" + stderr3
                                 except exec_worker.ExecWorkerException:
                                     worker.initialize()
-                                    print("Exception")
-                                    print("[%s] %s" % (cwd, " ".join(nargv)))
+                                    printd(f"Exception {nargv}", ptr)
+                                    failed()
                                     continue
 
-                                if ret != 0:
-                                    print("Error getting compilation data (%d) with command\n  %s" % (ret, " ".join(nargv)))
-                                    print("----------------------------------------")
-                                    print(out)
-                                    print("----------------------------------------")
+                                if ret3 != 0:
+                                    store_output(ptr, f"Error getting compilation data", nargv, stdout3, stderr3, ret3)
+                                    failed()
                                     continue
 
                                 compiler_path = os.path.join(cwd, self.maybe_compiler_binary(bin))
@@ -2133,7 +2188,7 @@ class CASDatabase:
                                 comp_objs = gcc_c.get_object_files(exe_dct, fork_map, rev_fork_map, wr_map)
 
                                 #  try:
-                                includes, defs, undefs = gcc_c.parse_defs(out, exe_dct)
+                                includes, defs, undefs = gcc_c.parse_defs(out3, exe_dct)
                                 includes = [os.path.realpath(os.path.normpath(os.path.join(cwd, x))) for x in includes]
                                 ipaths = gcc_c.compiler_include_paths(compiler_path)
                                 for u in ipaths:
@@ -2159,7 +2214,11 @@ class CASDatabase:
                                         out_fns.add(absfn)
 
                                 if len(out_fns) == 0:
-                                    printdbg("Skipping empty src compilation (probably /dev/null file) ", debug)
+                                    if len(fns) == 1 and fns[0] == "/dev/null":
+                                        skipped()
+                                    else:
+                                        store_output(ptr, f"Error getting input files from gcc compilation command\noutput = {fns}\noutput = {out_fns}", nargv, stdout3, stderr3, ret3)
+                                        skipped()
                                     continue
 
                                 write_queue.put({ptr: {
@@ -2171,8 +2230,9 @@ class CASDatabase:
                                         "s": src_type,
                                         "o": comp_objs,
                                         "p": 0
-                                    }})
-                                found_comps.value += 1
+                                    }},True,5)
+                                with found_comps.get_lock():
+                                    found_comps.value += 1
 
                         print("Searching for gcc compilations ... (%d candidates; %d jobs)" % (len(gxx_input_execs), jobs))
                         print_mem_usage(debug)
@@ -2182,9 +2242,17 @@ class CASDatabase:
                         processed.value = 0
                         found_comps = multiprocessing.Value("i")
                         found_comps.value = 0
+                        failed_comps = multiprocessing.Value("i")
+                        failed_comps.value = 0           
+                        skipped_comps = multiprocessing.Value("i")
+                        skipped_comps.value = 0                   
+                        cur_iter = multiprocessing.Value("i")
+                        cur_iter.value = 0
+                        max_iter = len(gxx_input_execs)
                         sstart = time.time()
                         procs = []
-                        for i in range(jobs-1):
+
+                        for i in range(jobs):
                             p = multiprocessing.Process(target=gcc_executor, args=(i,))
                             procs.append(p)
                             p.start()
@@ -2196,12 +2264,17 @@ class CASDatabase:
                         pbar.refresh()
                         pbar.close()
                         print(flush=True)
-                        print(f"Workers finished in {time.time() - sstart:.2f}s - found {found_comps.value} compilations.")
+                        print(f"Workers finished in {time.time() - sstart:.2f}s - found={found_comps.value} failed={failed_comps.value} skipped={skipped_comps.value} compilations.")
+                        if (found_comps.value + failed_comps.value + skipped_comps.value) != len(gxx_input_execs):
+                            print ("ERROR: Found + skipped + error != all.")
                         print_mem_usage(debug)
 
                     print("finished searching for gcc compilations [%.2fs]" % (time.time() - start_time))
 
-                computation_finished.value = True
+                with computation_finished.get_lock():
+                    computation_finished.value = True
+                
+                write_queue.join()
                 writer_process.join()
 
                 print("computed compilations  [%.2fs]" % (time.time()-compilation_start_time))

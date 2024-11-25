@@ -169,7 +169,7 @@ void ExecutionWorker::send(bool sentError) {
 void ExecutionWorker::execute(void) {
     int fdOut[2], fdErr[2], fdRead[2];
     char slice[256];
-    int status;
+    int status = 0;
     int retries = 0;
     pid_t writerPid = -1;
 
@@ -271,12 +271,12 @@ void ExecutionWorker::execute(void) {
 
         // Make sure our child is cold dead
         kill(pid, SIGKILL);
-        waitpid(pid, &status, WNOHANG);
+        waitpid(pid, &status, 0);
 
         // Kill writer if it exists
         if(writerPid > 0) {
             kill(writerPid, SIGKILL);
-            waitpid(writerPid, nullptr, WNOHANG);
+            waitpid(writerPid, nullptr, 0);
         }
 
         // Save return code

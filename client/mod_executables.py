@@ -60,7 +60,7 @@ class Commands(Module, PipedModule, FilterableModule):
         return Module.add_args([
             "filter", "command-filter", "select", "append",
             "details", "commands",
-            "pid", "binary",
+            "pid", "pos", "binary",
             "extended",
             "parent",
             "filerefs", "cdb"], Commands)
@@ -100,8 +100,11 @@ class Commands(Module, PipedModule, FilterableModule):
         return args
 
     def get_data(self) -> Tuple[Any, DataTypes, "Callable | None", "type | None"]:
-        args = self.prepare_args()
-        data = self.nfsdb.filtered_execs(**args)
+        if self.args.pos:
+            data = [self.nfsdb.get_exec_at_pos(p) for p in self.args.pos]
+        else:
+            args = self.prepare_args()
+            data = self.nfsdb.filtered_execs(**args)
 
         if self.args.cdb:
             data = list(self.cdb_fix_multiple(data))
@@ -118,7 +121,7 @@ class Execs(Module, PipedModule, FilterableModule):
         return Module.add_args([
             "filter", "command-filter", "select", "append",
             "details", "commands",
-            "pid", "binary",
+            "pid", "pos", "binary",
             "extended",
             "parent",
             "filerefs", "cdb"], Commands)
@@ -156,8 +159,11 @@ class Execs(Module, PipedModule, FilterableModule):
         return args
 
     def get_data(self) -> Tuple[Any, DataTypes, Callable, type]:
-        args = self.prepare_args()
-        data = self.nfsdb.filtered_execs(**args)
+        if self.args.pos:
+            data = [self.nfsdb.get_exec_at_pos(p) for p in self.args.pos]
+        else:
+            args = self.prepare_args()
+            data = self.nfsdb.filtered_execs(**args)
 
         if self.args.cdb:
             data = list(self.cdb_fix_multiple(data))
