@@ -1,0 +1,8 @@
+IndentWidth: 4
+UseTab: Never
+IndentPPDirectives: None
+PointerAlignment: Right
+SortIncludes: false
+ColumnLimit: 0
+AlignConsecutiveMacros: true
+AlignAfterOpenBracket: BlockIndent
