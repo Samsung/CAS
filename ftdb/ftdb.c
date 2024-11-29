@@ -44,8 +44,9 @@ CFtdb libftdb_c_ftdb_load(const char* filename, int quiet, int debug) {
         goto done;
     }
 
-    if (unflatten_load_continuous(ftdb_c->unflatten, in, NULL)) {
-        fprintf(stderr,"Failed to read cache file\n");
+    UnflattenStatus status = unflatten_load_continuous(ftdb_c->unflatten, in, NULL);
+    if (status) {
+        fprintf(stderr,"Failed to read cache file: %s\n", unflatten_explain_status(status));
         unflatten_deinit(ftdb_c->unflatten);
         goto done;
     }
@@ -73,7 +74,7 @@ done:
         free(ftdb_c);
         return NULL;	/* Indicate that exception has been set */
     }
-    
+
     return ftdb_c;
 }
 

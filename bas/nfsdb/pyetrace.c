@@ -1405,8 +1405,8 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 	const char* dbfn_s =  PyString_get_c_str(dbfn);
 	struct uflat* uflat = uflat_init(dbfn_s);
 	PYASSTR_DECREF(dbfn_s);
-	if(uflat == NULL) {
-		printf("uflat_init(): failed\n");
+	if(UFLAT_IS_ERR(uflat)) {
+		printf("uflat_init(): %s\n", strerror(UFLAT_PTR_ERR(uflat)));
 		Py_RETURN_FALSE;
 	}
 
@@ -1435,7 +1435,7 @@ PyObject* libetrace_nfsdb_create_deps_cache(libetrace_nfsdb_object *self, PyObje
 
 	int err = uflat_write(uflat);
 	if (err != 0) {
-		printf("flatten_write(): %d\n", err);
+		printf("flatten_write(): %s\n", strerror(err));
 		goto uflat_error_exit;
 	}
 
@@ -3824,8 +3824,9 @@ PyObject* libetrace_nfsdb_load(libetrace_nfsdb_object* self, PyObject* args, PyO
 		goto done;
 	}
 
-	if (unflatten_load_continuous(self->unflatten, in, NULL)) {
-		PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
+	UnflattenStatus status = unflatten_load_continuous(self->unflatten, in, NULL);
+	if (status) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to read cache file: %s", unflatten_explain_status(status));
 		unflatten_deinit(self->unflatten);
 		fclose(in);
 		goto done;
@@ -3912,8 +3913,9 @@ PyObject* libetrace_nfsdb_load_deps(libetrace_nfsdb_object* self, PyObject* args
 		goto done;
 	}
 
-	if (unflatten_load_continuous(self->unflatten_deps, in, NULL)) {
-		PyErr_SetString(libetrace_nfsdbError, "Failed to read cache file");
+	UnflattenStatus status = unflatten_load_continuous(self->unflatten_deps, in, NULL);
+	if (status) {
+		PyErr_Format(libetrace_nfsdbError, "Failed to read cache file: %s", unflatten_explain_status(status));
 		unflatten_deinit(self->unflatten_deps);
 		fclose(in);
 		goto done;
