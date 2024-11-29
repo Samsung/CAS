@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Callable
+from typing import Any, List, Tuple, Callable
 from client.mod_base import Module, PipedModule, FilterableModule
 from client.exceptions import PipelineException
 from client.misc import printdbg
@@ -79,7 +79,7 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
             "filter", "command-filter", "select", "append",
             "details", "commands",
             "path",
-            "revdeps",
+            "revdeps", "rcm",
             "match", "cdb"], RevCompsFor)
 
     def select_subject(self, ent) -> str:
@@ -110,6 +110,17 @@ class RevCompsFor(Module, PipedModule, FilterableModule):
                 if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo) and self.filter_exec(oo.opaque)
             })
             return data, DataTypes.commands_data, lambda x: x.compilation_info.files[0], libetrace.nfsdbEntry
+        elif self.args.rcm:
+            data:List = []
+            for p in self.args.path:
+                data.append( [p, list({
+                    oo.opaque.compilation_info.files[0].path
+                    for opn in self.nfsdb.get_opens_of_path(p)
+                    for oo in opn.parent.parent.opens_with_children
+                    if oo.opaque is not None and oo.opaque.compilation_info and self.filter_open(oo)
+                })]
+                )
+            return data, DataTypes.cdm_data, None, None
         else:
             data = list({
                 oo.opaque.compilation_info.files[0].path

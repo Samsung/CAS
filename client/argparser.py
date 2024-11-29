@@ -391,6 +391,13 @@ args_map = {
         default=False,
         help='Display compilation dependency map of results'
     ),
+    "rcm": lambda x: x.add_argument(
+        '--reverse-compilation-map', '--rcm',
+        dest='rcm',
+        action='store_true',
+        default=False,
+        help='Display reversed compilation map of results'
+    ),
     "cdm-ex-pt": lambda x: x.add_argument(
         '--cdm-exclude-patterns',
         type=str,
