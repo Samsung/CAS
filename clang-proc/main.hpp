@@ -32,7 +32,6 @@ struct main_opts {
 	bool recordLoc;
 	bool exit_on_error;
 	bool csd;
-	bool ptrMEonly;
 	bool save_expansions;
 };
 

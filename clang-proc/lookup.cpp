@@ -667,111 +667,6 @@ void DbJSONClassVisitor::lookForDeclRefExprs(const Expr* E, std::set<ValueHolder
 	}
 }
 
-void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternalFromStmt(const Stmt* S, DREMap_t& refs, lookup_cache_t& cache,
-		bool* compoundStmtSeen, unsigned MEIdx, const CallExpr* CE, bool secondaryChain) {
-
-	/* TODO: implement extraction of referenced variables from statements */
-
-	switch(S->getStmtClass()) {
-		case Stmt::DoStmtClass:
-		{
-			const DoStmt* Do = static_cast<const DoStmt*>(S);
-			//lookForDeclRefWithMemberExprsInternal(ICE->getSubExpr(),refs,cache,compoundStmtSeen,CE);
-			break;
-		}
-		case Stmt::DeclStmtClass:
-		{
-			const DeclStmt* Decl = static_cast<const DeclStmt*>(S);
-			//lookForDeclRefWithMemberExprsInternal(ICE->getSubExpr(),refs,cache,compoundStmtSeen,CE);
-			break;
-		}
-		case Stmt::GCCAsmStmtClass:
-		{
-			const GCCAsmStmt* GccAsm = static_cast<const GCCAsmStmt*>(S);
-			//lookForDeclRefWithMemberExprsInternal(ICE->getSubExpr(),refs,cache,compoundStmtSeen,CE);
-			break;
-		}
-		default:
-		{
-			if (opts.exit_on_error) {
-				llvm::outs() << "\nERROR: No implementation in lookForDeclRefExprs(Stmt) for:\n";
-				S->dump();
-				exit(EXIT_FAILURE);
-			}
-			else {
-				unsupportedExprRefs.insert(std::string(S->getStmtClassName()));
-			}
-		}
-	}
-
-}
-
-bool DbJSONClassVisitor::verifyMemberExprBaseType(QualType T) {
-
-	switch(T->getTypeClass()) {
-		case Type::Decayed:
-		{
-			const DecayedType *tp = cast<DecayedType>(T);
-			return verifyMemberExprBaseType(tp->getAdjustedType());
-		}
-		case Type::Pointer:
-		{
-			const PointerType *tp = cast<PointerType>(T);
-			return verifyMemberExprBaseType(tp->getPointeeType());
-		}
-                case Type::Paren:
-		{
-			const ParenType *tp = cast<ParenType>(T);
-                        return verifyMemberExprBaseType(tp->getInnerType());
-		}
-		case Type::Typedef:
-		{
-			const TypedefType *tp = cast<TypedefType>(T);
-			TypedefNameDecl* D = tp->getDecl();
-			return verifyMemberExprBaseType(D->getTypeSourceInfo()->getType());
-		}
-		case Type::TypeOfExpr:
-		{
-			const TypeOfExprType *tp= cast<TypeOfExprType>(T);
-			return verifyMemberExprBaseType(tp->getUnderlyingExpr()->getType());
-		}
-		case Type::TypeOf:
-		{
-			const TypeOfType *tp = cast<TypeOfType>(T);
-			return verifyMemberExprBaseType(tp->getUnmodifiedType());
-		}
-		case Type::Elaborated:
-		{
-			const ElaboratedType *tp = cast<ElaboratedType>(T);
-			return verifyMemberExprBaseType(tp->getNamedType());
-		}
-		case Type::Attributed:
-		{
-			const AttributedType *tp = cast<AttributedType>(T);
-			return verifyMemberExprBaseType(tp->getModifiedType());
-		}
-		COMPAT_VERSION_GE(15,
-		case Type::BTFTagAttributed:
-		{
-			const BTFTagAttributedType *tp = cast<BTFTagAttributedType>(T);
-			return verifyMemberExprBaseType(tp->getWrappedType());
-		}
-		)
-		case Type::MacroQualified:
-		{
-			const MacroQualifiedType *tp = cast<MacroQualifiedType>(T);
-			return verifyMemberExprBaseType(tp->getUnderlyingType());
-		}
-		case Type::Record:
-		{
-			return true;
-		}
-		default:
-			break;
-	}
-	return false;
-}
-
 const ArraySubscriptExpr* DbJSONClassVisitor::lookForArraySubscriptExprInCallExpr(const Expr* E) {
 
 	switch(E->getStmtClass()) {
@@ -838,29 +733,22 @@ const Expr* DbJSONClassVisitor::stripCastsEx(const Expr* E, std::vector<CStyleCa
 	return E;
 }
 
-const Expr* DbJSONClassVisitor::stripCasts(const Expr* E, QualType* castType) {
-
+const Expr* DbJSONClassVisitor::stripCasts(const Expr* E) {
 	switch(E->getStmtClass()) {
 		case Stmt::ImplicitCastExprClass:
 		{
 			const ImplicitCastExpr* ICE = static_cast<const ImplicitCastExpr*>(E);
-			if (castType) {
-				*castType = ICE->getType();
-			}
 			return stripCasts(ICE->getSubExpr());
 		}
 		case Stmt::CStyleCastExprClass:
 		{
 			const CStyleCastExpr* CSCE = static_cast<const CStyleCastExpr*>(E);
-			if (castType) {
-				*castType = CSCE->getType();
-			}
 			return stripCasts(CSCE->getSubExpr());
 		}
 		case Stmt::ParenExprClass:
 		{
 			const ParenExpr* PE = static_cast<const ParenExpr*>(E);
-			return stripCasts(PE->getSubExpr(),castType);
+			return stripCasts(PE->getSubExpr());
 		}
 	}
 	return E;
@@ -908,28 +796,6 @@ const UnaryOperator* DbJSONClassVisitor::lookForUnaryOperatorInCallExpr(const Ex
 	return 0;
 }
 
-bool DbJSONClassVisitor::DREMap_add(DREMap_t& refs, ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS& v, vMCtuple_t& vMCtuple) {
-	/* Check if the MC pair is already present in refs multimap for any of its keys
-	 * If not present add new key with unique MC pair value
-	 */
-	bool MCfound = false;
-	for (auto itr = refs.begin(); itr != refs.end(); itr++) {
-		if (itr->first==v) {
-			if (itr->second==vMCtuple) {
-				MCfound=true;
-				break;
-			}
-		}
-	}
-
-	if (!MCfound) {
-		refs.insert(std::pair<ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS,vMCtuple_t>(v,vMCtuple));
-		return true;
-	}
-
-	return false;
-}
-
 /* Look for variables (DeclRefExpr) or constant address values (IntegerLiteral, CharacterLiteral) and
  *  save each occurrence in the 'refs' mapping
  *  i.e. in 'a.b->c->d' the DeclRefExpr points to 'a' and in '((struct B *)30)->a' the address value is 30
@@ -950,109 +816,70 @@ bool DbJSONClassVisitor::DREMap_add(DREMap_t& refs, ValueDeclOrCallExprOrAddress
  *  TODO: (...)
  */
 
-void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, const Expr* origExpr, DREMap_t& refs, lookup_cache_t& cache,
-		bool* compoundStmtSeen, unsigned MEIdx, unsigned* MECnt, const CallExpr* CE, bool secondaryChain, bool IgnoreLiteral,
-		bool noticeInitListExpr, QualType castType) {
+// [TODO] remove MEIdx, maybe not possible
 
-	if (!castType.isNull()) {
-		get_ccast(cache).push_back(CStyleCastOrType(castType));
-	}
-
+void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DREMap_t& refs, std::vector<MemberInfo_t> *cache,
+		std::vector<CStyleCastOrType> castVec, unsigned MEIdx, const CallExpr* CE, bool IgnoreLiteral) {
+	static int depth = 0;
+	// llvm::errs()<<depth++<<":\t"<<E->getStmtClassName()<< !!cache <<'\n';
+	
 	switch(E->getStmtClass()) {
 		case Stmt::ImplicitCastExprClass:
 		{
 			const ImplicitCastExpr* ICE = static_cast<const ImplicitCastExpr*>(E);
-			if (get_member(cache).size()>get_type(cache).size()) {
-				get_type(cache).push_back(CastExprOrType(static_cast<CastExpr*>(const_cast<ImplicitCastExpr*>(ICE))));
-			}
-			lookForDeclRefWithMemberExprsInternal(ICE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(ICE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::ConstantExprClass:
 		{
 			const ConstantExpr* ConstExpr = static_cast<const ConstantExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(ConstExpr->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(ConstExpr->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::MemberExprClass:
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
-			if (secondaryChain) {
-				QualType METype;
-				if (get_type(cache).size()>0) {
-					METype = get_type(cache).back().getFinalType();
-				}
-				else {
-					METype = ME->getMemberDecl()->getType();
-				}
-				ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-				CStyleCastOrType valuecast;
-				if (get_ccast(cache).size()>0) {
-					valuecast = getMatchingCast(get_ccast(cache));
-				}
-				else {
-					valuecast = CStyleCastOrType(ME->getType());
-					noticeTypeClass(ME->getType());
-				}
-				v.setME(ME,METype,valuecast);
-				v.setMeIdx(MEIdx);
-				v.setPrimaryFlag(false);
-				typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-				vMCtuple_t vMCtuple;
-				refs.insert(std::pair<ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS,vMCtuple_t>(v,vMCtuple));
-				lookup_cache_clear(cache);
+			if(cache){
+				cache->push_back({ME,ME->getBase()->getType(),0,CE});
+				DoneMEs.insert(ME);
+				CE=0;
+				castVec.clear();
+				lookForDeclRefWithMemberExprsInternal(ME->getBase(),refs,cache,castVec,MEIdx+1,CE,IgnoreLiteral);
 			}
 			else {
-				if (get_member(cache).size()>get_type(cache).size()) {
-					QualType T = ME->getMemberDecl()->getType();
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				get_member(cache).push_back(const_cast<MemberExpr*>(ME));
-				get_shift(cache).push_back(0);
-				get_ccast(cache).clear();
-				if (CE) {
-					get_callref(cache).push_back(CE);
-					CE=0;
-				}
-				else {
-					get_callref(cache).push_back(0);
-				}
-				if (MECnt) {
-					(*MECnt)++;
-				}
-				lookForDeclRefWithMemberExprsInternal(ME->getBase(),origExpr,refs,cache,compoundStmtSeen,MEIdx+1,MECnt,CE,
-						secondaryChain,IgnoreLiteral,noticeInitListExpr);
+				ExprRef_t v;
+				// ensure valuecast type
+				noticeTypeClass(ME->getType());
+				castVec.push_back(ME->getType());
+				CStyleCastOrType valuecast = getMatchingCast(castVec);
+				v.setME(ME,valuecast);
+				v.setMeIdx(MEIdx);
+				refs.insert(v);
 			}
 			break;
 		}
 		case Stmt::CXXStaticCastExprClass:
 		{
 			const CXXStaticCastExpr* SCE = static_cast<const CXXStaticCastExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(SCE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(SCE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::MaterializeTemporaryExprClass:
 		{
 			const MaterializeTemporaryExpr* MTE = static_cast<const MaterializeTemporaryExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(MTE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(MTE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::ExprWithCleanupsClass:
 		{
 			const ExprWithCleanups* EWC = static_cast<const ExprWithCleanups*>(E);
-			lookForDeclRefWithMemberExprsInternal(EWC->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(EWC->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::IntegerLiteralClass:
 		case Stmt::CharacterLiteralClass:
 		{
-			if (IgnoreLiteral && secondaryChain) {
-				lookup_cache_clear(cache);
+			if (IgnoreLiteral && !cache) {
 				break;
 			}
 
@@ -1066,87 +893,34 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 				i = CL->getValue();
 			}
 
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			v.setAddress(i,valuecast);
 			v.setMeIdx(MEIdx);
-
-			vMCtuple_t vMCtuple;
-			if (get_member(cache).size()>get_type(cache).size()) {
-				llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-						") vs (" << get_type(cache).size() << ")\n";
-				E->dumpColor();
-				llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-				llvm::outs() << E->getStmtClassName() << "\n";
-				origExpr->dumpColor();
-				exit(EXIT_FAILURE);
-			}
-
-			if (!secondaryChain) {
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 
 		case Stmt::StringLiteralClass:
 		{
-			if (IgnoreLiteral && secondaryChain) {
-				lookup_cache_clear(cache);
+			if (IgnoreLiteral && !cache) {
+
 				break;
 			}
 
 			const StringLiteral* SL = static_cast<const StringLiteral*>(E);
 			std::string s = SL->getBytes().str();
 
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			v.setString(s,valuecast);
 			v.setMeIdx(MEIdx);
-
-			vMCtuple_t vMCtuple;
-			if (get_member(cache).size()>get_type(cache).size()) {
-				llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-						") vs (" << get_type(cache).size() << ")\n";
-				E->dumpColor();
-				llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-				llvm::outs() << E->getStmtClassName() << "\n";
-				origExpr->dumpColor();
-				exit(EXIT_FAILURE);
-			}
-
-			if (!secondaryChain) {
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 		case Stmt::FloatingLiteralClass:
 		{
-			if (IgnoreLiteral && secondaryChain) {
-				lookup_cache_clear(cache);
+			if (IgnoreLiteral && !cache) {
 				break;
 			}
 
@@ -1160,49 +934,19 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			    fp = FL->getValue().convertToDouble();
 			}
 
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			v.setFloating(fp,valuecast);
 			v.setMeIdx(MEIdx);
-
-			vMCtuple_t vMCtuple;
-			if (get_member(cache).size()>get_type(cache).size()) {
-				llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-						") vs (" << get_type(cache).size() << ")\n";
-				E->dumpColor();
-				llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-				llvm::outs() << E->getStmtClassName() << "\n";
-				origExpr->dumpColor();
-				exit(EXIT_FAILURE);
-			}
-
-			if (!secondaryChain) {
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 
 		case Stmt::DeclRefExprClass:
 		{
 			const DeclRefExpr* DRE = static_cast<const DeclRefExpr*>(E);
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
-
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			if (CE) {
 				const ValueDecl* VD = DRE->getDecl();
 				if ((VD->getKind()==Decl::Var)||(VD->getKind()==Decl::ParmVar)) {
@@ -1215,105 +959,34 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			else {
 				v.setValue(DRE->getDecl(),valuecast);
 			}
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = DRE->getDecl()->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					DRE->dumpColor();
-					llvm::outs() << "DeclRef Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
 			v.setMeIdx(MEIdx);
-
-			if (!secondaryChain) {
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 		case Stmt::CompoundLiteralExprClass:
 		{
 			const CompoundLiteralExpr* CLE = static_cast<const CompoundLiteralExpr*>(E);
-			if (compoundStmtSeen) *compoundStmtSeen=true;
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = CLE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					CLE->dumpColor();
-					llvm::outs() << "CompoundLiteral Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-			lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-			lookForDeclRefWithMemberExprsInternal(CLE->getInitializer(),origExpr,refs,icache,compoundStmtSeen,
-					MEIdx,MECnt,CE,true,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(CLE->getInitializer(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
 
-			/* Save dummy variable only to hold member expression information as there is no real primary variables */
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-			v.setMeIdx(MEIdx);
-			for (size_t i=0; i!=get_member(cache).size(); ++i) {
-				vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-						get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			// /* Save dummy variable only to hold member expression information as there is no real primary variables */
+			// [DEPRECATED]
 			break;
 		}
 		case Stmt::InitListExprClass:	/* Can only happen at the CompoundLiteral or StmtExpression */
 		{
 			const InitListExpr* ILE = static_cast<const InitListExpr*>(E);
-			if (noticeInitListExpr) {
-				DoneILEs.insert(const_cast<InitListExpr*>(ILE));
-			}
 			for (unsigned i=0; i<ILE->getNumInits(); ++i) {
-				lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(icache).clear();
+				std::vector<CStyleCastOrType> castVec;
 				const Expr* IE = ILE->getInit(i);
-				lookForDeclRefWithMemberExprsInternal(IE,origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-						secondaryChain,IgnoreLiteral,noticeInitListExpr);
+				lookForDeclRefWithMemberExprsInternal(IE,refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			}
-			lookup_cache_clear(cache);
 			break;
 		}
 		case Stmt::CompoundAssignOperatorClass:
 		{
 			const CompoundAssignOperator* CAO = static_cast<const CompoundAssignOperator*>(E);
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			if (CE) {
 				v.setRefCall(CE,CAO,valuecast);
 			}
@@ -1321,105 +994,32 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 				v.setCAO(CAO,valuecast);
 			}
 			v.setMeIdx(MEIdx);
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = CAO->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for CompoundAssignOperator > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					CAO->dumpColor();
-					llvm::outs() << "CompoundAssignOperator Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
-			if (!secondaryChain) {
-				if (MECnt) {
-					v.setMeCnt(*MECnt);
-				}
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 		case Stmt::ArraySubscriptExprClass:
 		{
 			const ArraySubscriptExpr* ASE = static_cast<const ArraySubscriptExpr*>(E);
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			CStyleCastOrType valuecast;
-			if (get_ccast(cache).size()>0) {
-				valuecast = getMatchingCast(get_ccast(cache));
-			}
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
 			if (CE) {
 				v.setRefCall(CE,ASE,valuecast);
 			}
 			else {
-				if (get_ccast(cache).size()<=0) {
-					/* If there's no cast on array subscript get the expression type */
-					valuecast = CStyleCastOrType(ASE->getType());
-					noticeTypeClass(ASE->getType());
-				}
+				// ensure valuecast type
+				noticeTypeClass(ASE->getType());
+				castVec.push_back(ASE->getType());
+				valuecast = getMatchingCast(castVec);
 				v.setAS(ASE,valuecast);
 			}
 			v.setMeIdx(MEIdx);
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = ASE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					ASE->dumpColor();
-					llvm::outs() << "ArraySubscriptExpr Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
-			if (!secondaryChain) {
-				if (MECnt) {
-					v.setMeCnt(*MECnt);
-				}
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 		case Stmt::OffsetOfExprClass:
 		{
 			const OffsetOfExpr* OOE = static_cast<const OffsetOfExpr*>(E);
-            ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+            ExprRef_t v;
             if (CE) {
                 /* I don't think we can get here; would need: 'offsetof(...)(...)' */
                 v.setRefCall(CE,OOE);
@@ -1428,66 +1028,21 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
                 v.setOOE(OOE);
             }
             v.setMeIdx(MEIdx);
-            typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-            vMCtuple_t vMCtuple;
-            /* We cannot have offsetof() in primary member expression chain */
-            v.setPrimaryFlag(false);
-            lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			refs.insert(v);
 			break;
 		}
 		case Stmt::ParenExprClass:
 		{
 			const ParenExpr* PE = static_cast<const ParenExpr*>(E);
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = PE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					PE->dumpColor();
-					llvm::outs() << "ParenExpr Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-			lookForDeclRefWithMemberExprsInternal(PE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(PE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::UnaryOperatorClass:
 		{
 			const UnaryOperator* UO = static_cast<const UnaryOperator*>(E);
-			if ((UO->getOpcode()==UO_Deref)||(UO->getOpcode()==UO_AddrOf)) {
-				if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-					QualType T = UO->getType();
-					if (verifyMemberExprBaseType(T)) {
-						get_type(cache).push_back(CastExprOrType(T));
-					}
-					else {
-						llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-										") vs (" << get_type(cache).size() << ")\n";
-						UO->dumpColor();
-						llvm::outs() << "UnaryOperator Type: " << T->getTypeClassName() << "\n";
-						T.dump();
-						llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-						llvm::outs() << E->getStmtClassName() << "\n";
-						origExpr->dumpColor();
-						exit(EXIT_FAILURE);
-					}
-				}
-			}
 			if (UO->getOpcode()==UO_Deref) {
-				ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-				CStyleCastOrType valuecast;
-				if (get_ccast(cache).size()>0) {
-					valuecast = getMatchingCast(get_ccast(cache));
-				}
+				ExprRef_t v;
+				CStyleCastOrType valuecast = getMatchingCast(castVec);
 				std::set<ValueHolder> callrefs;
 				lookForDeclRefExprsWithStmtExpr(UO->getSubExpr(),callrefs);
 				if (CE) {
@@ -1499,75 +1054,49 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					}
 				}
 				else {
-					if (get_ccast(cache).size()<=0) {
-						/* If there's no cast on dereference expression get the expression type */
-						valuecast = CStyleCastOrType(UO->getType());
-						noticeTypeClass(UO->getType());
-					}
+					// ensure valuecast type
+					noticeTypeClass(UO->getType());
+					castVec.push_back(UO->getType());
+					valuecast = getMatchingCast(castVec);
 					v.setUnary(UO,valuecast);
 				}
 				v.setMeIdx(MEIdx);
-				typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-				vMCtuple_t vMCtuple;
-
-				if (!secondaryChain) {
-					if (MECnt) {
-						v.setMeCnt(*MECnt);
-					}
-					for (size_t i=0; i!=get_member(cache).size(); ++i) {
-						vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-								get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-					}
-				}
-				else {
-					v.setPrimaryFlag(false);
-				}
-				lookup_cache_clear(cache);
-				DREMap_add(refs,v,vMCtuple);
+				refs.insert(v);
 			}
 			else {
-				lookForDeclRefWithMemberExprsInternal(UO->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-						secondaryChain,IgnoreLiteral,noticeInitListExpr);
+				lookForDeclRefWithMemberExprsInternal(UO->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			}
 			break;
 		}
 		case Stmt::CStyleCastExprClass:
 		{
 			const CStyleCastExpr* CSCE = static_cast<const CStyleCastExpr*>(E);
-			if (get_member(cache).size()>get_type(cache).size()) {
-				get_type(cache).push_back(CastExprOrType(static_cast<CastExpr*>(const_cast<CStyleCastExpr*>(CSCE))));
-			}
-			get_ccast(cache).push_back(CStyleCastOrType(const_cast<CStyleCastExpr*>(CSCE)));
-			lookForDeclRefWithMemberExprsInternal(CSCE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,false,noticeInitListExpr);
+			castVec.push_back(CStyleCastOrType(const_cast<CStyleCastExpr*>(CSCE)));
+			lookForDeclRefWithMemberExprsInternal(CSCE->getSubExpr(),refs,cache,castVec,MEIdx,CE,false);
 			break;
 		}
 		case Stmt::CXXConstCastExprClass:
 		{
 			const CXXConstCastExpr* CCE = static_cast<const CXXConstCastExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(CCE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(CCE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::CXXReinterpretCastExprClass:
 		{
 			const CXXReinterpretCastExpr* RCE = static_cast<const CXXReinterpretCastExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(RCE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(RCE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::CXXFunctionalCastExprClass:
 		{
 			const CXXFunctionalCastExpr* FCE = static_cast<const CXXFunctionalCastExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(FCE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(FCE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::CXXBindTemporaryExprClass:
 		{
 			const CXXBindTemporaryExpr* BTE = static_cast<const CXXBindTemporaryExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(BTE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(BTE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::BinaryOperatorClass:
@@ -1576,81 +1105,49 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			if ((BO->getOpcode()==BO_Add)||(BO->getOpcode()==BO_Sub)) {
 				bool Ldone = false;
 				bool Rdone = false;
-				if (get_shift(cache).size()>0) {
-					Ldone = tryComputeOffsetExpr(BO->getLHS(),&get_shift(cache).back(),BO->getOpcode());
-					Rdone = tryComputeOffsetExpr(BO->getRHS(),&get_shift(cache).back(),BO->getOpcode());
+				int64_t shift = 0;
+				Ldone = tryComputeOffsetExpr(BO->getLHS(),&shift,BO->getOpcode());
+				Rdone = tryComputeOffsetExpr(BO->getRHS(),&shift,BO->getOpcode());
+				if (cache) {
+					cache->back().offset = shift;
 				}
 				if (Ldone&&Rdone) {
 					/* No referenced variable; computed offset is actually an indirection address */
-					ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-					CStyleCastOrType valuecast;
-					if (get_ccast(cache).size()>0) {
-						valuecast = getMatchingCast(get_ccast(cache));
-					}
+					ExprRef_t v;
+					CStyleCastOrType valuecast = getMatchingCast(castVec);
 					if (CE) {
-						v.setRefCall(CE,get_shift(cache).back(),valuecast);
+						v.setRefCall(CE,shift,valuecast);
 					}
 					else {
-						v.setAddress(get_shift(cache).back(),valuecast);
+						v.setAddress(shift,valuecast);
 					}
-					get_shift(cache).back() = 0;
+					if (cache) {
+						cache->back().offset = 0;
+					}
 					v.setMeIdx(MEIdx);
-
-					typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-					vMCtuple_t vMCtuple;
-					if (get_member(cache).size()>get_type(cache).size()) {
-						llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-								") vs (" << get_type(cache).size() << ")\n";
-						llvm::outs() << E->getStmtClassName() << "\n";
-						E->dumpColor();
-						exit(EXIT_FAILURE);
-					}
-
-					if (!secondaryChain) {
-						for (size_t i=0; i!=get_member(cache).size(); ++i) {
-							vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-									get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-						}
-					}
-					else {
-						v.setPrimaryFlag(false);
-					}
-					lookup_cache_clear(cache);
-					DREMap_add(refs,v,vMCtuple);
+					refs.insert(v);
 				}
 				else if ((!Ldone)&&(!Rdone)) {	
 					/* Both "+/-" arguments are referencing variables */
-					lookup_cache_t lcache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-					get_ccast(lcache).clear();
-					lookForDeclRefWithMemberExprsInternal(BO->getLHS(),origExpr,refs,lcache,compoundStmtSeen,MEIdx,MECnt,CE,
-							secondaryChain,true,noticeInitListExpr);
-					lookup_cache_t rcache;
-					lookForDeclRefWithMemberExprsInternal(BO->getRHS(),origExpr,refs,rcache,compoundStmtSeen,MEIdx,0,0,
-							true,true,noticeInitListExpr);
-					lookup_cache_clear(cache);
+					std::vector<CStyleCastOrType> castVec;
+					lookForDeclRefWithMemberExprsInternal(BO->getLHS(),refs,cache,castVec,MEIdx,CE,true);
+					lookForDeclRefWithMemberExprsInternal(BO->getRHS(),refs,0,castVec,MEIdx,0,true);
 				} else {
 					/* Variables are referenced either on the left side or the right side of the "+/-" */
 					if (!Ldone) {
-						lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-						get_ccast(icache).clear();
-						lookForDeclRefWithMemberExprsInternal(BO->getLHS(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-								secondaryChain,true,noticeInitListExpr);
+						std::vector<CStyleCastOrType> castVec;
+						lookForDeclRefWithMemberExprsInternal(BO->getLHS(),refs,cache,castVec,MEIdx,CE,true);
 					}
 					if (!Rdone) {
-						lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-						get_ccast(icache).clear();
-						lookForDeclRefWithMemberExprsInternal(BO->getRHS(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-								secondaryChain,true,noticeInitListExpr);
+						std::vector<CStyleCastOrType> castVec;
+						lookForDeclRefWithMemberExprsInternal(BO->getRHS(),refs,cache,castVec,MEIdx,CE,true);
 					}
 				}
 			}
 			else if(BO->getOpcode() >= BO_Cmp && BO->getOpcode() <= BO_LOr){
 				Expr::EvalResult Res;
-				ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-				CStyleCastOrType valuecast;
-				if (get_ccast(cache).size()>0) {
-					valuecast = getMatchingCast(get_ccast(cache));
-				}
+				ExprRef_t v;
+				CStyleCastOrType valuecast = getMatchingCast(castVec);
 				if (CE) {
 					v.setRefCall(CE,BO,valuecast);
 				}
@@ -1661,206 +1158,64 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					v.setLogic(BO,valuecast);
 				}
 				v.setMeIdx(MEIdx);
-				typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-				vMCtuple_t vMCtuple;
-
-				if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-					QualType T = BO->getType();
-					if (verifyMemberExprBaseType(T)) {
-						get_type(cache).push_back(CastExprOrType(T));
-					}
-					else {
-						llvm::outs() << "\nERROR: cache size for CompoundAssignOperator > CastExpr cache size (" << get_member(cache).size() <<
-										") vs (" << get_type(cache).size() << ")\n";
-						BO->dumpColor();
-						llvm::outs() << "CompoundAssignOperator Type: " << T->getTypeClassName() << "\n";
-						T.dump();
-						llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-						origExpr->dumpColor();
-						exit(EXIT_FAILURE);
-					}
-				}
-
-				if (!secondaryChain) {
-					if (MECnt) {
-						v.setMeCnt(*MECnt);
-					}
-					for (size_t i=0; i!=get_member(cache).size(); ++i) {
-						vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-								get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-					}
-				}
-				else {
-					v.setPrimaryFlag(false);
-				}
-
-				lookup_cache_clear(cache);
-				DREMap_add(refs,v,vMCtuple);
+				refs.insert(v);
 				break;
 				// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!	
 			}
 			else {
-				lookup_cache_t lcache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(lcache).clear();
-				lookForDeclRefWithMemberExprsInternal(BO->getLHS(),origExpr,refs,lcache,compoundStmtSeen,MEIdx,MECnt,CE,
-						secondaryChain,true,noticeInitListExpr);
-				lookup_cache_t rcache;
-				lookForDeclRefWithMemberExprsInternal(BO->getRHS(),origExpr,refs,rcache,compoundStmtSeen,MEIdx,0,0,
-						true,true,noticeInitListExpr);
-				lookup_cache_clear(cache);
+				std::vector<CStyleCastOrType> castVec;
+				lookForDeclRefWithMemberExprsInternal(BO->getLHS(),refs,cache,castVec,MEIdx,CE,true);
+				lookForDeclRefWithMemberExprsInternal(BO->getRHS(),refs,0,castVec,MEIdx,0,true);
 			}
 			break;
 		}
 		case Stmt::OpaqueValueExprClass:
 		{
 			const OpaqueValueExpr* OVE = static_cast<const OpaqueValueExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(OVE->getSourceExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(OVE->getSourceExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::ChooseExprClass:
 		{
 			const ChooseExpr* ChE = static_cast<const ChooseExpr*>(E);
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = ChE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for ChooseExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					ChE->dumpColor();
-					llvm::outs() << "ChooseExpr Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
-			lookForDeclRefWithMemberExprsInternal(ChE->getChosenSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-				secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(ChE->getChosenSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::GenericSelectionExprClass:{
 			const GenericSelectionExpr* GSE = static_cast<const GenericSelectionExpr*>(E);
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = GSE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for ChooseExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					GSE->dumpColor();
-					llvm::outs() << "ChooseExpr Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
-			lookForDeclRefWithMemberExprsInternal(GSE->getResultExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,
-				secondaryChain,IgnoreLiteral,noticeInitListExpr);
+			lookForDeclRefWithMemberExprsInternal(GSE->getResultExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::ConditionalOperatorClass:
 		{
 			const ConditionalOperator* CO = static_cast<const ConditionalOperator*>(E);
 			int64_t condVal = 0;
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = CO->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					CO->dumpColor();
-					llvm::outs() << "ConditionalOperator Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
 			bool condEvaluated = tryComputeOffsetExpr(CO->getCond(),&condVal,BO_Add,true);
 			if (condEvaluated) {
 				/* The condition was successfully computed; take the viable path only */
-				lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(icache).clear();
+				std::vector<CStyleCastOrType> castVec;
 				if (condVal!=0) {
-					lookForDeclRefWithMemberExprsInternal(CO->getLHS(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-							true,IgnoreLiteral,noticeInitListExpr);
+					lookForDeclRefWithMemberExprsInternal(CO->getLHS(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
 				}
 				else {
-					lookForDeclRefWithMemberExprsInternal(CO->getRHS(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-							true,IgnoreLiteral,noticeInitListExpr);
+					lookForDeclRefWithMemberExprsInternal(CO->getRHS(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
 				}
 			}
 			else {
 				/* Condition cannot be computed at compile time; we need to grab variables from both paths */
-				lookup_cache_t lcache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(lcache).clear();
-				lookForDeclRefWithMemberExprsInternal(CO->getLHS(),origExpr,refs,lcache,compoundStmtSeen,MEIdx,MECnt,CE,
-						true,IgnoreLiteral,noticeInitListExpr);
-				lookup_cache_t rcache;
-				lookForDeclRefWithMemberExprsInternal(CO->getRHS(),origExpr,refs,rcache,compoundStmtSeen,MEIdx,0,0,
-						true,IgnoreLiteral,noticeInitListExpr);
+				std::vector<CStyleCastOrType> castVec;
+				lookForDeclRefWithMemberExprsInternal(CO->getLHS(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
+				lookForDeclRefWithMemberExprsInternal(CO->getRHS(),refs,0,castVec,MEIdx,0,IgnoreLiteral);
 			}
-			/* Save dummy variable only to hold member expression information as there is no real primary variables
-			    (and possibly multiple secondary variables) */
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-
-			v.setMeIdx(MEIdx);
-
-			if (!secondaryChain) {
-				if (MECnt) {
-					v.setMeCnt(*MECnt);
-				}
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			// /* Save dummy variable only to hold member expression information as there is no real primary variables
+			//     (and possibly multiple secondary variables) */
+			// [DEPRECATED]
 			break;
 		}
 		case Stmt::BinaryConditionalOperatorClass:
 		{
 			const BinaryConditionalOperator* BCO = static_cast<const BinaryConditionalOperator*>(E);
 			int64_t condVal = 0;
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = BCO->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					BCO->dumpColor();
-					llvm::outs() << "BinaryConditionalOperator Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
 			const Expr* cond = BCO->getCond();
 			if (cond->getStmtClass()==Stmt::OpaqueValueExprClass) {
 				const OpaqueValueExpr* opaque_cond = static_cast<const OpaqueValueExpr*>(cond);
@@ -1869,49 +1224,23 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			bool condEvaluated = tryComputeOffsetExpr(cond,&condVal,BO_Add,true);
 			if (condEvaluated) {
 				/* The condition was successfully computed; take the viable path only */
-				lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(icache).clear();
+				std::vector<CStyleCastOrType> castVec;
 				if (condVal!=0) {
-					lookForDeclRefWithMemberExprsInternal(BCO->getTrueExpr(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-							true,IgnoreLiteral,noticeInitListExpr);
+					lookForDeclRefWithMemberExprsInternal(BCO->getTrueExpr(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
 				}
 				else {
-					lookForDeclRefWithMemberExprsInternal(BCO->getFalseExpr(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-							true,IgnoreLiteral,noticeInitListExpr);
+					lookForDeclRefWithMemberExprsInternal(BCO->getFalseExpr(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
 				}
 			}
 			else {
 				/* Condition cannot be computed at compile time; we need to grab variables from both paths */
-				lookup_cache_t lcache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				get_ccast(lcache).clear();
-				lookForDeclRefWithMemberExprsInternal(BCO->getTrueExpr(),origExpr,refs,lcache,compoundStmtSeen,MEIdx,MECnt,CE,
-						true,IgnoreLiteral,noticeInitListExpr);
-				lookup_cache_t rcache;
-				lookForDeclRefWithMemberExprsInternal(BCO->getFalseExpr(),origExpr,refs,rcache,compoundStmtSeen,MEIdx,0,0,
-						true,IgnoreLiteral,noticeInitListExpr);
+				std::vector<CStyleCastOrType> castVec;
+				lookForDeclRefWithMemberExprsInternal(BCO->getTrueExpr(),refs,0,castVec,MEIdx,CE,IgnoreLiteral);
+				lookForDeclRefWithMemberExprsInternal(BCO->getFalseExpr(),refs,0,castVec,MEIdx,0,IgnoreLiteral);
 			}
-			/* Save dummy variable only to hold member expression information as there is no real primary variables
-			    (and possibly multiple secondary variables) */
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-
-			v.setMeIdx(MEIdx);
-
-			if (!secondaryChain) {
-				if (MECnt) {
-					v.setMeCnt(*MECnt);
-				}
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			// /* Save dummy variable only to hold member expression information as there is no real primary variables
+			//     (and possibly multiple secondary variables) */
+			// [DEPRECATED]
 			break;
 		}
 		case Stmt::UnaryExprOrTypeTraitExprClass:
@@ -1930,7 +1259,6 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		case Stmt::GNUNullExprClass:
 		case Stmt::CXXConstructExprClass:
 		{
-			lookup_cache_clear(cache);
 			break;
 		}
 		case Stmt::LambdaExprClass:
@@ -1942,7 +1270,6 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 		{
 			const StmtExpr* SE = static_cast<const StmtExpr*>(E);
 			const CompoundStmt* CS = SE->getSubStmt();
-			if (compoundStmtSeen) *compoundStmtSeen=true;
 			CompoundStmt::const_body_iterator i = CS->body_begin();
 			if (i!=CS->body_end()) {
 				/* We have at least one statement in the body; get the last one which is actually an expression */
@@ -1954,103 +1281,36 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 					break;
 				}
 				const Stmt* S = *e;
-				lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-				lookForDeclRefWithMemberExprsInternal(cast<Expr>(S),origExpr,refs,icache,compoundStmtSeen,MEIdx,0,0,
-						true,IgnoreLiteral,noticeInitListExpr);
+				lookForDeclRefWithMemberExprsInternal(cast<Expr>(S),refs,0,castVec,MEIdx,0,IgnoreLiteral);
 			}
-			/* Save dummy variable only to hold member expression information as there is no real primary variables */
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
-			typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-			vMCtuple_t vMCtuple;
-
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = SE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					SE->dumpColor();
-					llvm::outs() << "StmtExpr Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-
-			v.setMeIdx(MEIdx);
-
-			if (!secondaryChain) {
-				if (MECnt) {
-					v.setMeCnt(*MECnt);
-				}
-				for (size_t i=0; i!=get_member(cache).size(); ++i) {
-					vMCtuple.push_back(lookup_cache_tuple_t(get_member(cache)[i],get_type(cache)[i],
-							get_shift(cache)[i],get_callref(cache)[i],CStyleCastOrType()));
-				}
-			}
-			else {
-				v.setPrimaryFlag(false);
-			}
-			lookup_cache_clear(cache);
-			DREMap_add(refs,v,vMCtuple);
+			// /* Save dummy variable only to hold member expression information as there is no real primary variables */
+			// [DEPRECATED]
 			break;
 		}
 		case Stmt::CallExprClass:
 		{
 			const CallExpr* _CE = static_cast<const CallExpr*>(E);
-			if ((!secondaryChain)&&(get_member(cache).size()>get_type(cache).size())) {
-				QualType T = _CE->getType();
-				if (verifyMemberExprBaseType(T)) {
-					get_type(cache).push_back(CastExprOrType(T));
-				}
-				else {
-					llvm::outs() << "\nERROR: cache size for MemberExpr > CastExpr cache size (" << get_member(cache).size() <<
-									") vs (" << get_type(cache).size() << ")\n";
-					_CE->dumpColor();
-					llvm::outs() << "CallExpr Type: " << _CE->getType()->getTypeClassName() << "\n";
-					_CE->getType().dump();
-					llvm::outs() << "Return? Type: " << T->getTypeClassName() << "\n";
-					T.dump();
-					llvm::outs() << "Original expression: " << ExprToString(origExpr) << "\n";
-					llvm::outs() << E->getStmtClassName() << "\n";
-					origExpr->dumpColor();
-					exit(EXIT_FAILURE);
-				}
-			}
-			lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-			lookForDeclRefWithMemberExprsInternal(_CE->getCallee(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,_CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
-			lookup_cache_clear(cache);
+			lookForDeclRefWithMemberExprsInternal(_CE->getCallee(),refs,cache,castVec,MEIdx,_CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::CXXOperatorCallExprClass:
 		{
 			/* TODO */
 			const CXXOperatorCallExpr* OCE = static_cast<const CXXOperatorCallExpr*>(E);
-			lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-			lookForDeclRefWithMemberExprsInternal(OCE->getCallee(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
-			lookup_cache_clear(cache);
+			lookForDeclRefWithMemberExprsInternal(OCE->getCallee(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::CXXMemberCallExprClass:
 		{
 			/* TODO */
 			const CXXMemberCallExpr* MCE = static_cast<const CXXMemberCallExpr*>(E);
-			lookup_cache_t icache(get_member(cache),get_type(cache),get_shift(cache),get_callref(cache),get_ccast(cache));
-			lookForDeclRefWithMemberExprsInternal(MCE->getCallee(),origExpr,refs,icache,compoundStmtSeen,MEIdx,MECnt,CE,
-					secondaryChain,IgnoreLiteral,noticeInitListExpr);
-			lookup_cache_clear(cache);
+			lookForDeclRefWithMemberExprsInternal(MCE->getCallee(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		case Stmt::VAArgExprClass:
 		{
 			const VAArgExpr* VAAE = static_cast<const VAArgExpr*>(E);
-			lookForDeclRefWithMemberExprsInternal(VAAE->getSubExpr(),origExpr,refs,cache,compoundStmtSeen,MEIdx,MECnt,CE,secondaryChain,IgnoreLiteral);
+			lookForDeclRefWithMemberExprsInternal(VAAE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
 		default:
@@ -2066,31 +1326,17 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, co
 			}
 		}
 	}
-
+	// llvm::errs()<<--depth<<":\t"<<E->getStmtClassName()<<" done\n";
 }
 
-/* Returns true if CompoundLiteral was found during processing */
-bool DbJSONClassVisitor::lookForDeclRefWithMemberExprs(const Expr* E, DREMap_t& refs) {
 
-	lookup_cache_t cache;
-	bool compundStmtSeen = false;
-	lookForDeclRefWithMemberExprsInternal(E,E,refs,cache,&compundStmtSeen);
-	return compundStmtSeen;
-}
 
-void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInOffset(const Expr* E, std::vector<VarRef_t>& OffsetRefs) {
+void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInOffset(const Expr* E, std::vector<ExprRef_t>& OffsetRefs) {
 
 	DbJSONClassVisitor::DREMap_t DREMap;
-	lookup_cache_t cache;
-	bool compundStmtSeen = false;
-	unsigned MECnt = 0;
-	lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true);
-
-	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-		VarRef_t VR;
-		VR.VDCAMUAS = (*i).first;
-		OffsetRefs.push_back(VR);
-	}
+	std::vector<CStyleCastOrType> castVec;
+	lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,0,0);
+	OffsetRefs.insert(OffsetRefs.end(),DREMap.begin(),DREMap.end());
 }
 
 /* Tries to evaluate a given expression as an integer constant expression
@@ -2098,8 +1344,8 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInOffset(const Expr* E, st
     and adds the value into the `LiteralOffset` variable (taking into account the operator kind, i.e. (+/-)))
    If it is impossible to precompute the value all variable expressions are saved in the `OffsetRefs` variable
    Returns true if it was possible to precompute the value, otherwise return false */
-bool DbJSONClassVisitor::computeOffsetExpr(const Expr* E, int64_t* LiteralOffset,
-		std::vector<VarRef_t>& OffsetRefs, BinaryOperatorKind kind, bool stripCastFlag) {
+void DbJSONClassVisitor::computeOffsetExpr(const Expr* E, int64_t* LiteralOffset,
+		std::vector<ExprRef_t>& OffsetRefs, BinaryOperatorKind kind, bool stripCastFlag) {
 	
 	Expr::EvalResult Res;
 	const Expr* nE = E;
@@ -2113,11 +1359,9 @@ bool DbJSONClassVisitor::computeOffsetExpr(const Expr* E, int64_t* LiteralOffset
 		else {
 			*LiteralOffset -= Res.Val.getInt().extOrTrunc(63).getExtValue();
 		}
-		return true;
 	}
 	else {
 		lookForDeclRefWithMemberExprsInOffset(E,OffsetRefs);
-		return false;
 	}
 }
 
@@ -2153,11 +1397,10 @@ bool DbJSONClassVisitor::tryComputeOffsetExpr(const Expr* E, int64_t* LiteralOff
  *  Returns true if the value of literal offset was computed, otherwise returns false
  *  It is assumed that the 'B0' parameter is already (+/-) BinaryOperator
  */
-bool DbJSONClassVisitor::mergeBinaryOperators(const BinaryOperator* BO, int64_t* LiteralOffset,
-		std::vector<VarRef_t>& OffsetRefs, BinaryOperatorKind kind) {
+void DbJSONClassVisitor::mergeBinaryOperators(const BinaryOperator* BO, int64_t* LiteralOffset,
+		std::vector<ExprRef_t>& OffsetRefs, BinaryOperatorKind kind) {
 
 	// Process offset expression for BinaryOperator (in the context of pointer dereference)
-	VarRef_t VR;
 	const Expr* RHS = lookForNonParenExpr(BO->getRHS());
 	const Expr* LHS = lookForNonParenExpr(BO->getLHS());
 	int valueComputed = 0;
@@ -2165,50 +1408,23 @@ bool DbJSONClassVisitor::mergeBinaryOperators(const BinaryOperator* BO, int64_t*
 	if (LHS->getStmtClass()==Stmt::BinaryOperatorClass) {
 		const BinaryOperator* nBO = static_cast<const BinaryOperator*>(LHS);
 		if ((nBO->getOpcode()==BO_Add)||(nBO->getOpcode()==BO_Sub)) {
-			valueComputed+=mergeBinaryOperators(nBO,LiteralOffset,OffsetRefs,nBO->getOpcode());
-			valueComputed+=computeOffsetExpr(BO->getRHS(),LiteralOffset,OffsetRefs,kind);
-			return valueComputed>0;
+			mergeBinaryOperators(nBO,LiteralOffset,OffsetRefs,nBO->getOpcode());
+			computeOffsetExpr(BO->getRHS(),LiteralOffset,OffsetRefs,kind);
+			return;
 		}
 	}
 
-	valueComputed+=computeOffsetExpr(BO->getLHS(),LiteralOffset,OffsetRefs,kind);
+	computeOffsetExpr(BO->getLHS(),LiteralOffset,OffsetRefs,kind);
 
 	if (RHS->getStmtClass()==Stmt::BinaryOperatorClass) {
 		const BinaryOperator* nBO = static_cast<const BinaryOperator*>(RHS);
 		if ((nBO->getOpcode()==BO_Add)||(nBO->getOpcode()==BO_Sub)) {
-			valueComputed+=mergeBinaryOperators(nBO,LiteralOffset,OffsetRefs,nBO->getOpcode());
-			return valueComputed>0;
+			mergeBinaryOperators(nBO,LiteralOffset,OffsetRefs,nBO->getOpcode());
+			return;
 		}
 	}
-
-	valueComputed+=computeOffsetExpr(BO->getRHS(),LiteralOffset,OffsetRefs,kind);
-
-	return valueComputed>0;
-}
-
-/* Walk the AST hierarchy and descend into ImplicitCastExpr, CStyleCastExpr or ParenExpr and return first expression other than that */
-const Expr* DbJSONClassVisitor::lookForNonTransitiveExpr(const Expr* E) {
-	switch(E->getStmtClass()) {
-		case Stmt::ImplicitCastExprClass:
-		{
-			const ImplicitCastExpr* ICE = static_cast<const ImplicitCastExpr*>(E);
-			return lookForNonTransitiveExpr(ICE->getSubExpr());
-			break;
-		}
-		case Stmt::CStyleCastExprClass:
-		{
-			const CStyleCastExpr* CSCE = static_cast<const CStyleCastExpr*>(E);
-			return lookForNonTransitiveExpr(CSCE->getSubExpr());
-			break;
-		}
-		case Stmt::ParenExprClass:
-		{
-			const ParenExpr* PE = static_cast<const ParenExpr*>(E);
-			return lookForNonTransitiveExpr(PE->getSubExpr());
-			break;
-		}
-	}
-	return E;
+	computeOffsetExpr(BO->getRHS(),LiteralOffset,OffsetRefs,kind);
+	return;
 }
 
 /* Walk the AST hierarchy and descend into ParenExpr and return first expression other than that */
@@ -2244,73 +1460,18 @@ bool DbJSONClassVisitor::tryEvaluateIntegerConstantExpr(const Expr* E, Expr::Eva
  *  Returns true if at least one DeclRefExpr or integer literal  is found along the way
  *   (which must be the case for the UnaryOperator*)
  */
-bool DbJSONClassVisitor::lookForDerefExprs(const Expr* E, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs) {
+void DbJSONClassVisitor::lookForDerefExprs(const Expr* E, int64_t* LiteralOffset, std::vector<ExprRef_t>& OffsetRefs) {
 
-	bool valueComputed = false;
-
-	const Expr* nE = lookForNonTransitiveExpr(E);
+	const Expr* nE = stripCasts(E);
 	if (nE->getStmtClass()==Stmt::BinaryOperatorClass) {
 		const BinaryOperator* BO = static_cast<const BinaryOperator*>(nE);
 		if ((BO->getOpcode()==BO_Add)||(BO->getOpcode()==BO_Sub)) {
 			*LiteralOffset = 0;
-			valueComputed = mergeBinaryOperators(BO,LiteralOffset,OffsetRefs,BO->getOpcode());
-		}
-		else {
-			lookForDeclRefWithMemberExprsInOffset(E,OffsetRefs);
+			mergeBinaryOperators(BO,LiteralOffset,OffsetRefs,BO->getOpcode());
+			return;
 		}
 	}
-	else {
-		lookForDeclRefWithMemberExprsInOffset(E,OffsetRefs);
-	}
-
-	if ((OffsetRefs.size()<=0) && (!valueComputed)) return false;
-
-	return true;
-}
-
-/*  The way dereference in handled in ArraySubscriptExpr is slightly different than in UnaryOperator*
- *  If it is possible to evaluate the offset expression as an integer constant expression it is stored in the 'LiteralOffset'
- *  variable. Otherwise 'OffsetRefs' will contain all encountered DeclRefExprs. It the 'OffsetRefs' contains at least one
- *  element the 'LiteralOffset' value is not meaningful. The 'VR' variable will contain DeclRefExpr for the base expression
- *  (i.e. array name).
- */
-
-bool DbJSONClassVisitor::lookForASExprs(const ArraySubscriptExpr *Node, VarRef_t& VR, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs,
-		bool* ignoreErrors) {
-
-	// First handle index part of ArraySubscriptExpr
-	const Expr* idxE = lookForNonTransitiveExpr(Node->getIdx());
-	*LiteralOffset = 0;
-
-	// Check if expression can be evaluated as a constant expression
-	Expr::EvalResult Res;
-	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
-		*LiteralOffset = Res.Val.getInt().extOrTrunc(63).getExtValue();
-	}
-	else {
-		DbJSONClassVisitor::DREMap_t DREMap;
-		lookup_cache_t cache;
-		bool compundStmtSeen = false;
-		unsigned MECnt = 0;
-		lookForDeclRefWithMemberExprsInternal(idxE,idxE,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true);
-		for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			OffsetRefs.push_back(iVR);
-		}
-	}
-
-	// Now it's time for the base tree
-	DbJSONClassVisitor::DREMap_t DREMap;
-	lookup_cache_t cache;
-	bool compundStmtSeen = false;
-	unsigned MECnt = 0;
-	lookForDeclRefWithMemberExprsInternal(Node->getBase(),Node->getBase(),DREMap,cache,&compundStmtSeen,0,&MECnt,0,true);
-	if (DREMap.size()!=1) return false;
-	VR.VDCAMUAS = (*DREMap.begin()).first;
-	VR.VDCAMUAS.setAS(Node);
-
-	return true;
+	lookForDeclRefWithMemberExprsInOffset(E,OffsetRefs);
 }
 
 void DbJSONClassVisitor::lookForExplicitCastExprs(const Expr* E, std::vector<QualType>& refs ) {

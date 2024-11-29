@@ -292,53 +292,7 @@ public:
   typedef std::pair<int64_t,std::string> caseenum_t;
   typedef std::tuple<caseenum_t,std::string,std::string,int64_t> caseinfo_t;
 
-  struct CastExprOrType {
-	  enum CastExprOrTypeKind {
-		  CastExprOrTypeKindCast,
-		  CastExprOrTypeKindType,
-	  };
-	  CastExprOrType(CastExpr* cast): cast(cast), kind(CastExprOrTypeKindCast) {}
-	  CastExprOrType(QualType type): type(type), kind(CastExprOrTypeKindType) {}
-	  CastExpr* cast;
-	  QualType type;
-	  CastExprOrTypeKind kind;
-	  CastExprOrTypeKind getKind() {
-		  return kind;
-	  }
-	  CastExpr* getCast() {
-		  return cast;
-	  }
-	  QualType getType() {
-		  return type;
-	  }
-	  QualType getFinalType() {
-		  if (kind==CastExprOrTypeKindCast) {
-			  return cast->getType();
-		  }
-		  else {
-			  return type;
-		  }
-	  }
-	  bool operator <(const CastExprOrType & otherCT) const {
-		if (kind==CastExprOrTypeKindCast) {
-			return cast<otherCT.cast;
-		}
-		else {
-			return type<otherCT.type;
-		}
-	  }
-
-	  bool operator==(const CastExprOrType & otherCT) const {
-		if (kind==CastExprOrTypeKindCast) {
-			return cast==otherCT.cast;
-		}
-		else {
-			return type==otherCT.type;
-		}
-	  }
-  };
-
-    struct CStyleCastOrType {
+  struct CStyleCastOrType {
     enum CStyleCastOrTypeKind {
         CStyleCastOrTypeKindNone,
         CStyleCastOrTypeKindCast,
@@ -405,17 +359,18 @@ public:
   /* Gets the first c-style cast saved in the cache unless there isn't one. In such case
       takes first cast whatsoever (which must be implicit cast) */
   static inline CStyleCastOrType getMatchingCast(std::vector<CStyleCastOrType>& vC) {
-        auto i = vC.begin();
-        for (; i!=vC.end(); ++i) {
-            if ((*i).isCast()) {
-                break;
-            }
+    if(vC.empty()) return {};
+    auto i = vC.begin();
+    for (; i!=vC.end(); ++i) {
+        if ((*i).isCast()) {
+            break;
         }
-        if (i==vC.end()) {
-            i = vC.begin();
-        }
-        return *i;
     }
+    if (i==vC.end()) {
+        i = vC.begin();
+    }
+    return *i;
+  }
 
     static inline CStyleCastExpr* getFirstCast(std::vector<CStyleCastOrType>& vC) {
         auto i = vC.begin();
@@ -441,112 +396,87 @@ public:
         return false;
     }
 
-  struct ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS {
-	  enum ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKind {
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindInteger,
-          ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindFloating,
-          ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindString,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS,
-          ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO,
-          ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET,
-		  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm,
-      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond,
-      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic,
+  struct ExprRef_t {
+	  enum ExprRefKind {
+		  ExprRefKindNone,
+		  ExprRefKindAddress,     //internal
+		  ExprRefKindInteger,     //internal
+		  ExprRefKindFloating,    //internal
+		  ExprRefKindString,      //internal
+		  ExprRefKindValue,       //main: function, init; internal
+		  ExprRefKindCall,        //main: function; internal; special handling
+		  ExprRefKindRefCall,     //main: function; internal; special handling
+		  ExprRefKindMemberExpr,  //main: member; internal
+		  ExprRefKindUnary,       //main: unary; internal
+		  ExprRefKindAS,          //main: array; internal
+		  ExprRefKindCAO,         //main: assign; internal
+		  ExprRefKindOOE,         //main: offsetof; internal
+		  ExprRefKindLogic,       //main: logic; internal
+			External,
+		  ExprRefKindRET = External,         //main: return
+		  ExprRefKindParm,        //main: parm
+		  ExprRefKindCond,        //main: cond
 
 	  };
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const ValueDecl* value): value(value), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const CallExpr* call): value(0), call(call), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(int64_t address): value(0), call(0), address(address), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const MemberExpr* ME): value(0), call(0), address(0), floating(0.), strval(""), ME(ME), MEIdx(0), MECnt(0),
-			  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const UnaryOperator* UO): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(UO), AS(0), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary), primary(true) {}
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const ArraySubscriptExpr* AS): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-			  UO(0), AS(AS), valuecast(), cao(0), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS), primary(true) {}
-      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const CompoundAssignOperator* CAO): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-              UO(0), AS(0), valuecast(), cao(CAO), ooe(0), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO), primary(true) {}
-      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const OffsetOfExpr* OOE): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-              UO(0), AS(0), valuecast(), cao(0), ooe(OOE), re(0), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE), primary(true) {}
-      ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS(const ReturnStmt *S): value(0), call(0), address(0), floating(0.), strval(""), ME(0), MEIdx(0), MECnt(0),
-    		  UO(0), AS(0), valuecast(), cao(0), ooe(0), re(S->getRetValue()), kind(ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET), primary(true) {}
+
+	  ExprRef_t(): value(0), call(0), address(0), floating(0.), strval(""), MEIdx(0), MECnt(0),
+			  expr(0), valuecast(), kind(ExprRefKindNone) {}
 	  const ValueDecl* value;
 	  const CallExpr* call;
 	  int64_t address;
-      double floating;
-      std::string strval;
-	  const MemberExpr* ME;
-	  QualType METype;
+		double floating;
+		std::string strval;
 	  unsigned MEIdx;
 	  unsigned MECnt;
-	  const UnaryOperator* UO;
-	  const ArraySubscriptExpr* AS;
+		const Expr *expr;
 	  CStyleCastOrType valuecast;
-      const BinaryOperator* cao;
-      const OffsetOfExpr* ooe;
-      const Expr* re;
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKind kind;
-	  bool primary;
+	  ExprRefKind kind;
+		bool isSet = false;
 
-	  bool isPrimary() {
-		  return primary;
-	  }
 
-	  void setPrimaryFlag(bool __primary) {
-		  primary = __primary;
-	  }
+		bool isRefKind(){
+			return kind >= ExprRefKindMemberExpr && kind < External;
+		}
 
-	  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKind getKind() {
+	  ExprRefKind getKind() {
 		  return kind;
 	  }
-	  std::string getKindString() {
+	  std::string getKindString() const {
 		  switch(kind) {
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindFloating:
-                  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindFloating";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindString:
-                  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindString";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindInteger:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindInteger";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary";
-		  	  case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS:
-		  		  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO:
-                  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE:
-                  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET:
-            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm:
-            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond:
-            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond";
-              case ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic:
-            	  return "ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic";
+				case ExprRefKindNone:
+					return "ExprRefKindNone";
+				case ExprRefKindValue:
+					return "ExprRefKindValue";
+				case ExprRefKindCall:
+					return "ExprRefKindCall";
+				case ExprRefKindRefCall:
+					return "ExprRefKindRefCall";
+				case ExprRefKindAddress:
+					return "ExprRefKindAddress";
+				case ExprRefKindFloating:
+					return "ExprRefKindFloating";
+				case ExprRefKindString:
+					return "ExprRefKindString";
+				case ExprRefKindInteger:
+					return "ExprRefKindInteger";
+				case ExprRefKindMemberExpr:
+					return "ExprRefKindMemberExpr";
+				case ExprRefKindUnary:
+					return "ExprRefKindUnary";
+				case ExprRefKindAS:
+					return "ExprRefKindAS";
+				case ExprRefKindCAO:
+					return "ExprRefKindCAO";
+				case ExprRefKindOOE:
+					return "ExprRefKindOOE";
+				case ExprRefKindRET:
+					return "ExprRefKindRET";
+				case ExprRefKindParm:
+					return "ExprRefKindParm";
+				case ExprRefKindCond:
+					return "ExprRefKindCond";
+				case ExprRefKindLogic:
+					return "ExprRefKindLogic";
 		  }
 		  return "";
 	  }
@@ -568,18 +498,16 @@ public:
 		  return address;
 	  }
 
-      double getFloating() {
-        return floating;
-      }
+		double getFloating() {
+			return floating;
+		}
 
-      std::string getString() {
-        return strval;
-      }
+		std::string getString() {
+			return strval;
+		}
 
-	  void getCompound() {
-	  }
-	  std::pair<const MemberExpr*,QualType> getME() {
-		  return std::pair<const MemberExpr*,QualType>(ME,METype);
+	  const MemberExpr* getME() {
+		  return dyn_cast_or_null<MemberExpr>(expr);
 	  }
 
 	  unsigned getMeIdx() {
@@ -590,165 +518,153 @@ public:
 		  return MECnt;
 	  }
 
+		const Expr* getExpr(){
+			return expr;
+		}
 	  const UnaryOperator* getUnary() {
-		  return UO;
+		  return dyn_cast_or_null<UnaryOperator>(expr);
 	  }
 
 	  const ArraySubscriptExpr* getAS() {
-		  return AS;
+		  return dyn_cast_or_null<ArraySubscriptExpr>(expr);
 	  }
 
-      const BinaryOperator* getCAO() {
-          return cao;
-      }
-
-      const BinaryOperator* getLogic() {
-          return cao;
-      }
-
-      const OffsetOfExpr* getOOE() {
-          return ooe;
-      }
-
-      const Expr* getRET() {
-			return re;
+		const BinaryOperator* getCAO() {
+			return dyn_cast_or_null<BinaryOperator>(expr);
 		}
 
-      const Expr* getParm() {
-			return re;
+		const BinaryOperator* getLogic() {
+			return dyn_cast_or_null<BinaryOperator>(expr);
 		}
 
-      void setCast(CStyleCastOrType cast) {
-    	  valuecast = cast;
-      }
+		const OffsetOfExpr* getOOE() {
+			return dyn_cast_or_null<OffsetOfExpr>(expr);
+		}
+
+		const Expr* getRET() {
+			return (expr);
+		}
+
+		const Expr* getParm() {
+			return (expr);
+		}
+
+		void setCast(CStyleCastOrType cast) {
+			valuecast = cast;
+		}
 
 	  void setValue(const ValueDecl* v, CStyleCastOrType cast = CStyleCastOrType()) {
 		  value = v;
 		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue;
+		  kind = ExprRefKindValue;
 	  }
 
 	  void setCall(const CallExpr* c, CStyleCastOrType cast = CStyleCastOrType()) {
 		  call = c;
 		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall;
+		  kind = ExprRefKindCall;
 	  }
 
-      void setCAO(const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
-          cao = CAO;
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO;
-      }
-
-      void setLogic(const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
-          cao = CAO;
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic;
-      }
-
-      void setOOE(const OffsetOfExpr* OOE, CStyleCastOrType cast = CStyleCastOrType()) {
-          ooe = OOE;
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE;
-      }
-
-      void setRET(const ReturnStmt* S, CStyleCastOrType cast = CStyleCastOrType()) {
-			re = S->getRetValue();
+	  void setAddress(int64_t a, CStyleCastOrType cast = CStyleCastOrType()) {
+		  address = a;
 			valuecast = cast;
-			kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRET;
+		  kind = ExprRefKindAddress;
+	  }
+
+	  void setInteger(int64_t a, CStyleCastOrType cast = CStyleCastOrType()) {
+		  address = a;
+			valuecast = cast;
+		  kind = ExprRefKindInteger;
+	  }
+
+		void setFloating(double f, CStyleCastOrType cast = CStyleCastOrType()) {
+			floating = f;
+			valuecast = cast;
+			kind = ExprRefKindFloating;
 		}
 
-      void setParm(const Expr* E, CStyleCastOrType cast = CStyleCastOrType()) {
-			re = E;
+		void setString(std::string s, CStyleCastOrType cast = CStyleCastOrType()) {
+			strval = s;
 			valuecast = cast;
-			kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindParm;
+			kind = ExprRefKindString;
+		}
+
+
+		void setCAO(const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = CAO;
+			expr = llvm::cast<BinaryOperator>(expr);
+			valuecast = cast;
+			kind = ExprRefKindCAO;
+		}
+
+		void setLogic(const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = CAO;
+			valuecast = cast;
+			kind = ExprRefKindLogic;
+		}
+
+		void setOOE(const OffsetOfExpr* OOE, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = OOE;
+			valuecast = cast;
+			kind = ExprRefKindOOE;
+		}
+
+	  void setUnary(const UnaryOperator* __UO, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = __UO;
+			valuecast = cast;
+		  kind = ExprRefKindUnary;
+	  }
+
+	  void setAS(const ArraySubscriptExpr* __AS, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = __AS;
+			valuecast = cast;
+		  kind = ExprRefKindAS;
+	  }
+
+		void setRET(const ReturnStmt* S, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = S->getRetValue();
+			valuecast = cast;
+			kind = ExprRefKindRET;
+		}
+
+		void setParm(const Expr* E, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = E;
+			valuecast = cast;
+			kind = ExprRefKindParm;
 		}
     
     void setCond(const Expr *E,size_t cf_id, CStyleCastOrType cast = CStyleCastOrType()){
-      re = E;
+			expr = E;
       address = cf_id;
       valuecast = cast;
-      kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCond;
+      kind = ExprRefKindCond;
     }
-
-	  void setRefCall(const CallExpr* c, const UnaryOperator* __UO, CStyleCastOrType cast = CStyleCastOrType()) {
-		  call = c;
-		  UO = __UO;
-		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
-	  }
-
-	  void setRefCall(const CallExpr* c, const ArraySubscriptExpr* __AS, CStyleCastOrType cast = CStyleCastOrType()) {
-		  call = c;
-		  AS = __AS;
-		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
-	  }
 
 	  void setRefCall(const CallExpr* c, const ValueDecl* VD, CStyleCastOrType cast = CStyleCastOrType()) {
 		  call = c;
 		  value = VD;
 		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
+		  kind = ExprRefKindRefCall;
 	  }
 
 	  void setRefCall(const CallExpr* c, int64_t a, CStyleCastOrType cast = CStyleCastOrType()) {
 		  call = c;
 		  address = a;
 		  valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
+		  kind = ExprRefKindRefCall;
 	  }
 
-      void setRefCall(const CallExpr* c, const BinaryOperator* CAO, CStyleCastOrType cast = CStyleCastOrType()) {
-          call = c;
-          cao = CAO;
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
-      }
-
-      void setRefCall(const CallExpr* c, const OffsetOfExpr* OOE, CStyleCastOrType cast = CStyleCastOrType()) {
-          call = c;
-          ooe = OOE;
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
-      }
-
-      void setRefCall(const CallExpr* c, const ReturnStmt* S, CStyleCastOrType cast = CStyleCastOrType()) {
-          call = c;
-          re = S->getRetValue();
-          valuecast = cast;
-          kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindRefCall;
-      }
-
-	  void setAddress(int64_t a, CStyleCastOrType cast = CStyleCastOrType()) {
-		  address = a;
-          valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress;
+	  void setRefCall(const CallExpr* c, const Expr* E, CStyleCastOrType cast = CStyleCastOrType()) {
+		  call = c;
+			expr = E;
+		  valuecast = cast;
+		  kind = ExprRefKindRefCall;
 	  }
 
-	  void setInteger(int64_t a, CStyleCastOrType cast = CStyleCastOrType()) {
-		  address = a;
+	  void setME(const MemberExpr* __ME, CStyleCastOrType cast = CStyleCastOrType()) {
+			expr = __ME;
           valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindInteger;
-	  }
-
-      void setFloating(double f, CStyleCastOrType cast = CStyleCastOrType()) {
-        floating = f;
-        valuecast = cast;
-        kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindFloating;
-      }
-
-      void setString(std::string s, CStyleCastOrType cast = CStyleCastOrType()) {
-        strval = s;
-        valuecast = cast;
-        kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindString;
-      }
-
-	  void setME(const MemberExpr* __ME, QualType __METype, CStyleCastOrType cast = CStyleCastOrType()) {
-		  ME = __ME;
-		  METype = __METype;
-          valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr;
+		  kind = ExprRefKindMemberExpr;
 	  }
 
 	  void setMeIdx(unsigned __MEIdx) {
@@ -758,19 +674,7 @@ public:
 		  MECnt = __MECnt;
 	  }
 
-	  void setUnary(const UnaryOperator* __UO, CStyleCastOrType cast = CStyleCastOrType()) {
-		  UO = __UO;
-          valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary;
-	  }
-
-	  void setAS(const ArraySubscriptExpr* __AS, CStyleCastOrType cast = CStyleCastOrType()) {
-		  AS = __AS;
-          valuecast = cast;
-		  kind = ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS;
-	  }
-
-	  bool operator <(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) const {
+	  bool operator <(const ExprRef_t & otherVC) const {
 		if (kind<otherVC.kind) return true;
 		if (kind>otherVC.kind) return false;
 		if (MEIdx<otherVC.MEIdx) return true;
@@ -781,32 +685,19 @@ public:
 		if (value>otherVC.value) return false;
 		if (address<otherVC.address) return true;
 		if (address>otherVC.address) return false;
-        if (floating<otherVC.floating) return true;
-        if (floating>otherVC.floating) return false;
-        if (strval<otherVC.strval) return true;
-        if (strval>otherVC.strval) return false;
+		if (floating<otherVC.floating) return true;
+		if (floating>otherVC.floating) return false;
+		if (strval<otherVC.strval) return true;
+		if (strval>otherVC.strval) return false;
 		if (call<otherVC.call) return true;
 		if (call>otherVC.call) return false;
-		if (ME<otherVC.ME) return true;
-		if (ME>otherVC.ME) return false;
-		if (METype<otherVC.METype) return true;
-		if ((!(METype<otherVC.METype)) && (METype!=otherVC.METype)) return false;
-		if (UO<otherVC.UO) return true;
-		if (UO>otherVC.UO) return false;
-		if (valuecast<otherVC.valuecast) return true;
-		if (valuecast>otherVC.valuecast) return false;
-        if (cao<otherVC.cao) return true;
-        if (cao>otherVC.cao) return false;
-        if (ooe<otherVC.ooe) return true;
-        if (ooe>otherVC.ooe) return false;
-        if (re<otherVC.re) return true;
-        if (re>otherVC.re) return false;
-		if (primary<otherVC.primary) return true;
-		if (primary>otherVC.primary) return false;
-		return AS<otherVC.AS;
+		if (expr<otherVC.expr) return true;
+		if (expr>otherVC.expr) return false;
+		return valuecast<otherVC.valuecast;
+
 	  }
 
-	  bool operator >(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) const {
+	  bool operator >(const ExprRef_t & otherVC) const {
 		if (kind<otherVC.kind) return false;
 		if (kind>otherVC.kind) return true;
 		if (MEIdx<otherVC.MEIdx) return false;
@@ -817,117 +708,21 @@ public:
 		if (value>otherVC.value) return true;
 		if (address<otherVC.address) return false;
 		if (address>otherVC.address) return true;
-        if (floating<otherVC.floating) return false;
-        if (floating>otherVC.floating) return true;
-        if (strval<otherVC.strval) return false;
-        if (strval>otherVC.strval) return true;
+		if (floating<otherVC.floating) return false;
+		if (floating>otherVC.floating) return true;
+		if (strval<otherVC.strval) return false;
+		if (strval>otherVC.strval) return true;
 		if (call<otherVC.call) return false;
 		if (call>otherVC.call) return true;
-		if (ME<otherVC.ME) return false;
-		if (ME>otherVC.ME) return true;
-		if (METype<otherVC.METype) return false;
-		if ((!(METype<otherVC.METype)) && (METype!=otherVC.METype)) return true;
-		if (UO<otherVC.UO) return false;
-		if (UO>otherVC.UO) return true;
-		if (valuecast<otherVC.valuecast) return false;
-		if (valuecast>otherVC.valuecast) return true;
-        if (cao<otherVC.cao) return false;
-        if (cao>otherVC.cao) return true;
-        if (ooe<otherVC.ooe) return false;
-        if (ooe>otherVC.ooe) return true;
-        if (re<otherVC.re) return false;
-        if (re>otherVC.re) return true;
-		if (primary<otherVC.primary) return false;
-		if (primary>otherVC.primary) return true;
-		return AS>otherVC.AS;
+		if (expr<otherVC.expr) return false;
+		if (expr>otherVC.expr) return true;
+		return valuecast>otherVC.valuecast;
 	  }
 
-	  bool operator==(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) const {
-		return (kind==otherVC.kind)&&(MEIdx==otherVC.MEIdx)&&(MECnt==otherVC.MECnt)&&(value==otherVC.value)&&
-				(address==otherVC.address)&&(floating==otherVC.floating)&&(strval==otherVC.strval)&&(call==otherVC.call)&&(ME==otherVC.ME)&&
-                (METype==otherVC.METype)&&
-				(UO==otherVC.UO)&&(valuecast==otherVC.valuecast)&&(cao==otherVC.cao)&&(ooe==otherVC.ooe)&&(re==otherVC.re)&&
-				(primary==otherVC.primary)&&(AS==otherVC.AS);
-	  }
-
-	  bool operator <(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) {
-		if (kind<otherVC.kind) return true;
-		if (kind>otherVC.kind) return false;
-		if (MEIdx<otherVC.MEIdx) return true;
-		if (MEIdx>otherVC.MEIdx) return false;
-		if (MECnt<otherVC.MECnt) return true;
-		if (MECnt>otherVC.MECnt) return false;
-		if (value<otherVC.value) return true;
-		if (value>otherVC.value) return false;
-		if (address<otherVC.address) return true;
-		if (address>otherVC.address) return false;
-        if (floating<otherVC.floating) return true;
-        if (floating>otherVC.floating) return false;
-        if (strval<otherVC.strval) return true;
-        if (strval>otherVC.strval) return false;
-		if (call<otherVC.call) return true;
-		if (call>otherVC.call) return false;
-		if (ME<otherVC.ME) return true;
-		if (ME>otherVC.ME) return false;
-		if (METype<otherVC.METype) return true;
-		if ((!(METype<otherVC.METype)) && (METype!=otherVC.METype)) return false;
-		if (UO<otherVC.UO) return true;
-		if (UO>otherVC.UO) return false;
-		if (valuecast<otherVC.valuecast) return true;
-		if (valuecast>otherVC.valuecast) return false;
-        if (cao<otherVC.cao) return true;
-        if (cao>otherVC.cao) return false;
-        if (ooe<otherVC.ooe) return true;
-        if (ooe>otherVC.ooe) return false;
-        if (re<otherVC.re) return true;
-        if (re>otherVC.re) return false;
-		if (primary<otherVC.primary) return true;
-		if (primary>otherVC.primary) return false;
-		return AS<otherVC.AS;
-	  }
-
-	  bool operator >(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) {
-		if (kind<otherVC.kind) return false;
-		if (kind>otherVC.kind) return true;
-		if (MEIdx<otherVC.MEIdx) return false;
-		if (MEIdx>otherVC.MEIdx) return true;
-		if (MECnt<otherVC.MECnt) return false;
-		if (MECnt>otherVC.MECnt) return true;
-		if (value<otherVC.value) return false;
-		if (value>otherVC.value) return true;
-		if (address<otherVC.address) return false;
-		if (address>otherVC.address) return true;
-        if (floating<otherVC.floating) return false;
-        if (floating>otherVC.floating) return true;
-        if (strval<otherVC.strval) return false;
-        if (strval>otherVC.strval) return true;
-		if (call<otherVC.call) return false;
-		if (call>otherVC.call) return true;
-		if (ME<otherVC.ME) return false;
-		if (ME>otherVC.ME) return true;
-		if (METype<otherVC.METype) return false;
-		if ((!(METype<otherVC.METype)) && (METype!=otherVC.METype)) return true;
-		if (UO<otherVC.UO) return false;
-		if (UO>otherVC.UO) return true;
-		if (valuecast<otherVC.valuecast) return false;
-		if (valuecast>otherVC.valuecast) return true;
-        if (cao<otherVC.cao) return false;
-        if (cao>otherVC.cao) return true;
-        if (ooe<otherVC.ooe) return false;
-        if (ooe>otherVC.ooe) return true;
-        if (re<otherVC.re) return false;
-        if (re>otherVC.re) return true;
-		if (primary<otherVC.primary) return false;
-		if (primary>otherVC.primary) return true;
-		return AS>otherVC.AS;
-	  }
-
-	  bool operator==(const ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS & otherVC) {
-		return (kind==otherVC.kind)&&(MEIdx==otherVC.MEIdx)&&(MECnt==otherVC.MECnt)&&(value==otherVC.value)&&
-				(address==otherVC.address)&&(floating==otherVC.floating)&&(strval==otherVC.strval)&&(call==otherVC.call)&&(ME==otherVC.ME)&&
-                (METype==otherVC.METype)&&
-				(UO==otherVC.UO)&&(valuecast==otherVC.valuecast)&&(cao==otherVC.cao)&&(ooe==otherVC.ooe)&&(re==otherVC.re)&&
-				(primary==otherVC.primary)&&(AS==otherVC.AS);
+	  bool operator==(const ExprRef_t & otherVC) const {
+		  return (kind==otherVC.kind)&&(MEIdx==otherVC.MEIdx)&&(MECnt==otherVC.MECnt)&&(value==otherVC.value)&&
+				(address==otherVC.address)&&(floating==otherVC.floating)&&(strval==otherVC.strval)&&(call==otherVC.call)&&
+				(expr==otherVC.expr)&&(valuecast==otherVC.valuecast);
 	  }
   };
 
@@ -949,10 +744,10 @@ public:
   };
   
   struct refvarinfo_t {
-	  unsigned long id;
-      double fp;
-      std::string s;
-	  LiteralHolder lh;
+		unsigned long id;
+		double fp;
+		std::string s;
+		LiteralHolder lh;
 	  enum vartype {
 		  CALLVAR_NONE,
 		  CALLVAR_FUNCTION,
@@ -968,14 +763,14 @@ public:
 		  CALLVAR_ADDRCALLREF,
 		  CALLVAR_ADDRESS,
 		  CALLVAR_INTEGER,
-          CALLVAR_FLOATING,
-          CALLVAR_STRING,
+			CALLVAR_FLOATING,
+			CALLVAR_STRING,
 		  CALLVAR_UNARY,
 		  CALLVAR_ARRAY,
 		  CALLVAR_MEMBER,
-          CALLVAR_ASSIGN,
-          CALLVAR_OFFSETOF,
-          CALLVAR_LOGIC,
+			CALLVAR_ASSIGN,
+			CALLVAR_OFFSETOF,
+			CALLVAR_LOGIC,
 
 	  } type;
 	  unsigned long mi;
@@ -984,8 +779,8 @@ public:
     refvarinfo_t(): id(-1), fp(0.), s(""), type(CALLVAR_NONE), mi(0), di(0), castid(-1) {}
 	  refvarinfo_t(unsigned long id, enum vartype type): id(id), fp(0.), s(""), type(type), mi(0), di(0), castid(-1) {}
 	  refvarinfo_t(unsigned long id, enum vartype type, unsigned pos): id(id), fp(0.), s(""), type(type), mi(pos), di(0), castid(-1) {}
-      refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, double fp): id(id), fp(fp), s(""), type(type), mi(pos), di(0), castid(-1) {}
-      refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, std::string s): id(id), fp(0.), s(s), type(type), mi(pos), di(0), castid(-1) {}
+		refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, double fp): id(id), fp(fp), s(""), type(type), mi(pos), di(0), castid(-1) {}
+		refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, std::string s): id(id), fp(0.), s(s), type(type), mi(pos), di(0), castid(-1) {}
 	  refvarinfo_t(LiteralHolder lh, enum vartype type): id(-1), fp(0.), s(""), lh(lh), type(type), mi(0), di(0), castid(-1) {}
 	  refvarinfo_t(LiteralHolder lh, enum vartype type, unsigned pos): id(-1), fp(0.), s(""), lh(lh), type(type), mi(pos), di(0), castid(-1) {}
     void set(unsigned long _id, enum vartype _type, long _mi=0, long _di=0, long _castid=-1)
@@ -1022,14 +817,14 @@ public:
 		  if (type==CALLVAR_ADDRCALLREF) return "addrcallref";
 		  if (type==CALLVAR_ADDRESS) return "address";
 		  if (type==CALLVAR_INTEGER) return "integer";
-          if (type==CALLVAR_FLOATING) return "float";
-          if (type==CALLVAR_STRING) return "string";
+			if (type==CALLVAR_FLOATING) return "float";
+			if (type==CALLVAR_STRING) return "string";
 		  if (type==CALLVAR_UNARY) return "unary";
 		  if (type==CALLVAR_ARRAY) return "array";
 		  if (type==CALLVAR_MEMBER) return "member";
-          if (type==CALLVAR_ASSIGN) return "assign";
-          if (type==CALLVAR_OFFSETOF) return "offsetof";
-          if (type==CALLVAR_LOGIC) return "logic";
+			if (type==CALLVAR_ASSIGN) return "assign";
+			if (type==CALLVAR_OFFSETOF) return "offsetof";
+			if (type==CALLVAR_LOGIC) return "logic";
 		  return "";
 	  }
 
@@ -1057,12 +852,6 @@ public:
   VarArray_t VarMap;
   size_t VarNum;
   typedef std::map<int,std::multimap<int,const VarDecl*>> taintdata_t;
-
-  enum MemberExprKind {
-	  MemberExprKindObject,
-	  MemberExprKindPointer,
-    MemberExprKindInvalid,
-  };
 
   /*
    *  Contains information about variable reference
@@ -1094,37 +883,23 @@ public:
    *  (...)
    *
    */
-  struct VarRef_t {
-	ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS VDCAMUAS;
-    std::vector<std::pair<size_t,MemberExprKind>> MemberExprList;
-    std::vector<QualType> MECastList;
-    std::vector<int64_t> OffsetList;
-    std::vector<const CallExpr*> MCallList;
-    bool operator <(const VarRef_t & otherVR) const {
-      if (VDCAMUAS<otherVR.VDCAMUAS) return true;
-      if (VDCAMUAS>otherVR.VDCAMUAS) return false;
-      if (MemberExprList<otherVR.MemberExprList) return true;
-      if (MemberExprList>otherVR.MemberExprList) return false;
-      if (MECastList<otherVR.MECastList) return true;
-      if (MECastList>otherVR.MECastList) return false;
-      if (MCallList<otherVR.MCallList) return true;
-      if (MCallList>otherVR.MCallList) return false;
-      return OffsetList<otherVR.OffsetList;
+
+  struct MemberInfo_t {
+    const void *ME = 0;
+    QualType T = {};
+    int64_t offset = 0;
+    const CallExpr *Call = 0;
+    bool operator<(const MemberInfo_t &other) const {
+      if(ME<other.ME) return true;
+      if(ME>other.ME) return false;
+      if(T<other.T) return true;
+      if(other.T<T) return false;
+      if(offset<other.offset) return true;
+      if(offset>other.offset) return false;
+      return Call<other.Call;
     }
-    bool operator >(const VarRef_t & otherVR) const {
-      if (VDCAMUAS>otherVR.VDCAMUAS) return true;
-      if (VDCAMUAS<otherVR.VDCAMUAS) return false;
-      if (MemberExprList>otherVR.MemberExprList) return true;
-      if (MemberExprList<otherVR.MemberExprList) return false;
-      if (MECastList>otherVR.MECastList) return true;
-      if (MECastList<otherVR.MECastList) return false;
-      if (MCallList>otherVR.MCallList) return true;
-      if (MCallList<otherVR.MCallList) return false;
-      return OffsetList>otherVR.OffsetList;
-    }
-    bool operator==(const VarRef_t & otherVR) const {
-      return (VDCAMUAS==otherVR.VDCAMUAS)&&(MemberExprList==otherVR.MemberExprList)&&(MECastList==otherVR.MECastList)&&
-    		  (OffsetList==otherVR.OffsetList)&&(MCallList==otherVR.MCallList);
+    bool operator==(const MemberInfo_t &other) const {
+      return (ME==other.ME)&&(T==other.T)&&(offset==other.offset)&&(Call==other.Call);
     }
   };
 
@@ -1178,17 +953,19 @@ public:
 
 
   enum DereferenceKind {
-	  DereferenceUnary,
-	  DereferenceArray,
-	  DereferenceMember,
-	  DereferenceFunction,
-	  DereferenceAssign,
-	  DereferenceInit,
-	  DereferenceOffsetOf,
-	  DereferenceReturn,
-	  DereferenceParm,
-    DereferenceCond,
-    DereferenceLogic,
+		DereferenceInternal,
+	  DereferenceUnary = DereferenceInternal, // unary
+	  DereferenceArray, // as
+	  DereferenceMember, // me
+	  DereferenceFunction, // call/refcall
+	  DereferenceAssign, // cao
+    DereferenceLogic, // logic
+	  DereferenceOffsetOf, // ooe
+		DereferenceExternal,
+	  DereferenceInit = DereferenceExternal, // value
+	  DereferenceReturn, // ret
+	  DereferenceParm, // parm
+    DereferenceCond, // cond
   };
   /*
    * VR: variable being dereferenced
@@ -1198,20 +975,20 @@ public:
    */
   
   struct DereferenceInfo_t {
-    VarRef_t VR;
+    ExprRef_t VR;
+    std::vector<MemberInfo_t> MInfoList;
     int64_t i;
-    std::vector<VarRef_t> vVR;
+    std::vector<ExprRef_t> vVR;
     mutable std::string Expr;
     std::function<void(const DereferenceInfo_t*)> evalExprInner;
     const CompoundStmt* CSPtr;
     DereferenceKind Kind;
     unsigned baseCnt;
     std::vector<size_t> ord;
-    DereferenceInfo_t(VarRef_t VR, int64_t i, std::vector<VarRef_t> vVR, std::string Expr, const CompoundStmt* CSPtr, DereferenceKind Kind):
-      VR(VR), i(i), vVR(vVR), Expr(Expr), CSPtr(CSPtr), Kind(Kind), baseCnt(0) {}
-    DereferenceInfo_t(VarRef_t VR, int64_t i, unsigned baseCnt, std::vector<VarRef_t> vVR, std::string Expr, const CompoundStmt* CSPtr,
-    		DereferenceKind Kind):
-          VR(VR), i(i), vVR(vVR), Expr(Expr), CSPtr(CSPtr), Kind(Kind), baseCnt(baseCnt) {}
+    DereferenceInfo_t(ExprRef_t VR, std::vector<MemberInfo_t> MI, int64_t i, std::vector<ExprRef_t> vVR, std::string Expr, const CompoundStmt* CSPtr, DereferenceKind Kind):
+      VR(VR), MInfoList(MI), i(i), vVR(vVR), Expr(Expr), CSPtr(CSPtr), Kind(Kind), baseCnt(0) {}
+    DereferenceInfo_t(ExprRef_t VR, std::vector<MemberInfo_t> MI, int64_t i, unsigned baseCnt, std::vector<ExprRef_t> vVR, std::string Expr, const CompoundStmt* CSPtr, DereferenceKind Kind):
+          VR(VR), MInfoList(MI), i(i), vVR(vVR), Expr(Expr), CSPtr(CSPtr), Kind(Kind), baseCnt(baseCnt) {}
     void addOrd(size_t __ord) {
       ord.push_back(__ord);
     }
@@ -1219,6 +996,8 @@ public:
     bool operator <(const DereferenceInfo_t & otherDI) const {
       if (VR<otherDI.VR) return true;
       if (VR>otherDI.VR) return false;
+      if (MInfoList<otherDI.MInfoList) return true;
+      if (MInfoList>otherDI.MInfoList) return false;
       if (i<otherDI.i) return true;
       if (i>otherDI.i) return false;
       if (vVR<otherDI.vVR) return true;
@@ -1234,6 +1013,8 @@ public:
     bool operator >(const DereferenceInfo_t & otherDI) const {
 	  if (VR>otherDI.VR) return true;
 	  if (VR<otherDI.VR) return false;
+    if (MInfoList>otherDI.MInfoList) return true;
+    if (MInfoList<otherDI.MInfoList) return false;
 	  if (i>otherDI.i) return true;
 	  if (i<otherDI.i) return false;
 	  if (vVR>otherDI.vVR) return true;
@@ -1247,8 +1028,8 @@ public:
 	  return Expr > otherDI.Expr;
 	}
     bool operator==(const DereferenceInfo_t & otherDI) const {
-      return (VR==otherDI.VR)&&(i==otherDI.i)&&(vVR==otherDI.vVR)&&(Expr==otherDI.Expr)&&(Kind==otherDI.Kind)
-    		  &&(baseCnt==otherDI.baseCnt)&&(CSPtr==otherDI.CSPtr);
+      return (VR==otherDI.VR)&&(MInfoList==otherDI.MInfoList)&&(i==otherDI.i)&&(vVR==otherDI.vVR)&&(Expr==otherDI.Expr)
+          &&(Kind==otherDI.Kind)&&(baseCnt==otherDI.baseCnt)&&(CSPtr==otherDI.CSPtr);
     }
     std::string KindString() {
     	if (Kind==DereferenceUnary) return "unary";
@@ -1459,10 +1240,9 @@ public:
   const DbJSONClassVisitor::callfunc_info_t* handleCallMemberExpr(const MemberExpr* ME, std::set<ValueHolder> callrefs, std::set<LiteralHolder> literalRefs, const QualType* baseType = 0, const CallExpr* CE = 0);
   const DbJSONClassVisitor::callfunc_info_t* handleCallVarDecl(const VarDecl* VD, const DeclRefExpr* DRE, std::set<ValueHolder> callrefs, std::set<LiteralHolder> literalRefs, const QualType* baseType = 0, const CallExpr* CE = 0);
   bool handleCallConditionalOperator(const ConditionalOperator* CO, std::set<ValueHolder> callrefs, std::set<LiteralHolder> literalRefs, const QualType* baseType = 0, const CallExpr* CE = 0);
-  const Expr* stripCasts(const Expr* E, QualType* castType = 0);
+  const Expr* stripCasts(const Expr* E);
   const Expr* stripCastsEx(const Expr* E, std::vector<CStyleCastOrType>& vC);
   const UnaryOperator* lookForUnaryOperatorInCallExpr(const Expr* E);
-  bool verifyMemberExprBaseType(QualType T);
   const ArraySubscriptExpr* lookForArraySubscriptExprInCallExpr(const Expr* E);
   bool VisitExpr(const Expr *Node);
   bool VisitClassTemplateDecl(const ClassTemplateDecl *D);
@@ -1513,37 +1293,24 @@ public:
   const Expr* lookForStmtExpr(const Expr* E);
   void lookForDeclRefExprsWithStmtExpr(const Expr* E, std::set<ValueHolder>& refs, unsigned pos = 0 );
   void lookForDeclRefExprs(const Expr* E, std::set<ValueHolder>& refs, unsigned pos = 0 );
-  bool lookForVarReference(const Expr* E, VarRef_t& VR, bool* ignoreError=0);
-  bool lookForVarReferencesInOffsetExpr(const Expr* E, VarRef_t& VR, int64_t* LiteralOffset,
-      std::vector<VarRef_t>& OffsetRefs, bool* VarDone, BinaryOperatorKind kind);
-  bool computeOffsetExpr(const Expr* E, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs,
+  void computeOffsetExpr(const Expr* E, int64_t* LiteralOffset, std::vector<ExprRef_t>& OffsetRefs,
 		  BinaryOperatorKind kind, bool stripCastFlag = false);
   bool tryComputeOffsetExpr(const Expr* E, int64_t* LiteralOffset, BinaryOperatorKind kind, bool stripCastFlag = false);
-  bool mergeBinaryOperators(const BinaryOperator* BO, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs,
+  void mergeBinaryOperators(const BinaryOperator* BO, int64_t* LiteralOffset, std::vector<ExprRef_t>& OffsetRefs,
       BinaryOperatorKind kind);
-  const Expr* lookForNonTransitiveExpr(const Expr* E);
   const Expr* lookForNonParenExpr(const Expr* E);
   bool tryEvaluateIntegerConstantExpr(const Expr* E, Expr::EvalResult& Res);
-  bool lookForDerefExprs(const Expr* E, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs);
-  bool lookForASExprs(const ArraySubscriptExpr *Node, VarRef_t& VR, int64_t* LiteralOffset, std::vector<VarRef_t>& OffsetRefs,
-      bool* ignoreErrors);
+  void lookForDerefExprs(const Expr* E, int64_t* LiteralOffset, std::vector<ExprRef_t>& OffsetRefs);
   void lookForExplicitCastExprs(const Expr* E, std::vector<QualType>& refs );
   void lookForLiteral(const Expr* E, std::set<LiteralHolder>& refs, unsigned pos = 0 );
   const DeclRefExpr* lookForBottomDeclRef(const Expr* E);
-  int fieldToIndex(const FieldDecl* FD, const RecordDecl* RD);
+  int fieldToIndex(const MemberExpr *ME);
+  int fieldToIndex(const FieldDecl* FD);
   void setSwitchData(const Expr* caseExpr, int64_t* enumtp, std::string* enumstr, std::string* macroValue, std::string* raw_code, int64_t* exprVal);
   void varInfoForRefs(FuncData &func_data, const std::set<ValueHolder>& refs, std::set<LiteralHolder> literals, std::vector<struct refvarinfo_t>& refvarList);
-  bool VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef,std::set<const UnaryOperator*>& UnaryRef, std::set<const ArraySubscriptExpr*>& ASRef,
-        std::set<const BinaryOperator*>& CAORef,std::set<const BinaryOperator*>& LogicRef, std::set<const OffsetOfExpr*>& OOERef);
-  bool varInfoForVarRef(FuncData &func_data, VarRef_t VR,  struct refvarinfo_t& refvar,
-		  std::map<const CallExpr*,unsigned long>& CEIdxMap,
-		  std::map<const MemberExpr*,unsigned>& MEIdxMap,
-		  std::map<const UnaryOperator*,unsigned>& UnaryIdxMap,
-		  std::map<const ArraySubscriptExpr*,unsigned>& ASIdxMap,
-		  std::map<const ValueDecl*,unsigned>& VDIdxMap,
-      std::map<const BinaryOperator*,unsigned>& CAOIdxMap,
-      std::map<const BinaryOperator*,unsigned>& LogicIdxMap,
-      std::map<const OffsetOfExpr*,unsigned>& OOEIdxMap);
+  bool VR_referenced(ExprRef_t& VR, std::unordered_set<const Expr*> DExpRef);
+  bool varInfoForVarRef(FuncData &func_data, ExprRef_t VR,  struct refvarinfo_t& refvar, std::map<const CallExpr*,unsigned long>& CEIdxMap,
+	      std::unordered_map<const Expr*,unsigned> DExpIdxMap, std::unordered_map<const ValueDecl*,unsigned> DValIdxMap);
   void notice_class_references(RecordDecl* rD);
   void notice_field_attributes(RecordDecl* rD, std::vector<QualType>& QV);
   void notice_template_class_references(CXXRecordDecl* TRD);
@@ -1557,55 +1324,14 @@ public:
   QualType lookForNonPointerType(const PointerType* tp);
   const FunctionProtoType* lookForFunctionType(QualType T);
 
-  typedef std::tuple<MemberExpr*,CastExprOrType,int64_t,const CallExpr*,CStyleCastOrType> lookup_cache_tuple_t;
-  typedef std::multimap<ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS,std::vector<lookup_cache_tuple_t>> DREMap_t;
-  void lookForDeclRefWithMemberExprsInOffset(const Expr* E, std::vector<VarRef_t>& OffsetRefs);
-  bool lookForDeclRefWithMemberExprs(const Expr* E, DREMap_t& refs);
-    typedef std::tuple<
-    		std::vector<MemberExpr*>,
-			std::vector<CastExprOrType>,
-			std::vector<int64_t>,
-			std::vector<const CallExpr*>,
-			std::vector<CStyleCastOrType>> lookup_cache_t;
+  typedef std::set<ExprRef_t> DREMap_t;
 
-  std::vector<MemberExpr*>& get_member(lookup_cache_t& cache) {
-	  return std::get<0>(cache);
-  }
+  void lookForDeclRefWithMemberExprsInOffset(const Expr* E, std::vector<ExprRef_t>& OffsetRefs);
 
-  std::vector<CastExprOrType>& get_type(lookup_cache_t& cache) {
-	  return std::get<1>(cache);
-  }
+  void lookForDeclRefWithMemberExprsInternal(const Expr* E, DREMap_t& refs, std::vector<MemberInfo_t> *cache,
+      std::vector<CStyleCastOrType> castVec, unsigned MEIdx = 0, const CallExpr* CE = 0, bool IgnoreLiteral = false);
 
-  std::vector<int64_t>& get_shift(lookup_cache_t& cache) {
-	  return std::get<2>(cache);
-  }
-
-  std::vector<const CallExpr*>& get_callref(lookup_cache_t& cache) {
-	  return std::get<3>(cache);
-  }
-
-  std::vector<CStyleCastOrType>& get_ccast(lookup_cache_t& cache) {
-	  return std::get<4>(cache);
-  }
-
-  void lookup_cache_clear(lookup_cache_t& cache) {
-	  std::get<0>(cache).clear();
-	  std::get<1>(cache).clear();
-	  std::get<2>(cache).clear();
-	  std::get<3>(cache).clear();
-	  std::get<4>(cache).clear();
-  }
-
-  typedef std::vector<lookup_cache_tuple_t> vMCtuple_t;
-  bool DREMap_add(DREMap_t& DREMap, ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS& v, vMCtuple_t& vMCtuple);
-  void lookForDeclRefWithMemberExprsInternal(const Expr* E, const Expr* origExpr, DREMap_t& refs, lookup_cache_t& cache,
-		  bool* compoundStmtSeen = 0, unsigned MEIdx = 0, unsigned* MECnt = 0, const CallExpr* CE = 0,
-		  bool secondaryChain = false, bool IgnoreLiteral = false, bool noticeInitListExpr = false, QualType castType = QualType());
-  void lookForDeclRefWithMemberExprsInternalFromStmt(const Stmt* S, DREMap_t& refs, lookup_cache_t& cache,
-  		bool* compoundStmtSeen = 0, unsigned MEIdx = 0, const CallExpr* CE = 0, bool secondaryChain = false);
-
-  std::set<MemberExpr*> DoneMEs;
-  std::set<InitListExpr*> DoneILEs;
+  std::set<const MemberExpr*> DoneMEs;
 
   bool currentWithinCS() { return csStack.size()>0; }
   bool hasParentCS() { return csStack.size()>1; }

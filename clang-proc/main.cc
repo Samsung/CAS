@@ -117,7 +117,6 @@ cl::opt<bool> TUDumpWithSrcOption("uS", cl::cat(ctCategory));
 cl::opt<bool> OnlySrcOption("S", cl::cat(ctCategory));
 cl::opt<bool> ExitOnErrorOption("E", cl::cat(ctCategory));
 cl::opt<bool> CustomStructDefs("csd",cl::cat(ctCategory));
-cl::opt<bool> ptrMEOption("pm", cl::cat(ctCategory));
 cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
 
 cl::opt<bool> MultiOption("multi", cl::cat(ctCategory));
@@ -170,11 +169,13 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
     Tool.appendArgumentsAdjuster(getStripWarningsAdjuster());
     Tool.appendArgumentsAdjuster(getClangStripDependencyFileAdjusterFixed());
 
+    dbg<<llvm::format_decimal(current,6)<<"  "<<file<<"\n";
+    dbg.flush();
+    // llvm::outs()<<"LOG: "+buf;
+
     DBFactory<DbJSONClassAction> Factory(current);
     Tool.run(&Factory);
 
-    dbg<<llvm::format_decimal(current,6)<<"  "<<file<<"\n";
-    dbg.flush();
     llvm::errs()<<"LOG: "+buf;
     buf.clear();
 
@@ -219,7 +220,6 @@ int main(int argc, const char **argv)
     opts.recordLoc = RecordLocOption.getValue();
     opts.exit_on_error = ExitOnErrorOption.getValue();
     opts.csd = CustomStructDefs.getValue();
-    opts.ptrMEonly = ptrMEOption.getValue();
     opts.save_expansions = opts.addbody && SaveMacroExpansionOption.getValue();
 
     if (IncludeOption.getValue()) {

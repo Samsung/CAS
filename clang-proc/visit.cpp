@@ -145,7 +145,7 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			ExprRef_t v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
 				valuecast.setType(castType);
@@ -156,33 +156,26 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 			else {
 				v.setInteger(i,valuecast);
 			}
-			vMCtuple_t vMCtuple;
-			v.setPrimaryFlag(false);
-			DREMap_add(DREMap,v,vMCtuple);
+			DREMap.insert(v);
 		}
 		else {
-			DbJSONClassVisitor::lookup_cache_t cache;
-			bool compundStmtSeen = false;
-			unsigned MECnt = 0;
-			lookForDeclRefWithMemberExprsInternal(D->getInit(),D->getInit(),DREMap,cache,&compundStmtSeen,
-					0,&MECnt,0,true,false,false,castType);
+			std::vector<CStyleCastOrType> castVec;
+			if(!castType.isNull())
+				castVec.emplace_back(castType);
+			lookForDeclRefWithMemberExprsInternal(D->getInit(),DREMap,0,castVec,0,0,false);
 		}
 
-		VarRef_t VR;
-		VR.VDCAMUAS.setValue(D);
-		std::vector<VarRef_t> vVR;
+		ExprRef_t VR;
+		VR.setValue(D);
+
+		std::vector<ExprRef_t> vVR;
 		vVR.push_back(VR);
-		unsigned size = DREMap.size();
-		for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			vVR.push_back(iVR);
-		}
+		vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
 
 		if (!D->isDefinedOutsideFunctionOrMethod()) {
 			if (lastFunctionDef) {
 				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,NumInitializedElements(D->getInit()),vVR,"",
+						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},NumInitializedElements(D->getInit()),vVR,"",
 								getCurrentCSPtr(),DereferenceInit));
 				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
@@ -812,9 +805,6 @@ bool DbJSONClassVisitor::VisitCompoundStmtComplete(const CompoundStmt *CS) {
 void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 	if(!Cond) return;
 	QualType CT = Cond->getType();
-	VarRef_t VR;
-	VR.VDCAMUAS.setCond(Cond,cf_id);
-	std::vector<VarRef_t> vVR;
 	DbJSONClassVisitor::DREMap_t DREMap;
 
 	std::vector<CStyleCastOrType> castVec;
@@ -849,7 +839,7 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 	Expr::EvalResult Res;
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 		int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+		ExprRef_t v;
 		CStyleCastOrType valuecast;
 		if (!castType.isNull()) {
 			valuecast.setType(castType);
@@ -860,25 +850,23 @@ void DbJSONClassVisitor::handleConditionDeref(Expr *Cond,size_t cf_id){
 		  else {
 			  v.setInteger(i,valuecast);
 		  }
-		vMCtuple_t vMCtuple;
-		v.setPrimaryFlag(false);
-		DREMap_add(DREMap,v,vMCtuple);
+		DREMap.insert(v);
 	}
 	else {
-		lookup_cache_t cache;
-		bool compundStmtSeen = false;
-		unsigned MECnt = 0;
-		lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
+		std::vector<CStyleCastOrType> castVec;
+		if(!castType.isNull())
+			castVec.emplace_back(castType);
+		lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,0,0,false);
 	}
 
-	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-		VarRef_t iVR;
-		iVR.VDCAMUAS = (*i).first;
-		vVR.push_back(iVR);
-	}
+	ExprRef_t VR;
+	VR.setCond(Cond,cf_id);
+
+	std::vector<ExprRef_t> vVR;
+	vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
 
 	std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,cf_id,vVR,"",getCurrentCSPtr(),DereferenceCond));
+			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},cf_id,vVR,"",getCurrentCSPtr(),DereferenceCond));
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 		[Cond,this](const DereferenceInfo_t *d){ evalExpr(Cond, d); };
@@ -1171,9 +1159,6 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 				for (unsigned i=0; i!=CE->getNumArgs(); ++i) {
 					QualType argT;
 					const Expr* argE = CE->getArg(i);
-					VarRef_t VR;
-					VR.VDCAMUAS.setParm(argE);
-					std::vector<VarRef_t> vVR;
 					DbJSONClassVisitor::DREMap_t DREMap;
 					std::vector<CStyleCastOrType> castVec;
 					const class Expr* E = stripCastsEx(argE,castVec);
@@ -1209,7 +1194,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 					Expr::EvalResult Res;
 					if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 						int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-						ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+						ExprRef_t v;
 						CStyleCastOrType valuecast;
 						if (!castType.isNull()) {
 							valuecast.setType(castType);
@@ -1220,23 +1205,23 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 							else {
 								v.setInteger(i,valuecast);
 							}
-						vMCtuple_t vMCtuple;
-						v.setPrimaryFlag(false);
-						DREMap_add(DREMap,v,vMCtuple);
+						DREMap.insert(v);
 					}
 					else {
-						lookup_cache_t cache;
-						bool compundStmtSeen = false;
-						unsigned MECnt = 0;
-						lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
+						std::vector<CStyleCastOrType> castVec;
+						if(!castType.isNull())
+							castVec.emplace_back(castType);
+						lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,0,0,false);
 					}
-					for (DbJSONClassVisitor::DREMap_t::iterator u = DREMap.begin(); u!=DREMap.end(); ++u) {
-						VarRef_t iVR;
-						iVR.VDCAMUAS = (*u).first;
-						vVR.push_back(iVR);
-					}
+
+					ExprRef_t VR;
+					VR.setParm(argE);
+
+					std::vector<ExprRef_t> vVR;
+					vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
+
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-							lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,"",getCurrentCSPtr(),DereferenceParm));
+							lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},i,vVR,"",getCurrentCSPtr(),DereferenceParm));
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 						[argE,this](const DereferenceInfo_t *d){ evalExpr(argE, d); };
@@ -1385,18 +1370,14 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		const Expr* E = stripCastsEx(LHS,castVec);
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			ExprRef_t v;
 			CStyleCastOrType valuecast;
 			v.setInteger(i,valuecast);
-			vMCtuple_t vMCtuple;
-			v.setPrimaryFlag(false);
-			DREMap_add(LDREMap,v,vMCtuple);
+			LDREMap.insert(v);
 		}
 		else {
-			lookup_cache_t cache;
-			bool compundStmtSeen = false;
-			unsigned MECnt = 0;
-			lookForDeclRefWithMemberExprsInternal(LHS,LHS,LDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
+			std::vector<CStyleCastOrType> castVec;
+			lookForDeclRefWithMemberExprsInternal(LHS,LDREMap,0,castVec,0,0,true);
 		}
 
 		DbJSONClassVisitor::DREMap_t RDREMap;
@@ -1404,38 +1385,26 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		E = stripCastsEx(RHS,castVec);
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			ExprRef_t v;
 			CStyleCastOrType valuecast;
 			v.setInteger(i,valuecast);
-			vMCtuple_t vMCtuple;
-			v.setPrimaryFlag(false);
-			DREMap_add(RDREMap,v,vMCtuple);
+			RDREMap.insert(v);
 		}
 		else {
-			lookup_cache_t cache;
-			bool compundStmtSeen = false;
-			unsigned MECnt = 0;
-			lookForDeclRefWithMemberExprsInternal(RHS,RHS,RDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
+			std::vector<CStyleCastOrType> castVec;
+			lookForDeclRefWithMemberExprsInternal(RHS,RDREMap,0,castVec,0,0,true);
 		}
 
-		VarRef_t VR;
-		VR.VDCAMUAS.setLogic(BO);
-		std::vector<VarRef_t> vVR;
+		ExprRef_t VR;
+		VR.setLogic(BO);
+		std::vector<ExprRef_t> vVR;
 		unsigned Lsize = LDREMap.size();
 
-		for (DbJSONClassVisitor::DREMap_t::iterator i = LDREMap.begin(); i!=LDREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			vVR.push_back(iVR);
-		}
-		for (DbJSONClassVisitor::DREMap_t::iterator i = RDREMap.begin(); i!=RDREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			vVR.push_back(iVR);
-		}
+		vVR.insert(vVR.end(),LDREMap.begin(),LDREMap.end());
+		vVR.insert(vVR.end(),RDREMap.begin(),RDREMap.end());
 
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),Lsize,vVR,"",getCurrentCSPtr(),DereferenceLogic));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},BO->getOpcode(),Lsize,vVR,"",getCurrentCSPtr(),DereferenceLogic));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 			[BO,this](const DereferenceInfo_t *d){ evalExpr(BO, d); };
@@ -1455,10 +1424,8 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		const Expr* RHS = BO->getRHS();
 
 		DbJSONClassVisitor::DREMap_t LDREMap;
-		lookup_cache_t cache;
-		bool compundStmtSeen = false;
-		unsigned MECnt = 0;
-		lookForDeclRefWithMemberExprsInternal(LHS,LHS,LDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,true);
+		std::vector<CStyleCastOrType> castVecL;
+		lookForDeclRefWithMemberExprsInternal(LHS,LDREMap,0,castVecL,0,0,true);
 		
 		DbJSONClassVisitor::DREMap_t RDREMap;
 		std::vector<CStyleCastOrType> castVec;
@@ -1497,7 +1464,7 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 		Expr::EvalResult Res;
 		if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 			int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-			ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+			ExprRef_t v;
 			CStyleCastOrType valuecast;
 			if (!castType.isNull()) {
 			valuecast.setType(castType);
@@ -1508,43 +1475,32 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 			else {
 				v.setInteger(i,valuecast);
 			}
-			vMCtuple_t vMCtuple;
-			v.setPrimaryFlag(false);
-			DREMap_add(RDREMap,v,vMCtuple);
+			RDREMap.insert(v);
 		}
 		else {
-			lookup_cache_clear(cache);
-			compundStmtSeen = false;
-			MECnt = 0;
-			lookForDeclRefWithMemberExprsInternal(RHS,RHS,RDREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
+			std::vector<CStyleCastOrType> castVec;
+			if(!castType.isNull())
+				castVec.emplace_back(castType);
+			lookForDeclRefWithMemberExprsInternal(RHS,RDREMap,0,castVec,0,0,false);
 		}
 
-		VarRef_t VR;
-		VR.VDCAMUAS.setCAO(BO);
-		std::vector<VarRef_t> vVR;
-		unsigned Lsize = LDREMap.size();
-		if (Lsize>1) {
-		llvm::errs() << "Multiple expressions on LHS for assignment operator: " << Lsize << "\n";
-		BO->dumpColor();
-		assert(0);
+		ExprRef_t VR;
+		VR.setCAO(BO);
+		if (LDREMap.size() != 1) {
+			llvm::errs() << "Multiple expressions on LHS for assignment operator: " << LDREMap.size() << "\n";
+			BO->dumpColor();
+			assert(0);
 		}
-		for (DbJSONClassVisitor::DREMap_t::iterator i = LDREMap.begin(); i!=LDREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			CStyleCastOrType valuecast;
-			valuecast.setType(LHS->getType());
-			noticeTypeClass(LHS->getType());
-			iVR.VDCAMUAS.setCast(valuecast);
-			vVR.push_back(iVR);
-		}
-		for (DbJSONClassVisitor::DREMap_t::iterator i = RDREMap.begin(); i!=RDREMap.end(); ++i) {
-			VarRef_t iVR;
-			iVR.VDCAMUAS = (*i).first;
-			vVR.push_back(iVR);
-		}
+		ExprRef_t iVR = *LDREMap.begin();
+		noticeTypeClass(LHS->getType());
+		iVR.setCast(LHS->getType());
+
+		std::vector<ExprRef_t> vVR;
+		vVR.push_back(iVR);
+		vVR.insert(vVR.end(),RDREMap.begin(),RDREMap.end());
 
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,BO->getOpcode(),vVR,"",getCurrentCSPtr(),DereferenceAssign));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},BO->getOpcode(),vVR,"",getCurrentCSPtr(),DereferenceAssign));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 			[BO,this](const DereferenceInfo_t *d){ evalExpr(BO, d); };
@@ -1567,39 +1523,23 @@ bool DbJSONClassVisitor::VisitUnaryOperator(UnaryOperator *E) {
 			llvm::outs() << "\n";
 		}
 		int64_t i=0;
-		std::vector<VarRef_t> vVR;
+		std::vector<ExprRef_t> vVR;
 		bool ignoreErrors = false;
-		bool done = lookForDerefExprs(E->getSubExpr(),&i,vVR);
+		lookForDerefExprs(E->getSubExpr(),&i,vVR);
 		if (opts.debugDeref) {
-			llvm::outs() << done;
-			if (done) {
-				llvm::outs() << " [" << i << "]";
-				llvm::outs() << " | " << vVR.size();
-				llvm::outs() << " [";
-				for (size_t i=0; i<vVR.size(); ++i) {
-					VarRef_t vr = vVR[i];
-					if (i!=0) llvm::outs() << ",";
-					llvm::outs() << vr.MemberExprList.size();
-				}
-				llvm::outs() << "]";
-			}
-			else {
-				if (!ignoreErrors) {
-					E->dumpColor();
-				}
-			}
+			llvm::outs() << " [" << i << "]";
+			llvm::outs() << " | " << vVR.size();
 			llvm::outs() << "\n";
 		}
-		if (done) {
-			VarRef_t VR;
-			VR.VDCAMUAS.setUnary(E);
-			if (lastFunctionDef) {
-				std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-						lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,i,vVR,"",getCurrentCSPtr(),DereferenceUnary));
-				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
-				const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
-					[E,this](const DereferenceInfo_t *d){ evalExpr(E, d); };
-			}
+
+		ExprRef_t VR;
+		VR.setUnary(E);
+		if (lastFunctionDef) {
+			std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
+					lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},i,vVR,"",getCurrentCSPtr(),DereferenceUnary));
+			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+				[E,this](const DereferenceInfo_t *d){ evalExpr(E, d); };
 		}
 	}
 	return true;
@@ -1620,46 +1560,32 @@ bool DbJSONClassVisitor::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
 		Node->dumpColor();
 	}
 
-	// First handle index part of ArraySubscriptExpr
-	const Expr* idxE = lookForNonTransitiveExpr(Node->getIdx());
+	std::vector<ExprRef_t> vVR;
+	// base
+	int64_t base_i=0;
+	lookForDerefExprs(Node->getBase(),&base_i,vVR);
+	unsigned base_size = vVR.size();
+
+	// index
+	const Expr* idxE = stripCasts(Node->getIdx());
 	int64_t idx_i=0;
-	std::vector<VarRef_t> idx_vVR;
-	bool idx_done = true;
 	// Check if expression can be evaluated as a constant expression
 	Expr::EvalResult Res;
 	if((!idxE->isValueDependent()) && idxE->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(idxE,Res)) {
 		idx_i = Res.Val.getInt().extOrTrunc(63).getExtValue();
 	}
 	else {
-		idx_done = lookForDerefExprs(idxE,&idx_i,idx_vVR);
+		lookForDerefExprs(idxE,&idx_i,vVR);
 	}
 
-	// Now it's time for the base tree
-	int64_t base_i=0;
-	std::vector<VarRef_t> base_vVR;
-	bool base_done = lookForDerefExprs(Node->getBase(),&base_i,base_vVR);
-	unsigned base_size = 0;
-	for (auto i=base_vVR.begin(); i!=base_vVR.end(); ++i) {
-		VarRef_t& VR = *i;
-		if (VR.VDCAMUAS.getKind()!=
-				DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone) {
-			base_size++;
-		}
-	}
-
-	std::vector<VarRef_t> vVR(base_vVR.begin(),base_vVR.end());
-	vVR.insert(vVR.end(),idx_vVR.begin(),idx_vVR.end());
-
-	if (idx_done&&base_done) {
-		VarRef_t VR;
-		VR.VDCAMUAS.setAS(Node);
-		if (lastFunctionDef) {
-			std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-					lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,idx_i,base_size,vVR,"",getCurrentCSPtr(),DereferenceArray));
-			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
-			const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
-				[Node,this](const DereferenceInfo_t *d){ evalExpr(Node, d); };
-		}
+	ExprRef_t VR;
+	VR.setAS(Node);
+	if (lastFunctionDef) {
+		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},idx_i,base_size,vVR,"",getCurrentCSPtr(),DereferenceArray));
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
+		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
+			[Node,this](const DereferenceInfo_t *d){ evalExpr(Node, d); };
 	}
 
 	return true;
@@ -1688,14 +1614,11 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		offsetof_offset = Res.Val.getInt().extOrTrunc(63).getExtValue();
 	}
 
-	VarRef_t VR;
-	VR.VDCAMUAS.setOOE(Node);
-	std::vector<VarRef_t> vVR;
+	std::vector<MemberInfo_t> MInfoList;
 	DbJSONClassVisitor::DREMap_t DREMap;
 	bool canComputeOffset = true;
 
 	unsigned MEIdx = 0;
-	int fieldIndex = -1;
 	QualType lastRecordType;
 	unsigned fieldAccessCount = 0;
 	for (unsigned i=0; i<Node->getNumComponents(); ++i) {
@@ -1705,7 +1628,6 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 			fieldAccessCount++;
 		}
 	}
-	VR.VDCAMUAS.setMeCnt(fieldAccessCount-1);
 
 	for (unsigned i=0; i<Node->getNumComponents(); ++i) {
 		const OffsetOfNode & C = Node->getComponent(i);
@@ -1713,10 +1635,8 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 		if (k==OffsetOfNode::Field) {
 			FieldDecl* FD = C.getField();
 			const RecordDecl* RD = FD->getParent();
-			fieldIndex = fieldToIndex(FD,RD);
             lastRecordType = RD->getASTContext().getRecordType(RD);
-            VR.MemberExprList.push_back(std::pair<size_t,MemberExprKind>(fieldIndex,static_cast<MemberExprKind>(0)));
-            VR.MECastList.push_back(lastRecordType);
+			MInfoList.push_back(MemberInfo_t{FD,lastRecordType});
             noticeTypeClass(lastRecordType);
             MEIdx++;
 		}
@@ -1727,35 +1647,30 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
             Expr::EvalResult Res;
             if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
                 int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-                ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+                ExprRef_t v;
                 v.setInteger(i);
-                vMCtuple_t vMCtuple;
-                v.setPrimaryFlag(false);
                 v.setMeIdx(MEIdx-1);
-                DREMap_add(DREMap,v,vMCtuple);
+				DREMap.insert(v);
             }
             else {
-	            lookup_cache_t cache;
-	            bool compundStmtSeen = false;
-	            unsigned MECnt = 0;
-	            lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,MEIdx-1,&MECnt,0,true,true);            	
+				std::vector<CStyleCastOrType> castVec;
+	            lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,MEIdx-1,0,true);
             }
-            VR.MemberExprList.push_back(std::pair<size_t,MemberExprKind>(fieldIndex,MemberExprKindInvalid));
-            VR.MECastList.push_back(lastRecordType);
+			MInfoList.push_back(MemberInfo_t{0,lastRecordType});
 		}
 		else {
 			/* Not supported */
 		}
 	}
+	ExprRef_t VR;
+	VR.setOOE(Node);
+	VR.setMeCnt(fieldAccessCount-1);
 
-    for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-        VarRef_t iVR;
-        iVR.VDCAMUAS = (*i).first;
-        vVR.push_back(iVR);
-    }
+	std::vector<ExprRef_t> vVR;
+    vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
 
     std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-    		lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,offsetof_offset,vVR,"",getCurrentCSPtr(),DereferenceOffsetOf));
+    		lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,MInfoList,offsetof_offset,vVR,"",getCurrentCSPtr(),DereferenceOffsetOf));
     const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 		[Node,this](const DereferenceInfo_t *d){ evalExpr(Node, d); };
@@ -1776,9 +1691,6 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 		return true;
 	}
 
-	VarRef_t VR;
-	VR.VDCAMUAS.setRET(S);
-	std::vector<VarRef_t> vVR;
 	DbJSONClassVisitor::DREMap_t DREMap;
 	std::vector<CStyleCastOrType> castVec;
 	const class Expr* E = stripCastsEx(RVE,castVec);
@@ -1812,7 +1724,7 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 	Expr::EvalResult Res;
 	if((!E->isValueDependent()) && E->isEvaluatable(Context) && tryEvaluateIntegerConstantExpr(E,Res)) {
 		int64_t i = Res.Val.getInt().extOrTrunc(63).getExtValue();
-		ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS v;
+		ExprRef_t v;
 		CStyleCastOrType valuecast;
 		if (!castType.isNull()) {
 			valuecast.setType(castType);
@@ -1823,25 +1735,23 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 		  else {
 			  v.setInteger(i,valuecast);
 		  }
-		vMCtuple_t vMCtuple;
-		v.setPrimaryFlag(false);
-		DREMap_add(DREMap,v,vMCtuple);
+		DREMap.insert(v);
 	}
 	else {
-		lookup_cache_t cache;
-		bool compundStmtSeen = false;
-		unsigned MECnt = 0;
-		lookForDeclRefWithMemberExprsInternal(E,E,DREMap,cache,&compundStmtSeen,0,&MECnt,0,true,false,false,castType);
+		std::vector<CStyleCastOrType> castVec;
+		if(!castType.isNull())
+			castVec.emplace_back(castType);
+		lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,0,0,false);
 	}
 
-	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-		VarRef_t iVR;
-		iVR.VDCAMUAS = (*i).first;
-		vVR.push_back(iVR);
-	}
+	ExprRef_t VR;
+	VR.setRET(S);
+
+	std::vector<ExprRef_t> vVR;
+	vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
 
 	std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,"",getCurrentCSPtr(),DereferenceReturn));
+			lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,{},0,vVR,"",getCurrentCSPtr(),DereferenceReturn));
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 	const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 		[S,this](const DereferenceInfo_t *d){ evalExpr(S,d); };
@@ -1874,106 +1784,25 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 	/* We have primary MemberExpr (i.e. MemberExpr that is not in the chain of other MemberExprs); handle it */
 
 	DbJSONClassVisitor::DREMap_t DREMap;
-	lookup_cache_t cache;
-	bool CSseen = false;
-	unsigned MECnt = 0;
+	std::vector<MemberInfo_t> MInfoList;
+	std::vector<CStyleCastOrType> castVec;
 	const CallExpr* CE = 0;
 	if (MEHaveParentCE.find(Node)!=MEHaveParentCE.end()) {
 		CE = MEHaveParentCE[Node];
 	}
-	lookForDeclRefWithMemberExprsInternal(Node,Node,DREMap,cache,&CSseen,0,&MECnt,CE);
-	if (DREMap.size()==0) {
-		llvm::outs() << "No DeclRefExpr found at the bottom of primary MemberExpr:\n";
-		Node->dumpColor();
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		exprstream.flush();
-		llvm::outs() << "Expr: \"" << Expr << "\"\n";
-		if (lastFunctionDef) {
-			llvm::outs() << "Function: " << lastFunctionDef->this_func->getName().str() << "\n";
-		}
-		assert(0);
-	}
+	lookForDeclRefWithMemberExprsInternal(Node,DREMap,&MInfoList,castVec,0,CE);
 
-	/* Count number of entries in DREMap with maximum MEIdx referenced in primary chain */
-	unsigned pcount = 0;
-	unsigned maxMeIdx = 0;
-	DbJSONClassVisitor::DREMap_t::iterator vi;
-	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-		VarRef_t VR;
-		VR.VDCAMUAS = (*i).first;
-		if ((VR.VDCAMUAS.getMeIdx()>maxMeIdx)&&(VR.VDCAMUAS.isPrimary())) {
-			maxMeIdx = VR.VDCAMUAS.getMeIdx();
-			pcount = 1;
-			vi = i;
-		}
-		else if ((VR.VDCAMUAS.getMeIdx()==maxMeIdx)&&(VR.VDCAMUAS.isPrimary())) {
-			pcount += 1;
-		}
-	}
-	/* Walking from Primary MemberExpr we expect to have only one variable in the primary chain
-	 *  (unless there is a StmtExpr along the way) */
-
-	if ((pcount>1)&&(!CSseen)) {
-		llvm::outs() << "Multiple MemberExpr chains in primary MemberExpr:\n";
-		Node->dumpColor();
-		llvm::outs() << "Num chains: " << pcount << "\n";
-		llvm::outs() << "MemberExpr index: " << maxMeIdx << "\n";
-		std::string Expr;
-		llvm::raw_string_ostream exprstream(Expr);
-		Node->printPretty(exprstream,nullptr,Context.getPrintingPolicy());
-		exprstream.flush();
-		llvm::outs() << "Expr: \"" << Expr << "\"\n";
-		if (lastFunctionDef) {
-			llvm::outs() << "Function: " << lastFunctionDef->this_func->getName().str() << "\n";
-		}
-		llvm::outs() << "# Referenced variables:\n";
-		for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-			VarRef_t VR;
-			VR.VDCAMUAS = (*i).first;
-			if ((VR.VDCAMUAS.getMeIdx()==maxMeIdx)&&(VR.VDCAMUAS.isPrimary())) {
-				llvm::outs() << "  Kind :" << VR.VDCAMUAS.getKindString() << "\n";
-			}
-		}
-		assert(0);
-	}
-
-	VarRef_t VR;
-	QualType METype = Node->getMemberDecl()->getType();
-	VR.VDCAMUAS.setME(Node,METype);
-	VR.VDCAMUAS.setMeCnt(MECnt);
-	std::vector<VarRef_t> vVR;
-	bool hasPtrME = false;
-
-	/* Copy member expression information from the base variable of MemberExpr */
-	for (std::vector<lookup_cache_tuple_t>::iterator j = vi->second.begin();
-			j!=vi->second.end(); ++j) {
-		DoneMEs.insert(std::get<0>(*j));
-		const MemberExpr* ME = static_cast<const MemberExpr*>(std::get<0>(*j));
-		const ValueDecl *VD = ME->getMemberDecl();
-		if (VD->getKind()==Decl::Field) {
-			const FieldDecl* FD = static_cast<const FieldDecl*>(VD);
-			const RecordDecl* RD = FD->getParent();
-			int fieldIndex = fieldToIndex(FD,RD);
-			VR.MemberExprList.push_back(std::pair<size_t,MemberExprKind>(fieldIndex,static_cast<MemberExprKind>(ME->isArrow())));
-		}
-		VR.MECastList.push_back(std::get<1>(*j).getFinalType());
-		VR.OffsetList.push_back(std::get<2>(*j));
-		VR.MCallList.push_back(std::get<3>(*j));
-		if (ME->isArrow()) hasPtrME=true;
-	}
+	ExprRef_t VR;;
+	VR.setME(Node);
+	VR.setMeCnt(MInfoList.size());
+	std::vector<ExprRef_t> vVR;
 
 	/* Now save all the referenced variables */
-	for (DbJSONClassVisitor::DREMap_t::iterator i = DREMap.begin(); i!=DREMap.end(); ++i) {
-		VarRef_t iVR;
-		iVR.VDCAMUAS = (*i).first;
-		vVR.push_back(iVR);
-	}
+	vVR.insert(vVR.end(),DREMap.begin(),DREMap.end());
 
-	if (lastFunctionDef&&(hasPtrME||!(opts.ptrMEonly))) {
+	if (lastFunctionDef) {
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,0,vVR,"",getCurrentCSPtr(),DereferenceMember));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(VR,MInfoList,0,vVR,"",getCurrentCSPtr(),DereferenceMember));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(exprOrd++);
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 				[CE,Node,this](const DereferenceInfo_t *d){ evalExpr((Expr*)CE?:Node, d); };

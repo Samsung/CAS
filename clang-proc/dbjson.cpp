@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <random>
 #include <algorithm>
+#include <iterator>
 
 int DEBUG_NOTICE;
 
@@ -269,9 +270,12 @@ int DbJSONClassVisitor::fieldIndexInGroup(Decl** Begin, unsigned NumDecls, const
 	  }
 	  return false;
 	}
+  int DbJSONClassVisitor::fieldToIndex(const MemberExpr *ME){
+	return fieldToIndex(cast<FieldDecl>(ME->getMemberDecl()));
+  }
   
-  int DbJSONClassVisitor::fieldToIndex(const FieldDecl* FD, const RecordDecl* RD) {
-
+  int DbJSONClassVisitor::fieldToIndex(const FieldDecl* FD) {
+	const RecordDecl *RD = FD->getParent();
 	int fieldIndex = 0;
 	if (RD->isCompleteDefinition()) {
 		  const DeclContext *DC = cast<DeclContext>(RD);
@@ -381,7 +385,7 @@ const DbJSONClassVisitor::callfunc_info_t* DbJSONClassVisitor::handleCallMemberE
 			return 0;
 		}
 		const RecordDecl* RD = FD->getParent();
-		int fieldIndex = fieldToIndex(FD,RD);
+		int fieldIndex = fieldToIndex(FD);
 		QualType RT = Context.getRecordType(RD);
 		const Type *tp = cast<Type>(RT);
 		if(RT->getTypeClass()==Type::Record) {
@@ -521,19 +525,21 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 			lastFunctionDef->refTypes.insert(T);
 		}
 
-		VarRef_t VR;
-		std::vector<VarRef_t> vVR;
 		CStyleCastOrType valuecast;
 		if (CSCE) {
 			valuecast.setCast(const_cast<CStyleCastExpr*>(CSCE));
 		}
-		VarRef_t CEVR;
-		VR.VDCAMUAS.setAddress(Addr,valuecast);
+		ExprRef_t VR;
+		VR.setAddress(Addr,valuecast);
+
+		std::vector<ExprRef_t> vVR;
 		vVR.push_back(VR);
-		CEVR.VDCAMUAS.setRefCall(CE,Addr,valuecast);
+
+		ExprRef_t CEVR;
+		CEVR.setRefCall(CE,Addr,valuecast);
 
 		std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
+				lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,{},0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
 		const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 			[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
@@ -542,8 +548,7 @@ bool DbJSONClassVisitor::handleCallAddress(int64_t Addr,const Expr* AddressExpr,
 	return false;
 }
 
-bool DbJSONClassVisitor::handleCallStmtExpr(const Expr* E,
-		std::set<ValueHolder> callrefs,
+bool DbJSONClassVisitor::handleCallStmtExpr(const Expr* E, std::set<ValueHolder> callrefs,
 		std::set<DbJSONClassVisitor::LiteralHolder> literalRefs, const QualType* baseType, const CallExpr* CE) {
 
 	/* We've come here when there was a call expression that expands into StmtExpr,
@@ -623,17 +628,19 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 					nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
 					lastFunctionDef->funcinfo.insert(nfo);
 					/* If we used '*' operator on direct function name place it into the derefs array */
-					VarRef_t VR;
-					std::vector<VarRef_t> vVR;
-					VarRef_t CEVR;
 					const UnaryOperator* UO = lookForUnaryOperatorInCallExpr(CE);
 					if (UO) {
-						VR.VDCAMUAS.setUnary(UO);
+						ExprRef_t VR;
+						VR.setUnary(UO);
+
+						std::vector<ExprRef_t> vVR;
 						vVR.push_back(VR);
-						CEVR.VDCAMUAS.setCall(CE);
+
+						ExprRef_t CEVR;
+						CEVR.setCall(CE);
 						if (lastFunctionDef) {
 							std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
+									lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,{},0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo.ord);
 							const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 								[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
@@ -648,32 +655,32 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 			const VarDecl* VD = static_cast<const VarDecl*>(v);
 			const DbJSONClassVisitor::callfunc_info_t* nfo = handleCallVarDecl(VD,DRE,callrefs,literalRefs, baseType, CE);
 			if (nfo) {
-				VarRef_t VR;
-				std::vector<VarRef_t> vVR;
-				VarRef_t CEVR;
+				ExprRef_t VR;
+				std::vector<ExprRef_t> vVR;
+				ExprRef_t CEVR;
 				const UnaryOperator* UO = lookForUnaryOperatorInCallExpr(CE);
 				if (UO) {
-					VR.VDCAMUAS.setUnary(UO);
+					VR.setUnary(UO);
 					vVR.push_back(VR);
-					CEVR.VDCAMUAS.setRefCall(CE,UO);
+					CEVR.setRefCall(CE,UO);
 				}
 				else {
 					const ArraySubscriptExpr* ASE = lookForArraySubscriptExprInCallExpr(CE);
 					if (ASE) {
-						VR.VDCAMUAS.setAS(ASE);
+						VR.setAS(ASE);
 						vVR.push_back(VR);
-						CEVR.VDCAMUAS.setRefCall(CE,ASE);
+						CEVR.setRefCall(CE,ASE);
 					}
 					else {
-						VR.VDCAMUAS.setValue(VD);
+						VR.setValue(VD);
 						vVR.push_back(VR);
-						CEVR.VDCAMUAS.setRefCall(CE,VD);
+						CEVR.setRefCall(CE,VD);
 					}
 				}
 
 				if (lastFunctionDef) {
 					std::pair<std::set<DereferenceInfo_t>::iterator,bool> rv =
-							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
+							lastFunctionDef->derefList.insert(DereferenceInfo_t(CEVR,{},0,vVR,"",getCurrentCSPtr(),DereferenceFunction));
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->addOrd(nfo->ord);
 					const_cast<DbJSONClassVisitor::DereferenceInfo_t*>(&(*rv.first))->evalExprInner =
 						[CE,this](const DereferenceInfo_t *d){ evalExpr(CE, d); };
@@ -1169,61 +1176,35 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 
   }
 
-  bool DbJSONClassVisitor::VR_referenced(VarRef_t& VR, std::set<const MemberExpr*>& MERef, std::set<const UnaryOperator*>& UnaryRef,
-  		std::set<const ArraySubscriptExpr*>& ASRef, std::set<const BinaryOperator*>& CAORef, std::set<const BinaryOperator*>& LogicRef,
-		std::set<const OffsetOfExpr*>& OOERef) {
-
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary) {
-		  return UnaryRef.find(VR.VDCAMUAS.getUnary())!=UnaryRef.end();
+  bool DbJSONClassVisitor::VR_referenced(ExprRef_t& VR, std::unordered_set<const Expr*> DExpRef) {
+	  if (VR.isRefKind()) {
+		  return DExpRef.find(VR.getExpr()) != DExpRef.end();
 	  }
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS) {
-		  return ASRef.find(VR.VDCAMUAS.getAS())!=ASRef.end();
-	  }
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr) {
-		  return MERef.find(VR.VDCAMUAS.getME().first)!=MERef.end();
-	  }
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO) {
-		  return CAORef.find(VR.VDCAMUAS.getCAO())!=CAORef.end();
-	  }
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
-		  return LogicRef.find(VR.VDCAMUAS.getLogic())!=LogicRef.end();
-	  }
-	  if (VR.VDCAMUAS.getKind()==
-			  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
-		  return OOERef.find(VR.VDCAMUAS.getOOE())!=OOERef.end();
-	  }
-
 	  return false;
   }
 
-  bool DbJSONClassVisitor::varInfoForVarRef(FuncData &func_data, VarRef_t VR,  struct refvarinfo_t& refvar,
-		  std::map<const CallExpr*,unsigned long>& CEIdxMap,std::map<const MemberExpr*,unsigned>& MEIdxMap,
-		  std::map<const UnaryOperator*,unsigned>& UnaryIdxMap, std::map<const ArraySubscriptExpr*,unsigned>& ASIdxMap,
-		  std::map<const ValueDecl*,unsigned>& VDIdxMap, std::map<const BinaryOperator*,unsigned>& CAOIdxMap,
-		  std::map<const BinaryOperator*,unsigned>& LogicIdxMap, std::map<const OffsetOfExpr*,unsigned>& OOEIdxMap) {
+  bool DbJSONClassVisitor::varInfoForVarRef(FuncData &func_data, ExprRef_t VR,  struct refvarinfo_t& refvar,
+		std::map<const CallExpr*,unsigned long>& CEIdxMap, std::unordered_map<const Expr*,unsigned> DExpIdxMap,
+		std::unordered_map<const ValueDecl*,unsigned> DValIdxMap) {
+
 
 	long valueCastId = -1;
-	CStyleCastOrType valuecast = VR.VDCAMUAS.getValueCast();
+	CStyleCastOrType valuecast = VR.getValueCast();
 	if (valuecast.isValid()) {
 		valueCastId = getTypeData(valuecast.getFinalType()).id;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindNone) return false;
+	if (VR.getKind()==ExprRef_t::ExprRefKindNone) return false;
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindValue) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindValue) {
 
-	  if (VR.VDCAMUAS.getValue()->getKind()==Decl::Var) {
-		const VarDecl* VrD = static_cast<const VarDecl*>(VR.VDCAMUAS.getValue());
+	  if (VR.getValue()->getKind()==Decl::Var) {
+		const VarDecl* VrD = static_cast<const VarDecl*>(VR.getValue());
 
 		  if (VrD->isDefinedOutsideFunctionOrMethod()) {
 			  if (!VrD->isStaticDataMember()) {
 				  if (getVarMap().find(VarForMap(VrD))!=getVarMap().end()) {
-					  refvar.set(getVarData(VrD).id,refvarinfo_t::CALLVAR_GLOBAL,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+					  refvar.set(getVarData(VrD).id,refvarinfo_t::CALLVAR_GLOBAL,VR.getMeIdx(),0,valueCastId);
 				  }
 				  else {
 					  if (opts.exit_on_error) {
@@ -1232,14 +1213,14 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 						  exit(EXIT_FAILURE);
 					  }
 					  else {
-						  refvar.set(-1,refvarinfo_t::CALLVAR_GLOBAL,VR.VDCAMUAS.getMeIdx());
+						  refvar.set(-1,refvarinfo_t::CALLVAR_GLOBAL,VR.getMeIdx());
 					  }
 				  }
 				}
 		  }
 		  else {
 			  if (func_data.varMap.find(VrD)!=func_data.varMap.end()) {
-				  refvar.set(func_data.varMap[VrD].varId,refvarinfo_t::CALLVAR_LOCAL,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+				  refvar.set(func_data.varMap[VrD].varId,refvarinfo_t::CALLVAR_LOCAL,VR.getMeIdx(),0,valueCastId);
 			  }
 			  else {
 				  if (opts.exit_on_error) {
@@ -1248,15 +1229,15 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  exit(EXIT_FAILURE);
 				  }
 				  else {
-					  refvar.set(-1,refvarinfo_t::CALLVAR_LOCAL,VR.VDCAMUAS.getMeIdx());
+					  refvar.set(-1,refvarinfo_t::CALLVAR_LOCAL,VR.getMeIdx());
 				  }
 			  }
 		  }
 	  }
-	  else if (VR.VDCAMUAS.getValue()->getKind()==Decl::ParmVar) {
-		  const ParmVarDecl* PVrD = static_cast<const ParmVarDecl*>(VR.VDCAMUAS.getValue());
+	  else if (VR.getValue()->getKind()==Decl::ParmVar) {
+		  const ParmVarDecl* PVrD = static_cast<const ParmVarDecl*>(VR.getValue());
 		  if (func_data.varMap.find(PVrD)!=func_data.varMap.end()) {
-			  refvar.set(func_data.varMap[PVrD].varId,refvarinfo_t::CALLVAR_LOCALPARM,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+			  refvar.set(func_data.varMap[PVrD].varId,refvarinfo_t::CALLVAR_LOCALPARM,VR.getMeIdx(),0,valueCastId);
 		  }
 		  else {
 			  if (opts.exit_on_error) {
@@ -1265,18 +1246,18 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  exit(EXIT_FAILURE);
 			  }
 			  else {
-				  refvar.set(-1,refvarinfo_t::CALLVAR_LOCAL,VR.VDCAMUAS.getMeIdx());
+				  refvar.set(-1,refvarinfo_t::CALLVAR_LOCAL,VR.getMeIdx());
 			  }
 		  }
 	  }
-	  else if (VR.VDCAMUAS.getValue()->getKind()==Decl::Function) {
-		  const FunctionDecl* FD = static_cast<const FunctionDecl*>(VR.VDCAMUAS.getValue());
-		  refvar.set(getFunctionDeclId(FD),refvarinfo_t::CALLVAR_FUNCTION,VR.VDCAMUAS.getMeIdx());
+	  else if (VR.getValue()->getKind()==Decl::Function) {
+		  const FunctionDecl* FD = static_cast<const FunctionDecl*>(VR.getValue());
+		  refvar.set(getFunctionDeclId(FD),refvarinfo_t::CALLVAR_FUNCTION,VR.getMeIdx());
 	  }
 	  else {
 		  if (opts.exit_on_error) {
 			  llvm::errs() << "\nERROR: Invalid VarRef parameter for dereference:\n";
-			  VR.VDCAMUAS.getValue()->dump(llvm::errs());
+			  VR.getValue()->dump(llvm::errs());
 			  exit(EXIT_FAILURE);
 		  }
 		  else {
@@ -1287,189 +1268,143 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAddress) {
-		int64_t addr = VR.VDCAMUAS.getAddress();
-		refvar.set(addr,refvarinfo_t::CALLVAR_ADDRESS,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+	if (VR.getKind()==ExprRef_t::ExprRefKindAddress) {
+		int64_t addr = VR.getAddress();
+		refvar.set(addr,refvarinfo_t::CALLVAR_ADDRESS,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindInteger) {
-		int64_t addr = VR.VDCAMUAS.getInteger();
-		refvar.set(addr,refvarinfo_t::CALLVAR_INTEGER,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+	if (VR.getKind()==ExprRef_t::ExprRefKindInteger) {
+		int64_t addr = VR.getInteger();
+		refvar.set(addr,refvarinfo_t::CALLVAR_INTEGER,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindFloating) {
-		double fp = VR.VDCAMUAS.getFloating();
-		refvar.setFp(-1,refvarinfo_t::CALLVAR_FLOATING,VR.VDCAMUAS.getMeIdx(),0,valueCastId,fp);
+	if (VR.getKind()==ExprRef_t::ExprRefKindFloating) {
+		double fp = VR.getFloating();
+		refvar.setFp(-1,refvarinfo_t::CALLVAR_FLOATING,VR.getMeIdx(),0,valueCastId,fp);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindString) {
-		std::string s = VR.VDCAMUAS.getString();
-		refvar.setString(-1,refvarinfo_t::CALLVAR_STRING,VR.VDCAMUAS.getMeIdx(),0,valueCastId,s);
+	if (VR.getKind()==ExprRef_t::ExprRefKindString) {
+		std::string s = VR.getString();
+		refvar.setString(-1,refvarinfo_t::CALLVAR_STRING,VR.getMeIdx(),0,valueCastId,s);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr) {
-		std::pair<const MemberExpr*,QualType> ME = VR.VDCAMUAS.getME();
-		if (MEIdxMap.find(ME.first)==MEIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindMemberExpr) {
+		const MemberExpr* ME = VR.getME();
+		if (DExpIdxMap.find(ME)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing MemberExpr in Index Map\n";
-			ME.first->dumpColor();
+			ME->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(MEIdxMap[ME.first],refvarinfo_t::CALLVAR_MEMBER,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[ME],refvarinfo_t::CALLVAR_MEMBER,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary) {
-		const UnaryOperator* UO = VR.VDCAMUAS.getUnary();
-		if (UnaryIdxMap.find(UO)==UnaryIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindUnary) {
+		const UnaryOperator* UO = VR.getUnary();
+		if (DExpIdxMap.find(UO)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing UnaryOperator in Index Map\n";
 			UO->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(UnaryIdxMap[UO],refvarinfo_t::CALLVAR_UNARY,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[UO],refvarinfo_t::CALLVAR_UNARY,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS) {
-		const ArraySubscriptExpr* AS = VR.VDCAMUAS.getAS();
-		if (ASIdxMap.find(AS)==ASIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindAS) {
+		const ArraySubscriptExpr* AS = VR.getAS();
+		if (DExpIdxMap.find(AS)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing ArraySubscriptExpr in Index Map\n";
 			AS->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(ASIdxMap[AS],refvarinfo_t::CALLVAR_ARRAY,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[AS],refvarinfo_t::CALLVAR_ARRAY,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO) {
-		const BinaryOperator* CAO = VR.VDCAMUAS.getCAO();
-		if (CAOIdxMap.find(CAO)==CAOIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindCAO) {
+		const BinaryOperator* CAO = VR.getCAO();
+		if (DExpIdxMap.find(CAO)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing BinaryOperator in Index Map\n";
 			CAO->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(CAOIdxMap[CAO],refvarinfo_t::CALLVAR_ASSIGN,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[CAO],refvarinfo_t::CALLVAR_ASSIGN,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 	
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
-		const BinaryOperator* CAO = VR.VDCAMUAS.getLogic();
-		if (LogicIdxMap.find(CAO)==LogicIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindLogic) {
+		const BinaryOperator* CAO = VR.getLogic();
+		if (DExpIdxMap.find(CAO)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing logic BinaryOperator in Index Map\n";
 			CAO->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(LogicIdxMap[CAO],refvarinfo_t::CALLVAR_LOGIC,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[CAO],refvarinfo_t::CALLVAR_LOGIC,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
-		const OffsetOfExpr* OOE= VR.VDCAMUAS.getOOE();
-		if (OOEIdxMap.find(OOE)==OOEIdxMap.end()) {
+	if (VR.getKind()==ExprRef_t::ExprRefKindOOE) {
+		const OffsetOfExpr* OOE= VR.getOOE();
+		if (DExpIdxMap.find(OOE)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing OffsetOfExpr in Index Map\n";
 			OOE->dumpColor();
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
 		}
-		refvar.set(OOEIdxMap[OOE],refvarinfo_t::CALLVAR_OFFSETOF,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+		refvar.set(DExpIdxMap[OOE],refvarinfo_t::CALLVAR_OFFSETOF,VR.getMeIdx(),0,valueCastId);
 		return true;
 	}
 
 	/* We must have ValueDeclOrCallExprOrAddress::ValueDeclOrCallExprOrAddressKind(Ref)Call */
-	const CallExpr* CE = VR.VDCAMUAS.getCall();
+	const CallExpr* CE = VR.getCall();
 	if (CEIdxMap.find(CE)==CEIdxMap.end()) return false;
 
-	if (VR.VDCAMUAS.getKind()==ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCall) {
-		refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_CALLREF,VR.VDCAMUAS.getMeIdx(),0,valueCastId);
+	if (VR.getKind()==ExprRef_t::ExprRefKindCall) {
+		refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_CALLREF,VR.getMeIdx(),0,valueCastId);
 	}
+	// refcall
 	else {
-		const UnaryOperator* UO = VR.VDCAMUAS.getUnary();
-		if (UO) {
-			if (UnaryIdxMap.find(UO)==UnaryIdxMap.end()) {
-				llvm::errs() << "Missing UnaryOperator in Index Map\n";
-				UO->dumpColor();
+		const Expr *E = VR.getExpr();
+		const ValueDecl *D = VR.getValue();
+		if(E){
+			if (DExpIdxMap.find(E)==DExpIdxMap.end()) {
+				llvm::errs() << "Missing Expr in Index Map\n";
+				E->dumpColor();
 				llvm::errs() << "@FunctionDecl:\n";
 				func_data.this_func->dumpColor();
 				assert(0);
 			}
-			refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),UnaryIdxMap[UO],valueCastId);
+			refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.getMeIdx(),DExpIdxMap[E],valueCastId);
+		}
+		else if(D){
+			if (DValIdxMap.find(D)==DValIdxMap.end()) {
+				llvm::errs() << "Missing Expr in Index Map\n";
+				E->dumpColor();
+				llvm::errs() << "@FunctionDecl:\n";
+				func_data.this_func->dumpColor();
+				assert(0);
+			}
+			refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.getMeIdx(),DValIdxMap[D],valueCastId);
 		}
 		else {
-			const ArraySubscriptExpr* AS = VR.VDCAMUAS.getAS();
-			if (AS) {
-				if (ASIdxMap.find(AS)==ASIdxMap.end()) {
-					llvm::errs() << "Missing ArraySubscriptExpr in Index Map\n";
-					AS->dumpColor();
-					llvm::errs() << "@FunctionDecl:\n";
-					func_data.this_func->dumpColor();
-					assert(0);
-				}
-				refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),ASIdxMap[AS],valueCastId);
-			}
-			else {
-				const BinaryOperator* CAO = VR.VDCAMUAS.getCAO();
-				if (CAO) {
-					if (CAOIdxMap.find(CAO)!=CAOIdxMap.end()){
-						refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),CAOIdxMap[CAO],valueCastId);
-					}
-					else if(LogicIdxMap.find(CAO) != LogicIdxMap.end()){
-						refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),LogicIdxMap[CAO],valueCastId);
-					}
-					else{
-						llvm::errs() << "Missing CompoundAssigOperator or logic BinaryOperator in Index Map\n";
-						CAO->dumpColor();
-						llvm::errs() << "@FunctionDecl:\n";
-						func_data.this_func->dumpColor();
-						assert(0);
-					}
-				}
-				else {
-					/* Formality? As we almost surely cannot get here */
-					const OffsetOfExpr* OOE = VR.VDCAMUAS.getOOE();
-					if (OOE) {
-						if (OOEIdxMap.find(OOE)==OOEIdxMap.end()) {
-							llvm::errs() << "Missing OffsetOfExpr in Index Map\n";
-							OOE->dumpColor();
-							llvm::errs() << "@FunctionDecl:\n";
-							func_data.this_func->dumpColor();
-							assert(0);
-						}
-						refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),OOEIdxMap[OOE],valueCastId);
-					}
-					else {
-						const ValueDecl* VD = VR.VDCAMUAS.getValue();
-						if (VD) {
-							if (VDIdxMap.find(VD)==VDIdxMap.end()) {
-								llvm::errs() << "Missing ValueDecl in Index Map\n";
-								VD->dumpColor();
-								llvm::errs() << "@FunctionDecl:\n";
-								func_data.this_func->dumpColor();
-								assert(0);
-							}
-							refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_REFCALLREF,VR.VDCAMUAS.getMeIdx(),VDIdxMap[VD],valueCastId);
-						}
-						else {
-							/* This must be a refcall through address */
-							int64_t address = VR.VDCAMUAS.getAddress();
-							refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_ADDRCALLREF,VR.VDCAMUAS.getMeIdx(),address,valueCastId);
-						}
-					}
-				}
-			}
+			/* This must be a refcall through address */
+			int64_t address = VR.getAddress();
+			refvar.set(CEIdxMap[CE],refvarinfo_t::CALLVAR_ADDRCALLREF,VR.getMeIdx(),address,valueCastId);
 		}
 	}
 
@@ -1808,83 +1743,32 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  std::stringstream derefs;
 		  derefs << Indent << "\t\t\"derefs\": [";
 		  bool deref_first = true;
-		  std::map<const MemberExpr*,unsigned> MEIdxMap;
-		  std::map<const UnaryOperator*,unsigned> UnaryIdxMap;
-		  std::map<const ArraySubscriptExpr*,unsigned> ASIdxMap;
-		  std::map<const ValueDecl*,unsigned> VDIdxMap;
-		  std::map<const BinaryOperator*,unsigned> CAOIdxMap;
-		  std::map<const BinaryOperator*,unsigned> LogicIdxMap;
-		  std::map<const OffsetOfExpr*,unsigned> OOEIdxMap;
-		  /* Keep dereference information entries in predefined order */
-		  std::vector<DbJSONClassVisitor::DereferenceInfo_t> derefList(func_data.derefList.begin(),func_data.derefList.end());
-		  for (auto u = derefList.begin(); u!=derefList.end(); ++u) {
-			  DbJSONClassVisitor::DereferenceInfo_t DI = *u;
-			  if (DI.Kind==DbJSONClassVisitor::DereferenceMember) {
-				  MEIdxMap.insert(std::pair<const MemberExpr*,unsigned>(DI.VR.VDCAMUAS.getME().first,std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceUnary) {
-				  UnaryIdxMap.insert(std::pair<const UnaryOperator*,unsigned>(DI.VR.VDCAMUAS.getUnary(),std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceArray) {
-				  ASIdxMap.insert(std::pair<const ArraySubscriptExpr*,unsigned>(DI.VR.VDCAMUAS.getAS(),std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceFunction) {
-				  VDIdxMap.insert(std::pair<const ValueDecl*,unsigned>(DI.VR.VDCAMUAS.getValue(),std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceAssign) {
-				  CAOIdxMap.insert(std::pair<const BinaryOperator*,unsigned>(DI.VR.VDCAMUAS.getCAO(),std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceLogic) {
-				  LogicIdxMap.insert(std::pair<const BinaryOperator*,unsigned>(DI.VR.VDCAMUAS.getLogic(),std::distance(derefList.begin(),u)));
-			  }
-			  else if (DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf) {
-				  OOEIdxMap.insert(std::pair<const OffsetOfExpr*,unsigned>(DI.VR.VDCAMUAS.getOOE(),std::distance(derefList.begin(),u)));
-			  }
-		  }
+
 		  /* Find out which entries are referenced by other entries */
-		  std::set<const MemberExpr*> MERef;
-		  std::set<const UnaryOperator*> UnaryRef;
-		  std::set<const ArraySubscriptExpr*> ASRef;
-		  std::set<const BinaryOperator*> CAORef;
-		  std::set<const BinaryOperator*> LogicRef;
-		  std::set<const OffsetOfExpr*> OOERef;
-		  for (auto u = derefList.begin(); u!=derefList.end(); ++u) {
+		  std::unordered_map<const Expr*,unsigned> DExpIdxMap;
+		  std::unordered_map<const ValueDecl*,unsigned> DValIdxMap;
+		  std::unordered_set<const Expr*> DExpRef;
+
+		  int deref_id = 0;
+		  for (auto u = func_data.derefList.begin(); u!=func_data.derefList.end(); ++u) {
 			  DbJSONClassVisitor::DereferenceInfo_t DI = *u;
-			  std::vector<DbJSONClassVisitor::VarRef_t>& vVR = DI.vVR;
-			  for (size_t x=0; x<vVR.size(); ++x) {
-				  DbJSONClassVisitor::VarRef_t iVR = vVR[x];
-				  if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-						  ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindMemberExpr) {
-						std::pair<const MemberExpr*,QualType> ME = iVR.VDCAMUAS.getME();
-						MERef.insert(ME.first);
-					}
-					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindUnary) {
-						const UnaryOperator* UO = iVR.VDCAMUAS.getUnary();
-						UnaryRef.insert(UO);
-					}
-					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindAS) {
-						const ArraySubscriptExpr* AS = iVR.VDCAMUAS.getAS();
-						ASRef.insert(AS);
-					}
-					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindCAO) {
-						const BinaryOperator* CAO = iVR.VDCAMUAS.getCAO();
-						CAORef.insert(CAO);
-					}
-					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindLogic) {
-						const BinaryOperator* CAO = iVR.VDCAMUAS.getLogic();
-						LogicRef.insert(CAO);
-					}
-					if (iVR.VDCAMUAS.getKind()==DbJSONClassVisitor::ValueDeclOrCallExprOrAddressOrMEOrUnaryOrAS::
-							ValueDeclOrCallExprOrAddressOrMEOrUnaryOrASKindOOE) {
-						const OffsetOfExpr* OOE = iVR.VDCAMUAS.getOOE();
-						OOERef.insert(OOE);
-					}
+			  assert(!(DI.VR.expr && DI.VR.value));
+
+			  if(!DI.VR.call && DI.VR.expr && DI.Kind < DbJSONClassVisitor::DereferenceExternal){
+				DExpIdxMap.insert({DI.VR.expr, deref_id});
 			  }
+			  if(DI.Kind == DbJSONClassVisitor::DereferenceFunction) {
+				DValIdxMap.insert({DI.VR.value,deref_id});
+			  }
+			  for(auto &x : DI.vVR){
+				const Expr *E = x.getExpr();
+				if(E && x.kind < DbJSONClassVisitor::ExprRef_t::External){
+					DExpRef.insert(E);
+				}
+			  }
+			  deref_id++;
 		  }
+
 		  /* Now print dereference entries */
 		  typedef std::tuple<std::string,std::string,std::string,std::string,std::vector<unsigned>,std::vector<size_t>> deref_entry_t;
 		  std::map<std::string,size_t> deref_set;
@@ -1901,15 +1785,13 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  std::vector<size_t> ords;
 			  DbJSONClassVisitor::DereferenceInfo_t DI = *u;
 			  int64_t offset = DI.i;
-			  std::vector<DbJSONClassVisitor::VarRef_t>& vVR = DI.vVR;
 			  long csid = func_data.csIdMap[DI.CSPtr];
 			  if ((DI.Kind==DbJSONClassVisitor::DereferenceMember)||(DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf)) {
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceMember) {
-					  DbJSONClassVisitor::VarRef_t& VR = DI.VR;
-					  if (VR.MemberExprList.size()<=0) {
+					  if (DI.MInfoList.size()<=0) {
 					  	llvm::errs() << "Invalid size for member expression list:\n";
 					  	llvm::errs() << DI.Expr << "\n";
-					  	VR.VDCAMUAS.getME().first->dumpColor();
+					  	DI.VR.getME()->dumpColor();
 					  	llvm::errs() << "Function: " << func_data.this_func->getName().str() << "\n";
 					  	assert(0);
 					  }
@@ -1918,88 +1800,63 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  }
 					  else deref_intro << ",\n";
 					  deref_core << Indent << "\t\t\t{\n";
-					  deref_core << Indent << "\t\t\t\t\"member\" : [ ";
-					  size_t x=VR.MemberExprList.size()-1;
-					  while (true) {
-						  if (x<VR.MemberExprList.size()-1) deref_core << ",";
-						  deref_core << VR.MemberExprList[x].first;
-						  if (x<=0) break;
-						  --x;
-					  }
-					  deref_core << " ],\n";
 
-					  deref_core << Indent << "\t\t\t\t\"type\" : [ ";
-					  x=VR.MECastList.size()-1;
-					  while (true) {
-						  if (x<VR.MECastList.size()-1) deref_core << ",";
-						  QualType TC = VR.MECastList[x];
-						  //TODO: temporary fix
-						  // for -> dereference TC is pointer to struct type
-						  // which sometimes is not added to type database
-						  // TC should never be a pointer (unless decided otherwise)
-						  // fix in place where type is added to deref data
-						  if(TC->isPointerType()) TC = TC->getPointeeType();
-						  deref_core << Visitor.getTypeData(TC).id;
-						  if (x<=0) break;
-						  --x;
-					  }
-					  deref_core << " ],\n";
+					  std::stringstream deref_member;
+					  deref_member << Indent << "\t\t\t\t\"member\" : [ ";
+					  std::stringstream deref_type;
+					  deref_type << Indent << "\t\t\t\t\"type\" : [ ";
+					  std::stringstream deref_access;
+					  deref_access << Indent << "\t\t\t\t\"access\" : [ ";
+					  std::stringstream deref_shift;
+					  deref_shift << Indent << "\t\t\t\t\"shift\" : [ ";
+					  std::stringstream deref_mcall;
+					  deref_mcall << Indent << "\t\t\t\t\"mcall\" : [ ";
+					  bool hasMCall = false;
 
-					  deref_core << Indent << "\t\t\t\t\"access\" : [ ";
-					  x=VR.MemberExprList.size()-1;
-					  while (true) {
-						  if (x<VR.MemberExprList.size()-1) deref_core << ",";
-						  deref_core << VR.MemberExprList[x].second;
-						  if (x<=0) break;
-						  --x;
+					  for(auto x = DI.MInfoList.rbegin(); x!=DI.MInfoList.rend();x++){
+						// member
+						deref_member << Visitor.fieldToIndex(static_cast<const MemberExpr*>(x->ME)) << ',';
+						// type
+						// TODO: consider fixing this when collecting data
+						QualType TC = x->T;
+						if(TC->isPointerType()) TC = TC->getPointeeType();
+						deref_type << Visitor.getTypeData(TC).id << ',';
+						// access
+						deref_access << static_cast<const MemberExpr*>(x->ME)->isArrow() << ',';
+						// shift
+						deref_shift << x->offset << ',';
+						// mcall
+						if(x->Call !=0){
+							hasMCall = true;
+							if (CEIdxMap.find(x->Call)==CEIdxMap.end()) {
+								llvm::errs() << "Missing Call Expression in Index Map\n";
+								x->Call->dumpColor();
+								assert(0);
+							}
+							deref_mcall << CEIdxMap.at(x->Call)<<',';
+						}
+						else{
+							deref_mcall << "-1,";
+						}
 					  }
-					  deref_core << " ],\n";
-
-					  deref_core << Indent << "\t\t\t\t\"shift\" : [ ";
-					  x=VR.OffsetList.size()-1;
-					  while (true) {
-						  if (x<VR.OffsetList.size()-1) deref_core << ",";
-						  deref_core << VR.OffsetList[x];
-						  if (x<=0) break;
-						  --x;
-					  }
-					  deref_core << " ],\n";
-
-					  bool haveMCall = false;
-					  for (x=0; x<VR.MCallList.size(); ++x) {
-						  if (VR.MCallList[x]!=0) {
-							  haveMCall = true;
-							  break;
-						  }
-					  }
-					  if (haveMCall) {
-						  deref_core << Indent << "\t\t\t\t\"mcall\" : [ ";
-						  x=VR.MCallList.size()-1;
-						  while (true) {
-							  if (x<VR.MCallList.size()-1) deref_core << ",";
-							  if (VR.MCallList[x]) {
-								  if (CEIdxMap.find(VR.MCallList[x])==CEIdxMap.end()) {
-									  llvm::errs() << "Missing Call Expression in Index Map\n";
-									  VR.MCallList[x]->dumpColor();
-									  assert(0);
-								  }
-								  deref_core << CEIdxMap[VR.MCallList[x]];
-							  }
-							  else {
-								  deref_core << "-1";
-							  }
-							  if (x<=0) break;
-							  --x;
-						  }
-						  deref_core << " ],\n";
+					  deref_member.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_member.str()<<",\n";
+					  deref_type.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_type.str()<<",\n";
+					  deref_access.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_access.str()<<",\n";
+					  deref_shift.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_shift.str()<<",\n";
+					  if(hasMCall){
+					  	deref_member.seekp(-1,std::ios_base::cur)<<" ]";
+					  	deref_core << deref_member.str()<<",\n";
 					  }
 				  }
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf) {
-					  DbJSONClassVisitor::VarRef_t& VR = DI.VR;
-					  if (VR.MemberExprList.size()<=0) {
+					  if (DI.MInfoList.size()<=0) {
 					  	llvm::errs() << "Invalid size for field access list:\n";
 					  	llvm::errs() << DI.Expr << "\n";
-					  	VR.VDCAMUAS.getOOE()->dumpColor();
+					  	DI.VR.getOOE()->dumpColor();
 					  	llvm::errs() << "Function: " << func_data.this_func->getName().str() << "\n";
 					  	assert(0);
 					  }
@@ -2008,30 +1865,21 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  }
 					  else deref_intro << ",\n";
 					  deref_core << Indent << "\t\t\t{\n";
-					  deref_core << Indent << "\t\t\t\t\"member\" : [ ";
 
-					  for (auto x=VR.MemberExprList.begin(); x!=VR.MemberExprList.end(); ++x) {
-					  	  if (x!=VR.MemberExprList.begin()) deref_core << ",";
-					  	  if ((*x).second==DbJSONClassVisitor::MemberExprKindInvalid) {
-					  	  	deref_core << "-1";
-					  	  }
-					  	  else {
-					  	  	deref_core << (*x).first;
-					  	  }
+					  std::stringstream deref_member;
+					  deref_member << Indent << "\t\t\t\t\"member\" : [ ";
+					  std::stringstream deref_type;
+					  deref_type << Indent << "\t\t\t\t\"type\" : [ ";
+					  for(auto x = DI.MInfoList.begin(); x != DI.MInfoList.end(); x++){
+						// member
+						deref_member << (x->ME? Visitor.fieldToIndex(static_cast<const FieldDecl*>(x->ME)) : -1) <<',';
+						// type
+						deref_type << Visitor.getTypeData(x->T).id << ',';
 					  }
-					  deref_core << " ],\n";
-					  deref_core << Indent << "\t\t\t\t\"type\" : [ ";
-					  for (auto x=VR.MECastList.begin(); x!=VR.MECastList.end(); ++x) {
-					  	  if (x!=VR.MECastList.begin()) deref_core << ",";
-						  if (!(*x).isNull()) {
-							  QualType TC = *x;
-							  deref_core << Visitor.getTypeData(TC).id;
-						  }
-						  else {
-						  	  deref_core << "-1";
-						  }
-					  }
-					  deref_core << " ],\n";
+					  deref_member.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_member.str()<<",\n";
+					  deref_type.seekp(-1,std::ios_base::cur)<<" ]";
+					  deref_core << deref_type.str()<<",\n";
 				  }
 			  }
 			  else {
@@ -2047,13 +1895,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  deref_core << Indent << "\t\t\t\t\"kind\" : \"" << DI.KindString() << "\",\n";
 			  if ((DI.Kind!=DbJSONClassVisitor::DereferenceMember)&&(DI.Kind!=DbJSONClassVisitor::DereferenceReturn)) {
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceFunction) {
-					  DbJSONClassVisitor::VarRef_t& CEVR = DI.VR;
-					  if (CEIdxMap.find(CEVR.VDCAMUAS.getCall())==CEIdxMap.end()) {
+					  if (CEIdxMap.find(DI.VR.getCall())==CEIdxMap.end()) {
 						  llvm::errs() << "Missing Call Expression in Index Map\n";
-						  CEVR.VDCAMUAS.getCall()->dumpColor();
+						  DI.VR.getCall()->dumpColor();
 						  assert(0);
 					  }
-					  deref_core << Indent << "\t\t\t\t\"offset\" : " << CEIdxMap[CEVR.VDCAMUAS.getCall()] << ",\n";
+					  deref_core << Indent << "\t\t\t\t\"offset\" : " << CEIdxMap[DI.VR.getCall()] << ",\n";
 				  }
 				  else if(DI.Kind==DbJSONClassVisitor::DereferenceCond){
 					  auto CS = func_data.cfData[offset].CS;
@@ -2071,10 +1918,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  bool ideref_first = true;
 			  std::stringstream deref_core_subst;
 			  deref_core_subst << deref_core.str();
-			  for (size_t x=0; x<vVR.size(); ++x) {
-				  DbJSONClassVisitor::VarRef_t iVR = vVR[x];
+			  for(auto &iVR : DI.vVR){
 				  DbJSONClassVisitor::refvarinfo_t irefvar;
-				  if (Visitor.varInfoForVarRef(func_data,iVR,irefvar,CEIdxMap,MEIdxMap,UnaryIdxMap,ASIdxMap,VDIdxMap,CAOIdxMap,LogicIdxMap,OOEIdxMap)) {
+				  if (Visitor.varInfoForVarRef(func_data,iVR,irefvar,CEIdxMap,DExpIdxMap,DValIdxMap)) {
 					  if (ideref_first) {
 					  	deref_core << "\n";
 					  	deref_core_subst << "\n";
@@ -2102,8 +1948,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  if ((DI.Kind==DbJSONClassVisitor::DereferenceMember)||(DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf)) {
 						  deref_core << ",\n";
 						  deref_core_subst << ",\n";
-						  deref_core << Indent << "\t\t\t\t\t\t\"mi\" : " << DI.VR.VDCAMUAS.getMeCnt()-irefvar.mi;
-						  deref_core_subst << Indent << "\t\t\t\t\t\t\"mi\" : " << DI.VR.VDCAMUAS.getMeCnt()-irefvar.mi;
+						  deref_core << Indent << "\t\t\t\t\t\t\"mi\" : " << DI.VR.getMeCnt()-irefvar.mi;
+						  deref_core_subst << Indent << "\t\t\t\t\t\t\"mi\" : " << DI.VR.getMeCnt()-irefvar.mi;
 					  }
 					  if ((irefvar.getType()==DbJSONClassVisitor::refvarinfo_t::CALLVAR_REFCALLREF)||
 							  (irefvar.getType()==DbJSONClassVisitor::refvarinfo_t::CALLVAR_ADDRCALLREF)){
@@ -2136,12 +1982,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			   *  even though it is the same as other entry encountered before
 			   *  TODO: make proper deduplication with proper link resolution
 			   */
-			  if ((deref_set.find(deref_core_subst.str())==deref_set.end())||(Visitor.VR_referenced(DI.VR,MERef,UnaryRef,ASRef,CAORef,LogicRef,OOERef))) {
+			  if ((deref_set.find(deref_core_subst.str())==deref_set.end())||(Visitor.VR_referenced(DI.VR,DExpRef))) {
 				  deref_entry_t dentry(deref_intro.str(),deref_core.str(),deref_expr.str(),Indent+"\t\t\t}",offrefids,ords);
 				  deref_entries.push_back(dentry);
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceParm) {
-					  parmIndexMap.insert(std::pair<const class Expr*,size_t>(DI.VR.VDCAMUAS.getParm(),deref_entries.size()-1));
-					  parmReprMap.insert(std::pair<std::string,const class Expr*>(deref_core_subst.str(),DI.VR.VDCAMUAS.getParm()));
+					  parmIndexMap.insert(std::pair<const class Expr*,size_t>(DI.VR.getParm(),deref_entries.size()-1));
+					  parmReprMap.insert(std::pair<std::string,const class Expr*>(deref_core_subst.str(),DI.VR.getParm()));
 				  }
 				  deref_set.insert(std::pair<std::string,size_t>(deref_core_subst.str(),deref_entries.size()-1));
 				  deref_first = false;
@@ -2166,7 +2012,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 							exit(2);
 						}
 						const class Expr* uExpr = parmReprMap[deref_core_subst.str()];
-						parmIndexMap.insert(std::pair<const class Expr*,size_t>(DI.VR.VDCAMUAS.getParm(),parmIndexMap[uExpr]));
+						parmIndexMap.insert(std::pair<const class Expr*,size_t>(DI.VR.getParm(),parmIndexMap[uExpr]));
 					}
 				}
 			  	rmCount+=1;
@@ -4763,10 +4609,15 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		setCTAList(&Visitor.CTAList);
 	  }
 	  Visitor.TraverseDecl(D);
+	  
+	  if (opts.brk) {
+		  return;
+	  }
+
 	  computeVarHashes();
 	  computeFuncHashes();
 	  computeTypeHashes();
-    processFops();
+	  processFops();
 
     // process data to string
     printGlobalArray(1);
@@ -4775,9 +4626,6 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
     printFuncDeclArray(1);
     printFopsArray(1);
 
-	  if (opts.brk) {
-		  return;
-	  }
 	  // printDatabase();
   }
 
