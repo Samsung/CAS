@@ -7,7 +7,6 @@ import json
 import uuid
 import zipfile
 import fnmatch
-import subprocess
 from pathlib import Path
 from typing import Generator, Iterator, List, Optional, Set, Dict
 
@@ -94,6 +93,7 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         self.data: List[libetrace.nfsdbEntryOpenfile] = []
         self.metaname: str = self.args.metaname if self.args.metaname else "cas_project"
         self.compile_commands: List[Dict] = []
+        self.rcomps: Dict[str, Set] = {}
         self.defines: Dict[str, Dict[str, List]] = {"gcc": {}, "g++": {}, "others": {}}
         self.compilers: Dict[str, Dict[str, List]] = {}
         self.global_defines: List = []
@@ -148,6 +148,10 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
     def get_effective_path(self, path: str) -> str:
         return os.path.normpath(path.replace(self.source_root, self.real_src_root) if self.real_src_root else path)
 
+    def filter_rcomps(self, f:str):
+        return f not in self.nfsdb.linked_module_paths() and f not in self.nfsdb.object_files_paths() and \
+            not f.endswith(".o.d") and not f.endswith(".o.tmp")
+
     def get_files(self):
         unique_paths: Set[str] = set()
         symlinks: Dict[str, Set] = {}
@@ -156,6 +160,17 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         for opn in progressbar(self.data, disable=self.args.debug or self.args.is_server):
             if opn.opaque and opn.opaque.compilation_info:
                 execs.add(opn.opaque)
+                for f in opn.opaque.openpaths_with_children:
+                    if self.filter_rcomps(f):
+                        no_sr_f = f.replace(self.source_root, "")
+                        for cf in opn.opaque.compilation_info.file_paths:
+                            no_sr_cf = cf.replace(self.source_root, "")
+                            if no_sr_f != no_sr_cf:
+                                if f.startswith(self.source_root):
+                                    if no_sr_f not in self.rcomps:
+                                        self.rcomps[no_sr_f] = {no_sr_cf}
+                                    else:
+                                        self.rcomps[no_sr_f].add(no_sr_cf)
 
             symlink = os.path.normpath(opn.original_path)
             target = os.path.normpath(opn.path)
@@ -377,6 +392,13 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         }
         self.write_file("deps.json", json.dumps(out, indent=4))
 
+    def add_rcomp_file(self):
+        printcli("Writing rcm.json", self.args)
+        def serialize_set(obj):
+            if isinstance(obj, set):
+                return list(obj)
+        self.write_file("rcm.json", json.dumps(self.rcomps, indent=4, default=serialize_set))
+
     def gen_dep_record(self, o: libetrace.nfsdbEntryOpenfile):
         fp = self.get_effective_path(o.path)
         output_file = fp.replace(self.real_src_root, '')
@@ -434,6 +456,7 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
             self.write_modules()
             if not self.args.is_server:
                 self.add_deps_file()
+                self.add_rcomp_file()
             self.add_workspace()
 
             if len(self.compile_commands) > 0:
