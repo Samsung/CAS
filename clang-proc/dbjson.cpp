@@ -1848,8 +1848,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 					  deref_shift.seekp(-1,std::ios_base::cur)<<" ]";
 					  deref_core << deref_shift.str()<<",\n";
 					  if(hasMCall){
-					  	deref_member.seekp(-1,std::ios_base::cur)<<" ]";
-					  	deref_core << deref_member.str()<<",\n";
+					  	deref_mcall.seekp(-1,std::ios_base::cur)<<" ]";
+					  	deref_core << deref_mcall.str()<<",\n";
 					  }
 				  }
 				  if (DI.Kind==DbJSONClassVisitor::DereferenceOffsetOf) {
