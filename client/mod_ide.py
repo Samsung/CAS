@@ -101,12 +101,12 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         self.real_src_root = os.path.abspath(os.path.expanduser(os.path.expandvars(self.args.remap_source_root))) if self.args.remap_source_root else self.source_root
         if not self.real_src_root.endswith("/"):
             self.real_src_root += "/"
-        project_dir_name = self.args.output_dir if self.args.output_zip else self.args.metaname if self.args.metaname else "cas_project"
-        zip_name = self.args.output_zip if self.args.output_zip else self.args.metaname+".zip" if self.args.metaname else "cas_project.zip"
+        project_dir_name = self.args.output_dir if self.args.output_dir else self.args.metaname if self.args.metaname else "cas_project"
+        zip_name = self.args.output_zip if self.args.output_zip else self.args.metaname + ".zip" if self.args.metaname else "cas_project.zip"
         if self.args.is_server or self.args.archive:
             self.gen_dir = os.path.join("/tmp/",str(uuid.uuid4()))
             self.output_dir = os.path.join(self.gen_dir, project_dir_name)
-            self.output_zip = os.path.join(self.gen_dir,  zip_name)
+            self.output_zip = os.path.join(self.gen_dir, zip_name)
         else:
             self.output_dir = os.path.abspath(os.path.expanduser(os.path.expandvars(project_dir_name)))
             self.output_zip = os.path.abspath(os.path.expanduser(os.path.expandvars(zip_name)))
