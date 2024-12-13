@@ -368,6 +368,7 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
                 ],
                 "cas.ftdbDatabase": None,
                 "cas.ftdbDatabases": [],
+                "cas.baseDir": self.source_root,
                 "cas.genCmd": " ".join(self.args.cmd[:self.args.cmd.index("vscode")]),
                 "cas.projectName": self.metaname,
                 "cas.depsFolders": [ "${workspaceFolder}" ],
