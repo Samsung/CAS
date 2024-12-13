@@ -49,7 +49,7 @@ class OutputRenderer:
     def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: Callable) -> None:
         self.args = args
         self.data = data
-        if not self.args.plain or self.args.count:
+        if not self.args.count:
             self.count = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
         self.sort_lambda = self.get_sorting_lambda(sort_lambda)
 
