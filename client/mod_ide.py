@@ -1,4 +1,5 @@
 import argparse
+from os.path import abspath
 import re
 import sys
 import shutil
@@ -406,7 +407,8 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         abs_output_file = os.path.join(self.output_dir, output_file)
         return {
                         "filename": fp.replace(self.source_root, ""),
-                        "original_path": abs_output_file,
+                        "original_path": abspath(o.path),
+                        "workspace_path": abs_output_file,
                         "open_timestamp": o.open_timestamp,
                         "close_timestamp": o.close_timestamp,
                         "ppid": o.parent.eid.pid,

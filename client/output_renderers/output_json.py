@@ -511,7 +511,7 @@ class Renderer(OutputRenderer):
             else (row.linked_file.path if row.linked_file else "")
         return f'''    {{
         "directory": "{row.cwd}",
-        "command": {fix_cmd(row.argv)},
+        "arguments": { json.dumps(row.argv) },
         "file": "{filename}"
     }}'''
 
@@ -521,12 +521,12 @@ class Renderer(OutputRenderer):
             else (row.linked_file.path if row.linked_file else "")
         return '''    {{
         "directory": "{dir}",
-        "command": {cmd},
+        "arguments": {cmd},
         "file": "{filename}",
         "openfiles": [{refs}]
     }}'''.format(
             dir=row.cwd,
-            cmd=fix_cmd(row.argv),
+            cmd=json.dumps(row.argv),
             filename=filename,
             refs=("" if not row.opens else '\n            '+',\n            '.join(['"'+o.path+'"' for o in row.opens]) + "\n        ")
         )
