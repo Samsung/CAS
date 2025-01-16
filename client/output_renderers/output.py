@@ -49,8 +49,7 @@ class OutputRenderer:
     def __init__(self, data, args, origin, output_type: DataTypes, sort_lambda: Callable) -> None:
         self.args = args
         self.data = data
-        if not self.args.count:
-            self.count = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
+        self.count = len(data) if isinstance(data, list) or isinstance(data, Iterator) else -1
         self.sort_lambda = self.get_sorting_lambda(sort_lambda)
 
         if self.args.entries_per_page is None:
@@ -119,6 +118,8 @@ class OutputRenderer:
         return original_sort_lambda
 
     def render_data(self):
+        if self.args.count:
+            return self.count_renderer()
         if not self.args.count and self.args.sorted and self.output_type.value < DataTypes.config_data.value:
             self.data = sorted(self.data, key=self.sort_lambda, reverse=self.args.reverse)
 
@@ -167,8 +168,7 @@ class OutputRenderer:
 
         if not self.args.plain:
             self.num_entries = len(self.data) if isinstance(self.data, list) or isinstance(self.data, Iterator) else -1
-        if self.args.count:
-            return self.count_renderer()
+
         return self.output_renderer()
 
     @abstractmethod
