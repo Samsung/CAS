@@ -67,7 +67,18 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 NPROC=$(nproc)
 NPROC=$(expr $NPROC - 1)
 
-TRACING_CMD="${DIR}/cati /sys/kernel/debug/tracing/trace_pipe"
+if [ -n "${CORE_RANGE}" ]; then
+    MAX_CORE=`echo ${CORE_RANGE} | grep -Po "\d+$"`
+    if [ $NPROC -eq $MAX_CORE ] ; then
+        #CORE RANGE is set to max cpu num - cati won't get designated core
+        CATI_TASKSET=""
+    else 
+        MAX_CORE=$(expr $MAX_CORE + 1)
+        CATI_TASKSET="taskset -c ${MAX_CORE} "
+    fi
+fi
+
+TRACING_CMD="${CATI_TASKSET}${DIR}/cati /sys/kernel/debug/tracing/trace_pipe"
 
 cat_proc_pid=$(pgrep "cati")
 if [ -n "${cat_proc_pid}" ]; then
@@ -123,7 +134,7 @@ if [ "$?" -ne 0 ]; then
 fi
 
 # -------- run the command
-if [ ! -z "${CORE_RANGE}" ]; then
+if [ -n "${CORE_RANGE}" ]; then
     taskset ${CORE_RANGE} "$@"
 else
     "$@"
