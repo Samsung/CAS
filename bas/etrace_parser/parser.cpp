@@ -80,10 +80,12 @@ void CachingParser::schedule_processing(eventTuple_t &event) {
     auto &_pending_exits = pending_exits();
     auto _lifetime = cache_lifetime();
 
-    _pending_exits.insert(event.pid);
+    if (!_process_map.at(event.pid).exited)
+        _pending_exits.insert(event.pid);
 
     if (event.tag == Tag::Exit) {
         _cache.push_back(CacheEntry(event.pid, event.line_number + _lifetime));
+        _process_map.at(event.pid).exited = true;
         _pending_exits.erase(event.pid);
     }
 

@@ -250,6 +250,7 @@ struct Process {
 
     uint64_t first_event_time;
     uint64_t last_event_time;
+    bool exited;
 
     std::vector<Execution> executions;
 
@@ -257,6 +258,7 @@ struct Process {
         : pid (pid)
         , first_event_time (0)
         , last_event_time (0)
+        , exited (false)
     {
         event_list.push_back(event);
         executions.push_back(Execution(pid));

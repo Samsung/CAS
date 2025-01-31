@@ -1233,6 +1233,9 @@ class CASDatabase:
                 pbar.refresh()
             return module_path, [(x.ptr[0], x.ptr[1], x.path) for x in ret[2]]
 
+        print("")
+        print("Computing direct dependency list for all modules...")
+
         pbar = progressbar(total=len(all_modules), disable=None)
         processed = multiprocessing.Value('i', 0)
         processed.value = 0
@@ -1249,24 +1252,22 @@ class CASDatabase:
         depmap = {d[0]: d[1] for d in results}
         depmap_keys = list(depmap.keys())
         del results
-        deplst = {k: len(v) for k, v in depmap.items()}
+
         print("")
-        print("# Sorted list of dependencies count")
-        err_count = 0
+        print("# Sorted list of direct dependencies count")
 
-        for m, q in sorted(deplst.items(), key=lambda item: item[1], reverse=True):
-            print("  %s: %d" % (m, q))
-            if deps_threshold and q > int(deps_threshold):
-                print("ERROR: Number of direct dependencies [%d] for linked module [%s] exceeds the threshold [%d]" % (q, m, int(deps_threshold)))
-                err_count += 1
-
-        global get_full_deps
-        def get_full_deps(lm):
-            return calc_deps(lm, direct=False, all_mods=depmap_keys)
-
-        if err_count > 0:
-            print("ERROR: Exiting due dependency mismatch errors (%d errors)" % err_count)
-            sys.exit(err_count)
+        mismatch_list = list()
+        for k, v in sorted(depmap.items(), key=lambda item: len(item[1]), reverse=True):
+            print("  %s: %d" % (k, len(v)))
+            if deps_threshold and len(v) > int(deps_threshold):
+                mismatch_list.append((k, len(v)))
+        
+        if len(mismatch_list) > 0:
+            print("ERROR: Number of modules with direct dependency list that exceeds the predefined threshold [%d]: %d" % (int(deps_threshold), len(mismatch_list)))
+            for m, n in mismatch_list:
+                print("  %s: %d" % (m, n))
+            print("Exiting due dependency mismatch errors (%d errors)" % (len(mismatch_list)))
+            sys.exit(len(mismatch_list))
 
         print("Saving {} ...".format(ddepmap_filename))
         with open(ddepmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
@@ -1274,6 +1275,9 @@ class CASDatabase:
         printdbg("written {}".format(ddepmap_filename), debug)
 
         # Compute full dependency list for all modules
+        global get_full_deps
+        def get_full_deps(lm):
+            return calc_deps(lm, direct=False, all_mods=depmap_keys)
 
         print("")
         print("Computing full dependency list for all modules...")
@@ -1294,21 +1298,25 @@ class CASDatabase:
         full_depmap = {r[0]: r[1] for r in results}
         del results
 
-        print("Saving {} ...".format(depmap_filename))
-        with open(depmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
-            json.dump(obj=full_depmap, fp=f, indent=4)
-        printdbg("Written {}".format(depmap_filename), debug)
-
         mismatch_list = list()
-        for k, v in full_depmap.items():
+        print("")
+        print("# Sorted list of full dependencies count")
+        for k, v in sorted(full_depmap.items(), key=lambda item: len(item[1]), reverse=True):
+            print("  %s: %d" % (k, len(v)))
             if deps_threshold and len(v) > int(deps_threshold):
                 mismatch_list.append((k, len(v)))
+
         if len(mismatch_list) > 0:
             print("Number of modules with full dependency list that exceeds the predefined threshold [%d]: %d" % (int(deps_threshold), len(mismatch_list)))
             for m, n in mismatch_list:
                 print("  %s: %d" % (m, n))
             print("Exiting due dependency mismatch errors (%d errors)" % (len(mismatch_list)))
             sys.exit(len(mismatch_list))
+
+        print("Saving {} ...".format(depmap_filename))
+        with open(depmap_filename, "w", encoding=sys.getfilesystemencoding()) as f:
+            json.dump(obj=full_depmap, fp=f, indent=4)
+        printdbg("Written {}".format(depmap_filename), debug)
 
         print("Writing {} ".format(deps_cache_db_filename))
         assert self.db.create_deps_cache(full_depmap, depmap, deps_cache_db_filename, True)

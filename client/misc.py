@@ -171,7 +171,7 @@ def get_config_path(config_file: str) -> str:
     """
     if os.path.exists(config_file):
         return config_file
-
+    print ("WARNING: using default .bas_config")
     # try bas/.bas_config
     main_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     if os.path.exists(os.path.join(main_dir, 'bas/.bas_config')):

@@ -34,6 +34,11 @@ class ParseDB(Module):
         json_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.json_database))
         tracer_db_filename = os.path.abspath(os.path.join(self.args.dbdir, self.args.tracer_database))
         intm_db_filename = os.path.abspath(os.path.join(self.args.dbdir, ".nfsdb.img.tmp"))
+        tracer_db_part_dir = os.path.abspath(os.path.join(self.args.dbdir, ".nfsdb_parts"))
+
+        if os.path.exists(tracer_db_part_dir) and os.stat(tracer_db_filename).st_size < 2048: # TODO maybe some line-count check?
+            print(f"Merging trace file parts {tracer_db_part_dir}/.nfsdb_part_* to {tracer_db_filename} ...")
+            os.system(f"sort -s -t',' -k1.4,1n -k3,3n -k4,4n --parallel=$(nproc) {tracer_db_part_dir}/.nfsdb_part_* >> {tracer_db_filename}")
 
         if not os.path.exists(tracer_db_filename):
             print("ERROR: {} database not found!".format(tracer_db_filename))

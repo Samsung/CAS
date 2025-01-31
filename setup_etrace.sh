@@ -37,23 +37,17 @@ if [ "$1" = "-f" ]; then
 
 	# set buffers size
 	if [ "$2" == "-c" ]; then
-		CORE_RANGE=$(seq ${3/-/' '})
 		# reset buffers size
 		echo "${SAFE_BUFFER_SIZE}" > /sys/kernel/debug/tracing/buffer_size_kb
-		for cpu_buff_file in /sys/kernel/debug/tracing/per_cpu/cpu*/buffer_size_kb ; do 
-			echo "${SAFE_BUFFER_SIZE}" > "$cpu_buff_file"; 
-		done
 		# per-cpu setup
-		for i in $CORE_RANGE ; do
-			echo ${BUFFER_SIZE} > "/sys/kernel/debug/tracing/per_cpu/cpu${i}/buffer_size_kb";
-		done
+		seq ${3/-/' '} | parallel "echo ${BUFFER_SIZE} > /sys/kernel/debug/tracing/per_cpu/cpu{}/buffer_size_kb"
 	else 
 		echo "${BUFFER_SIZE}" > /sys/kernel/debug/tracing/buffer_size_kb
 	fi
 	if [ "$?" -ne 0 ]; then
 		exit "$?"
 	fi
-
+	
 	# Remove log headers
 	echo "nocontext-info" > /sys/kernel/debug/tracing/trace_options
 
