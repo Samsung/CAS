@@ -1568,7 +1568,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
       DbJSONClassVisitor::FuncData &func_data = i->second;
 	  func_data.fid = file_id;
       getFuncHash(&func_data);
-      if(func_data.this_func->getLinkageInternal() == Linkage::InternalLinkage){
+      if(func_data.this_func->getLinkageInternal() == compatInternalLinkage){
         multi::registerFuncInternal(func_data);
       }
       else if(isFunctionDefinitionDiscarded(func_data.this_func)){

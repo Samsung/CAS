@@ -40,6 +40,23 @@
 #define compatGetValue getValue
 #endif
 
+#if CLANG_VERSION>=18
+#define compatNoLinkage             Linkage::None
+#define compatInternalLinkage       Linkage::Internal
+#define compatExternalLinkage       Linkage::External
+#else
+#define compatNoLinkage             NoLinkage
+#define compatInternalLinkage       InternalLinkage
+#define compatExternalLinkage       ExternalLinkage
+#endif
+
+#if CLANG_VERSION>=18
+#define C2x_gnu_section  C23_gnu_section
+#define C2x_nodiscard C23_nodiscard
+#define C2x_gnu_warn_unused_result C23_gnu_warn_unused_result
+#define C2x_gnu_assume_aligned C23_gnu_assume_aligned
+#endif
+
 using namespace clang;
 
 namespace compatibility{
@@ -76,5 +93,29 @@ namespace compatibility{
     return tp->getReplacedParameter();
 #endif
   }
+
+  inline const std::string translateLinkageImpl(clang::Linkage linkage){
+    switch(linkage){
+#if CLANG_VERSION>=18
+    case clang::Linkage::None:
+      return "none";
+		case clang::Linkage::Internal:
+			return "internal";
+    case clang::Linkage::External:
+      return "external";
+#else
+		case clang::NoLinkage:
+			return "none";
+		case clang::InternalLinkage:
+			return "internal";
+		case clang::ExternalLinkage:
+			return "external";
+#endif
+		default:
+			return "";
+	  }
+  }
 }
+
+
 #endif //FTDB_COMPAT_H

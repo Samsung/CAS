@@ -125,8 +125,6 @@ namespace {
 
 static thread_local int in_decl_group;
 static thread_local int group_unused;
-thread_local int csd = 0;
-thread_local std::set<const FunctionDecl*> *CTAList;
 
 
 void Decl::print(raw_ostream &Out, unsigned Indentation,
@@ -250,103 +248,6 @@ raw_ostream& DeclPrinter::Indent(unsigned Indentation) {
   return Out;
 }
 
-static std::string quote_escape( const std::string &str ) {
-        std::string output;
-    for( unsigned i = 0; i < str.length(); ++i ) {
-        if (str[i]=='\"') {
-                output += "\\\"";
-        }
-        else {
-                output += str[i];
-        }
-    }
-    return output;
-}
-
-
-static void printPrettyAttr(Attr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  return A->printPretty(OS, Policy);
-}
-
-static void printPrettySectionAttr(SectionAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  switch (A->getSemanticSpelling()) {
-    default:
-      llvm_unreachable("Unknown attribute spelling!");
-      break;
-    case 0 : {
-      OS << " __attribute__((section(\"" << quote_escape(A->getName().str()) << "\")))";
-      break;
-    }
-    case 1 : {
-      OS << " [[gnu::section(\"" << quote_escape(A->getName().str()) << "\")]]";
-      break;
-    }
-    case 2 : {
-      OS << " __declspec(allocate(\"" << quote_escape(A->getName().str()) << "\"))";
-      break;
-    }
-  }
-}
-
-static void printPrettyWarnUnusedResultAttr(WarnUnusedResultAttr* A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  switch (A->getAttributeSpellingListIndex()) {
-    default:
-      llvm_unreachable("Unknown attribute spelling!");
-      break;
-    case 0 : {
-      OS << " [[nodiscard(\"" << A->getMessage() << "\")]]";
-      break;
-    }
-    case 1 : {
-      OS << " [[nodiscard(\"" << A->getMessage() << "\")]]";
-      break;
-    }
-    case 2 : {
-      OS << " [[clang::warn_unused_result(\"" << A->getMessage() << "\")]]";
-      break;
-    }
-    case 3 : {
-      OS << " __attribute__((warn_unused_result))";
-      break;
-    }
-    case 4 : {
-      OS << " [[gnu::warn_unused_result(\"" << A->getMessage() << "\")]]";
-      break;
-    }
-  }
-}
-
-static void printPrettyAssumeAlignedAttr(AssumeAlignedAttr *A, raw_ostream &OS, const PrintingPolicy &Policy) {
-  const char *delim;
-  switch (A->getAttributeSpellingListIndex()) {
-    default:
-      llvm_unreachable("Unknown attribute spelling!");
-      break;
-    case 0 : {
-      OS << " __attribute__((assume_aligned(";
-      delim = "))";
-      break;
-    }
-    case 1 : {
-      OS << " [[gnu::assume_aligned";
-      delim = "]]";
-      break;
-    }
-    case 2 : {
-      OS << " [[gnu::assume_aligned";
-      delim = "]]";
-      break;
-    }
-  }
-  OS << "(";
-  A->getAlignment()->printPretty(OS,nullptr,Policy);
-  if(A->getOffset()){
-    OS << ", ";
-    A->getOffset()->printPretty(OS,nullptr,Policy);
-  }
-  OS << ")" << delim;
-}
-
 void DeclPrinter::prettyPrintAttributes(Decl *D) {
   if (Policy.PolishForDeclaration)
     return;
@@ -361,17 +262,8 @@ void DeclPrinter::prettyPrintAttributes(Decl *D) {
 #define PRAGMA_SPELLING_ATTR(X) case attr::X:
 #include "clang/Basic/AttrList.inc"
         break;
-      case attr::Section:
-        printPrettySectionAttr(cast<SectionAttr>(A), Out, Policy);
-        break;
-      case attr::WarnUnusedResult:
-        printPrettyWarnUnusedResultAttr(cast<WarnUnusedResultAttr>(A), Out, Policy);
-        break;
-      case attr::AssumeAligned:
-        printPrettyAssumeAlignedAttr(cast<AssumeAlignedAttr>(A), Out, Policy);
-        break;
       default:
-        printPrettyAttr(A, Out, Policy);
+        printPrettyAttrModified(A, Out, Policy);
         break;
       }
     }
@@ -1949,11 +1841,6 @@ void DeclPrinter::VisitOMPCapturedExprDecl(OMPCapturedExprDecl *D) {
 }
 
 
-
-void setCTAList(std::set<const FunctionDecl*> *List){
-  CTAList = List;
-}
-
 void DeclPrinter::VisitRecordHead(RecordDecl *D){
   if (!Policy.SuppressSpecifiers && D->isModulePrivate())
     Out << "__module_private__ ";
@@ -1986,10 +1873,6 @@ void DeclPrinter::VisitUnnamedTag(TagDecl *D){
 void printUnnamedTag(TagDecl *D,llvm::raw_ostream &Out, const PrintingPolicy &Policy){
   DeclPrinter Printer(Out,Policy,D->getASTContext());
   Printer.VisitUnnamedTag(D);
-}
-
-void setCustomStructDefs(bool _csd){
-  csd = _csd;
 }
 
 void processDeclGroupNoClear(SmallVectorImpl<Decl*>& Decls, llvm::raw_ostream &Out,

@@ -1409,9 +1409,9 @@ public:
   static std::string translateLinkage(clang::Linkage linkage) {
 
 	  switch(linkage) {
-		case clang::NoLinkage:
+		case clang::compatNoLinkage:
 			return "none";
-		case clang::InternalLinkage:
+		case clang::compatInternalLinkage:
 			return "internal";
 		// case clang::UniqueExternalLinkage:
 		// 	return "";
@@ -1421,7 +1421,7 @@ public:
 		// 	return "";
 		// case clang::ModuleLinkage:
 		// 	return "";
-		case clang::ExternalLinkage:
+		case clang::compatExternalLinkage:
 			return "external";
 		default:
 			return "";

@@ -14,11 +14,16 @@ set(CLANG_PROC_SOURCES
     lookup.cpp
     typehash.cpp
     taint.cpp
+    printers_common.cpp
     MacroHandler.cpp
     ${LLVM_VERSION_MAJOR}/DeclPrinter.cpp
     ${LLVM_VERSION_MAJOR}/StmtPrinter.cpp
     ${LLVM_VERSION_MAJOR}/TypePrinter.cpp
 )
+
+if(${LLVM_PACKAGE_VERSION} VERSION_GREATER_EQUAL 12)
+    set (clangAPINotes clangAPINotes)
+endif()
 
 set(CLANG_PROC_LIBS
     pthread
@@ -29,6 +34,7 @@ set(CLANG_PROC_LIBS
     clangSerialization
     clangParse
     clangSema
+    ${clangAPINotes}
     clangAnalysis
     clangEdit
     clangAST

@@ -132,8 +132,6 @@ namespace {
 
 static thread_local int in_decl_group;
 static thread_local int group_unused;
-thread_local int csd = 0;
-thread_local std::set<const FunctionDecl*> *CTAList;
 
 
 void Decl::print(raw_ostream &Out, unsigned Indentation,
@@ -2013,10 +2011,6 @@ void DeclPrinter::VisitNonTypeTemplateParmDecl(
 }
 
 
-void setCTAList(std::set<const FunctionDecl*> *List){
-  CTAList = List;
-}
-
 void DeclPrinter::VisitRecordHead(RecordDecl *D){
   if (!Policy.SuppressSpecifiers && D->isModulePrivate())
     Out << "__module_private__ ";
@@ -2049,10 +2043,6 @@ void DeclPrinter::VisitUnnamedTag(TagDecl *D){
 void printUnnamedTag(TagDecl *D,llvm::raw_ostream &Out, const PrintingPolicy &Policy){
   DeclPrinter Printer(Out,Policy,D->getASTContext());
   Printer.VisitUnnamedTag(D);
-}
-
-void setCustomStructDefs(bool _csd){
-  csd = _csd;
 }
 
 void processDeclGroupNoClear(SmallVectorImpl<Decl*>& Decls, llvm::raw_ostream &Out,
