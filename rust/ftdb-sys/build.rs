@@ -40,7 +40,7 @@ fn build_native_lib(out_dir: &Path) {
     // When building from CAS repository, the `bindings/cas` points to the
     // root CAS project directory
     let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    if let Ok(cas_dir) = root_dir.join("bindings/cas").canonicalize() {
+    if let Ok(cas_dir) = root_dir.join("../../").canonicalize() {
         let cmake_dir = cmake::Config::new(cas_dir).build_target("ftdb_c").build();
         println!(
             "cargo:rustc-link-search=native={}",
