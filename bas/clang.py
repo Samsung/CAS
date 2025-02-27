@@ -225,22 +225,37 @@ class clang:
         return True
 
     @staticmethod
-    def extract_comp_file(argv: List[str], cwd: str, tailopts: List[str]) -> str:
-        i = 0
-        loc_arg = argv.copy()
-        try:
-            o_pos = argv.index("-o")
-            loc_arg.pop(o_pos+1)
-            loc_arg.pop(o_pos)
-        except ValueError:
-            pass
+    def extract_comp_file(argv: List[str], cwd: str, tailopts: List[str]) -> "str | None":
+        clang_args_with_paths = [
+            "-o",
+            "-MF",
+            "-MT",
+            "-MQ",
+            "-I",
+            "-isystem",
+            "-iquote",
+            "-idirafter",
+            "-iprefix",
+            "-iwithprefix",
+            "-L",
+            "-B",
+            "-resource-dir",
+            "-fmodules-cache-path",
+            "-fmodule-map-file",
+            "-fmodule-file",
+            "-include-pch",
+            "-fmodules-user-build-path",
+            "-fdebug-compilation-dir",
+            "--sysroot",
+            "--gcc-toolchain",
+            "-ccc-install-dir"
+        ]
 
-        for i, u in enumerate(reversed(loc_arg)):
-            if u.startswith("-fdump-preamble=") or u.startswith("-no-opaque-pointers"):
-                continue
-            if u not in tailopts:
-                break
-        return loc_arg[-1-i]
+        for i, arg in reversed(list(enumerate(argv))):
+            if not arg[0] == "-":
+                pth =  argv[i] if os.path.exists(argv[i]) else os.path.join(cwd, argv[i]) if os.path.exists(os.path.join(cwd, argv[i]) ) else None
+                if pth is not None and argv[i-1] not in clang_args_with_paths:
+                    return argv[i]
 
     @staticmethod
     def fix_argv(argv: List[str], compiler_type, compiled_file) -> List[str]:

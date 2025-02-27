@@ -1887,6 +1887,10 @@ class CASDatabase:
                                     continue
 
                                 arg_fn = clang_c.extract_comp_file(argv, exe.cwd, self.config.clang_tailopts)
+                                if arg_fn is None:
+                                    printd (f"Error: {arg_fn} - cannot find compiled file!", ptr, True)
+                                    failed()
+                                    continue
                                 if os.path.isabs(arg_fn):
                                     fn = arg_fn
                                 else:
