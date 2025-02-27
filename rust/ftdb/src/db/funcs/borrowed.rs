@@ -10,7 +10,7 @@ pub struct FunctionEntry<'a>(pub(crate) &'a ftdb_func_entry);
 
 func_entry_impl!(FunctionEntry<'a>, 'a);
 
-impl<'a> Display for FunctionEntry<'a> {
+impl Display for FunctionEntry<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.unpreprocessed_body())
     }
@@ -29,7 +29,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_func_entry> for FunctionEntry<'r> {
     }
 }
 
-impl<'a> FunctionEntry<'a> {
+impl FunctionEntry<'_> {
     pub fn into_owned(self, handle: Arc<FtdbHandle>) -> super::owned::FunctionEntry {
         let inner_ptr = self.0 as *const ftdb_func_entry;
         super::owned::FunctionEntry::from(Owned {

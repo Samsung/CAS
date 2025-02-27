@@ -38,7 +38,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_fops_entry> for FopsEntry<'r> {
     }
 }
 
-impl<'a> FopsEntry<'a> {
+impl FopsEntry<'_> {
     pub fn into_owned(self, handle: Arc<FtdbHandle>) -> super::owned::FopsEntry {
         let inner_ptr = self.0 as *const ftdb_fops_entry;
         super::owned::FopsEntry::from(Owned {
@@ -68,7 +68,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_fops_member_entry> for FopsMember<'r> {
     }
 }
 
-impl<'a> FopsMember<'a> {
+impl FopsMember<'_> {
     pub fn into_owned(self, handle: Arc<FtdbHandle>) -> super::owned::FopsMember {
         let inner_ptr = self.0 as *const ftdb_fops_member_entry;
         super::owned::FopsMember::from(Owned {

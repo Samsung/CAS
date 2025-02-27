@@ -59,7 +59,7 @@ impl From<&u64> for MemberAccessKind {
     }
 }
 
-impl<'a> DerefInfo<'a> {
+impl DerefInfo<'_> {
     /// Describes what kind of member access expression was used
     ///
     /// For example, for this deref: `pps->info.echo` function returns:
@@ -226,7 +226,7 @@ impl<'a> From<&'a offsetref_info> for OffsetRef<'a> {
     }
 }
 
-impl<'a> OffsetRef<'a> {
+impl OffsetRef<'_> {
     /// Type of the cast used directly on the expression for the referenced variable
     ///
     /// For the first variable expression referenced for the parent

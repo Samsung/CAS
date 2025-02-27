@@ -8,7 +8,7 @@ pub struct GlobalEntry<'a>(pub(crate) &'a ftdb_global_entry);
 
 global_entry_impl!(GlobalEntry<'a>);
 
-impl<'a> Display for GlobalEntry<'a> {
+impl Display for GlobalEntry<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -31,7 +31,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_global_entry> for GlobalEntry<'r> {
     }
 }
 
-impl<'a> GlobalEntry<'a> {
+impl GlobalEntry<'_> {
     pub fn into_owned(self, handle: Arc<FtdbHandle>) -> super::owned::GlobalEntry {
         let inner_ptr = self.0 as *const ftdb_global_entry;
         super::owned::GlobalEntry::from(Owned {

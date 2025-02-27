@@ -9,7 +9,7 @@ pub struct UnresolvedFuncEntry<'a>(&'a ftdb_unresolvedfunc_entry);
 
 unresolved_funcs_entry_impl!(UnresolvedFuncEntry<'a>);
 
-impl<'a> std::fmt::Display for UnresolvedFuncEntry<'a> {
+impl std::fmt::Display for UnresolvedFuncEntry<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.id(), self.name())
     }
@@ -27,7 +27,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_unresolvedfunc_entry> for UnresolvedFuncEntry
     }
 }
 
-impl<'a> UnresolvedFuncEntry<'a> {
+impl UnresolvedFuncEntry<'_> {
     pub fn to_owned(&self, handle: Arc<FtdbHandle>) -> super::OwnedUnresolvedFuncEntry {
         let inner_ptr = self.0 as *const ftdb_unresolvedfunc_entry;
         super::OwnedUnresolvedFuncEntry::from(Owned {

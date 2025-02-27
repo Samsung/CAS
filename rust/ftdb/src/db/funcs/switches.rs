@@ -35,7 +35,7 @@ impl<'a> SwitchInfo<'a> {
     }
 }
 
-impl<'a> Display for SwitchInfo<'a> {
+impl Display for SwitchInfo<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "switch ({})", self.condition())?;
         for case in self.cases_iter() {
@@ -66,7 +66,7 @@ pub enum Case<'a> {
     Range(CaseData<'a>, CaseData<'a>),
 }
 
-impl<'a> Display for Case<'a> {
+impl Display for Case<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Case::Value(lhs) => write!(f, "case: {}", lhs),
@@ -104,7 +104,7 @@ impl<'a> CaseData<'a> {
     }
 }
 
-impl<'a> Display for CaseData<'a> {
+impl Display for CaseData<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.raw_code())
     }

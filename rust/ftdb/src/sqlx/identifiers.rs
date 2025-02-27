@@ -1,9 +1,9 @@
 #[cfg(feature = "postgres")]
 mod postgres {
-    use crate::{FileId, FunctionId, GlobalId, TypeId};
-    use ::sqlx::{encode::IsNull, error::BoxDynError, Decode, Encode, Postgres, Type};
+    use crate::{CsId, DerefId, FileId, FunctionId, GlobalId, LocalId, ModuleId, TypeId};
     use byteorder::{BigEndian, ByteOrder};
     use sqlx::postgres::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueFormat, PgValueRef};
+    use sqlx::{encode::IsNull, error::BoxDynError, Decode, Encode, Postgres, Type};
 
     macro_rules! impl_traits {
         ($TypeName:ident) => {
@@ -41,4 +41,8 @@ mod postgres {
     impl_traits!(GlobalId);
     impl_traits!(TypeId);
     impl_traits!(FileId);
+    impl_traits!(ModuleId);
+    impl_traits!(LocalId);
+    impl_traits!(CsId);
+    impl_traits!(DerefId);
 }

@@ -183,7 +183,7 @@ impl Functions {
     pub fn entry_by_name<'p>(
         &'p self,
         name: &'p str,
-    ) -> impl Iterator<Item = FunctionEntry<'_>> + 'p {
+    ) -> impl Iterator<Item = FunctionEntry<'p>> + 'p {
         self.0.funcs_by_name(name).map(FunctionEntry::from)
     }
 

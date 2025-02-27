@@ -116,7 +116,7 @@ impl Globals {
     pub fn entries_by_name<'p>(
         &'p self,
         name: &'p str,
-    ) -> impl Iterator<Item = GlobalEntry<'_>> + 'p {
+    ) -> impl Iterator<Item = GlobalEntry<'p>> + 'p {
         self.0
             .globals_by_name(name)
             .map(borrowed::GlobalEntry::from)
@@ -138,7 +138,7 @@ pub enum GlobalDef<'a> {
     Unknown(&'a str, u32),
 }
 
-impl<'a> Display for GlobalDef<'a> {
+impl Display for GlobalDef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (deftype, defstring) = match *self {
             GlobalDef::Declaration(x) => (0, x),

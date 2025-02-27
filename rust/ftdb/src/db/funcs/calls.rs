@@ -44,7 +44,7 @@ impl<'a> Iterator for CallEntryIterator<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for CallEntryIterator<'a> {}
+impl ExactSizeIterator for CallEntryIterator<'_> {}
 
 /// Function call details
 ///
@@ -180,7 +180,7 @@ impl<'a> Iterator for RefCallsIterator<'a> {
 }
 
 // Memory size of refcalls and refcallrefs is known
-impl<'a> ExactSizeIterator for RefCallsIterator<'a> {}
+impl ExactSizeIterator for RefCallsIterator<'_> {}
 
 /// Represents a single call over a function pointer
 ///
@@ -287,7 +287,7 @@ impl<'s, 'r> InnerRef<'s, 'r, callref_data> for CallRefData<'r> {
 
 impl_expr_iface!(CallRefData);
 
-impl<'a> CallRefData<'a> {
+impl CallRefData<'_> {
     /// Position of this function call argument
     ///
     pub fn pos(&self) -> u64 {

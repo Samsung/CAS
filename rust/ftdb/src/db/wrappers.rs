@@ -168,7 +168,7 @@ impl<'a> From<&'a ftdb_sys::ftdb::ftdb_func_entry> for Literals<'a> {
     }
 }
 
-impl<'a> Display for Literals<'a> {
+impl Display for Literals<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

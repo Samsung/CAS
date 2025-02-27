@@ -9,7 +9,7 @@ pub struct TypeEntry<'a>(&'a ftdb_type_entry);
 
 type_entry_impl!(TypeEntry<'a>);
 
-impl<'a> std::fmt::Display for TypeEntry<'a> {
+impl std::fmt::Display for TypeEntry<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "id:{}|class:{}", self.id(), self.classname())
     }
@@ -27,7 +27,7 @@ impl<'s, 'r> InnerRef<'s, 'r, ftdb_type_entry> for TypeEntry<'r> {
     }
 }
 
-impl<'a> TypeEntry<'a> {
+impl TypeEntry<'_> {
     /// Upgrade instance into owned one by providing a shared handle to the
     /// FTDB database
     ///
