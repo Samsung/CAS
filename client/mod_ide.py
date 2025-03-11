@@ -211,8 +211,7 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
             if path in self.nfsdb.linked_module_paths():
                 return True
         if self.args.skip_objects:
-            objects_paths = set(self.nfsdb.object_files_paths())
-            if path in objects_paths:
+            if path in self.nfsdb.object_files_paths_set():
                 return True
         if self.pattern is not None:
             return self.pattern.match(path)
@@ -223,8 +222,7 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
         if self.args.skip_linked:
             unique_paths = unique_paths - set(self.nfsdb.linked_module_paths())
         if self.args.skip_objects:
-            objects_paths = set(self.nfsdb.object_files_paths())
-            unique_paths = unique_paths - objects_paths
+            unique_paths = unique_paths - self.nfsdb.object_files_paths_set()
         if self.pattern is not None:
             unique_paths = {up for up in unique_paths if not self.pattern.match(up)}
         return unique_paths

@@ -302,6 +302,10 @@ class CASDatabase:
                      for obj_p in x.compilation_info.object_paths })
 
     @lru_cache(maxsize=1)
+    def object_files_paths_set(self) -> Set[str]:
+        return set(self.object_files_paths())
+
+    @lru_cache(maxsize=1)
     def linked_modules(self) -> List[libetrace.nfsdbEntryOpenfile]:
         """
         Function returns linked modules as libetrace.nfsdbEntryOpenfile objects.
