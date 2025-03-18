@@ -2177,6 +2177,10 @@ class CASDatabase:
                                     nargv.insert(i+3, '-dD')
                                 else:
                                     nargv += ['-E', '-P', '-v', '-dD']
+                                try:
+                                    nargv.pop(nargv.index("-Werror"))
+                                except:
+                                    pass
                                 for x in fns:
                                     li = [i for i, u in enumerate(nargv) if u == x]
                                     if len(li):
