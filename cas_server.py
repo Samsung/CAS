@@ -25,6 +25,7 @@ from flask_cors import CORS
 from gevent.pywsgi import WSGIServer
 from libetrace import nfsdbEntry
 import libetrace
+from libcas import CASDatabase
 from client.server import DBProvider
 from client.filtering import CommandFilter
 from client.argparser import get_api_keywords
@@ -193,7 +194,7 @@ def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
     return ret
 
 
-def child_renderer(exe: nfsdbEntry):
+def child_renderer(exe: nfsdbEntry, cas_db: CASDatabase | None = None, depth: int = 0):
     ret = {
         "class": "compiler" if exe.compilation_info is not None
         else "linker" if exe.linked_file is not None
@@ -208,7 +209,7 @@ def child_renderer(exe: nfsdbEntry):
         "pipe_eids": [f'[{o.pid},{o.index}]' for o in exe.pipe_eids],
         "stime": exe.stime if hasattr(exe, "stime") else "",
         "etime": exe.etime,
-        "children": len(exe.child_cids),
+        "children": [child_renderer(child, cas_db, depth - 1) for child in cas_db.get_eids([(c.pid,) for c in exe.child_cids])] if depth > 0 and len(exe.child_cids) > 0 else len(exe.child_cids),
         "wpid": exe.wpid if exe.wpid else "",
         "open_len": len(exe.opens),
     }
@@ -354,13 +355,12 @@ def proc_lookup(db: str) -> Response:
 @cas_single.route('/children', defaults={'db': ""}, methods=['GET'])
 @cas_multi.route('/<db>/children', methods=['GET'])
 def children_of(db: str) -> Response:
-    maxResults = 20
     j = request.args
     etime_sort = True if "etime_sort" in j and j["etime_sort"] == "true" else False
     hide_empty = True if "hide_empty" in j and j["hide_empty"] == "true" else False
-    page = 0
-    if "page" in j.keys():
-        page = int(j["page"])
+    depth = int(j["depth"]) if "depth" in j else 0
+    maxResults = int(j["max_results"]) if "max_results" in j else 20
+    page = int(j["page"]) if "page" in j else 0
     cas_db = dbs.get_nfsdb(db)
     e = cas_db.get_exec(int(j["pid"]), int(j["idx"]))
     execs = cas_db.get_eids([(c.pid,) for c in e.child_cids])
@@ -368,17 +368,11 @@ def children_of(db: str) -> Response:
         execs = sorted(execs, key=lambda x: x.etime, reverse=True)
     if hide_empty:
         execs = sorted(execs, key=lambda x: (len(x.child_cids), len(x.binary), len(x.opens)), reverse=True)
-    data = [
-        child_renderer(ent)
-        for ent in execs
-    ]
-    pages = math.ceil(len(data) / maxResults)
+    pages = math.ceil(len(execs) / maxResults) if maxResults > 0 else -1
+    resultNum = page * maxResults if maxResults > 0 else 0
 
-    if page:
-        resultNum = page * maxResults
-        result = {"count": len(data), "pages": pages, "page": page, "children": data[resultNum:resultNum + maxResults]}
-    else:
-        result = {"count": len(data), "pages": pages, "page": 0, "children": data[:maxResults]}
+    data = [child_renderer(exe, cas_db, depth) for exe in execs[resultNum:(resultNum+maxResults if maxResults > 0 else None)]]
+    result = {"count": len(execs), "pages": pages, "page": page, "children": data}
     return Response(
         json.dumps(result),
         mimetype='application/json', direct_passthrough=True)
