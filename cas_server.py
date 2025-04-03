@@ -10,7 +10,7 @@ except ModuleNotFoundError:
 
 from argparse import Namespace
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from os import path
 import json
@@ -668,12 +668,16 @@ def favicon():
 @cas_single.route('/status/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
 @cas_multi.route('/<db>/status/', methods=['GET'], strict_slashes=False)
 @cas_multi.route('/status/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-def status(db: str):
-    return Response(
-        json.dumps(dbs.json(db), indent=2),
-        mimetype="application/json"
-    )
-
+def status(db: Optional[str]):
+    try:
+        return Response(
+            json.dumps(dbs.json(db), indent=2),
+            mimetype="application/json"
+        )
+    except MessageException as exc:
+        return Response(json.dumps({
+            "ERROR": exc.message
+        }), mimetype='text/json')
 
 @cas_single.route('/<module>/', defaults={'db': ""}, strict_slashes=False)
 @cas_multi.route('/<db>/<module>/', strict_slashes=False)
@@ -697,19 +701,19 @@ def get_module(db: str, module: str) -> Response:
 
 @cas_multi.route('/<db>/', methods=['GET'], strict_slashes=False)
 def print_api(db: str) -> Response:
-    if db in dbs.db_map:
-        return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    if db in dbs.get_dbs():
+        return Response(render_template('api_list.html', dbs=dbs.get_dbs(), web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
     else:
-        return Response(json.dumps({ "ERROR": "database not found" }), mimetype='text/json')
+        return Response(json.dumps({ "ERROR": f"Endpoint database '{db}' does not exists!" }), mimetype='text/json')
 
 
 @cas_single.route('/', methods=['GET'], strict_slashes=False)
 @cas_multi.route('/', methods=['GET'], strict_slashes=False)
 def main() -> Response:
     if dbs and dbs.multi_instance:
-        return Response(render_template('dbs.html', dbs=dbs.db_map, web_ctx=args.ctx), mimetype="text/html")
+        return Response(render_template('dbs.html', dbs=dbs.get_dbs(), web_ctx=args.ctx), mimetype="text/html")
     else:
-        return Response(render_template('api_list.html', dbs=dbs.db_map, web_ctx=get_webctx(args.ctx, "")), mimetype="text/html")
+        return Response(render_template('api_list.html', dbs=dbs.get_dbs(), web_ctx=get_webctx(args.ctx, "")), mimetype="text/html")
 
 
 def get_app(arg, is_test=False):

@@ -14,14 +14,17 @@ template="""
 <html>
 <head>
     <title>Database List</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <link  href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.min.css" rel="stylesheet">
+    <script src="https://cdn.datatables.net/2.2.1/js/dataTables.min.js"></script>
 </head>
 <body>
 <div id="content">
 <div class="text-center" style="display:flex;justify-content: center">
-    <table class="table table-hover table-bordered align-middle table-responsive-sm" style="width: fit-content;padding: 20px">
+    <table class="table table-hover table-bordered align-middle table-responsive-sm display" id="buildTable" style="width: fit-content;padding: 20px">
         <thead class="table-dark">
         <tr>
             <th scope="col">DB name</th>
@@ -69,6 +72,15 @@ template="""
 
 </div>
 </body>
+<script>$(document).ready( function () {
+    new DataTable('#buildTable', {
+    lengthMenu: [
+        [50, 100, 500, -1],
+        [50, 100, 500, 'All']
+    ]
+});
+} );
+</script>
 </html>
 """
 
@@ -99,8 +111,8 @@ def generate_stream(source_response):
         yield chunk
 
 def get_response(host_info: Tuple) -> Tuple[str, Dict | None]:
+    host, url = host_info
     try:
-        host, url = host_info
         return (host, requests.get(url, timeout=0.2).json())
     except Exception:
         return (host, None)
@@ -109,15 +121,16 @@ def get_status():
     req = [(host, f"{addr}/status/") for host, addr in conf["BACKEND_SERVERS"].items()]
     ret = {}
     rsp = p.map_async(get_response, req).get(True)
-    for r in rsp:
-        if r[1] is not None:
-            ret[conf["BACKEND_SERVERS"][r[0]]] = {}
-            for x in r[1]:
-                tmp = r[1][x]
-                tmp["host"] = r[0]
-                ret[conf["BACKEND_SERVERS"][r[0]]][x] = tmp
+    for host, dbs in rsp:
+        url = conf["BACKEND_SERVERS"][host]
+        if dbs is not None:
+            ret[url] = {}
+            for x in dbs:
+                tmp = dbs[x]
+                tmp["host"] = host
+                ret[url][x] = tmp
         else:
-            ret[conf["BACKEND_SERVERS"][r[0]]] = None
+            ret[url] = None
     return ret
 
 @cas_gw.route('/status/',methods=['GET'], strict_slashes=False)

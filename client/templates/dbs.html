@@ -6,10 +6,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script>let ctx = "{{web_ctx}}"</script>
     <script src="{{ url_for('static', filename = 'dbs.js') }}"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/2.2.1/js/dataTables.min.js"></script>
 {% endblock %}
 {% block content %}
     <div class="text-center" style="display:flex;justify-content: center">
-    <table class="table table-hover table-bordered align-middle table-responsive-sm" style="width: fit-content;padding: 20px">
+    <table class="table table-hover table-bordered align-middle table-responsive-sm display" id="buildTable" style="width: fit-content;padding: 20px">
         <thead class="table-dark">
         <tr>
             <th scope="col">DB name</th>
@@ -38,5 +41,13 @@
         </tbody>
     </table>
 </div>
-
+<script>$(document).ready( function () {
+    new DataTable('#buildTable', {
+    lengthMenu: [
+        [50, 100, 500, -1],
+        [50, 100, 500, 'All']
+    ]
+});
+} );
+</script>
 {% endblock %}
