@@ -90,7 +90,8 @@
     ],
     "dependency_exclude_patterns": [
         "/dev/*",
-        "/proc/*"
+        "/proc/*",
+        "*.rsp"
     ],
     "additional_module_exclude_patterns": [
     ],
