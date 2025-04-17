@@ -268,11 +268,11 @@ def reload_ftdb(db: str):
     return Response("DB reloaded")
 
 
-@cas_single.route('/raw_cmd/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/raw_cmd/', methods=['GET'], strict_slashes=False)
+@cas_single.route('/raw_cmd/', defaults={'db': ""}, methods=['GET', 'POST'], strict_slashes=False)
+@cas_multi.route('/<db>/raw_cmd/', methods=['GET', 'POST'], strict_slashes=False)
 def get_raw_cmd(db: str):
     org_url = request.url
-    raw_cmd = request.args.get('cmd', None)
+    raw_cmd = request.method == 'GET' and request.args.get('cmd', None) or (request.is_json and request.get_json().get('cmd')) or request.get_data(as_text=True)
     if raw_cmd:
         cmd = shell_split(raw_cmd)
         if "--json" not in cmd:
@@ -284,7 +284,7 @@ def get_raw_cmd(db: str):
                 "ERROR": exc.message
             }), mimetype='text/json')
     else:
-        return Response(json.dumps({"ERROR": "Empty raw command"}),
+        return Response(json.dumps({"ERROR": "Empty raw command or invalid content type (remember to set it to application/json if using JSON in the POST request body)"}),
                         mimetype='text/json')
 
 
