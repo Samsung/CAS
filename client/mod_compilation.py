@@ -13,7 +13,7 @@ class Compiled(Module, FilterableModule):
         return Module.add_args([
             "filter", "command-filter", "select", "append",
             "details", "commands",
-            "revdeps", "cdb"], Compiled)
+            "revdeps", "cdb", "nostdinc"], Compiled)
 
     def select_subject(self, ent) -> str:
         if self.args.show_commands:

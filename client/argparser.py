@@ -525,6 +525,13 @@ args_map = {
         default=False,
         help='Output compilations as compilation database'
     ),
+    "nostdinc": lambda x: x.add_argument(
+        '--nostdinc',
+        dest='nostdinc',
+        action='store_true',
+        default=False,
+        help='Generate compilecommands with appended system includes'
+    ),
     "unique-output-list": lambda x: x.add_argument(
         '--unique-output-list',
         type=str,

@@ -13,6 +13,7 @@ from client.filtering import CommandFilter, OpenFilter, FilterException, FtdbSim
 from client.misc import get_output_renderers, printdbg, fix_cmd
 from client.output_renderers.output import DataTypes
 from client.exceptions import ArgumentException, LibFtdbException, LibetraceException, PipelineException
+import subprocess
 
 
 class ModulePipeline:
@@ -444,11 +445,25 @@ class Module:
     def cdb_fix_multiple(self, data: List[libetrace.nfsdbEntry]) -> Generator:
         for exe in data:
             if exe.compilation_info is not None:
-                if len(exe.compilation_info.file_paths) > 1:
-                    for comp_file in exe.compilation_info.file_paths:
-                        yield {"filename": comp_file, "cmd": fix_cmd(exe.argv), "dir": exe.cwd}
-                else:
-                    yield {"filename": exe.compilation_info.file_paths[0], "cmd": fix_cmd(exe.argv), "dir": exe.cwd}
+                for comp_file in exe.compilation_info.file_paths:
+                    command = exe.argv
+                    if self.args.nostdinc:
+                        pn = subprocess.Popen([exe.binary,*exe.argv[1:],'-###'],cwd=exe.cwd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                        out, err = pn.communicate()
+                        out2 = out.decode("utf-8")
+                        next = False
+                        command = exe.argv
+                        command.append('-nostdinc')
+                        for c in out2.split(' '):
+                            if next:
+                                command.append('-isystem')
+                                command.append(c.strip('"'))
+                                next = False
+                            else:
+                                if c.endswith("-isystem\""):
+                                    next =True
+                    yield {"filename": comp_file, "cmd": fix_cmd(command), "dir": exe.cwd}
+
 
     def expath_to_dict(self, expath_string: str) -> dict:
         parameters_schema = {
