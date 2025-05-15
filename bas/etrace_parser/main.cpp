@@ -63,12 +63,12 @@ void print_mounts(ParsingResults& results, std::ostream& output) {
                 output << ",\"y\":\"" << mount.type << "\"";
                 output << ",\"f\":" << mount.flags;
                 output << ",\"m\":" << mount.mount_timestamp;
-                output << "},\n";
+                if (std::next(iter) != end_iter)
+                    output << "},\n";
             }
         }
     }
 
-    output.seekp(-2, std::ios_base::cur);
     output << " \n]\n";
 }
 
