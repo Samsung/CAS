@@ -9,7 +9,6 @@ from functools import lru_cache
 from client.exceptions import LibetraceException
 
 
-@staticmethod
 @lru_cache(maxsize=1)
 def get_def_ip():
     import socket
