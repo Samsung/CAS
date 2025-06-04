@@ -11,7 +11,7 @@ static PyObject *libftdb_ftdb_global_entry_new(PyTypeObject *subtype, PyObject *
 
     self = (libftdb_ftdb_global_entry_object *)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
-        self->globals = (const libftdb_ftdb_globals_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
+        self->globals = (const libftdb_ftdb_collection_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
         Py_IncRef((PyObject *)self->globals);
         unsigned long index = PyLong_AsLong(PyTuple_GetItem(args, 1));
         if (index >= self->globals->ftdb->globals_count) {
@@ -424,7 +424,7 @@ PyGetSetDef libftdb_ftdbGlobalEntry_getset[] = {
 PyTypeObject libftdb_ftdbGlobalEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbGlobalEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbGlobalEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_global_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_global_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_global_entry_repr,
     .tp_as_sequence = &libftdb_ftdbGlobalEntry_sequence_methods,

@@ -20,7 +20,7 @@ class GlobalsModule(Module, FilterableModule, PipedModule):
             globs = [glob for glob in self.ft_db.get_globs(getattr(self.args, 'fids', None)) if self.filter_ftdb(glob)]
         else:
             globs = [glob for glob in self.ft_db.get_globs(getattr(self.args, 'fids', None))]
-        return globs, DataTypes.global_data, lambda x: x.name, libftdb.ftdbGlobalEntry 
+        return globs, DataTypes.global_data, lambda x: x.name, None 
 
 
 class TypesModule(Module, FilterableModule):
@@ -34,5 +34,5 @@ class TypesModule(Module, FilterableModule):
             types = [t for t in self.ft_db.get_types() if self.filter_ftdb(t)]
         else:
             types = [t for t in self.ft_db.get_types()]
-        return types, DataTypes.type_data, lambda x: x.name, libftdb.ftdbTypeEntry 
+        return types, DataTypes.type_data, lambda x: x.name, None
 

@@ -5,6 +5,8 @@ set(PYFTDB_SOURCES
 
     ftdbmaps.cpp
 
+    generic_collection.c
+
     funcs.c
     funcs_entry.c
     funcs_iter.c
@@ -33,6 +35,7 @@ set(PYFTDB_SOURCES
     funcdecls_iter.c
 
     unresolvedfuncs.c
+    unresolvedfuncs_entry.c
     unresolvedfuncs_iter.c
 
     modules.c

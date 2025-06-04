@@ -9,10 +9,10 @@ static void libftdb_ftdb_fops_entry_dealloc(libftdb_ftdb_fops_entry_object *self
 static PyObject *libftdb_ftdb_fops_entry_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
     libftdb_ftdb_fops_entry_object *self;
 
-    self = (libftdb_ftdb_fops_entry_object *)subtype->tp_alloc(subtype, 0);
+    self = (libftdb_ftdb_fops_entry_object *) subtype->tp_alloc(subtype, 0);
     if (self != 0) {
-        self->fops = (const libftdb_ftdb_fops_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
-        Py_IncRef((PyObject *)self->fops);
+        self->fops = (libftdb_ftdb_collection_object *) PyLong_AsLong(PyTuple_GetItem(args, 0));
+        Py_IncRef((PyObject *) self->fops);
         unsigned long index = PyLong_AsLong(PyTuple_GetItem(args, 1));
         if (index >= self->fops->ftdb->fops_count) {
             PyErr_SetString(libftdb_ftdbError, "fops entry index out of bounds");
@@ -207,7 +207,7 @@ PyGetSetDef libftdb_ftdbFopsEntry_getset[] = {
 PyTypeObject libftdb_ftdbFopsEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFopsEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFopsEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_fops_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_fops_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_fops_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFopsEntry_sequence_methods,

@@ -6,7 +6,7 @@ import fnmatch
 
 from libft_db import FTDatabase
 from libcas import CASDatabase
-from typing import List, Optional, Generator
+from typing import List, Optional
 
 from client.filtering import FtdbSimpleFilter, FilterException
 from client.argparser import get_args, merge_args

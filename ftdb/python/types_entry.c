@@ -11,7 +11,7 @@ static PyObject *libftdb_ftdb_type_entry_new(PyTypeObject *subtype, PyObject *ar
 
     self = (libftdb_ftdb_type_entry_object *)subtype->tp_alloc(subtype, 0);
     if (self != 0) {
-        self->types = (const libftdb_ftdb_types_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
+        self->types = (const libftdb_ftdb_collection_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
         Py_IncRef((PyObject *)self->types);
         unsigned long index = PyLong_AsLong(PyTuple_GetItem(args, 1));
         if (index >= self->types->ftdb->types_count) {
@@ -867,7 +867,7 @@ PyGetSetDef libftdb_ftdbTypeEntry_getset[] = {
 PyTypeObject libftdb_ftdbTypeEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbTypeEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbTypeEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_type_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_type_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_type_entry_repr,
     .tp_as_sequence = &libftdb_ftdbTypeEntry_sequence_methods,

@@ -37,7 +37,6 @@ extern PySequenceMethods libftdb_ftdbFops_sequence_methods;
 extern PyMemberDef libftdb_ftdbFops_members[];
 extern PyMappingMethods libftdb_ftdbFops_mapping_methods;
 extern PyTypeObject libftdb_ftdbFopsType;
-extern PySequenceMethods libftdb_ftdbFopsIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbFopsIterType;
 extern PyMethodDef libftdb_ftdbFopsEntry_methods[];
 extern PyMemberDef libftdb_ftdbFopsEntry_members[];
@@ -58,7 +57,6 @@ extern PyMappingMethods libftdb_ftdbFuncdeclEntry_mapping_methods;
 extern PySequenceMethods libftdb_ftdbFuncdeclEntry_sequence_methods;
 extern PyGetSetDef libftdb_ftdbFuncdeclEntry_getset[];
 extern PyTypeObject libftdb_ftdbFuncdeclsEntryType;
-extern PySequenceMethods libftdb_ftdbFuncdeclsIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbFuncdeclsIterType;
 
 extern PyMethodDef libftdb_ftdbFuncDerefInfoEntry_methods[];
@@ -108,7 +106,6 @@ extern PyGetSetDef libftdb_ftdbFuncEntry_getset[];
 extern PyMappingMethods libftdb_ftdbFuncEntry_mapping_methods;
 extern PySequenceMethods libftdb_ftdbFuncEntry_sequence_methods;
 extern PyTypeObject libftdb_ftdbFuncsEntryType;
-extern PySequenceMethods libftdb_ftdbFuncsIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbFuncsIterType;
 
 extern PyMethodDef libftdb_ftdbFuncSwitchInfoEntry_methods[];
@@ -130,7 +127,6 @@ extern PyMappingMethods libftdb_ftdbGlobalEntry_mapping_methods;
 extern PySequenceMethods libftdb_ftdbGlobalEntry_sequence_methods;
 extern PyGetSetDef libftdb_ftdbGlobalEntry_getset[];
 extern PyTypeObject libftdb_ftdbGlobalEntryType;
-extern PySequenceMethods libftdb_ftdbGlobalsIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbGlobalsIterType;
 
 extern PyMethodDef libftdb_ftdbModules_methods[];
@@ -139,7 +135,6 @@ extern PyMemberDef libftdb_ftdbModules_members[];
 extern PyGetSetDef libftdb_ftdbModules_getset[];
 extern PyMappingMethods libftdb_ftdbModules_mapping_methods;
 extern PyTypeObject libftdb_ftdbModulesType;
-extern PySequenceMethods libftdb_ftdbModulesIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbModulesIterType;
 
 extern PyMethodDef libftdb_ftdbSources_methods[];
@@ -148,7 +143,6 @@ extern PyMemberDef libftdb_ftdbSources_members[];
 extern PyGetSetDef libftdb_ftdbSources_getset[];
 extern PyMappingMethods libftdb_ftdbSources_mapping_methods;
 extern PyTypeObject libftdb_ftdbSourcesType;
-extern PySequenceMethods libftdb_ftdbSourcesIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbSourcesIterType;
 
 extern PyMethodDef libftdb_ftdbTypes_methods[];
@@ -163,7 +157,6 @@ extern PySequenceMethods libftdb_ftdbTypeEntry_sequence_methods;
 extern PyMappingMethods libftdb_ftdbTypeEntry_mapping_methods;
 extern PyGetSetDef libftdb_ftdbTypeEntry_getset[];
 extern PyTypeObject libftdb_ftdbTypeEntryType;
-extern PySequenceMethods libftdb_ftdbTypesIter_sequence_methods;
 extern PyTypeObject libftdb_ftdbTypesIterType;
 
 extern PyMethodDef libftdb_ftdbUnresolvedfuncs_methods[];
@@ -171,8 +164,15 @@ extern PySequenceMethods libftdb_ftdbUnresolvedfuncs_sequence_methods;
 extern PyMemberDef libftdb_ftdbUnresolvedfuncs_members[];
 extern PyGetSetDef libftdb_ftdbUnresolvedfuncs_getset[];
 extern PyTypeObject libftdb_ftdbUnresolvedfuncsType;
-extern PySequenceMethods libftdb_ftdbUnresolvedfuncsIter_sequence_methods;
+extern PyMethodDef libftdb_ftdbUnresolvedfuncEntry_methods[];
+extern PySequenceMethods libftdb_ftdbUnresolvedfuncEntry_sequence_methods;
+extern PyMappingMethods libftdb_ftdbUnresolvedfuncEntry_mapping_methods;
+extern PyMemberDef libftdb_ftdbUnresolvedfuncEntry_members[];
+extern PyGetSetDef libftdb_ftdbUnresolvedfuncEntry_getset[];
+extern PyTypeObject libftdb_ftdbUnresolvedfuncEntryType;
 extern PyTypeObject libftdb_ftdbUnresolvedfuncsIterType;
+
+extern PySequenceMethods libftdb_ftdbCollectionIter_sequence_methods;
 
 struct ftdb_ref {
     const struct ftdb *ftdb;
@@ -180,7 +180,8 @@ struct ftdb_ref {
 };
 
 typedef struct {
-    PyObject_HEAD int verbose;
+    PyObject_HEAD
+    int verbose;
     int debug;
     int init_done;
     const struct ftdb *ftdb;
@@ -190,50 +191,44 @@ typedef struct {
 } libftdb_ftdb_object;
 
 typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
+    PyObject_HEAD
+    const struct ftdb *ftdb;
     const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_fops_object;
+    unsigned long count;
+    const char *name;
+} libftdb_ftdb_collection_object;
 
 typedef struct {
-    PyObject_HEAD const struct ftdb_fops_entry *entry;
+    PyObject_HEAD
     unsigned long index;
-    const libftdb_ftdb_fops_object *fops;
+    const libftdb_ftdb_collection_object *collection;
+
+} libftdb_ftdb_collection_iter_object;
+
+typedef struct {
+    PyObject_HEAD
+    const struct ftdb_fops_entry *entry;
+    unsigned long index;
+    const libftdb_ftdb_collection_object *fops;
 } libftdb_ftdb_fops_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_fops_object *fops;
-} libftdb_ftdb_fops_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_funcdecls_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb_funcdecl_entry *entry;
+    PyObject_HEAD
+    const struct ftdb_funcdecl_entry *entry;
     unsigned long index;
-    const libftdb_ftdb_funcdecls_object *funcdecls;
+    const libftdb_ftdb_collection_object *funcdecls;
 } libftdb_ftdb_funcdecl_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_funcdecls_object *funcdecls;
-} libftdb_ftdb_funcdecls_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_funcs_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb_func_entry *entry;
+    PyObject_HEAD
+    const struct ftdb_func_entry *entry;
     unsigned long index;
-    const libftdb_ftdb_funcs_object *funcs;
+    const libftdb_ftdb_collection_object *funcs;
 } libftdb_ftdb_func_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long func_index;
+    PyObject_HEAD
+    unsigned long func_index;
     unsigned long entry_index;
     unsigned long is_refcall;
     struct call_info *entry;
@@ -241,105 +236,64 @@ typedef struct {
 } libftdb_ftdb_func_callinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long func_index;
+    PyObject_HEAD
+    unsigned long func_index;
     unsigned long entry_index;
     struct deref_info *entry;
     const libftdb_ftdb_func_entry_object *func_entry;
 } libftdb_ftdb_func_derefinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long func_index;
+    PyObject_HEAD
+    unsigned long func_index;
     unsigned long entry_index;
     struct if_info *entry;
     const libftdb_ftdb_func_entry_object *func_entry;
 } libftdb_ftdb_func_ifinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_funcs_object *funcs;
-} libftdb_ftdb_funcs_iter_object;
-
-typedef struct {
-    PyObject_HEAD unsigned long func_index;
+    PyObject_HEAD
+    unsigned long func_index;
     unsigned long entry_index;
     struct local_info *entry;
     const libftdb_ftdb_func_entry_object *func_entry;
 } libftdb_ftdb_func_localinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long entry_index;
+    PyObject_HEAD
+    unsigned long entry_index;
     struct offsetref_info *entry;
     const libftdb_ftdb_func_derefinfo_entry_object *deref_entry;
 } libftdb_ftdb_func_offsetrefinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long func_index;
+    PyObject_HEAD
+    unsigned long func_index;
     unsigned long entry_index;
     struct switch_info *entry;
     const libftdb_ftdb_func_entry_object *func_entry;
 } libftdb_ftdb_func_switchinfo_entry_object;
 
 typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_globals_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb_global_entry *entry;
+    PyObject_HEAD
+    const struct ftdb_global_entry *entry;
     unsigned long index;
-    const libftdb_ftdb_globals_object *globals;
+    const libftdb_ftdb_collection_object *globals;
 } libftdb_ftdb_global_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_globals_object *globals;
-} libftdb_ftdb_globals_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_modules_object;
-
-typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_modules_object *modules;
-} libftdb_ftdb_modules_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_sources_object;
-
-typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_sources_object *sources;
-} libftdb_ftdb_sources_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_types_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb_type_entry *entry;
+    PyObject_HEAD
+    const struct ftdb_type_entry *entry;
     unsigned long index;
-    const libftdb_ftdb_types_object *types;
+    const libftdb_ftdb_collection_object *types;
 } libftdb_ftdb_type_entry_object;
 
 typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_types_object *types;
-} libftdb_ftdb_types_iter_object;
-
-typedef struct {
-    PyObject_HEAD const struct ftdb *ftdb;
-    const libftdb_ftdb_object *py_ftdb;
-} libftdb_ftdb_unresolvedfuncs_object;
-
-typedef struct {
-    PyObject_HEAD unsigned long index;
-    const libftdb_ftdb_unresolvedfuncs_object *unresolvedfuncs;
-} libftdb_ftdb_unresolvedfuncs_iter_object;
+    PyObject_HEAD
+    const struct ftdb_unresolvedfunc_entry *entry;
+    unsigned long index;
+    const libftdb_ftdb_collection_object *unresolvedfuncs;
+} libftdb_ftdb_unresolvedfunc_entry_object;
 
 static PyObject *libftdb_generic_richcompare(PyObject *self, PyObject *other, int op) {
     if (op != Py_EQ && op != Py_NE)
@@ -373,5 +327,13 @@ static const char *PyString_get_c_str(PyObject *s) {
         return (const char *)0xdeadbeef;
     }
 }
+
+void libftdb_ftdb_collection_dealloc(libftdb_ftdb_collection_object *self);
+PyObject *libftdb_ftdb_collection_repr(PyObject *self);
+PyObject *libftdb_ftdb_collection_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+Py_ssize_t libftdb_ftdb_collection_sq_length(PyObject *self);
+
+void libftdb_ftdb_collection_iter_dealloc(libftdb_ftdb_collection_iter_object *self);
+PyObject *libftdb_ftdb_collection_iter_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
 
 #endif /* _PYFTDB_H */

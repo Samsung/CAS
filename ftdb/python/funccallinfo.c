@@ -10,7 +10,7 @@ static PyObject *libftdb_ftdb_func_callinfo_entry_new(PyTypeObject *subtype, PyO
     static char errmsg[ERRMSG_BUFFER_SIZE];
     libftdb_ftdb_func_callinfo_entry_object *self;
 
-    self = (libftdb_ftdb_func_callinfo_entry_object *)subtype->tp_alloc(subtype, 0);
+    self = (libftdb_ftdb_func_callinfo_entry_object *) subtype->tp_alloc(subtype, 0);
     if (self != 0) {
         self->func_entry = (const libftdb_ftdb_func_entry_object *)PyLong_AsLong(PyTuple_GetItem(args, 0));
         Py_IncRef((PyObject *)self->func_entry);
@@ -223,7 +223,7 @@ PyGetSetDef libftdb_ftdbFuncCallInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncCallInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncCallInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncCallInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_callinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_callinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_callinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncCallInfoEntry_sequence_methods,

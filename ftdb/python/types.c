@@ -1,41 +1,7 @@
 #include "pyftdb.h"
 
-static void libftdb_ftdb_types_dealloc(libftdb_ftdb_types_object *self) {
-    Py_DecRef((PyObject *)self->py_ftdb);
-    PyTypeObject *tp = Py_TYPE(self);
-    tp->tp_free(self);
-}
-
-static PyObject *libftdb_ftdb_types_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
-    libftdb_ftdb_types_object *self;
-
-    self = (libftdb_ftdb_types_object *)subtype->tp_alloc(subtype, 0);
-    if (self != 0) {
-        self->ftdb = (const struct ftdb *)PyLong_AsLong(PyTuple_GetItem(args, 0));
-        self->py_ftdb = (const libftdb_ftdb_object *)PyLong_AsLong(PyTuple_GetItem(args, 1));
-        Py_IncRef((PyObject *)self->py_ftdb);
-    }
-
-    return (PyObject *)self;
-}
-
-static PyObject *libftdb_ftdb_types_repr(PyObject *self) {
-    static char repr[1024];
-
-    libftdb_ftdb_types_object *__self = (libftdb_ftdb_types_object *)self;
-    int written = snprintf(repr, 1024, "<ftdbTypes object at %lx : ", (uintptr_t)self);
-    written += snprintf(repr + written, 1024 - written, "%ld types>", __self->ftdb->types_count);
-
-    return PyUnicode_FromString(repr);
-}
-
-static Py_ssize_t libftdb_ftdb_types_sq_length(PyObject *self) {
-    libftdb_ftdb_types_object *__self = (libftdb_ftdb_types_object *)self;
-    return __self->ftdb->types_count;
-}
-
 static PyObject *libftdb_ftdb_types_getiter(PyObject *self) {
-    libftdb_ftdb_types_object *__self = (libftdb_ftdb_types_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     PyObject *args = PyTuple_New(2);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self);
@@ -48,7 +14,7 @@ static PyObject *libftdb_ftdb_types_getiter(PyObject *self) {
 
 static PyObject *libftdb_ftdb_types_mp_subscript(PyObject *self, PyObject *slice) {
     static char errmsg[ERRMSG_BUFFER_SIZE];
-    libftdb_ftdb_types_object *__self = (libftdb_ftdb_types_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     if (PyLong_Check(slice)) {
         unsigned long id = PyLong_AsUnsignedLong(slice);
@@ -88,7 +54,7 @@ static PyObject *libftdb_ftdb_types_mp_subscript(PyObject *self, PyObject *slice
     }
 }
 
-static PyObject *libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_types_object *self, const char *hash) {
+static PyObject *libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_collection_object *self, const char *hash) {
     struct stringRef_entryMap_node *node = stringRef_entryMap_search(&self->ftdb->hrefmap, hash);
     if (node) {
         Py_RETURN_TRUE;
@@ -97,14 +63,14 @@ static PyObject *libftdb_ftdb_types_contains_hash_internal(libftdb_ftdb_types_ob
     }
 }
 
-static PyObject *libftdb_ftdb_types_contains_hash(libftdb_ftdb_types_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_types_contains_hash(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *hash;
     if (!PyArg_ParseTuple(args, "s", &hash))
         return NULL;
     return libftdb_ftdb_types_contains_hash_internal(self, hash);
 }
 
-static PyObject *libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_types_object *self, unsigned long id) {
+static PyObject *libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_collection_object *self, unsigned long id) {
     struct ulong_entryMap_node *node = ulong_entryMap_search(&self->ftdb->refmap, id);
     if (node) {
         Py_RETURN_TRUE;
@@ -113,14 +79,14 @@ static PyObject *libftdb_ftdb_types_contains_id_internal(libftdb_ftdb_types_obje
     }
 }
 
-static PyObject *libftdb_ftdb_types_contains_id(libftdb_ftdb_types_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_types_contains_id(libftdb_ftdb_collection_object *self, PyObject *args) {
     unsigned long id;
     if (!PyArg_ParseTuple(args, "k", &id))
         return NULL;
     return libftdb_ftdb_types_contains_id_internal(self, id);
 }
 
-static PyObject *libftdb_ftdb_types_entry_by_hash(libftdb_ftdb_types_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_types_entry_by_hash(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *hash;
     if (!PyArg_ParseTuple(args, "s", &hash))
         return NULL;
@@ -141,7 +107,7 @@ static PyObject *libftdb_ftdb_types_entry_by_hash(libftdb_ftdb_types_object *sel
     return entry;
 }
 
-static PyObject *libftdb_ftdb_types_entry_by_id(libftdb_ftdb_types_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_types_entry_by_id(libftdb_ftdb_collection_object *self, PyObject *args) {
     unsigned long id;
     if (!PyArg_ParseTuple(args, "k", &id))
         return NULL;
@@ -164,7 +130,7 @@ static PyObject *libftdb_ftdb_types_entry_by_id(libftdb_ftdb_types_object *self,
 }
 
 static int libftdb_ftdb_types_sq_contains(PyObject *self, PyObject *key) {
-    libftdb_ftdb_types_object *__self = (libftdb_ftdb_types_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     if (PyUnicode_Check(key)) {
         /* Check hash */
@@ -197,7 +163,7 @@ PyMethodDef libftdb_ftdbTypes_methods[] = {
 };
 
 PySequenceMethods libftdb_ftdbTypes_sequence_methods = {
-    .sq_length = libftdb_ftdb_types_sq_length,
+    .sq_length = libftdb_ftdb_collection_sq_length,
     .sq_contains = libftdb_ftdb_types_sq_contains
 };
 
@@ -208,13 +174,13 @@ PyMappingMethods libftdb_ftdbTypes_mapping_methods = {
 PyTypeObject libftdb_ftdbTypesType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbTypes",
-    .tp_basicsize = sizeof(libftdb_ftdbTypesType),
-    .tp_dealloc = (destructor)libftdb_ftdb_types_dealloc,
-    .tp_repr = (reprfunc)libftdb_ftdb_types_repr,
+    .tp_basicsize = sizeof(libftdb_ftdb_collection_object),
+    .tp_dealloc = (destructor)libftdb_ftdb_collection_dealloc,
+    .tp_repr = (reprfunc)libftdb_ftdb_collection_repr,
     .tp_as_sequence = &libftdb_ftdbTypes_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbTypes_mapping_methods,
     .tp_doc = "libftdb ftdbTypes object",
     .tp_iter = libftdb_ftdb_types_getiter,
     .tp_methods = libftdb_ftdbTypes_methods,
-    .tp_new = libftdb_ftdb_types_new,
+    .tp_new = libftdb_ftdb_collection_new,
 };

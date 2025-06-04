@@ -236,7 +236,7 @@ PyGetSetDef libftdb_ftdbFuncLocalInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncLocalInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncLocalInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncLocalInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_localinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_localinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_localinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncLocalInfoEntry_sequence_methods,

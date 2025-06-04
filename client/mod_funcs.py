@@ -20,7 +20,7 @@ class FunctionsModule(Module, FilterableModule, PipedModule):
             funcs = [func for func in self.ft_db.get_funcs(getattr(self.args, 'fids', None)) if self.filter_ftdb(func)]
         else:
             funcs = [func for func in self.ft_db.get_funcs(getattr(self.args, 'fids', None))]
-        return funcs, DataTypes.function_data, lambda x: x.name, libftdb.ftdbFuncEntry
+        return funcs, DataTypes.function_data, lambda x: x.name, None
 
 
 class FuncDeclModule(Module, FilterableModule, PipedModule):
@@ -38,4 +38,4 @@ class FuncDeclModule(Module, FilterableModule, PipedModule):
             funcdecls = [fd for fd in self.ft_db.get_funcdecls(getattr(self.args, 'fids', None)) if self.filter_ftdb(fd)]
         else:
             funcdecls = [fd for fd in self.ft_db.get_funcdecls(getattr(self.args, 'fids', None))]
-        return funcdecls, DataTypes.funcdecl_data, lambda x: x.name, libftdb.ftdbFuncdeclEntry
+        return funcdecls, DataTypes.funcdecl_data, lambda x: x.name, None

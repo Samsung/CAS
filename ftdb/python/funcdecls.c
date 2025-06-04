@@ -1,41 +1,7 @@
 #include "pyftdb.h"
 
-static void libftdb_ftdb_funcdecls_dealloc(libftdb_ftdb_funcdecls_object *self) {
-    Py_DecRef((PyObject *)self->py_ftdb);
-    PyTypeObject *tp = Py_TYPE(self);
-    tp->tp_free(self);
-}
-
-static PyObject *libftdb_ftdb_funcdecls_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
-    libftdb_ftdb_funcdecls_object *self;
-
-    self = (libftdb_ftdb_funcdecls_object *)subtype->tp_alloc(subtype, 0);
-    if (self != 0) {
-        self->ftdb = (const struct ftdb *)PyLong_AsLong(PyTuple_GetItem(args, 0));
-        self->py_ftdb = (const libftdb_ftdb_object *)PyLong_AsLong(PyTuple_GetItem(args, 1));
-        Py_IncRef((PyObject *)self->py_ftdb);
-    }
-
-    return (PyObject *)self;
-}
-
-static PyObject *libftdb_ftdb_funcdecls_repr(PyObject *self) {
-    static char repr[1024];
-
-    libftdb_ftdb_funcdecls_object *__self = (libftdb_ftdb_funcdecls_object *)self;
-    int written = snprintf(repr, 1024, "<ftdbFuncdecls object at %lx : ", (uintptr_t)self);
-    written += snprintf(repr + written, 1024 - written, "%ld funcdecls>", __self->ftdb->funcdecls_count);
-
-    return PyUnicode_FromString(repr);
-}
-
-static Py_ssize_t libftdb_ftdb_funcdecls_sq_length(PyObject *self) {
-    libftdb_ftdb_funcdecls_object *__self = (libftdb_ftdb_funcdecls_object *)self;
-    return __self->ftdb->funcdecls_count;
-}
-
 static PyObject *libftdb_ftdb_funcdecls_getiter(PyObject *self) {
-    libftdb_ftdb_funcdecls_object *__self = (libftdb_ftdb_funcdecls_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     PyObject *args = PyTuple_New(2);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self);
@@ -47,7 +13,7 @@ static PyObject *libftdb_ftdb_funcdecls_getiter(PyObject *self) {
 
 static PyObject *libftdb_ftdb_funcdecls_mp_subscript(PyObject *self, PyObject *slice) {
     static char errmsg[ERRMSG_BUFFER_SIZE];
-    libftdb_ftdb_funcdecls_object *__self = (libftdb_ftdb_funcdecls_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     if (PyLong_Check(slice)) {
         unsigned long id = PyLong_AsUnsignedLong(slice);
@@ -87,7 +53,7 @@ static PyObject *libftdb_ftdb_funcdecls_mp_subscript(PyObject *self, PyObject *s
     }
 }
 
-static PyObject *libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_collection_object *self, PyObject *args) {
     unsigned long id;
     if (!PyArg_ParseTuple(args, "k", &id))
         return NULL;
@@ -109,7 +75,7 @@ static PyObject *libftdb_ftdb_funcdecls_entry_by_id(libftdb_ftdb_funcdecls_objec
     return entry;
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_funcdecls_object *self, unsigned long id) {
+static PyObject *libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_collection_object *self, unsigned long id) {
     struct ulong_entryMap_node *node = ulong_entryMap_search(&self->ftdb->fdrefmap, id);
     if (node) {
         Py_RETURN_TRUE;
@@ -118,14 +84,14 @@ static PyObject *libftdb_ftdb_funcdecls_contains_id_internal(libftdb_ftdb_funcde
     }
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_contains_id(libftdb_ftdb_collection_object *self, PyObject *args) {
     unsigned long id;
     if (!PyArg_ParseTuple(args, "k", &id))
         return NULL;
     return libftdb_ftdb_funcdecls_contains_id_internal(self, id);
 }
 
-static PyObject *libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *hash;
     if (!PyArg_ParseTuple(args, "s", &hash))
         return NULL;
@@ -146,7 +112,7 @@ static PyObject *libftdb_ftdb_funcdecls_entry_by_hash(libftdb_ftdb_funcdecls_obj
     return entry;
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_funcdecls_object *self, const char *hash) {
+static PyObject *libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_collection_object *self, const char *hash) {
     struct stringRef_entryMap_node *node = stringRef_entryMap_search(&self->ftdb->fdhrefmap, hash);
     if (node) {
         Py_RETURN_TRUE;
@@ -155,7 +121,7 @@ static PyObject *libftdb_ftdb_funcdecls_contains_hash_internal(libftdb_ftdb_func
     }
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *hash;
     if (!PyArg_ParseTuple(args, "s", &hash))
         return NULL;
@@ -163,7 +129,7 @@ static PyObject *libftdb_ftdb_funcdecls_contains_hash(libftdb_ftdb_funcdecls_obj
     return libftdb_ftdb_funcdecls_contains_hash_internal(self, hash);
 }
 
-static PyObject *libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *name;
     if (!PyArg_ParseTuple(args, "s", &name))
         return NULL;
@@ -191,7 +157,7 @@ static PyObject *libftdb_ftdb_funcdecls_entry_by_name(libftdb_ftdb_funcdecls_obj
     return entry_list;
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_funcdecls_object *self, const char *name) {
+static PyObject *libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_collection_object *self, const char *name) {
     struct stringRef_entryListMap_node *node = stringRef_entryListMap_search(&self->ftdb->fdnrefmap, name);
     if (node) {
         Py_RETURN_TRUE;
@@ -200,7 +166,7 @@ static PyObject *libftdb_ftdb_funcdecls_contains_name_internal(libftdb_ftdb_func
     }
 }
 
-static PyObject *libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_object *self, PyObject *args) {
+static PyObject *libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_collection_object *self, PyObject *args) {
     const char *name;
     if (!PyArg_ParseTuple(args, "s", &name))
         return NULL;
@@ -209,7 +175,7 @@ static PyObject *libftdb_ftdb_funcdecls_contains_name(libftdb_ftdb_funcdecls_obj
 }
 
 static int libftdb_ftdb_funcdecls_sq_contains(PyObject *self, PyObject *key) {
-    libftdb_ftdb_funcdecls_object *__self = (libftdb_ftdb_funcdecls_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     if (PyUnicode_Check(key)) {
         /* Check hash */
@@ -249,20 +215,20 @@ PyMappingMethods libftdb_ftdbFuncdecls_mapping_methods = {
 };
 
 PySequenceMethods libftdb_ftdbFuncdecls_sequence_methods = {
-    .sq_length = libftdb_ftdb_funcdecls_sq_length,
+    .sq_length = libftdb_ftdb_collection_sq_length,
     .sq_contains = libftdb_ftdb_funcdecls_sq_contains
 };
 
 PyTypeObject libftdb_ftdbFuncdeclsType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncsdecl",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncdeclsType),
-    .tp_dealloc = (destructor)libftdb_ftdb_funcdecls_dealloc,
-    .tp_repr = (reprfunc)libftdb_ftdb_funcdecls_repr,
+    .tp_basicsize = sizeof(libftdb_ftdb_collection_object),
+    .tp_dealloc = (destructor)libftdb_ftdb_collection_dealloc,
+    .tp_repr = (reprfunc)libftdb_ftdb_collection_repr,
     .tp_as_sequence = &libftdb_ftdbFuncdecls_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbFuncdecls_mapping_methods,
     .tp_doc = "libftdb ftdbFuncdecls object",
     .tp_iter = libftdb_ftdb_funcdecls_getiter,
     .tp_methods = libftdb_ftdbFuncdecls_methods,
-    .tp_new = libftdb_ftdb_funcdecls_new,
+    .tp_new = libftdb_ftdb_collection_new,
 };

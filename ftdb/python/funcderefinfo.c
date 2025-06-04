@@ -360,7 +360,7 @@ PyGetSetDef libftdb_ftdbFuncDerefInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncDerefInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncDerefInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncDerefInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_derefinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_derefinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_derefinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncDerefInfoEntry_sequence_methods,

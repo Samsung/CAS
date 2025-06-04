@@ -70,66 +70,6 @@
 
 #define ERRMSG_BUFFER_SIZE 8192
 
-#define ASSERT_WITH_NFSDB_ERROR(__expr, __msg, ...)       \
-    do {                                                  \
-        if (!(__expr)) {                                  \
-            PyErr_SetString(libetrace_nfsdbError, __msg); \
-            return 0;                                     \
-        }                                                 \
-    } while (0)
-
-#define ASSERT_BREAK_WITH_NFSDB_ERROR(__expr, __msg, ...) \
-    {                                                     \
-        if (!(__expr)) {                                  \
-            PyErr_SetString(libetrace_nfsdbError, __msg); \
-            break;                                        \
-        }                                                 \
-    }
-
-#define ASSERT_CLEANUP_WITH_NFSDB_ERROR(__expr, __msg, ...) \
-    do {                                                    \
-        if (!(__expr)) {                                    \
-            PyErr_SetString(libetrace_nfsdbError, __msg);   \
-            goto cleanup_and_err;                           \
-        }                                                   \
-    } while (0)
-
-#define ASSERT_WITH_NFSDB_FORMAT_ERROR(__expr, __msg, ...)            \
-    do {                                                              \
-        if (!(__expr)) {                                              \
-            snprintf(errmsg, ERRMSG_BUFFER_SIZE, __msg, __VA_ARGS__); \
-            PyErr_SetString(libetrace_nfsdbError, errmsg);            \
-            return 0;                                                 \
-        }                                                             \
-    } while (0)
-
-#define ASSERT_BREAK_WITH_NFSDB_FORMAT_ERROR(__expr, __msg, ...)      \
-    {                                                                 \
-        if (!(__expr)) {                                              \
-            snprintf(errmsg, ERRMSG_BUFFER_SIZE, __msg, __VA_ARGS__); \
-            PyErr_SetString(libetrace_nfsdbError, errmsg);            \
-            break;                                                    \
-        }                                                             \
-    }
-
-#define ASSERT_CLEANUP_WITH_NFSDB_FORMAT_ERROR(__expr, __msg, ...)    \
-    do {                                                              \
-        if (!(__expr)) {                                              \
-            snprintf(errmsg, ERRMSG_BUFFER_SIZE, __msg, __VA_ARGS__); \
-            PyErr_SetString(libetrace_nfsdbError, errmsg);            \
-            goto cleanup_and_err;                                     \
-        }                                                             \
-    } while (0)
-
-#define ASSERT_RETURN_WITH_NFSDB_FORMAT_ERROR(__expr, __msg, __retcode, ...) \
-    do {                                                                     \
-        if (!(__expr)) {                                                     \
-            snprintf(errmsg, ERRMSG_BUFFER_SIZE, __msg, __VA_ARGS__);        \
-            PyErr_SetString(libetrace_nfsdbError, errmsg);                   \
-            return __retcode;                                                \
-        }                                                                    \
-    } while (0)
-
 #define ASSERT_WITH_FTDB_ERROR(__expr, __msg, ...)     \
     do {                                               \
         if (!(__expr)) {                               \

@@ -63,20 +63,20 @@ class FTDatabase:
             return [ftdbModuleEntry(md[0], md[1]) for md in list(self.db.modules)]
         return [ftdbModuleEntry(mid, self.db.modules[mid]) for mid in set(mids) if mid < len(self.db.modules)]
 
-    def get_funcs(self, fids: Optional[List[int]]=None) -> List[libftdb.ftdbFuncEntry]:
+    def get_funcs(self, fids: Optional[List[int]]=None):
         if fids is None:
             return self.db.funcs
         return [func for func in self.db.funcs if set(func.fids).intersection(fids)]
 
-    def get_funcdecls(self, fids:Optional[List[int]]=None) -> List[libftdb.ftdbFuncdeclEntry]:
+    def get_funcdecls(self, fids:Optional[List[int]]=None):
         if fids is None:
             return self.db.funcdecls
         return [fd for fd in self.db.funcdecls if fd.fid in fids]
 
-    def get_globs(self, fids: Optional[List[int]]=None) -> List[libftdb.ftdbGlobalEntry]:
+    def get_globs(self, fids: Optional[List[int]]=None):
         if fids is None:
             return self.db.globals
         return [glob for glob in self.db.globals if glob.fid in fids]
 
-    def get_types(self) -> libftdb.ftdbTypes:
+    def get_types(self):
         return self.db.types

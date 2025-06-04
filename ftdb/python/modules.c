@@ -1,42 +1,8 @@
 #include "pyftdb.h"
 
-static void libftdb_ftdb_modules_dealloc(libftdb_ftdb_modules_object *self) {
-    Py_DecRef((PyObject *)self->py_ftdb);
-    PyTypeObject *tp = Py_TYPE(self);
-    tp->tp_free(self);
-}
-
-static PyObject *libftdb_ftdb_modules_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds) {
-    libftdb_ftdb_modules_object *self;
-
-    self = (libftdb_ftdb_modules_object *)subtype->tp_alloc(subtype, 0);
-    if (self != 0) {
-        self->ftdb = (const struct ftdb *)PyLong_AsLong(PyTuple_GetItem(args, 0));
-        self->py_ftdb = (const libftdb_ftdb_object *)PyLong_AsLong(PyTuple_GetItem(args, 1));
-        Py_IncRef((PyObject *)self->py_ftdb);
-    }
-
-    return (PyObject *)self;
-}
-
-static PyObject *libftdb_ftdb_modules_repr(PyObject *self) {
-    static char repr[1024];
-
-    libftdb_ftdb_modules_object *__self = (libftdb_ftdb_modules_object *)self;
-    int written = snprintf(repr, 1024, "<ftdbModules object at %lx : ", (uintptr_t)self);
-    written += snprintf(repr + written, 1024 - written, "%ld modules>", __self->ftdb->moduleindex_table_count);
-
-    return PyUnicode_FromString(repr);
-}
-
-static Py_ssize_t libftdb_ftdb_modules_sq_length(PyObject *self) {
-    libftdb_ftdb_modules_object *__self = (libftdb_ftdb_modules_object *)self;
-    return __self->ftdb->moduleindex_table_count;
-}
-
 static PyObject *libftdb_ftdb_modules_mp_subscript(PyObject *self, PyObject *slice) {
     static char errmsg[ERRMSG_BUFFER_SIZE];
-    libftdb_ftdb_modules_object *__self = (libftdb_ftdb_modules_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     if (PyLong_Check(slice)) {
         unsigned long index = PyLong_AsUnsignedLong(slice);
@@ -69,7 +35,7 @@ static int libftdb_ftdb_modules_sq_contains(PyObject *self, PyObject *key) {
         return 0;
     }
 
-    libftdb_ftdb_modules_object *__self = (libftdb_ftdb_modules_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
     const char *ckey = PyString_get_c_str(key);
     struct stringRefMap_node *node = stringRefMap_search(&__self->ftdb->modulemap, ckey);
     PYASSTR_DECREF(ckey);
@@ -79,7 +45,7 @@ static int libftdb_ftdb_modules_sq_contains(PyObject *self, PyObject *key) {
 }
 
 static PyObject *libftdb_ftdb_modules_getiter(PyObject *self) {
-    libftdb_ftdb_modules_object *__self = (libftdb_ftdb_modules_object *)self;
+    libftdb_ftdb_collection_object *__self = (libftdb_ftdb_collection_object *)self;
 
     PyObject *args = PyTuple_New(2);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self);
@@ -90,7 +56,7 @@ static PyObject *libftdb_ftdb_modules_getiter(PyObject *self) {
 }
 
 PySequenceMethods libftdb_ftdbModules_sequence_methods = {
-    .sq_length = libftdb_ftdb_modules_sq_length,
+    .sq_length = libftdb_ftdb_collection_sq_length,
     .sq_contains = libftdb_ftdb_modules_sq_contains
 };
 
@@ -101,12 +67,12 @@ PyMappingMethods libftdb_ftdbModules_mapping_methods = {
 PyTypeObject libftdb_ftdbModulesType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbModules",
-    .tp_basicsize = sizeof(libftdb_ftdbModulesType),
-    .tp_dealloc = (destructor)libftdb_ftdb_modules_dealloc,
-    .tp_repr = (reprfunc)libftdb_ftdb_modules_repr,
+    .tp_basicsize = sizeof(libftdb_ftdb_collection_object),
+    .tp_dealloc = (destructor)libftdb_ftdb_collection_dealloc,
+    .tp_repr = (reprfunc)libftdb_ftdb_collection_repr,
     .tp_as_sequence = &libftdb_ftdbModules_sequence_methods,
     .tp_as_mapping = &libftdb_ftdbModules_mapping_methods,
     .tp_doc = "libftdb ftdbModules object",
     .tp_iter = libftdb_ftdb_modules_getiter,
-    .tp_new = libftdb_ftdb_modules_new,
+    .tp_new = libftdb_ftdb_collection_new,
 };

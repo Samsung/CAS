@@ -16,96 +16,11 @@
 #define IS_EINTR(x) 0
 #endif
 
-/* Taken from GNU CoreUtils 6.9 cat: GPL v.2 */
-ssize_t safe_rd(int fd, void const *buf, size_t count) {
-    for (;;) {
-        ssize_t result = read(fd, (void *)buf, count);
-
-        if (0 <= result)
-            return result;
-        else if (IS_EINTR(errno)) {
-            continue;
-        } else
-            return result;
-    }
-}
-
 #define COMP_MAX 50
 
 #define ispathsep(ch) ((ch) == '/' || (ch) == '\\')
 #define iseos(ch)     ((ch) == '\0')
 #define ispathend(ch) (ispathsep(ch) || iseos(ch))
-
-/* Taken from https://gist.github.com/starwing/2761647 */
-char *normpath(const char *in) {
-    char *out = malloc(strlen(in) + 1);
-    char *pos[COMP_MAX], **top = pos, *head = out;
-    int isabs = ispathsep(*in);
-
-    if (isabs)
-        *out++ = '/';
-    *top++ = out;
-
-    while (!iseos(*in)) {
-        while (ispathsep(*in))
-            ++in;
-
-        if (iseos(*in))
-            break;
-
-        if (memcmp(in, ".", 1) == 0 && ispathend(in[1])) {
-            ++in;
-            continue;
-        }
-
-        if (memcmp(in, "..", 2) == 0 && ispathend(in[2])) {
-            in += 2;
-            if (top != pos + 1)
-                out = *--top;
-            else if (isabs)
-                out = top[-1];
-            else {
-                strcpy(out, "../");
-                out += 3;
-            }
-            continue;
-        }
-
-        if (top - pos >= COMP_MAX)
-            return NULL; /* path too complicated */
-
-        *top++ = out;
-        while (!ispathend(*in))
-            *out++ = *in++;
-        if (ispathsep(*in))
-            *out++ = '/';
-    }
-
-    *out = '\0';
-    if (*head == '\0')
-        strcpy(head, "./");
-    return head;
-}
-
-const char *path_join(const char *start, const char *end) {
-    if (end[0] == '/') {
-        return 0;
-    }
-
-    size_t ssz = strlen(start);
-    size_t esz = strlen(end);
-
-    char *s = malloc(ssz + esz + 2);
-    memcpy(s, start, ssz);
-    s[ssz] = '/';
-    memcpy(s + ssz + 1, end, esz);
-    s[ssz + 1 + esz] = 0;
-
-    char *ns = normpath(s);
-    free(s);
-
-    return ns;
-}
 
 /* The following code that originally implemented 'vsnprintf' function was taken
  *  from the Linux kernel source tree: GPL v.2

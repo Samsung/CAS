@@ -236,7 +236,7 @@ PyGetSetDef libftdb_ftdbFuncOffsetrefInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncOffsetrefInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncOffsetrefInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncOffsetrefInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_offsetrefinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_offsetrefinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_offsetrefinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncOffsetrefInfoEntry_sequence_methods,

@@ -224,9 +224,11 @@ PyObject *libftdb_ftdb_get_sources(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
-    PyTuple_SetItem(args, 0, PyLong_FromLong((uintptr_t)__self->ftdb));
+    PyObject *args = PyTuple_New(4);
+    PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->sourceindex_table_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbSources");
     PyObject *sources = PyObject_CallObject((PyObject *)&libftdb_ftdbSourcesType, args);
     Py_DECREF(args);
     return sources;
@@ -268,9 +270,11 @@ PyObject *libftdb_ftdb_get_modules(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
-    PyTuple_SetItem(args, 0, PyLong_FromLong((uintptr_t)__self->ftdb));
+    PyObject *args = PyTuple_New(4);
+    PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->moduleindex_table_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbModules");
     PyObject *modules = PyObject_CallObject((PyObject *)&libftdb_ftdbModulesType, args);
     Py_DECREF(args);
     return modules;
@@ -312,9 +316,11 @@ PyObject *libftdb_ftdb_get_funcs(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->funcs_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbFuncs");
     PyObject *funcs = PyObject_CallObject((PyObject *)&libftdb_ftdbFuncsType, args);
     Py_DECREF(args);
     return funcs;
@@ -324,9 +330,11 @@ PyObject *libftdb_ftdb_get_funcdecls(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->funcdecls_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbFuncdecls");
     PyObject *funcdecls = PyObject_CallObject((PyObject *)&libftdb_ftdbFuncdeclsType, args);
     Py_DECREF(args);
     return funcdecls;
@@ -336,9 +344,11 @@ PyObject *libftdb_ftdb_get_unresolvedfuncs(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->unresolvedfuncs_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbUnresolvedfuncs");
     PyObject *unresolvedfuncs = PyObject_CallObject((PyObject *)&libftdb_ftdbUnresolvedfuncsType, args);
     Py_DECREF(args);
     return unresolvedfuncs;
@@ -363,9 +373,11 @@ PyObject *libftdb_ftdb_get_globals(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->globals_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbGlobals");
     PyObject *globals = PyObject_CallObject((PyObject *)&libftdb_ftdbGlobalsType, args);
     Py_DECREF(args);
     return globals;
@@ -375,9 +387,11 @@ PyObject *libftdb_ftdb_get_types(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->types_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbTypes");
     PyObject *types = PyObject_CallObject((PyObject *)&libftdb_ftdbTypesType, args);
     Py_DECREF(args);
     return types;
@@ -387,9 +401,11 @@ PyObject *libftdb_ftdb_get_fops(PyObject *self, void *closure) {
     libftdb_ftdb_object *__self = (libftdb_ftdb_object *)self;
     FTDB_MODULE_INIT_CHECK;
 
-    PyObject *args = PyTuple_New(2);
+    PyObject *args = PyTuple_New(4);
     PYTUPLE_SET_ULONG(args, 0, (uintptr_t)__self->ftdb);
     PYTUPLE_SET_ULONG(args, 1, (uintptr_t)self);
+    PYTUPLE_SET_ULONG(args, 2, (uintptr_t)__self->ftdb->fops_count);
+    PYTUPLE_SET_ULONG(args, 3, (uintptr_t)"ftdbFops");
     PyObject *fops = PyObject_CallObject((PyObject *)&libftdb_ftdbFopsType, args);
     Py_DECREF(args);
     return fops;
@@ -2028,6 +2044,38 @@ PyTypeObject libftdb_ftdbType = {
     .tp_new = libftdb_ftdb_new,
 };
 
+static PyTypeObject *__registered_types[] = {
+    &libftdb_ftdbType,
+    &libftdb_ftdbSourcesType,
+    &libftdb_ftdbModulesType,
+    &libftdb_ftdbFuncsType,
+    &libftdb_ftdbFuncdeclsType,
+    &libftdb_ftdbUnresolvedfuncsType,
+    &libftdb_ftdbGlobalsType,
+    &libftdb_ftdbTypesType,
+    &libftdb_ftdbFopsType,
+    &libftdb_ftdbSourcesIterType,
+    &libftdb_ftdbModulesIterType,
+    &libftdb_ftdbFuncsIterType,
+    &libftdb_ftdbFuncdeclsIterType,
+    &libftdb_ftdbUnresolvedfuncsIterType,
+    &libftdb_ftdbGlobalsIterType,
+    &libftdb_ftdbTypesIterType,
+    &libftdb_ftdbFopsIterType,
+    &libftdb_ftdbFuncsEntryType,
+    &libftdb_ftdbFuncdeclsEntryType,
+    &libftdb_ftdbUnresolvedfuncEntryType,
+    &libftdb_ftdbGlobalEntryType,
+    &libftdb_ftdbTypeEntryType,
+    &libftdb_ftdbFopsEntryType,
+    &libftdb_ftdbFuncCallInfoEntryType,
+    &libftdb_ftdbFuncSwitchInfoEntryType,
+    &libftdb_ftdbFuncIfInfoEntryType,
+    &libftdb_ftdbFuncLocalInfoEntryType,
+    &libftdb_ftdbFuncDerefInfoEntryType,
+    &libftdb_ftdbFuncOffsetrefInfoEntryType,
+};
+
 PyMODINIT_FUNC
 PyInit_libftdb(void) {
     PyObject *m;
@@ -2036,249 +2084,14 @@ PyInit_libftdb(void) {
     if (m == 0)
         return 0;
 
-    if (PyType_Ready(&libftdb_ftdbType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbType);
+    for (int i = 0; i < sizeof(__registered_types) / sizeof(*__registered_types); i++) {
+        if (PyType_Ready(__registered_types[i]) < 0)
+            return 0;
 
-    if (PyType_Ready(&libftdb_ftdbSourcesType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbSourcesType);
-
-    if (PyType_Ready(&libftdb_ftdbModulesType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbModulesType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncsType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncsType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncdeclsType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncdeclsType);
-
-    if (PyType_Ready(&libftdb_ftdbUnresolvedfuncsType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbUnresolvedfuncsType);
-
-    if (PyType_Ready(&libftdb_ftdbGlobalsType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbGlobalsType);
-
-    if (PyType_Ready(&libftdb_ftdbTypesType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbTypesType);
-
-    if (PyType_Ready(&libftdb_ftdbFopsType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFopsType);
-
-    if (PyType_Ready(&libftdb_ftdbSourcesIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbSourcesIterType);
-
-    if (PyType_Ready(&libftdb_ftdbModulesIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbModulesIterType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncsIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncsIterType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncdeclsIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncdeclsIterType);
-
-    if (PyType_Ready(&libftdb_ftdbUnresolvedfuncsIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbUnresolvedfuncsIterType);
-
-    if (PyType_Ready(&libftdb_ftdbGlobalsIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbGlobalsIterType);
-
-    if (PyType_Ready(&libftdb_ftdbTypesIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbTypesIterType);
-
-    if (PyType_Ready(&libftdb_ftdbFopsIterType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFopsIterType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncsEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncsEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncdeclsEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncdeclsEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbGlobalEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbGlobalEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbTypeEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbTypeEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFopsEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFopsEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncCallInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncCallInfoEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncSwitchInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncSwitchInfoEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncIfInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncIfInfoEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncLocalInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncLocalInfoEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncDerefInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncDerefInfoEntryType);
-
-    if (PyType_Ready(&libftdb_ftdbFuncOffsetrefInfoEntryType) < 0)
-        return 0;
-    Py_XINCREF(&libftdb_ftdbFuncOffsetrefInfoEntryType);
+        Py_XINCREF(__registered_types[i]);
+    }
 
     if (PyModule_AddObject(m, "ftdb", (PyObject *)&libftdb_ftdbType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbModules", (PyObject *)&libftdb_ftdbModulesType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbModulesIter", (PyObject *)&libftdb_ftdbModulesIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbSources", (PyObject *)&libftdb_ftdbSourcesType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbSourcesIter", (PyObject *)&libftdb_ftdbSourcesIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncs", (PyObject *)&libftdb_ftdbFuncsType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncsIter", (PyObject *)&libftdb_ftdbFuncsIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncEntry", (PyObject *)&libftdb_ftdbFuncsEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncCallInfoEntry", (PyObject *)&libftdb_ftdbFuncCallInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncSwitchInfoEntry", (PyObject *)&libftdb_ftdbFuncSwitchInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncIfInfoEntry", (PyObject *)&libftdb_ftdbFuncIfInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncLocalInfoEntry", (PyObject *)&libftdb_ftdbFuncLocalInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncDerefInfoEntry", (PyObject *)&libftdb_ftdbFuncDerefInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncOffsetrefInfoEntry", (PyObject *)&libftdb_ftdbFuncOffsetrefInfoEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncdecls", (PyObject *)&libftdb_ftdbFuncdeclsType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFuncdeclEntry", (PyObject *)&libftdb_ftdbFuncdeclsEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbUnresolvedfuncs", (PyObject *)&libftdb_ftdbUnresolvedfuncsType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbUnresolvedfuncsIter", (PyObject *)&libftdb_ftdbUnresolvedfuncsIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbGlobals", (PyObject *)&libftdb_ftdbGlobalsType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbGlobalsIter", (PyObject *)&libftdb_ftdbGlobalsIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbGlobalEntry", (PyObject *)&libftdb_ftdbGlobalEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbTypes", (PyObject *)&libftdb_ftdbTypesType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbTypesIter", (PyObject *)&libftdb_ftdbTypesIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbTypeEntry", (PyObject *)&libftdb_ftdbTypeEntryType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFops", (PyObject *)&libftdb_ftdbFopsType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFopsIter", (PyObject *)&libftdb_ftdbFopsIterType) < 0) {
-        Py_DECREF(m);
-        return 0;
-    }
-
-    if (PyModule_AddObject(m, "ftdbFopsEntry", (PyObject *)&libftdb_ftdbFopsEntryType) < 0) {
         Py_DECREF(m);
         return 0;
     }

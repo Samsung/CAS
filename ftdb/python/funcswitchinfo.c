@@ -183,7 +183,7 @@ PyGetSetDef libftdb_ftdbFuncSwitchInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncSwitchInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncSwitchInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncSwitchInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_switchinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_switchinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_switchinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncSwitchInfoEntry_sequence_methods,

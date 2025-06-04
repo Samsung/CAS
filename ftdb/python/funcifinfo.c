@@ -171,7 +171,7 @@ PyGetSetDef libftdb_ftdbFuncIfInfoEntry_getset[] = {
 PyTypeObject libftdb_ftdbFuncIfInfoEntryType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "libftdb.ftdbFuncIfInfoEntry",
-    .tp_basicsize = sizeof(libftdb_ftdbFuncIfInfoEntryType),
+    .tp_basicsize = sizeof(libftdb_ftdb_func_ifinfo_entry_object),
     .tp_dealloc = (destructor)libftdb_ftdb_func_ifinfo_entry_dealloc,
     .tp_repr = (reprfunc)libftdb_ftdb_func_ifinfo_entry_repr,
     .tp_as_sequence = &libftdb_ftdbFuncIfInfoEntry_sequence_methods,
