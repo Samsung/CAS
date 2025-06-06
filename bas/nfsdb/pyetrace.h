@@ -497,7 +497,7 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 static PyTypeObject libetrace_nfsdbEntryType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntry",
-	.tp_basicsize = sizeof(libetrace_nfsdbEntryType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_entry_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_repr,
 	.tp_hash = (hashfunc)libetrace_nfsdb_entry_hash,
@@ -529,7 +529,7 @@ static PySequenceMethods libetrace_nfsdbIter_sequence_methods = {
 static PyTypeObject libetrace_nfsdbIterType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbIterType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_iter_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_iter_dealloc,
 	.tp_as_sequence = &libetrace_nfsdbIter_sequence_methods,
 	.tp_doc = "libetrace nfsdb iterator",
@@ -559,7 +559,7 @@ static PySequenceMethods libetrace_nfsdbOpensIter_sequence_methods = {
 static PyTypeObject libetrace_nfsdbOpensIterType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbOpensIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbOpensIterType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_opens_iter_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_opens_iter_dealloc,
 	.tp_as_sequence = &libetrace_nfsdbOpensIter_sequence_methods,
 	.tp_doc = "libetrace nfsdb openfile iterator",
@@ -593,7 +593,7 @@ static PySequenceMethods libetrace_nfsdbFilteredOpensPathsIter_sequence_methods 
 static PyTypeObject libetrace_nfsdbFilteredOpensPathsIterType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbFilteredOpensPathsIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbFilteredOpensPathsIterType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_filtered_opens_paths_iter_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_opens_paths_iter_dealloc,
 	.tp_as_sequence = &libetrace_nfsdbFilteredOpensPathsIter_sequence_methods,
 	.tp_doc = "libetrace nfsdb filtered opens paths iterator",
@@ -628,7 +628,7 @@ static PySequenceMethods libetrace_nfsdbFilteredOpensIter_sequence_methods = {
 static PyTypeObject libetrace_nfsdbFilteredOpensIterType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbFilteredOpensIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbFilteredOpensIterType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_filtered_opens_iter_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_opens_iter_dealloc,
 	.tp_as_sequence = &libetrace_nfsdbFilteredOpensIter_sequence_methods,
 	.tp_doc = "libetrace nfsdb filtered opens iterator",
@@ -662,7 +662,7 @@ static PySequenceMethods libetrace_nfsdbFilteredCommandsIter_sequence_methods = 
 static PyTypeObject libetrace_nfsdbFilteredCommandsIterType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbFilteredCommandsIter",
-	.tp_basicsize = sizeof(libetrace_nfsdbFilteredCommandsIterType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_filtered_commands_iter_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_filtered_commands_iter_dealloc,
 	.tp_as_sequence = &libetrace_nfsdbFilteredCommandsIter_sequence_methods,
 	.tp_doc = "libetrace nfsdb filtered commands iterator",
@@ -696,7 +696,7 @@ static PyGetSetDef libetrace_nfsdbEntryEid_getset[] = {
 static PyTypeObject libetrace_nfsdbEntryEidType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntryEid",
-	.tp_basicsize = sizeof(libetrace_nfsdbEntryEidType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_entry_eid_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_eid_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_eid_repr,
 	.tp_doc = "libetrace nfsdb entry extended id type",
@@ -725,7 +725,7 @@ static PyMemberDef libetrace_nfsdb_entry_cid_members[] = {
 static PyTypeObject libetrace_nfsdbEntryCidType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntryCid",
-	.tp_basicsize = sizeof(libetrace_nfsdbEntryCidType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_entry_cid_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_cid_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_cid_repr,
 	.tp_doc = "libetrace nfsdb entry child id type",
@@ -833,7 +833,7 @@ static PyMethodDef libetrace_nfsdbEntryOpenfile_methods[] = {
 static PyTypeObject libetrace_nfsdbEntryOpenfileType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntryOpenfile",
-	.tp_basicsize = sizeof(libetrace_nfsdbEntryOpenfileType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_entry_openfile_object),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_openfile_dealloc,
 	.tp_repr = (reprfunc)libetrace_nfsdb_entry_openfile_repr,
 	.tp_hash = (hashfunc)libetrace_nfsdb_entry_openfile_hash,
@@ -892,7 +892,7 @@ static PyMethodDef libetrace_nfsdbEntryCompilationInfo_methods[] = {
 static PyTypeObject libetrace_nfsdbEntryCompilationInfoType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.nfsdbEntryCompilationInfo",
-	.tp_basicsize = sizeof(libetrace_nfsdbEntryCompilationInfoType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_entry_compilation_info),
 	.tp_dealloc = (destructor)libetrace_nfsdb_entry_compilation_info_dealloc,
 	.tp_doc = "libetrace nfsdb entry compilation info type",
 	.tp_methods = libetrace_nfsdbEntryCompilationInfo_methods,
@@ -925,7 +925,7 @@ static PyMappingMethods libetrace_nfsdb_filemap_mapping_methods = {
 static PyTypeObject libetrace_nfsdbFileMapType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
 	.tp_name = "libetrace.fileMapObject",
-	.tp_basicsize = sizeof(libetrace_nfsdbFileMapType),
+	.tp_basicsize = sizeof(libetrace_nfsdb_filemap),
 	.tp_dealloc = (destructor)libetrace_nfsdb_filemap_dealloc,
 	.tp_as_mapping = &libetrace_nfsdb_filemap_mapping_methods,
 	.tp_doc = "libetrace nfsdb filemap type",
