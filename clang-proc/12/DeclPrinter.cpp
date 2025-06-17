@@ -984,7 +984,10 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
       }
     } 
     else if(!D->isReferenced()){
-      if(T->isFunctionPointerType()){
+      if(T->isDependentType()){
+        // print normally
+      }
+      else if(T->isFunctionPointerType()){
         //replace with void (*)() type
         Out << "void (*" << D->getName() << ")()";
         return;
@@ -999,6 +1002,10 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
           Out << "void *" << D->getName();
         }
         return;
+      }
+      else if(T->isReferenceType()){
+        //replace with char[] of proper size
+        Out << "char " << D->getName() << "[" << Ctx.getTypeSizeInChars(T).getQuantity() << "]";
       }
       else if(T->isArrayType()){
         if(GetBaseType(T)->isBuiltinType()){
@@ -1037,7 +1044,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
         return;
       }
       else if(T->isVectorType()){
-    	  Out << "";
+        Out << "";
       }
       else{
         llvm::errs() << "Unhandled type: [" << T->getTypeClassName() << "] " << T.getAsString()<<'\n';

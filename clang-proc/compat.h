@@ -16,6 +16,12 @@
 #define COMPAT_VERSION_GE_10(code)
 #endif
 
+#if CLANG_VERSION>=14
+#define COMPAT_VERSION_GE_14(code) code
+#else
+#define COMPAT_VERSION_GE_14(code)
+#endif
+
 #if CLANG_VERSION>=15
 #define COMPAT_VERSION_GE_15(code) code
 #else
@@ -43,10 +49,12 @@
 #if CLANG_VERSION>=18
 #define compatNoLinkage             Linkage::None
 #define compatInternalLinkage       Linkage::Internal
+#define compatUniqueExternalLinkage Linkage::UniqueExternal
 #define compatExternalLinkage       Linkage::External
 #else
 #define compatNoLinkage             NoLinkage
 #define compatInternalLinkage       InternalLinkage
+#define compatUniqueExternalLinkage UniqueExternalLinkage
 #define compatExternalLinkage       ExternalLinkage
 #endif
 

@@ -57,16 +57,26 @@ int load_taint_function_database(std::string filepath, ndb_t &exact, ndb_t &rege
 }
 
 QualType resolve_Typedef_Integer_Type(QualType T) {
+	if (T->getTypeClass()==Type::Elaborated){
+		return resolve_Typedef_Integer_Type(cast<ElaboratedType>(T)->getNamedType());
+	}
 	if (T->getTypeClass()==Type::Typedef) {
 	  	const TypedefType *tpd = cast<TypedefType>(T);
 	  	TypedefNameDecl* D = tpd->getDecl();
 	  	return resolve_Typedef_Integer_Type(D->getTypeSourceInfo()->getType());
-	  }
+	}
+	COMPAT_VERSION_GE(14,
+	else if (isa<UsingType>(T)){
+		const UsingType *tp = cast<UsingType>(T);
+		return resolve_Typedef_Integer_Type(tp->getUnderlyingType());
+	}
+	)
 	else if (T->getTypeClass()==Type::Builtin) {
 		return T;
 	}
 	else {
 		llvm::errs() << "UNSUPPORTED enum type: " << T->getTypeClassName() << "\n";
+		T->dump();
 		assert(0);
 	}
 }
@@ -101,7 +111,9 @@ void DbJSONClassConsumer::getFuncDeclSignature(const FunctionDecl* D, std::strin
 	  fdecl_sig += "__compiletime_assert";
   }
   else {
-	  fdecl_sig += D->getName();
+	  auto &SM = Context.getSourceManager();
+	  fdecl_sig += Lexer::getSourceText(SM.getExpansionRange(D->getNameInfo().getSourceRange()),SM,Context.getLangOpts());
+	//   fdecl_sig += D->getNameAsString();
   }
   fdecl_sig += ' ';
   fdecl_sig += walkTypedefType(D->getType()).getAsString();
@@ -271,6 +283,7 @@ int DbJSONClassVisitor::fieldIndexInGroup(Decl** Begin, unsigned NumDecls, const
 	  return false;
 	}
   int DbJSONClassVisitor::fieldToIndex(const MemberExpr *ME){
+	if(!isa<FieldDecl>(ME->getMemberDecl())) return -1;
 	return fieldToIndex(cast<FieldDecl>(ME->getMemberDecl()));
   }
   
@@ -366,71 +379,105 @@ const DbJSONClassVisitor::callfunc_info_t* DbJSONClassVisitor::handleCallMemberE
 	std::stringstream className;
 	std::stringstream refObj;
 	const ValueDecl *VD = ME->getMemberDecl();
-	if (VD->getKind()==Decl::Field) {
-		const FieldDecl* FD = static_cast<const FieldDecl*>(VD);
-		const FunctionProtoType* proto;
-		if (baseType) {
-			proto = lookForFunctionType(*baseType);
-		}
-		else {
-			proto = lookForFunctionType(FD->getType());
-		}
-		if (proto) {
-			protostr << " [" << proto->getNumParams() << "] ("
-					<< ME->getExprLoc().printToString(Context.getSourceManager()) << ") "
-					<< (const void*)proto;
-			noticeTypeClass(QualType(proto,0));
-		}
-		else {
-			return 0;
-		}
-		const RecordDecl* RD = FD->getParent();
-		int fieldIndex = fieldToIndex(FD);
-		QualType RT = Context.getRecordType(RD);
-		const Type *tp = cast<Type>(RT);
-		if(RT->getTypeClass()==Type::Record) {
-			className << "[" << RT.getAsString() << ":" << tp << "]";
-		}
-		const DeclRefExpr* DRE = lookForBottomDeclRef(static_cast<const Expr*>(*(ME->child_begin())));
-		if (DRE) {
-			refObj << "[" << DRE->getNameInfo().getAsString() << ":" << DRE << "]";
-		}
-		DBG(opts.debug, llvm::outs() << "  notice MemberRefCall: "
-				<< refObj.str() << " " << className.str() << " " << FD->getName().str() << "()"
-				<< " i(" << fieldIndex << ")" << protostr.str() << "\n" );
-		callfunc_info_t nfo = {};
-		nfo.FunctionDeclOrProtoType = (void*)proto;
-		nfo.refObj = (void*)DRE;
-		if (!DRE) {
-			nfo.funcproto = true;
-		}
-		nfo.classType = RT;
-		nfo.fieldIndex = fieldIndex;
-		nfo.callrefs = callrefs;
-		nfo.literalRefs = literalRefs;
-		nfo.CE = CE;
-		nfo.ord = exprOrd++;
-		/* We might have member function call from implicit (e.g. operator()) function */
-		if (lastFunctionDef) {
-			nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
-			std::pair<std::set<callfunc_info_t>::iterator,bool> rv = lastFunctionDef->funcinfo.insert(nfo);
-			for(unsigned long i=0; i<proto->getNumParams(); i++) {
-				QualType T = proto->getParamType(i);
-				lastFunctionDef->refTypes.insert(T);
+	switch(VD->getKind()){
+		case Decl::Field:{
+			const FieldDecl* FD = cast<FieldDecl>(VD);
+			const FunctionProtoType* proto;
+			if (baseType) {
+				proto = lookForFunctionType(*baseType);
 			}
-			/* Now save information that for this particular MemberExpr that there was a parent CallExpr involved */
-			if ((MEHaveParentCE.find(ME)!=MEHaveParentCE.end())&&(MEHaveParentCE[ME]!=CE)) {
-				llvm::errs() << "Multiple parent CE for MemberExpr\n";
-				llvm::errs() << "MemberExpr:\n";
-				ME->dumpColor();
-				llvm::errs() << "CallExpr involved:\n";
-				CE->dumpColor();
-				llvm::errs() << "CallExpr already present:\n";
-				MEHaveParentCE[ME]->dumpColor();
-				assert(0);
+			else {
+				proto = lookForFunctionType(FD->getType());
 			}
-			MEHaveParentCE[ME] = CE;
-			return &(*(rv.first));
+			if (proto) {
+				protostr << " [" << proto->getNumParams() << "] ("
+						<< ME->getExprLoc().printToString(Context.getSourceManager()) << ") "
+						<< (const void*)proto;
+				noticeTypeClass(QualType(proto,0));
+			}
+			else {
+				return 0;
+			}
+			const RecordDecl* RD = FD->getParent();
+			int fieldIndex = fieldToIndex(FD);
+			QualType RT = Context.getRecordType(RD);
+			const Type *tp = cast<Type>(RT);
+			if(RT->getTypeClass()==Type::Record) {
+				className << "[" << RT.getAsString() << ":" << tp << "]";
+			}
+			const DeclRefExpr* DRE = lookForBottomDeclRef(static_cast<const Expr*>(*(ME->child_begin())));
+			if (DRE) {
+				refObj << "[" << DRE->getNameInfo().getAsString() << ":" << DRE << "]";
+			}
+			DBG(opts.debug, llvm::outs() << "  notice MemberRefCall: "
+					<< refObj.str() << " " << className.str() << " " << FD->getName().str() << "()"
+					<< " i(" << fieldIndex << ")" << protostr.str() << "\n" );
+			callfunc_info_t nfo = {};
+			nfo.FunctionDeclOrProtoType = (void*)proto;
+			nfo.refObj = (void*)DRE;
+			if (!DRE) {
+				nfo.funcproto = true;
+			}
+			nfo.classType = RT;
+			nfo.fieldIndex = fieldIndex;
+			nfo.callrefs = callrefs;
+			nfo.literalRefs = literalRefs;
+			nfo.CE = CE;
+			nfo.ord = exprOrd++;
+			/* We might have member function call from implicit (e.g. operator()) function */
+			if (lastFunctionDef) {
+				nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
+				std::pair<std::set<callfunc_info_t>::iterator,bool> rv = lastFunctionDef->funcinfo.insert(nfo);
+				for(unsigned long i=0; i<proto->getNumParams(); i++) {
+					QualType T = proto->getParamType(i);
+					lastFunctionDef->refTypes.insert(T);
+				}
+				/* Now save information that for this particular MemberExpr that there was a parent CallExpr involved */
+				if ((MEHaveParentCE.find(ME)!=MEHaveParentCE.end())&&(MEHaveParentCE[ME]!=CE)) {
+					llvm::errs() << "Multiple parent CE for MemberExpr\n";
+					llvm::errs() << "MemberExpr:\n";
+					ME->dumpColor();
+					llvm::errs() << "CallExpr involved:\n";
+					CE->dumpColor();
+					llvm::errs() << "CallExpr already present:\n";
+					MEHaveParentCE[ME]->dumpColor();
+					assert(0);
+				}
+				MEHaveParentCE[ME] = CE;
+				return &(*(rv.first));
+			}
+		}
+		case Decl::CXXMethod:{
+			if (lastFunctionDef) {
+				const CXXMethodDecl *MD = cast<CXXMethodDecl>(VD);
+				DBG(opts.debug, llvm::outs() << "  notice FunctionCall: "
+						<< MD->getName().str() << "() [" << MD->getNumParams() << "] ("
+						<< MD->getLocation().printToString(Context.getSourceManager()) << ") "
+						<< (const void*)MD << "\n" );
+				callfunc_info_t nfo = {};
+				if (MD->hasBody()) {
+					nfo.FunctionDeclOrProtoType = (void*)(MD->getDefinition());
+				}
+				else {
+					nfo.FunctionDeclOrProtoType = (void*)(MD->getCanonicalDecl());
+				}
+				nfo.callrefs = callrefs;
+				nfo.literalRefs = literalRefs;
+				nfo.CE = CE;
+				nfo.ord = exprOrd++;
+				auto cs = getCurrentCSPtr();
+				// assign 0 for constructor member init
+				nfo.csid = 0;
+				if(lastFunctionDef->csIdMap.find(cs) != lastFunctionDef->csIdMap.end()){
+					nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
+				}
+				auto rv = lastFunctionDef->funcinfo.insert(nfo);
+				return &(*rv.first);
+			}
+		}
+		default:{
+			llvm::errs()<<"Unhandled call: "<<VD->getDeclKindName()<<'\n';
+			assert(0);
 		}
 	}
 	return 0;
@@ -625,7 +672,12 @@ bool DbJSONClassVisitor::handleCallDeclRefOrMemberExpr(const Expr* E,
 					nfo.literalRefs = literalRefs;
 					nfo.CE = CE;
 					nfo.ord = exprOrd++;
-					nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
+					auto cs = getCurrentCSPtr();
+					// assign 0 for constructor member init
+					nfo.csid = 0;
+					if(lastFunctionDef->csIdMap.find(cs) != lastFunctionDef->csIdMap.end()){
+						nfo.csid = lastFunctionDef->csIdMap.at(getCurrentCSPtr());
+					}
 					lastFunctionDef->funcinfo.insert(nfo);
 					/* If we used '*' operator on direct function name place it into the derefs array */
 					const UnaryOperator* UO = lookForUnaryOperatorInCallExpr(CE);
@@ -876,6 +928,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
     std::stringstream out;
     if (type==CALLVAR_FLOATING) {
         out << fp;
+		// FIXME: dumb workaround
+		if(out.str() == "inf") return "\"inf\"";
     }
     else if (type==CALLVAR_STRING) {
         out << "\"" << json::json_escape(s) << "\"";
@@ -892,23 +946,47 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
     return out.str();
   }
 
-  std::string DbJSONClassVisitor::refvarinfo_t::LiteralString() {
+  std::string DbJSONClassVisitor::LiteralString(DbJSONClassVisitor::LiteralHolder &lh) {
 	  if (lh.type==LiteralHolder::LiteralChar) {
 		  std::stringstream ss;
-		  ss << lh.prvLiteral.charLiteral;
+		  ss << lh.charLiteral;
 		  return ss.str();
 	  }
 	  if (lh.type==LiteralHolder::LiteralInteger) {
 		  std::stringstream ss;
-		  ss << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
+		  ss << lh.integerLiteral.extOrTrunc(63).getExtValue();
 		  return ss.str();
 	  }
 	  if (lh.type==LiteralHolder::LiteralString) {
-		  return "\"" + json::json_escape(lh.prvLiteral.stringLiteral) + "\"";
+		  return "\"" + json::json_escape(lh.stringLiteral) + "\"";
 	  }
 	  if (lh.type==LiteralHolder::LiteralFloat) {
-		  std::stringstream ss;
-		  ss << lh.prvLiteral.floatingLiteral;
+		  std::string str;
+		  llvm::raw_string_ostream ss(str);
+		  lh.floatingLiteral.print(ss);
+		//   std::stringstream ss;
+		//   auto &FV = lh.floatingLiteral;
+		//   if(FV.isInfinity()){
+		// 	ss << "\"inf\"";
+		//   }
+		//   else if(FV.isNaN()){
+		// 	ss << "\"nan\"";
+		//   }
+		//   //more informative than an actual number
+		//   else if(FV.isLargest()){
+		// 	ss << "\"max\"";
+		//   }
+		//   else if(FV.isSmallest()){
+		// 	ss << "\"min\"";
+		//   }
+		//   //this should be unnecessary
+		//   else if(&FV.getSemantics() == &llvm::APFloat::IEEEsingle()){
+		// 	ss << FV.convertToFloat();
+		//   }
+		//   else{
+		// 	ss << FV.convertToDouble();
+		//   }
+		  ss.flush();
 		  return ss.str();
 	  }
 	  return "";
@@ -1022,50 +1100,32 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  std::stringstream int_literals;
 	  std::stringstream char_literals;
 	  std::stringstream float_literals;
-	  std::stringstream string_literals;	
+	  std::stringstream string_literals;
+	  std::stringstream *any_literals;
 	  for(DbJSONClassVisitor::LiteralHolder lh : var_data.g_literals){
 		  switch(lh.type){
 			  case DbJSONClassVisitor::LiteralHolder::LiteralInteger: {
-				  if(int_literals.str().empty()){
-					  int_literals << "[ ";
-				  }
-				  else{
-					  int_literals << ", ";
-				  }
-				  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
+				  any_literals = &int_literals;
 				  break;
 			  }
 			  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
-				  if(char_literals.str().empty()){
-					  char_literals << "[ ";
-				  }
-				  else{
-					  char_literals << ", ";
-				  }
-				  char_literals << lh.prvLiteral.charLiteral;
-				  break;
-			  }
+				any_literals = &char_literals;
+				break;
+			}
 			  case DbJSONClassVisitor::LiteralHolder::LiteralFloat:{
-				  if(float_literals.str().empty()){
-					  float_literals << "[ ";
-				  }
-				  else{
-					  float_literals << ", ";
-				  }
-				  float_literals << lh.prvLiteral.floatingLiteral;
-				  break;
-			  }
+				any_literals = &float_literals;
+				break;
+			}
 			  case DbJSONClassVisitor::LiteralHolder::LiteralString:{
-				  if(string_literals.str().empty()){
-					  string_literals << "[ ";
-				  }
-				  else{
-					  string_literals << ", ";
-				  }
-				  string_literals << "\"" + json::json_escape(lh.prvLiteral.stringLiteral) + "\"";
-				  break;
-			  }
+				any_literals = &string_literals;
+				break;
+			}
 		  }
+		  if(any_literals->str().empty())
+			  *any_literals << "[ ";
+		  else
+			  *any_literals << ", ";
+		  *any_literals << Visitor.LiteralString(lh);
 	  }
 	  int_literals << (int_literals.str().empty() ? "[]" : " ]");
 	  char_literals << (char_literals.str().empty() ? "[]" : " ]");
@@ -1297,6 +1357,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		if (DExpIdxMap.find(ME)==DExpIdxMap.end()) {
 			llvm::errs() << "Missing MemberExpr in Index Map\n";
 			ME->dumpColor();
+			for(auto &D : func_data.derefList){
+				llvm::errs()<<"DEREF:"<<D.VR.expr<<'\t'<<D.VR.getKindString()<<'\n';
+				for(auto &DD : D.vVR){
+					llvm::errs()<<"\tDEREF:"<<DD.expr<<'\t'<<DD.getKindString()<<'\n';
+				}
+			}
 			llvm::errs() << "@FunctionDecl:\n";
 			func_data.this_func->dumpColor();
 			assert(0);
@@ -1436,7 +1502,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  llvm::outs() << "@buildTypeString for:\n";
 			  T.dump();
 		  }
-		  buildTypeString(T,type_data.hash);
+		  if(!type_data.hash.size())
+		  	buildTypeString(T,type_data.hash);
 		  if (opts.debugbuild) {
 			  llvm::outs() << "[" << type_data.hash << "]\n-------------------- done!\n";
 		  }
@@ -1487,7 +1554,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		QualType RT = Context.getRecordType(RD);
 		DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
 		// build ahead of time
-		if(!RT_data.hash.size()) buildTypeString(RT,RT_data.hash);
+		if(!RT_data.hash.size()){
+			buildTypeString(RT,RT_data.hash);
+		}
 		SHA_update(&cd, RT_data.hash.data(), RT_data.hash.size());
 	}
 
@@ -1537,7 +1606,9 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		QualType RT = Context.getRecordType(RD);
 		DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
 		// build ahead of time
-		if(!RT_data.hash.size()) buildTypeString(RT,RT_data.hash);
+		if(!RT_data.hash.size()){
+			buildTypeString(RT,RT_data.hash);
+		}
 		SHA_update(&c, RT_data.hash.data(), RT_data.hash.size());
 	}
 
@@ -1568,7 +1639,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
       DbJSONClassVisitor::FuncData &func_data = i->second;
 	  func_data.fid = file_id;
       getFuncHash(&func_data);
-      if(func_data.this_func->getLinkageInternal() == compatInternalLinkage){
+	//   if(func_data.this_func->getLinkageInternal() == compatInternalLinkage){
+	  if(func_data.this_func->getLinkageInternal() <= compatUniqueExternalLinkage){
         multi::registerFuncInternal(func_data);
       }
       else if(isFunctionDefinitionDiscarded(func_data.this_func)){
@@ -1614,7 +1686,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  llvm::raw_string_ostream bcsstream(fcsbody);
 		  body->printPretty(bcsstream,nullptr,Context.getPrintingPolicy());
 		  bcsstream.flush();
-		  std::string fname = D->getName().str();
+		  std::string fname = D->getNameAsString();
 		  std::string linkage = translateLinkage(D->getLinkageInternal());
 		  std::string declbody = func_data.body.substr(0,func_data.body.find("{")-1);
 		  // locations
@@ -2183,49 +2255,31 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  std::stringstream char_literals;
 		  std::stringstream float_literals;
 		  std::stringstream string_literals;
+		  std::stringstream *any_literals;
 		  for(DbJSONClassVisitor::LiteralHolder lh : func_data.literals){
 			  switch(lh.type){
 				  case DbJSONClassVisitor::LiteralHolder::LiteralInteger: {
-					  if(int_literals.str().empty()){
-						  int_literals << "[ ";
-					  }
-					  else{
-						  int_literals << ", ";
-					  }
-					  int_literals << lh.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
+					  any_literals = &int_literals;
 					  break;
 				  }
 				  case DbJSONClassVisitor::LiteralHolder::LiteralChar:{
-					  if(char_literals.str().empty()){
-						  char_literals << "[ ";
-					  }
-					  else{
-						  char_literals << ", ";
-					  }
-					  char_literals << lh.prvLiteral.charLiteral;
-					  break;
-				  }
+					any_literals = &char_literals;
+					break;
+				}
 				  case DbJSONClassVisitor::LiteralHolder::LiteralFloat:{
-					  if(float_literals.str().empty()){
-						  float_literals << "[ ";
-					  }
-					  else{
-						  float_literals << ", ";
-					  }
-					  float_literals << lh.prvLiteral.floatingLiteral;
-					  break;
-				  }
+					any_literals = &float_literals;
+					break;
+				}
 				  case DbJSONClassVisitor::LiteralHolder::LiteralString:{
-					  if(string_literals.str().empty()){
-						  string_literals << "[ ";
-					  }
-					  else{
-						  string_literals << ", ";
-					  }
-					  string_literals << "\"" + json::json_escape(lh.prvLiteral.stringLiteral) + "\"";
-					  break;
-				  }
+					any_literals = &string_literals;
+					break;
+				}
 			  }
+			  if(any_literals->str().empty())
+				  *any_literals << "[ ";
+			  else
+				  *any_literals << ", ";
+			  *any_literals << Visitor.LiteralString(lh);
 		  }
 		  int_literals << (int_literals.str().empty() ? "[]" : " ]");
 		  char_literals << (char_literals.str().empty() ? "[]" : " ]");
@@ -2233,7 +2287,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  string_literals << (string_literals.str().empty() ? "[]" : " ]");
 		  
 		  FOut << Indent << "\t{\n";
-		  FOut << Indent << "\t\t\"name\": \"" << D->getName().str() << "\",\n";
+		  FOut << Indent << "\t\t\"name\": \"" << json::json_escape(D->getNameAsString()) << "\",\n";
 		  if (isCXXTU(Context)) {
 			  FOut << Indent << "\t\t\"namespace\": \"" << func_data.nms << "\",\n";
 		  }
@@ -2260,7 +2314,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  const CXXRecordDecl* RD = MD->getParent();
 			  QualType RT = Context.getRecordType(RD);
 			  std::string _class = RT.getAsString();
-			  FOut << Indent << "\t\t\"class\": \"" << _class << "\",\n";
+			  FOut << Indent << "\t\t\"class\": \"" << json::json_escape(_class) << "\",\n";
 			  DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
 			  FOut << Indent << "\t\t\"classid\": " << RT_data.id << ",\n";
 		  }
@@ -2309,11 +2363,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 							  t.second->dump(llvm::errs());
 							  exit(EXIT_FAILURE);
 						  }
-						  break;
+						  continue;
 					  }
-					  FOut << "[ " << t.first << ", " << func_data.varMap[t.second].varId << " ]";
-					  if(*param.second.rbegin() != t) FOut << ", ";
+					  FOut << "[ " << t.first << "," << func_data.varMap[t.second].varId << "],";
+					//   if(*param.second.rbegin() != t) FOut << ", ";
 				  }
+				  FOut.str().pop_back();
 				  FOut << " ]";
 				  if(*func_data.taintdata.rbegin() != param ) FOut << ",\n";
 			  }
@@ -2376,7 +2431,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 						  FOut << Indent << "\t\t\t\t\t\"id\" : " << (*j).id << "\n";
 					  }
 					  else {
-						  FOut << Indent << "\t\t\t\t\t\"id\" : " << (*j).LiteralString() << "\n";
+						  FOut << Indent << "\t\t\t\t\t\"id\" : " << Visitor.LiteralString((*j).lh) << "\n";
 					  }
 					  FOut << Indent << "\t\t\t\t}";
 					  ++j;
@@ -2442,7 +2497,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 						  FOut << Indent << "\t\t\t\t\t\"id\" : " << (*j).id << "\n";
 					  }
 					  else {
-						  FOut << Indent << "\t\t\t\t\t\"id\" : " << (*j).LiteralString() << "\n";
+						  FOut << Indent << "\t\t\t\t\t\"id\" : " << Visitor.LiteralString((*j).lh) << "\n";
 					  }
 					  FOut << Indent << "\t\t\t\t}";
 					  ++j;
@@ -2586,7 +2641,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 						  FOut << Indent << "\t\t\t\t\t\t\"id\" : " << (*j).id << "\n";
 					  }
 					  else {
-						  FOut << Indent << "\t\t\t\t\t\t\"id\" : " << (*j).LiteralString() << "\n";
+						  FOut << Indent << "\t\t\t\t\t\t\"id\" : " << Visitor.LiteralString((*j).lh) << "\n";
 					  }
 					  FOut << Indent << "\t\t\t\t\t}";
 					  ++j;
@@ -2721,7 +2776,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
   			FDOut << Indent << "\t\t\"name\": \"" << "__compiletime_assert" << "\",\n";
   		  }
   		  else {
-  			FDOut << Indent << "\t\t\"name\": \"" << D->getName().str() << "\",\n";
+  			FDOut << Indent << "\t\t\"name\": \"" << json::json_escape(D->getNameAsString()) << "\",\n";
   		  }
   		  std::string nms = getFullFunctionNamespace(D);
   		  if (isCXXTU(Context)) {
@@ -2744,7 +2799,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
   			  const CXXRecordDecl* RD = MD->getParent();
   			  QualType RT = Context.getRecordType(RD);
   			  std::string _class = RT.getAsString();
-  			  FDOut << Indent << "\t\t\"class\": \"" << _class << "\",\n";
+  			  FDOut << Indent << "\t\t\"class\": \"" << json::json_escape(_class) << "\",\n";
 			  DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
 			  FDOut << Indent << "\t\t\"classid\": " << RT_data.id << ",\n";
   		  }
@@ -2838,20 +2893,14 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  case Decl::ClassTemplate:
 		  {
 			  ClassTemplateDecl* innerD = cast<ClassTemplateDecl>(D);
-			  Visitor.VisitClassTemplateDecl(innerD);
-			  assert(Visitor.InjectedClassNameMap.find(innerD)!=Visitor.InjectedClassNameMap.end() && "InjectedClassNameMap missing entry");
-			  const InjectedClassNameType* IT = Visitor.InjectedClassNameMap[innerD];
-			  QualType T = QualType(IT,0);
+			  QualType T = Context.getRecordType(innerD->getTemplatedDecl());
 			  extraArg.first = EXTRA_TEMPLATEDECL;
 			  return Visitor.getTypeData(T).id;
 		  }
 		  case Decl::ClassTemplatePartialSpecialization:
 		  {
 			  ClassTemplatePartialSpecializationDecl* innerD = cast<ClassTemplatePartialSpecializationDecl>(D);
-			  Visitor.VisitClassTemplatePartialSpecializationDecl(innerD);
-			  assert(Visitor.InjectedClassNamePSMap.find(innerD)!=Visitor.InjectedClassNamePSMap.end() && "InjectedClassNamePSMap missing entry");
-			  const InjectedClassNameType* IT = Visitor.InjectedClassNamePSMap[innerD];
-			  QualType T = QualType(IT,0);
+			  QualType T = Context.getRecordType(innerD);
 			  extraArg.first = EXTRA_TEMPLATEDECL;
 			  return Visitor.getTypeData(T).id;
 			  break;
@@ -2862,10 +2911,12 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
       default:
 			  std::stringstream DN;
 			  DN << D->getDeclKindName() << "DeclId";
-        llvm::errs()<<DN.str()<<'\n';
-        D->dump();
+			//   llvm::errs()<<DN.str()<<'\n';
+			//   D->dump();
+			//   D->print(llvm::errs());
+			//   llvm::errs()<<"MISSING DECLID\n";
 			  Visitor.unsupportedDeclClass.insert(std::pair<Decl::Kind,std::string>(D->getKind(),DN.str()));
-			  assert(0 && "Unknown object");
+			//   assert(0 && "Unknown object");
 			  break;
 	  }
 	  return -1;
@@ -3054,7 +3105,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	    	  QualType T = A.getAsType();
 	    	  const TemplateTypeParmType* TTP = T->getAs<TemplateTypeParmType>();
 	    	  if (TTP) {
-				  assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type");
+				//   assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type1");
 	    	  }
 	    	  type_args.push_back(std::pair<QualType,unsigned>(T,I));
 	      }
@@ -3071,11 +3122,11 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	    	  }
 	      }
 	      else if (A.getKind() == TemplateArgument::NullPtr) {
-	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\"nullptr\"",I));
+	    	  nontype_args.push_back(std::pair<std::string,unsigned>("nullptr",I));
 	      }
 	      else if (A.getKind() == TemplateArgument::Integral) {
 	    	  llvm::APSInt Iv = A.getAsIntegral();
-	    	  nontype_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
+	    	  nontype_args.push_back(std::pair<std::string,unsigned>(compatibility::toString(Iv),I));
 	      }
 	      else {
 	    	  if (opts.exit_on_error) {
@@ -3107,7 +3158,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	  TOut << Indent << "\t\t],\n";
 	  TOut << Indent << "\t\t\"nontype_args\": [\n";
 	  for (auto i=template_args.second.begin(); i!=template_args.second.end();) {
-		  TOut << Indent << "\t\t\t[ " << (*i).second << "," << (*i).first << " ]";
+		  TOut << Indent << "\t\t\t[ " << (*i).second << ",\"" << (*i).first << "\" ]";
 		  ++i;
 		  if (i!=template_args.second.end()) {
 			   TOut << ",\n";
@@ -3417,23 +3468,20 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  int templateref = 0;
 			  bool have_template_args = false;
 			  template_args_t template_args;
+			  TOut << Indent << "\t\t\"class\": \"" << "record_specialization" << "\",\n";
+			  TOut << Indent << "\t\t\"str\": \"" << "T<X>" << "\",\n";
+			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
+			  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
+			  TOut << Indent << "\t\t\"def\": \"";
+			  T.print(TOut,Context.getPrintingPolicy());
+			  TOut << "\",\n";
 			  if (tp->getTemplateName().getKind()==TemplateName::Template) {
 				  TemplateDecl* TD = TN.getAsTemplateDecl();
 				  if (isa<ClassTemplateDecl>(TD)) {
 					  ClassTemplateDecl* CTD = static_cast<ClassTemplateDecl*>(TD);
-					  assert(Visitor.InjectedClassNameMap.find(CTD)!=Visitor.InjectedClassNameMap.end() && "InjectedClassNameMap missing entry");
-					  const InjectedClassNameType* IT = Visitor.InjectedClassNameMap[CTD];
-					  QualType injT = QualType(IT,0);
+					  QualType injT = Context.getRecordType(CTD->getTemplatedDecl());
 					  templateref = Visitor.getTypeData(injT).id;
-					  have_templateref = true;
-					  TOut << Indent << "\t\t\"class\": \"" << "record_specialization" << "\",\n";
-					  TOut << Indent << "\t\t\"str\": \"" << "T<X>" << "\",\n";
-					  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
-					  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
-					  TOut << Indent << "\t\t\"def\": \"";
-					  T.print(TOut,Context.getPrintingPolicy());
-					  TOut << "\",\n";
-					  
+					  have_templateref = true;					  
 					  // TODO: removed likely unnecessary code, some issues may arise
 					  have_template_args = true;
 
@@ -3519,6 +3567,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  TOut << Indent << "\t\t\"str\": \"" << "DT<X>" << "\",\n";
 			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
 			  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
+			  TOut << Indent << "\t\t\"refs\": " << "[]" << ",\n";
+			  TOut << Indent << "\t\t\"usedrefs\": " << "[]" << "\n";
 		  }
 		  break;
 		  case Type::InjectedClassName:
@@ -3571,7 +3621,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  }
 				  have_specializations = true;
 				  llvm::SmallVector<ClassTemplatePartialSpecializationDecl*,10> PSv;
-				  const_cast<ClassTemplateDecl*>(CTD)->getPartialSpecializations(PSv);
+				//   [FIXME] Causes problems with nested templates
+				//   const_cast<ClassTemplateDecl*>(CTD)->getPartialSpecializations(PSv);
 				  for (ClassTemplatePartialSpecializationDecl *CTPS : PSv) {
 					  int spec_id = Visitor.getTypeData(Context.getRecordType(CTPS)).id;
 					  partial_specializations.push_back(spec_id);
@@ -3599,9 +3650,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  TOut << Indent << "\t\t\"specialization\": true,\n";
 				  const ClassTemplatePartialSpecializationDecl* CTPS = Visitor.classTemplatePartialSpecializationMap[TRD];
 				  ClassTemplateDecl* CTD = CTPS->getSpecializedTemplate();
-				  assert(Visitor.InjectedClassNameMap.find(CTD)!=Visitor.InjectedClassNameMap.end() && "InjectedClassNameMap missing entry");
-				  const InjectedClassNameType* IT = Visitor.InjectedClassNameMap[CTD];
-				  QualType injT = QualType(IT,0);
+				  QualType injT = Context.getRecordType(CTD->getTemplatedDecl());
 				  templateref = Visitor.getTypeData(injT).id;
 				  have_templateref = true;
 				  TemplateParameterList* Params = CTPS->getTemplateParameters();
@@ -3948,7 +3997,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 				  else {
 					  tpII = II->getName().str();
 				  }
-				  TOut << Indent << "\t\t\"str\": \"" << tpII << "\",\n";
+				//   FIXME: unnamed class inlined as template argument, added json_escape as a temporary workaround
+				  TOut << Indent << "\t\t\"str\": \"" << json::json_escape(tpII) << "\",\n";
 			  }
 			  else {
 				  TOut << Indent << "\t\t\"str\": \"" << "" << "\",\n";
@@ -4597,7 +4647,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 		  return;
 	  }
 	  if ((opts.tudump)||(opts.tudumpcont)||(opts.tudumpwithsrc)) {
-		  D->dumpColor();
+		  D->dump();
 		  if (opts.tudumpwithsrc) {
 			  D->print(llvm::outs());
 		  }
@@ -4627,6 +4677,7 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
     printFopsArray(1);
 
 	  // printDatabase();
+	setCTAList(nullptr);
   }
 
 void DbJSONClassConsumer::printDatabase(){

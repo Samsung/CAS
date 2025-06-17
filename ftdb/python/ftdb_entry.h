@@ -101,24 +101,33 @@
         __new_entry;                                                                    \
     })
 
-#define FTDB_ENTRY_FLOAT(__entry, __key)                                             \
-    ({                                                                               \
-        PyObject *key_##__key = PyUnicode_FromString(#__key);                        \
-        double __new_entry = PyFloat_AsDouble(PyDict_GetItem(__entry, key_##__key)); \
-        Py_DecRef(key_##__key);                                                      \
-        __new_entry;                                                                 \
+#define FTDB_ENTRY_FLOAT(__entry, __key)                                   \
+    ({                                                                     \
+        double __new_entry;                                                \
+        PyObject *key_##__key = PyUnicode_FromString(#__key);              \
+        PyObject *float_obj = PyDict_GetItem(__entry, key_##__key);        \
+        if(PyObject_TypeCheck(float_obj,&PyUnicode_Type))                  \
+            __new_entry = PyFloat_AsDouble(PyFloat_FromString(float_obj)); \
+        else                                                               \
+            __new_entry = PyFloat_AsDouble(float_obj);                     \
+        Py_DecRef(key_##__key);                                            \
+        __new_entry;                                                       \
     })
 
-#define FTDB_ENTRY_FLOAT_OPTIONAL(__entry, __key)                                  \
-    ({                                                                             \
-        double *__new_entry = 0;                                                   \
-        PyObject *key_##__key = PyUnicode_FromString(#__key);                      \
-        if (PyDict_Contains(__entry, key_##__key)) {                               \
-            __new_entry = (double *)malloc(sizeof(double));                        \
-            *__new_entry = PyFloat_AsDouble(PyDict_GetItem(__entry, key_##__key)); \
-        }                                                                          \
-        Py_DecRef(key_##__key);                                                    \
-        __new_entry;                                                               \
+#define FTDB_ENTRY_FLOAT_OPTIONAL(__entry, __key)                               \
+    ({                                                                          \
+        double *__new_entry = 0;                                                \
+        PyObject *key_##__key = PyUnicode_FromString(#__key);                   \
+        if (PyDict_Contains(__entry, key_##__key)) {                            \
+            __new_entry = (double *)malloc(sizeof(double));                     \
+            PyObject *float_obj = PyDict_GetItem(__entry, key_##__key);         \
+            if(PyObject_TypeCheck(float_obj,&PyUnicode_Type))                   \
+                *__new_entry = PyFloat_AsDouble(PyFloat_FromString(float_obj)); \
+            else                                                                \
+                *__new_entry = PyFloat_AsDouble(float_obj);                     \
+        }                                                                       \
+        Py_DecRef(key_##__key);                                                 \
+        __new_entry;                                                            \
     })
 
 #define FTDB_ENTRY_INT64(__entry, __key)                                           \
@@ -319,17 +328,21 @@
         __new_array;                                                              \
     })
 
-#define FTDB_ENTRY_FLOAT_ARRAY(__entry, __key)                               \
-    ({                                                                       \
-        PyObject *key_##__key = PyUnicode_FromString(#__key);                \
-        PyObject *__key = PyDict_GetItem(__entry, key_##__key);              \
-        unsigned long __key##_count = PyList_Size(__key);                    \
-        double *__new_array = calloc(__key##_count, sizeof(double));         \
-        for (unsigned long __i = 0; __i < __key##_count; ++__i) {            \
-            __new_array[__i] = PyFloat_AsDouble(PyList_GetItem(__key, __i)); \
-        }                                                                    \
-        Py_DecRef(key_##__key);                                              \
-        __new_array;                                                         \
+#define FTDB_ENTRY_FLOAT_ARRAY(__entry, __key)                                      \
+    ({                                                                              \
+        PyObject *key_##__key = PyUnicode_FromString(#__key);                       \
+        PyObject *__key = PyDict_GetItem(__entry, key_##__key);                     \
+        unsigned long __key##_count = PyList_Size(__key);                           \
+        double *__new_array = calloc(__key##_count, sizeof(double));                \
+        for (unsigned long __i = 0; __i < __key##_count; ++__i) {                   \
+            PyObject *float_obj = PyList_GetItem(__key, __i);                       \
+            if(PyObject_TypeCheck(float_obj,&PyUnicode_Type))                       \
+                __new_array[__i] = PyFloat_AsDouble(PyFloat_FromString(float_obj)); \
+            else                                                                    \
+                __new_array[__i] = PyFloat_AsDouble(float_obj);                     \
+        }                                                                           \
+        Py_DecRef(key_##__key);                                                     \
+        __new_array;                                                                \
     })
 
 #define FTDB_ENTRY_STRING_ARRAY(__entry, __key)                                 \

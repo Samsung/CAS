@@ -57,10 +57,12 @@ class DbJSONClassVisitor
   : public RecursiveASTVisitor<DbJSONClassVisitor> {
   using Base = RecursiveASTVisitor<DbJSONClassVisitor>;
 public:
+  int tab = 0;
   explicit DbJSONClassVisitor(ASTContext &Context)
     : TypeNum(0), VarNum(0), FuncNum(0), lastFunctionDef(0), CTA(0), missingRefsCount(0), Context(Context) {}
 
     bool shouldVisitImplicitCode() const {return true;}
+    bool shouldVisitTemplateInstantiations() const {return true;}
 
   static QualType getDeclType(Decl* D) {
     if (TypedefNameDecl* TDD = dyn_cast<TypedefNameDecl>(D))
@@ -108,8 +110,6 @@ public:
 	  const ValueDecl* value;
 	  unsigned pos;
 	  ValueHolder(const ValueDecl* value, unsigned pos): value(value), pos(pos) {}
-	  const ValueDecl* getValue() { return value; }
-	  unsigned getPos() { return pos; }
 	  const ValueDecl* getValue() const { return value; }
 	  unsigned getPos() const { return pos; }
 	  bool operator<(ValueHolder other) const {
@@ -129,27 +129,27 @@ public:
   		LiteralChar,
 		  LiteralFloat,
   	} type;
-  	struct PrivLiterals {
+  	struct {
   		std::string stringLiteral;
   		llvm::APSInt integerLiteral;
   		unsigned int charLiteral;
-  		double floatingLiteral;
-  	} prvLiteral;
+  		llvm::APFloat floatingLiteral{llvm::APFloat::IEEEdouble()};
+  	};
   	unsigned pos;
   	bool literalLower(const LiteralHolder &other) const {
       if (type < other.type) return true;
       if (type > other.type) return false;
   		if (type==LiteralString) {
-  			return prvLiteral.stringLiteral.compare(other.prvLiteral.stringLiteral)<0;
+  			return stringLiteral.compare(other.stringLiteral)<0;
   		}
   		if (type==LiteralInteger) {
-  			return prvLiteral.integerLiteral.extOrTrunc(63).getExtValue() < other.prvLiteral.integerLiteral.extOrTrunc(63).getExtValue();
+  			return integerLiteral.extOrTrunc(63).getExtValue() < other.integerLiteral.extOrTrunc(63).getExtValue();
   		}
   		if (type==LiteralChar) {
-  			return prvLiteral.charLiteral < other.prvLiteral.charLiteral;
+  			return charLiteral < other.charLiteral;
   		}
   		if (type==LiteralFloat) {
-  			return prvLiteral.floatingLiteral < other.prvLiteral.floatingLiteral;
+  			return floatingLiteral.convertToDouble() < other.floatingLiteral.convertToDouble();
   		}
       assert( 0 && "Wrong literal type.");
   	}
@@ -157,6 +157,8 @@ public:
   		return literalLower(other);
   	}
   };
+
+  std::string LiteralString(LiteralHolder &lh);
 
   typedef std::vector<std::string> recordFields_t;
   typedef std::vector<size_t> recordOffsets_t;
@@ -416,7 +418,7 @@ public:
 		  ExprRefKindRET = External,         //main: return
 		  ExprRefKindParm,        //main: parm
 		  ExprRefKindCond,        //main: cond
-
+      ExprRefKindUnhandled,    //main: missing cpp support
 	  };
 
 	  ExprRef_t(): value(0), call(0), address(0), floating(0.), strval(""), MEIdx(0), MECnt(0),
@@ -477,6 +479,8 @@ public:
 					return "ExprRefKindCond";
 				case ExprRefKindLogic:
 					return "ExprRefKindLogic";
+        case ExprRefKindUnhandled:
+					return "ExprRefKindUnhandled";
 		  }
 		  return "";
 	  }
@@ -640,6 +644,13 @@ public:
       kind = ExprRefKindCond;
     }
 
+    void setUnhandled(const Expr *E, const CallExpr* c, CStyleCastOrType cast = CStyleCastOrType()){
+      expr = E;
+      call = c;
+		  valuecast = cast;
+		  kind = ExprRefKindUnhandled;
+    }
+
 	  void setRefCall(const CallExpr* c, const ValueDecl* VD, CStyleCastOrType cast = CStyleCastOrType()) {
 		  call = c;
 		  value = VD;
@@ -777,11 +788,7 @@ public:
 	  unsigned long di;
 	  long castid;
     refvarinfo_t(): id(-1), fp(0.), s(""), type(CALLVAR_NONE), mi(0), di(0), castid(-1) {}
-	  refvarinfo_t(unsigned long id, enum vartype type): id(id), fp(0.), s(""), type(type), mi(0), di(0), castid(-1) {}
 	  refvarinfo_t(unsigned long id, enum vartype type, unsigned pos): id(id), fp(0.), s(""), type(type), mi(pos), di(0), castid(-1) {}
-		refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, double fp): id(id), fp(fp), s(""), type(type), mi(pos), di(0), castid(-1) {}
-		refvarinfo_t(unsigned long id, enum vartype type, unsigned pos, std::string s): id(id), fp(0.), s(s), type(type), mi(pos), di(0), castid(-1) {}
-	  refvarinfo_t(LiteralHolder lh, enum vartype type): id(-1), fp(0.), s(""), lh(lh), type(type), mi(0), di(0), castid(-1) {}
 	  refvarinfo_t(LiteralHolder lh, enum vartype type, unsigned pos): id(-1), fp(0.), s(""), lh(lh), type(type), mi(pos), di(0), castid(-1) {}
     void set(unsigned long _id, enum vartype _type, long _mi=0, long _di=0, long _castid=-1)
     	{ id = _id; type = _type; mi = _mi; di = _di; castid = _castid; }
@@ -833,9 +840,8 @@ public:
     }
 
       std::string idString();
-	  std::string LiteralString();
-  };
-
+    };
+    
   struct VarData{
     ObjectID id;
     const VarDecl *Node;
@@ -1031,7 +1037,7 @@ public:
       return (VR==otherDI.VR)&&(MInfoList==otherDI.MInfoList)&&(i==otherDI.i)&&(vVR==otherDI.vVR)&&(Expr==otherDI.Expr)
           &&(Kind==otherDI.Kind)&&(baseCnt==otherDI.baseCnt)&&(CSPtr==otherDI.CSPtr);
     }
-    std::string KindString() {
+    std::string KindString() const {
     	if (Kind==DereferenceUnary) return "unary";
     	if (Kind==DereferenceArray) return "array";
     	if (Kind==DereferenceMember) return "member";
@@ -1140,21 +1146,11 @@ public:
   std::set<int> unsupportedAttrRefs;
   std::map<const FunctionDecl*,const FunctionTemplateDecl*> functionTemplateMap;
   std::map<CXXRecordDecl*,const ClassTemplateDecl*> classTemplateMap;
-  std::map<const ClassTemplateDecl*,const InjectedClassNameType*> InjectedClassNameMap;
-  std::map<const ClassTemplatePartialSpecializationDecl*,const InjectedClassNameType*> InjectedClassNamePSMap;
   std::map<const CXXRecordDecl*,const ClassTemplateSpecializationDecl*> classTemplateSpecializationMap;
   std::map<const CXXRecordDecl*,const ClassTemplatePartialSpecializationDecl*> classTemplatePartialSpecializationMap;
-  std::map<const void*,const FriendDecl*> friendDeclMap;
   std::map<CXXRecordDecl*,CXXRecordDecl*> recordParentDeclMap;
   std::vector<const CompoundStmt*> csStack;
   std::map<const RecordDecl *,const CompoundStmt*> recordCSMap;
-  std::map<const TemplateTypeParmType*,QualType> templateTypeParmTypeMap;
-  std::map<const TemplateTypeParmType*,const void*> templateTypeParmDeclMap;
-  std::map<const TemplateSpecializationType*,FunctionDecl*> templateSpecializationFunctionMap;
-  std::map<const TemplateSpecializationType*,CXXRecordDecl*> templateSpecializationRecordMap;
-  std::map<const TemplateSpecializationType*,TypeAliasDecl*> templateSpecializationTypeAliasMap;
-  std::map<const TemplateSpecializationType*,TypedefDecl*> templateSpecializationTypedefMap;
-  std::map<const TemplateSpecializationType*,FunctionDecl*> templateSpecializationFunctionMemberMap;
   std::map<QualType, QualType> vaTMap;
   unsigned long missingRefsCount;
   std::map<const RecordDecl*,std::set<const VarDecl*>> gtp_refVars;
@@ -1210,7 +1206,6 @@ public:
   	  return UnresolvedFuncMap;
     }
 
-  std::vector<const CompoundStmt*>& getCSStack() { return csStack; }
   std::map<const RecordDecl *,const CompoundStmt*> getRecordCSMap() { return recordCSMap; }
   std::string getAbsoluteLocation(SourceLocation L);
   bool hasNamedFields(RecordDecl* rD);
@@ -1260,7 +1255,6 @@ public:
   bool VisitVarDeclComplete(const VarDecl *D);
   bool VisitVarDecl(const VarDecl *VD);
   bool VisitCastExpr(const CastExpr *Node);
-  bool VisitFriendDecl(const FriendDecl *D);
   bool TraverseStmt(Stmt* S);
   bool TraverseInitListExpr(InitListExpr *S);
   bool VisitCompoundStmtStart(const CompoundStmt *CS);
@@ -1317,7 +1311,6 @@ public:
   void lookForAttrTypes(const Attr* attr, std::vector<QualType>& QV);
   bool lookForUnaryExprOrTypeTraitExpr(const Expr* e, std::vector<QualType>& QV);
   bool lookForTypeTraitExprs(const Expr* e, std::vector<const TypeTraitExpr*>& TTEV);
-  const TemplateSpecializationType* LookForTemplateSpecializationType(QualType T);
   size_t outerFunctionorMethodIdforTagDecl(TagDecl* rD);
   std::string parentFunctionOrMethodString(TagDecl* tD);
   size_t getFunctionDeclId(const FunctionDecl* FD);

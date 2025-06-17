@@ -173,6 +173,8 @@ def create_json_db_main(args: argparse.Namespace,stream=False) -> int:
 
     if not args.field_usage:
         args.field_usage = True
+    else:
+        args.field_usage = False
 
     if not args.taint:
         script_dir = os.path.dirname(os.path.abspath(__file__))

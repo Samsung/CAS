@@ -5,7 +5,10 @@
 
 // Decl visitors
 bool DbJSONClassVisitor::TraverseDecl(Decl *D) {
+	if(!D) return true;
+	// llvm::outs()<<std::string(2*tab++,' ')<<D->getDeclKindName()<<D<<'\n';
 	bool TraverseResult = RecursiveASTVisitor<DbJSONClassVisitor>::TraverseDecl(D);
+	// llvm::outs()<<std::string(2*(--tab),' ')<<D->getDeclKindName()<<" done\n";
 	if (D) {
 		switch (D->getKind()) {
 			case Decl::Function:
@@ -16,6 +19,7 @@ bool DbJSONClassVisitor::TraverseDecl(Decl *D) {
 			case Decl::CXXDeductionGuide:
 			{
 				if (!VisitFunctionDeclComplete(static_cast<FunctionDecl*>(D))) return false;
+				DoneMEs.clear();
 				break;
 			}
 			case Decl::Var:
@@ -107,6 +111,9 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 	}
 
 	if ((D->getKind() == Decl::Kind::Var)&&(D->getInit())) {
+		if(isa<InitListExpr>(D->getInit())){
+			assert(cast<InitListExpr>(D->getInit())->isSemanticForm() && "syntactic init list");
+		}
 		DbJSONClassVisitor::DREMap_t DREMap;
 		std::vector<CStyleCastOrType> castVec;
 		const Expr* E = stripCastsEx(D->getInit(),castVec);
@@ -163,6 +170,8 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 			if(!castType.isNull())
 				castVec.emplace_back(castType);
 			lookForDeclRefWithMemberExprsInternal(D->getInit(),DREMap,0,castVec,0,0,false);
+			// if(isa<InitListExpr>(D->getInit()))
+				// llvm::outs()<<"INIT: "<<D->getInit()<<' '<<cast<InitListExpr>(D->getInit())->isSemanticForm()<<' '<<cast<InitListExpr>(D->getInit())->isSyntacticForm()<<'\n';
 		}
 
 		ExprRef_t VR;
@@ -241,10 +250,12 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		if(D->isStaticDataMember()) return true;
 		if(!D->hasGlobalStorage()) return true;
 		if(D->isStaticLocal()) return true;
-		std::string name = D->getNameAsString();
+		std::string name = D->getQualifiedNameAsString();
+		// D->getNameAsString();
 		if(!unique_name.insert(name).second) return true;
 		int linkage = D->isExternallyVisible();
 		int def_kind = D->hasDefinition();
+		
 		for( const VarDecl *RD : D->getCanonicalDecl()->redecls()){
 			if(RD->isThisDeclarationADefinition() == def_kind) {
 				D=RD;
@@ -351,6 +362,7 @@ bool DbJSONClassVisitor::VisitCXXRecordDecl(const CXXRecordDecl* D) {
 
 bool DbJSONClassVisitor::VisitClassTemplateDecl(const ClassTemplateDecl *D) {
 	DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitClassTemplateDecl()\n"; D->dump(llvm::outs()) );
+	// llvm::outs()<<"VISIT: "<<D<<'\n';
 
 	CXXRecordDecl* RD = D->getTemplatedDecl();
 
@@ -493,12 +505,7 @@ bool DbJSONClassVisitor::VisitTypeAliasDeclFromClass(TypeAliasDecl *D) {
 	const TypedefType *ttp = cast<TypedefType>(T);
 	TypedefNameDecl* TPD = ttp->getDecl();
 	QualType UT = TPD->getUnderlyingType();
-	const TemplateSpecializationType* tp = LookForTemplateSpecializationType(UT);
-	if (TATD && tp) {
-		templateSpecializationTypeAliasMap.insert(std::pair<const TemplateSpecializationType*,TypeAliasDecl*>(tp,D));
-	}
 	noticeTypeClass(T);
-
 	return true;
 }
 
@@ -513,18 +520,12 @@ bool DbJSONClassVisitor::VisitTypedefDeclFromClass(TypedefDecl *D) {
 bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 
 	DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitFunctionDeclStart(" << D << ")\n"; D->dump(llvm::outs()) );
-	
-	if (!D->getIdentifier()) {
-		std::stringstream DN;
-		DN << static_cast<const Decl*>(D)->getDeclKindName() << "Decl";
-		unsupportedFuncClass.insert(std::pair<Decl::Kind,std::string>(D->getDeclKind(),DN.str()));
-		return true;
-	}
 
 	if (D->hasBody()) {
 		if (FuncMap.find(D)!=FuncMap.end()) {
 			DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitFunctionDeclStart(): present\n"; );
 			lastFunctionDef = &FuncMap[D];
+			functionStack.push_back(&FuncMap[D]);
 			return true;
 		}
 	}
@@ -539,7 +540,6 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 		}
 	}
 
-	QualType rT = D->getReturnType();
 	std::stringstream className;
 	std::stringstream funcName;
 	const CXXRecordDecl* RD = 0;
@@ -550,7 +550,7 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 		className << RD->getNameAsString() << "::";
 	}
 	else {
-		funcName << D->getName().str();
+		funcName << D->getNameAsString();
 	}
 
 	bool funcSaved = false;
@@ -575,27 +575,24 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 	else {
 		D = D->getCanonicalDecl();
 		if (getFuncDeclMap().find(D)==getFuncDeclMap().end()) {
-			if (friendDeclMap.find(D)==friendDeclMap.end()) {
-				// Ignored friend function declarations when arrived here
-				funcSaved = true;
-				if (opts.assert) {
-					if (is_compiletime_assert_decl(D,Context)) {
-						/* Save only first encounter of the "void __compiletime_assert_N()" function declaration
-						* Later resolve all references to __compiletime_assert_M() to the first seen declaration
-						*/
-						if (CTA) {
-							funcSaved = false;
-						}
-						else {
-							CTA = D;
-						}
-						CTAList.insert(D);
+			funcSaved = true;
+			if (opts.assert) {
+				if (is_compiletime_assert_decl(D,Context)) {
+					/* Save only first encounter of the "void __compiletime_assert_N()" function declaration
+					* Later resolve all references to __compiletime_assert_M() to the first seen declaration
+					*/
+					if (CTA) {
+						funcSaved = false;
 					}
+					else {
+						CTA = D;
+					}
+					CTAList.insert(D);
 				}
-				if (funcSaved) {
-					getFuncDeclMap().insert(std::pair<const FunctionDecl*,FuncDeclData>(D,{{},D}));
-					getFuncDeclMap().at(D).id.setID(FuncNum++);
-				}
+			}
+			if (funcSaved) {
+				getFuncDeclMap().insert(std::pair<const FunctionDecl*,FuncDeclData>(D,{{},D}));
+				getFuncDeclMap().at(D).id.setID(FuncNum++);
 			}
 		}
 	}
@@ -610,30 +607,13 @@ bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 	//D->dumpColor();
 
 	if (funcSaved) {
-		const TemplateSpecializationType* tp = LookForTemplateSpecializationType(rT);
+		QualType rT = D->getReturnType();
 		noticeTypeClass(rT);
-
 		for(unsigned long i=0; i<D->getNumParams(); i++) {
-			std::string TypeS;
 			const ParmVarDecl* p = D->getParamDecl(i);
-
 			QualType T = p->getTypeSourceInfo() ? p->getTypeSourceInfo()->getType() : p->getType();
-
-			const TemplateSpecializationType* tp = LookForTemplateSpecializationType(T);
 			noticeTypeClass(T);
 		}
-
-		if (D->getTemplatedKind()==FunctionDecl::TK_NonTemplate) {
-		}
-		else if (D->getTemplatedKind()==FunctionDecl::TK_FunctionTemplate) {
-		}
-		else if (D->getTemplatedKind()==FunctionDecl::TK_MemberSpecialization) {
-		}
-		else if (D->getTemplatedKind()==FunctionDecl::TK_FunctionTemplateSpecialization) {
-		}
-		else if (D->getTemplatedKind()==FunctionDecl::TK_DependentFunctionTemplateSpecialization) {
-		}
-
 		DBG(DEBUG_NOTICE, llvm::outs() << "notice Function: " << className.str() <<
 				funcName.str() << "() [" << D->getNumParams() << "]: DONE\n"; );
 	}
@@ -647,10 +627,6 @@ bool DbJSONClassVisitor::VisitFunctionDeclComplete(const FunctionDecl *D) {
 		for(auto &deref : lastFunctionDef->derefList){
 			deref.evalExpr();
 		}
-	}
-
-	if (!D->getIdentifier()) {
-		return true;
 	}
 
 	if (D->hasBody()) {
@@ -675,20 +651,6 @@ bool DbJSONClassVisitor::VisitFunctionDeclComplete(const FunctionDecl *D) {
 // Functions - c++ only
 bool DbJSONClassVisitor::VisitCXXMethodDecl(const CXXMethodDecl* D) {
 	//llvm::outs() << "@DbJSONClassVisitor::VisitCXXMethodDecl(" << D << ")\n";
-	return true;
-}
-
-bool DbJSONClassVisitor::VisitFriendDecl(const FriendDecl *D) {
-	if (!D->getFriendType()) {
-		if (friendDeclMap.find(D->getFriendDecl())==friendDeclMap.end()) {
-			friendDeclMap.insert(std::pair<const void*,const FriendDecl*>(D->getFriendDecl(),D));
-		}
-	}
-	else {
-		if (friendDeclMap.find(D->getFriendType())==friendDeclMap.end()) {
-			friendDeclMap.insert(std::pair<const void*,const FriendDecl*>(D->getFriendType(),D));
-		}
-	}
 	return true;
 }
 
@@ -728,8 +690,10 @@ bool DbJSONClassVisitor::VisitFunctionTemplateDecl(const FunctionTemplateDecl *D
 
 // Stmt visitors
 bool DbJSONClassVisitor::TraverseStmt(Stmt *S) {
-
+	if(!S) return true;
+	// llvm::outs()<<std::string(2*tab++,' ')<<S->getStmtClassName()<<S<<'\n';
 	bool TraverseResult = RecursiveASTVisitor<DbJSONClassVisitor>::TraverseStmt(S);
+	// llvm::outs()<<std::string(2*(--tab),' ')<<S->getStmtClassName()<<" done\n";
 	if (S && (S->getStmtClass()==Stmt::CompoundStmtClass)) {
 		if (!VisitCompoundStmtComplete(static_cast<CompoundStmt*>(S))) return false;
 	}
@@ -738,7 +702,7 @@ bool DbJSONClassVisitor::TraverseStmt(Stmt *S) {
 
 // bypass the traversal of semantic form introduced by shouldVisitImplicitCode
 bool DbJSONClassVisitor::TraverseInitListExpr(InitListExpr *S){
-	S = S->isSyntacticForm()? S : S->getSyntacticForm();
+	S = S->isSemanticForm()? S : S->getSemanticForm();
 	return Base::TraverseSynOrSemInitListExpr(S);
 }
 
@@ -882,6 +846,7 @@ bool DbJSONClassVisitor::VisitSwitchStmt(SwitchStmt *S){
 
 	// add control flow info
 	CompoundStmt *CS = static_cast<CompoundStmt*>(S->getBody());
+	assert(lastFunctionDef);
 	size_t cf_id = lastFunctionDef->cfData.size();
 	lastFunctionDef->cfData.push_back({cf_switch,CS});
 	lastFunctionDef->csInfoMap.insert({CS,cf_id});
@@ -1117,6 +1082,7 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 			DBG(opts.debug3, llvm::outs() << "CALL not served: " << CE << "\n" );
 			if (opts.debug3) CE->dumpColor();
 			MissingCallExpr.insert(CE);
+			// assert(0 && "missing call");
 
 		}
 		else {
@@ -1129,6 +1095,10 @@ bool DbJSONClassVisitor::VisitCallExpr(CallExpr *CE){
 				if (D->getKind()==Decl::Function) {
 					const FunctionDecl* FD = static_cast<const FunctionDecl*>(D);
 					rFT = walkToFunctionProtoType(FD->getType());
+				}
+				else if(D->getKind()==Decl::CXXMethod) {
+					const CXXMethodDecl *MD = static_cast<const CXXMethodDecl*>(D);
+					rFT = walkToFunctionProtoType(MD->getType());
 				}
 				else if (D->getKind()==Decl::Var) {
 					const VarDecl* VD = static_cast<const VarDecl*>(D);
@@ -1486,9 +1456,12 @@ bool DbJSONClassVisitor::VisitBinaryOperator(BinaryOperator *BO) {
 
 		ExprRef_t VR;
 		VR.setCAO(BO);
-		if (LDREMap.size() != 1) {
-			llvm::errs() << "Multiple expressions on LHS for assignment operator: " << LDREMap.size() << "\n";
+		if (LDREMap.size() < 1) {
+			// TODO: Allowed multiple LHS entries, caused by conditional operator, needs better handling
+			llvm::errs() << "No expressions on LHS for assignment operator: " << LDREMap.size() << "\n";
 			BO->dumpColor();
+			llvm::outs()<<LDREMap.size()<<'\n';
+			BO->printPretty(llvm::outs(),nullptr,Context.getPrintingPolicy());
 			assert(0);
 		}
 		ExprRef_t iVR = *LDREMap.begin();
@@ -1619,12 +1592,12 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 	bool canComputeOffset = true;
 
 	unsigned MEIdx = 0;
-	QualType lastRecordType;
+	QualType lastRecordType = Node->getTypeSourceInfo()->getType();
 	unsigned fieldAccessCount = 0;
 	for (unsigned i=0; i<Node->getNumComponents(); ++i) {
 		const OffsetOfNode & C = Node->getComponent(i);
 		OffsetOfNode::Kind k = C.getKind();
-		if (k==OffsetOfNode::Field) {
+		if (k==OffsetOfNode::Field || k == OffsetOfNode::Identifier) {
 			fieldAccessCount++;
 		}
 	}
@@ -1632,7 +1605,10 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 	for (unsigned i=0; i<Node->getNumComponents(); ++i) {
 		const OffsetOfNode & C = Node->getComponent(i);
 		OffsetOfNode::Kind k = C.getKind();
-		if (k==OffsetOfNode::Field) {
+		if (k==OffsetOfNode::Identifier){
+			MInfoList.push_back(MemberInfo_t{0,lastRecordType});
+		}
+		else if (k==OffsetOfNode::Field) {
 			FieldDecl* FD = C.getField();
 			const RecordDecl* RD = FD->getParent();
             lastRecordType = RD->getASTContext().getRecordType(RD);
@@ -1678,19 +1654,16 @@ bool DbJSONClassVisitor::VisitOffsetOfExpr(OffsetOfExpr *Node) {
 }
 
 bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
-
 	if (!lastFunctionDef) {
 		return true;
 	}
 
 	QualType RT = lastFunctionDef->this_func->getReturnType();
-
 	const Expr* RVE = S->getRetValue();
 
 	if (!RVE) {
 		return true;
 	}
-
 	DbJSONClassVisitor::DREMap_t DREMap;
 	std::vector<CStyleCastOrType> castVec;
 	const class Expr* E = stripCastsEx(RVE,castVec);
@@ -1743,7 +1716,6 @@ bool DbJSONClassVisitor::VisitReturnStmt(const ReturnStmt *S) {
 			castVec.emplace_back(castType);
 		lookForDeclRefWithMemberExprsInternal(E,DREMap,0,castVec,0,0,false);
 	}
-
 	ExprRef_t VR;
 	VR.setRET(S);
 
@@ -1812,7 +1784,8 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 }
 
 bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
-	
+
+	// llvm::outs()<<"ILE: "<<ILE<<' '<<ILE->isSemanticForm()<<ILE->isSyntacticForm()<<'\n';
 	// probably a part of compoundliteralexpr, we handle it in assign if relevant
 	if(fopsVarDecl.empty()) return true;
 
@@ -1821,6 +1794,7 @@ bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
 		return true;
 
 	const FunctionDecl *F = lastFunctionDef ?  lastFunctionDef->this_func : nullptr;
+	T.removeLocalFastQualifiers();
 	assert(!T.hasQualifiers() && "Qualified type");
 	FopsObject FObj(T, fopsVarDecl.back(), F);
 	ILE = ILE->isSemanticForm()? ILE : ILE->getSemanticForm();
@@ -1839,7 +1813,7 @@ bool DbJSONClassVisitor::VisitInitListExpr(InitListExpr* ILE) {
 bool DbJSONClassVisitor::VisitIntegerLiteral(IntegerLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralInteger;
-	lh.prvLiteral.integerLiteral = llvm::APSInt(L->getValue(),L->getType()->isUnsignedIntegerOrEnumerationType());
+	lh.integerLiteral = llvm::APSInt(L->getValue(),L->getType()->isUnsignedIntegerOrEnumerationType());
 	if(lastFunctionDef){
 		lastFunctionDef->literals.insert(lh);
 	}
@@ -1853,13 +1827,7 @@ bool DbJSONClassVisitor::VisitIntegerLiteral(IntegerLiteral *L){
 bool DbJSONClassVisitor::VisitFloatingLiteral(FloatingLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralFloat;
-	llvm::APFloat FV = L->getValue();
-	if (&FV.getSemantics()==&llvm::APFloat::IEEEsingle()) {
-		lh.prvLiteral.floatingLiteral = FV.convertToFloat();
-	}
-	else {
-		lh.prvLiteral.floatingLiteral = FV.convertToDouble();
-	}
+	lh.floatingLiteral = L->getValue();
 	if(lastFunctionDef){
 		lastFunctionDef->literals.insert(lh);
 	}
@@ -1873,7 +1841,7 @@ bool DbJSONClassVisitor::VisitFloatingLiteral(FloatingLiteral *L){
 bool DbJSONClassVisitor::VisitCharacterLiteral(CharacterLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralChar;
-	lh.prvLiteral.charLiteral = L->getValue();
+	lh.charLiteral = L->getValue();
 	if(lastFunctionDef){
 		lastFunctionDef->literals.insert(lh);
 	}
@@ -1887,8 +1855,8 @@ bool DbJSONClassVisitor::VisitCharacterLiteral(CharacterLiteral *L){
 bool DbJSONClassVisitor::VisitStringLiteral(StringLiteral *L){
 	LiteralHolder lh;
 	lh.type = LiteralHolder::LiteralString;
-	lh.prvLiteral.stringLiteral = L->getBytes().str();
-	lh.prvLiteral.stringLiteral.erase(std::remove(lh.prvLiteral.stringLiteral.begin(),lh.prvLiteral.stringLiteral.end(),'\x1f'),lh.prvLiteral.stringLiteral.end());
+	lh.stringLiteral = L->getBytes().str();
+	lh.stringLiteral.erase(std::remove(lh.stringLiteral.begin(),lh.stringLiteral.end(),'\x1f'),lh.stringLiteral.end());
 	if(lastFunctionDef){
 		lastFunctionDef->literals.insert(lh);
 	}

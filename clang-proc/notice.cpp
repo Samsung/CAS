@@ -330,7 +330,7 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	    	  QualType T = A.getAsType();
 	    	  const TemplateTypeParmType* TTP = T->getAs<TemplateTypeParmType>();
 	    	  if (TTP) {
-				  assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type");
+				//   assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type2");
 	    	  }
 	    	  noticeTypeClass(T);
 	    	  
@@ -358,16 +358,19 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
   }
 
   void DbJSONClassVisitor::noticeTypeClass(QualType T) {
-
 	  T = typeForMap(T);
 	  if(TypeMap.find(T) != TypeMap.end())
 	  	  return;
 
 	  size_t size = 0;
-	  auto optsize = Context.getTypeSizeInCharsIfKnown(T);
-	  if(optsize){
-		size = Context.toBits(optsize.compatGetValue());
+	  if(!T->isIncompleteType() && !T->isDependentType() && !isa<BuiltinType>(T) && !isa<AutoType>(T)){
+		size = Context.getTypeSize(T);
 	  }
+	//   auto optsize = Context.getTypeSizeInCharsIfKnown(T);
+	//   if(optsize){
+	// 	size = Context.toBits(optsize.compatGetValue());
+	// 	assert(Context.getTypeSize(T) == size && "size mismatch");
+	//   }
 	  std::string qualifierString = getQualifierString(T);
 	  switch(T->getTypeClass()) {
 		  // skipped types
@@ -390,6 +393,9 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 	  	  case Type::Builtin:
 		  {
 			  const BuiltinType *tp = cast<BuiltinType>(T);
+			  if(tp->getKind() != BuiltinType::BoundMember && tp->getKind() != BuiltinType::Dependent){
+				size = Context.getTypeSize(T);
+			  }
 			  DBG(DEBUG_NOTICE, llvm::outs() << "@notice Builtin (" <<
 					  tp->getName(Context.getPrintingPolicy()).str() << ")(" << qualifierString << ")\n";
 			  	  	  tp->dump() );
@@ -510,15 +516,6 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  for (const TemplateArgument &Arg : tp->template_arguments()) {
 				  if (Arg.getKind() == TemplateArgument::Type) {
 					  QualType TPT = Arg.getAsType();
-					  switch (TPT->getTypeClass()) {
-						  case Type::TemplateTypeParm:
-						  {
-							  const TemplateTypeParmType* ttp = cast<TemplateTypeParmType>(TPT);
-							  if (templateTypeParmTypeMap.find(ttp)==templateTypeParmTypeMap.end()) {
-								  templateTypeParmTypeMap.insert(std::pair<const TemplateTypeParmType*,QualType>(ttp,T));
-							  }
-						  }
-					  }
 					  noticeTypeClass(TPT);
 				  }
 			  }
@@ -534,16 +531,9 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  for (const TemplateArgument &Arg : tp->template_arguments()) {
 				  if (Arg.getKind() == TemplateArgument::Type) {
 					  QualType TPT = Arg.getAsType();
-					  switch (TPT->getTypeClass()) {
-						  case Type::TemplateTypeParm:
-						  {
-							  const TemplateTypeParmType* ttp = cast<TemplateTypeParmType>(TPT);
-							  if (templateTypeParmTypeMap.find(ttp)==templateTypeParmTypeMap.end()) {
-								  templateTypeParmTypeMap.insert(std::pair<const TemplateTypeParmType*,QualType>(ttp,T));
-							  }
-							  noticeTypeClass(QualType(ttp,0));
-						  }
-					  }
+					//   FIXME: hash issue for other cases
+					  if(TPT->getTypeClass() == Type::TemplateTypeParm)
+					  	noticeTypeClass(TPT);
 				  }
 			  }
 		  }
@@ -553,53 +543,34 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  const InjectedClassNameType* IT = cast<InjectedClassNameType>(T);
 
 			  CXXRecordDecl* TRD = IT->getDecl();
-			  const ClassTemplateDecl* CTD = 0;
+			  const ClassTemplateDecl* CTD = TRD ->getDescribedClassTemplate();
 			  const ClassTemplatePartialSpecializationDecl* CTPS = 0;
-			  if (classTemplateMap.find(TRD)!=classTemplateMap.end()) {
-				  CTD = classTemplateMap[TRD];
-			  }
-			  else {
-				  if (classTemplatePartialSpecializationMap.find(TRD)!=classTemplatePartialSpecializationMap.end()) {
-					  CTPS = classTemplatePartialSpecializationMap[TRD];
-				  }
-				  else {
-					  if (isa<ClassTemplatePartialSpecializationDecl>(TRD)) {
-						  // VisitClassTemplateSpecializationDecl might've not yet been called
-						  CTPS = static_cast<const ClassTemplatePartialSpecializationDecl*>(TRD);
-					  }
-				  }
-			  }
+			  if(isa<ClassTemplatePartialSpecializationDecl>(TRD))
+				  CTPS = cast<ClassTemplatePartialSpecializationDecl>(TRD);
+
+			//   if (classTemplateMap.find(TRD)!=classTemplateMap.end()) {
+			// 	  CTD = classTemplateMap[TRD];
+			//   }
+			//   else {
+			// 	  if (classTemplatePartialSpecializationMap.find(TRD)!=classTemplatePartialSpecializationMap.end()) {
+			// 		  CTPS = classTemplatePartialSpecializationMap[TRD];
+			// 	  }
+			// 	  else {
+			// 		  if (isa<ClassTemplatePartialSpecializationDecl>(TRD)) {
+			// 			  // VisitClassTemplateSpecializationDecl might've not yet been called
+			// 			  CTPS = static_cast<const ClassTemplatePartialSpecializationDecl*>(TRD);
+			// 		  }
+			// 	  }
+			//   }
 
 			  DBG(DEBUG_NOTICE, llvm::outs() << "@notice InjectedClassName (" <<
 					  T.getAsString() << ") " << "[" << TRD << "] " << CTD << " " << CTPS << "\n";
 			  	  	  T.dump() );
 
 			  if (CTD) {
-				  if (InjectedClassNameMap.find(CTD)==InjectedClassNameMap.end()) {
-					  InjectedClassNameMap.insert(std::pair<const ClassTemplateDecl*,const InjectedClassNameType*>(CTD,IT));
-				  }
-				//   if (friendDeclMap.find(CTD)!=friendDeclMap.end()) {
-				// 	  // Ignore friend declaration
-				// 	  if (TypeMap.find(T)!=TypeMap.end()) {
-				// 		  TypeMap.erase(T);
-				// 	  }
-				// 	  return;
-				//   }
-				  // Notice template type parameters
 				  noticeTemplateParameters(CTD->getTemplateParameters());
 			  }
 			  else if (CTPS) {
-				  if (InjectedClassNamePSMap.find(CTPS)==InjectedClassNamePSMap.end()) {
-					  InjectedClassNamePSMap.insert(
-							  std::pair<const ClassTemplatePartialSpecializationDecl*,const InjectedClassNameType*>(CTPS,IT));
-				  }
-				//   if (friendDeclMap.find(CTPS)!=friendDeclMap.end()) {
-				// 	  // Ignore friend declaration
-				// 	  if (TypeMap.find(T)!=TypeMap.end()) {
-				// 		  TypeMap.erase(T);
-				// 	  }
-				// 	  return;
-				//   }
 				  // Notice template type parameters and arguments
 				  noticeTemplateParameters(CTPS->getTemplateParameters());
 
@@ -642,6 +613,14 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  DBG(DEBUG_NOTICE, llvm::outs() << "TypeMap[" << tp << "]R = " << TypeNum << "\n" );
 			  TypeNum++;
 
+			  if (isa<CXXRecordDecl>(rD)) {
+				CXXRecordDecl* cpprD =  cast<CXXRecordDecl>(rD);
+				if(isa<ClassTemplateSpecializationDecl>(cpprD)){
+					ClassTemplateSpecializationDecl* CTSD = cast<ClassTemplateSpecializationDecl>(cpprD);
+					noticeTemplateArguments(CTSD->getTemplateArgs());
+				}
+			  }
+
 			  if (rD->isCompleteDefinition()) {
 				  if (II) {
 					  DBG(opts.debug2, llvm::outs() << "notice Record(" << II->getName().str() << ")(" << qualifierString << ")" <<
@@ -653,36 +632,6 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 				  }
 				  if (opts.debug2) {
 					  tp->dump();
-				  }
-				  /* Notice template arguments in case this is full specialization of some class (potentially
-				   *   partially specialized template */
-				  if (isa<CXXRecordDecl>(rD)) {
-					  CXXRecordDecl* cpprD =  cast<CXXRecordDecl>(rD);
-					  if (cpprD->getTemplateSpecializationKind()>0) {
-						  CXXRecordDecl* tmpl = nullptr;
-						  const ClassTemplateSpecializationDecl* CTSD = 0;
-						  if (classTemplateSpecializationMap.find(cpprD)==classTemplateSpecializationMap.end()) {
-							  /* It looks like in case of implicit class template specializations the internal
-							   * record declaration differs from the specialization declaration
-							   */
-							  cpprD = cpprD->getMostRecentDecl();
-						  }
-						  if (classTemplateSpecializationMap.find(cpprD)!=
-								  classTemplateSpecializationMap.end()) {
-							  CTSD = classTemplateSpecializationMap[cpprD];
-							  llvm::PointerUnion<ClassTemplateDecl *,
-													   ClassTemplatePartialSpecializationDecl *> Result
-									  = CTSD->getSpecializedTemplateOrPartial();
-							  (void)Result;
-						  }
-						  if (cpprD->getTemplateSpecializationKind()==TSK_ExplicitSpecialization) {
-							  noticeTemplateArguments(CTSD->getTemplateArgs());
-						  }
-						  if ((cpprD->getTemplateSpecializationKind()==TSK_ImplicitInstantiation)||
-								  (cpprD->getTemplateSpecializationKind()>=TSK_ExplicitInstantiationDeclaration)) {
-							  noticeTemplateArguments(CTSD->getTemplateArgs());
-						  }
-					  }
 				  }
 				  recordInfo_t* recordInfo = new recordInfo_t;
 				  recordIdentifierStack.push_back(recordInfo);
@@ -866,6 +815,13 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 			else
 				return T;
 		}
+		case Type::DeducedTemplateSpecialization:{
+			auto tp = cast<DeducedTemplateSpecializationType>(T);
+			if(tp->isSugared())
+				return typeForMap(tp->desugar());
+			else
+				return T;
+		}
 		case Type::Auto:{
 			auto tp = cast<AutoType>(T);
 			if(tp->isSugared())
@@ -939,6 +895,12 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 			auto tp = cast<DecayedType>(T);
 			return typeForMap(tp->getDecayedType());
 		}
+		COMPAT_VERSION_GE(14,
+		case Type::Using:{
+			auto tp = cast<UsingType>(T);
+			return typeForMap(tp->getUnderlyingType());
+		}
+		)
 		
 		//unhandled types
 		default:{

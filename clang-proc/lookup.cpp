@@ -88,7 +88,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 			const IntegerLiteral* IL = static_cast<const IntegerLiteral*>(E);
 			DbJSONClassVisitor::LiteralHolder lh;
 			lh.type = DbJSONClassVisitor::LiteralHolder::LiteralInteger;
-			lh.prvLiteral.integerLiteral = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType());
+			lh.integerLiteral = llvm::APSInt(IL->getValue(),IL->getType()->isUnsignedIntegerOrEnumerationType());
 			lh.pos = pos;
 			refs.insert(lh);
 			break;
@@ -98,7 +98,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 			const CharacterLiteral* CL = static_cast<const CharacterLiteral*>(E);
 			DbJSONClassVisitor::LiteralHolder lh;
 			lh.type = DbJSONClassVisitor::LiteralHolder::LiteralChar;
-			lh.prvLiteral.charLiteral = CL->getValue();
+			lh.charLiteral = CL->getValue();
 			lh.pos = pos;
 			refs.insert(lh);
 			break;
@@ -108,9 +108,9 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 			const StringLiteral* SL = static_cast<const StringLiteral*>(E);
 			DbJSONClassVisitor::LiteralHolder lh;
 			lh.type = DbJSONClassVisitor::LiteralHolder::LiteralString;
-			lh.prvLiteral.stringLiteral = SL->getBytes().str();
+			lh.stringLiteral = SL->getBytes().str();
 			/* Remove invalid control characters which break json parsing */
-			lh.prvLiteral.stringLiteral.erase(std::remove(lh.prvLiteral.stringLiteral.begin(),lh.prvLiteral.stringLiteral.end(),'\x1f'),lh.prvLiteral.stringLiteral.end());
+			lh.stringLiteral.erase(std::remove(lh.stringLiteral.begin(),lh.stringLiteral.end(),'\x1f'),lh.stringLiteral.end());
 			lh.pos = pos;
 			refs.insert(lh);
 			break;
@@ -120,13 +120,7 @@ void DbJSONClassVisitor::lookForLiteral(const Expr* E, std::set<DbJSONClassVisit
 			const FloatingLiteral* FL = static_cast<const FloatingLiteral*>(E);
 			DbJSONClassVisitor::LiteralHolder lh;
 			lh.type = DbJSONClassVisitor::LiteralHolder::LiteralFloat;
-			llvm::APFloat FV = FL->getValue();
-			if (&FV.getSemantics()==&llvm::APFloat::IEEEsingle()) {
-				lh.prvLiteral.floatingLiteral = FL->getValue().convertToFloat();
-			}
-			else {
-				lh.prvLiteral.floatingLiteral = FL->getValue().convertToDouble();
-			}
+			lh.floatingLiteral = FL->getValue();
 			lh.pos = pos;
 			refs.insert(lh);
 			break;
@@ -820,7 +814,7 @@ const UnaryOperator* DbJSONClassVisitor::lookForUnaryOperatorInCallExpr(const Ex
 
 void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DREMap_t& refs, std::vector<MemberInfo_t> *cache,
 		std::vector<CStyleCastOrType> castVec, unsigned MEIdx, const CallExpr* CE, bool IgnoreLiteral) {
-	static int depth = 0;
+	// static int depth = 0;
 	// llvm::errs()<<depth++<<":\t"<<E->getStmtClassName()<< !!cache <<'\n';
 	
 	switch(E->getStmtClass()) {
@@ -840,6 +834,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 		{
 			const MemberExpr* ME = static_cast<const MemberExpr*>(E);
 			if(cache){
+				noticeTypeClass(ME->getBase()->getType());
 				cache->push_back({ME,ME->getBase()->getType(),0,CE});
 				DoneMEs.insert(ME);
 				CE=0;
@@ -848,7 +843,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 			}
 			else {
 				ExprRef_t v;
-				// ensure valuecast type
+				// enxxure valuecast type
 				noticeTypeClass(ME->getType());
 				castVec.push_back(ME->getType());
 				CStyleCastOrType valuecast = getMatchingCast(castVec);
@@ -1164,7 +1159,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 			}
 			else {
 				std::vector<CStyleCastOrType> castVec;
-				lookForDeclRefWithMemberExprsInternal(BO->getLHS(),refs,cache,castVec,MEIdx,CE,true);
+				lookForDeclRefWithMemberExprsInternal(BO->getLHS(),refs,0,castVec,MEIdx,CE,true);
 				lookForDeclRefWithMemberExprsInternal(BO->getRHS(),refs,0,castVec,MEIdx,0,true);
 			}
 			break;
@@ -1246,14 +1241,10 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 		case Stmt::UnaryExprOrTypeTraitExprClass:
 		case Stmt::PredefinedExprClass:
 		case Stmt::PackExpansionExprClass:
-		case Stmt::CXXUnresolvedConstructExprClass:
-		case Stmt::CXXDependentScopeMemberExprClass:
-		case Stmt::CXXThisExprClass:
 		case Stmt::CXXTemporaryObjectExprClass:
 		case Stmt::CXXNullPtrLiteralExprClass:
 		case Stmt::CXXBoolLiteralExprClass:
 		case Stmt::DependentScopeDeclRefExprClass:
-		case Stmt::UnresolvedLookupExprClass:
 		case Stmt::SizeOfPackExprClass:
 		case Stmt::CXXDefaultArgExprClass:
 		case Stmt::GNUNullExprClass:
@@ -1313,6 +1304,21 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 			lookForDeclRefWithMemberExprsInternal(VAAE->getSubExpr(),refs,cache,castVec,MEIdx,CE,IgnoreLiteral);
 			break;
 		}
+		// unhandled cpp nodes
+		case Stmt::CXXDependentScopeMemberExprClass:
+		case Stmt::UnresolvedMemberExprClass:
+		case Stmt::UnresolvedLookupExprClass:
+		case Stmt::CXXUnresolvedConstructExprClass:
+		case Stmt::CXXThisExprClass:
+		{
+			ExprRef_t v;
+			CStyleCastOrType valuecast = getMatchingCast(castVec);
+			v.setUnhandled(E,CE,valuecast);
+			v.setMeIdx(MEIdx);
+			refs.insert(v);
+			break;
+		}
+
 		default:
 		{
 			if (opts.exit_on_error) {
@@ -2057,6 +2063,15 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
 			  LookForTemplateTypeParameters(tT,s);
 		  }
 		  break;
+		  COMPAT_VERSION_GE(14,
+		  case Type::Using:
+		  {
+			  const UsingType* tp = cast<UsingType>(T);
+			  QualType uT = tp->getUnderlyingType();
+			  LookForTemplateTypeParameters(uT,s);
+		  }
+		  )
+		  break;
 		  case Type::Decltype:
 		  {
 			  const DecltypeType* tp = cast<DecltypeType>(T);
@@ -2293,237 +2308,6 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
   			  llvm::outs() << "UNSUPPORTED: " << T->getTypeClassName() << "\n";
   		  }
   	}
-  }
-
-  const TemplateSpecializationType* DbJSONClassVisitor::LookForTemplateSpecializationType(QualType T) {
-
-  	switch (T->getTypeClass()) {
-  		  case Type::TemplateTypeParm:
-  		  {
-  			  const TemplateTypeParmType* ttp = cast<TemplateTypeParmType>(T);
-  		  }
-  		  break;
-  		  case Type::Builtin:
-  		  case Type::Enum:
-  			  break;
-  		  case Type::LValueReference:
-  		  {
-  			const LValueReferenceType* lvrT = cast<LValueReferenceType>(T);
-  			return LookForTemplateSpecializationType(lvrT->getPointeeType());
-  		  }
-  		  break;
-		  case Type::RValueReference:
-		  {
-			  const RValueReferenceType* rvrT = cast<RValueReferenceType>(T);
-			  return LookForTemplateSpecializationType(rvrT->getPointeeType());
-		  }
-		  break;
-		  case Type::Typedef:
-		  {
-			  const TypedefType* tp = cast<TypedefType>(T);
-			  TypedefNameDecl* D = tp->getDecl();
-			  QualType tT = D->getTypeSourceInfo()->getType();
-			  return LookForTemplateSpecializationType(tT);
-		  }
-		  break;
-		  case Type::Decltype:
-		  {
-			  const DecltypeType* tp = cast<DecltypeType>(T);
-			  QualType uT = tp->getUnderlyingType();
-			  return LookForTemplateSpecializationType(uT);
-		  }
-		  break;
-		  case Type::Pointer:
-		  {
-			  const PointerType* tp = cast<PointerType>(T);
-			  QualType pT = tp->getPointeeType();
-			  return LookForTemplateSpecializationType(pT);
-		  }
-		  break;
-		  case Type::IncompleteArray:
-		  {
-			  const IncompleteArrayType* tp = cast<IncompleteArrayType>(T);
-			  QualType eT = tp->getElementType();
-			  return LookForTemplateSpecializationType(eT);
-		  }
-		  break;
-		  case Type::ConstantArray:
-		  {
-			  const ConstantArrayType* tp = cast<ConstantArrayType>(T);
-			  QualType eT = tp->getElementType();
-			  return LookForTemplateSpecializationType(eT);
-		  }
-		  break;
-		  case Type::DependentSizedArray:
-		  {
-			  const DependentSizedArrayType* tp = cast<DependentSizedArrayType>(T);
-			  return LookForTemplateSpecializationType(tp->getElementType());
-		  }
-		  break;
-		  case Type::MemberPointer:
-		  {
-			  const MemberPointerType* tp = cast<MemberPointerType>(T);
-			  QualType pT = tp->getPointeeType();
-			  return LookForTemplateSpecializationType(pT);
-		  }
-		  break;
-		  case Type::TemplateSpecialization:
-		  {
-			  const TemplateSpecializationType* tp = cast<TemplateSpecializationType>(T);
-			  return tp;
-		  }
-		  break;
-		  case Type::DependentTemplateSpecialization:
-		  {
-			  const DependentTemplateSpecializationType* tp = cast<DependentTemplateSpecializationType>(T);
-		  }
-		  break;
-		  case Type::DependentName:
-		  {
-			const DependentNameType* tp = cast<DependentNameType>(T);
-		  }
-		  break;
-		  case Type::PackExpansion:
-		  {
-			  const PackExpansionType* tp = cast<PackExpansionType>(T);
-		  }
-		  break;
-		  case Type::Record:
-		  {
-			  const RecordType* tp = cast<RecordType>(T);
-		  }
-		  break;
-		  case Type::Elaborated:
-		  {
-			  const ElaboratedType* tp = cast<ElaboratedType>(T);
-			  QualType eT = tp->getNamedType();
-			  return LookForTemplateSpecializationType(eT);
-		  }
-		  break;
-		  case Type::FunctionProto:
-		  {
-			  const FunctionProtoType* tp = cast<FunctionProtoType>(T);
-			  return LookForTemplateSpecializationType(tp->getReturnType());
-			  for (unsigned i = 0; i<tp->getNumParams(); ++i) {
-                              return LookForTemplateSpecializationType(tp->getParamType(i));
-			  }
-		  }
-		  break;
-                  case Type::FunctionNoProto:
-                  {
-                          const FunctionNoProtoType *tp = cast<FunctionNoProtoType>(T);
-                          return LookForTemplateSpecializationType(tp->getReturnType());
-                  }
-                  break;
-		  case Type::Paren:
-		  {
-			  const ParenType* tp = cast<ParenType>(T);
-			  QualType iT = tp->getInnerType();
-			  return LookForTemplateSpecializationType(iT);
-		  }
-		  break;
-		  case Type::InjectedClassName:
-		  {
-			  const InjectedClassNameType* tp = cast<InjectedClassNameType>(T);
-		  }
-		  break;
-		  case Type::UnresolvedUsing:
-		  {
-			  const UnresolvedUsingType* tp = cast<UnresolvedUsingType>(T);
-		  }
-		  break;
-		  case Type::SubstTemplateTypeParm:
-		  {
-		 	const SubstTemplateTypeParmType* tp = cast<SubstTemplateTypeParmType>(T);
-		  }
-		  break;
-                  case Type::Attributed:
-                  {
-                      const AttributedType *tp = cast<AttributedType>(T);
-                      QualType mT = tp->getModifiedType();
-                      (void)mT;
-                      QualType eT = tp->getEquivalentType();
-                      return LookForTemplateSpecializationType(eT);
-                  }
-                  break;
-				  COMPAT_VERSION_GE(15,
-                  case Type::BTFTagAttributed:
-                  {
-                      const BTFTagAttributedType *tp = cast<BTFTagAttributedType>(T);
-                      QualType eT = tp->getWrappedType();
-                      return LookForTemplateSpecializationType(eT);
-                  }
-                  break;
-				  )
-                  case Type::VariableArray:
-                  {
-                      const VariableArrayType *tp = cast<VariableArrayType>(T);
-                      QualType vaT = tp->getElementType();
-                      return LookForTemplateSpecializationType(vaT);
-                  }
-                  break;
-                 case Type::Decayed:
-                  {
-                      const DecayedType *tp = cast<DecayedType>(T);
-                      QualType dT = tp->getPointeeType();
-                      return LookForTemplateSpecializationType(dT);
-                  }
-                  break;
-                  case Type::TypeOfExpr:
-                  {
-                      const TypeOfExprType *tp = cast<TypeOfExprType>(T);
-                      QualType toT = tp->getUnderlyingExpr()->getType();
-                      return LookForTemplateSpecializationType(toT);
-                  }
-                  break;
-                  case Type::ExtVector:
-                  {
-                      const ExtVectorType *tp = cast<ExtVectorType>(T);
-                      QualType eT = tp->getElementType();
-                      return LookForTemplateSpecializationType(eT);
-                  }
-                  case Type::Vector:
-                  {
-                      const VectorType *tp = cast<VectorType>(T);
-                      QualType eT = tp->getElementType();
-                      return LookForTemplateSpecializationType(eT);
-                  }
-                  break;
-                  case Type::Complex:
-                  {
-                      const ComplexType *tp = cast<ComplexType>(T);
-                      QualType eT = tp->getElementType();
-                      return LookForTemplateSpecializationType(eT);
-                  }
-                  break;
-                  case Type::TypeOf:
-                  {
-                      const TypeOfType *tp = cast<TypeOfType>(T);
-                      QualType toT = tp->getUnmodifiedType();
-                      return LookForTemplateSpecializationType(toT);
-                  }
-                  break;
-                 case Type::Atomic:
-                  {
-                      const AtomicType* tp = cast<AtomicType>(T);
-                      QualType aT = tp->getValueType();
-                      return LookForTemplateSpecializationType(aT);
-                  }
-                  break;
-                 case Type::MacroQualified:
-                  {
-                      const MacroQualifiedType* tp = cast<MacroQualifiedType>(T);
-                      QualType uT = tp->getUnderlyingType();
-                      return LookForTemplateSpecializationType(uT);
-                  }
-                  break;
-  		  default:
-  		  {
-  			  llvm::outs() << "UNSUPPORTED: " << T->getTypeClassName() << "\n";
-  		  }
-  		  return 0;
-  	}
-  	return 0;
   }
 
 QualType DbJSONClassVisitor::lookForNonPointerType(const PointerType* tp) {

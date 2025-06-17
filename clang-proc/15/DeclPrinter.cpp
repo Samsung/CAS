@@ -877,7 +877,7 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
   if (!Policy.SuppressSpecifiers && D->isModulePrivate())
     Out << "__module_private__ ";
 
-if(csd){
+  if(csd){
     auto &Ctx = D->getASTContext();
     QualType T = D->getType().getCanonicalType();
     if (T->isAtomicType()) {
@@ -892,7 +892,10 @@ if(csd){
       }
     } 
     else if(!D->isReferenced()){
-      if(T->isFunctionPointerType()){
+      if(T->isDependentType()){
+        // print normally
+      }
+      else if(T->isFunctionPointerType()){
         //replace with void (*)() type
         Out << "void (*" << D->getName() << ")()";
         return;
@@ -907,6 +910,10 @@ if(csd){
           Out << "void *" << D->getName();
         }
         return;
+      }
+      else if(T->isReferenceType()){
+        //replace with char[] of proper size
+        Out << "char " << D->getName() << "[" << Ctx.getTypeSizeInChars(T).getQuantity() << "]";
       }
       else if(T->isArrayType()){
         if(GetBaseType(T)->isBuiltinType()){
@@ -945,7 +952,7 @@ if(csd){
         return;
       }
       else if(T->isVectorType()){
-    	  Out << "";
+        Out << "";
       }
       else{
         llvm::errs() << "Unhandled type: [" << T->getTypeClassName() << "] " << T.getAsString()<<'\n';

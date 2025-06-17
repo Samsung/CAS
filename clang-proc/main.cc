@@ -143,7 +143,7 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
     std::string directory = compilations.getCompileCommands(file).at(0).Directory;
     ClangTool Tool(compilations,file);
     IgnoringDiagConsumer Diag;
-    Tool.setDiagnosticConsumer(&Diag);
+    // Tool.setDiagnosticConsumer(&Diag);
 
     if (IncludeOption.getValue()) {
       auto arg = "-I" + builtInIncludePath;
@@ -171,7 +171,7 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
 
     dbg<<llvm::format_decimal(current,6)<<"  "<<file<<"\n";
     dbg.flush();
-    // llvm::outs()<<"LOG: "+buf;
+    // llvm::errs()<<"LOG: "+buf;
 
     DBFactory<DbJSONClassAction> Factory(current);
     Tool.run(&Factory);

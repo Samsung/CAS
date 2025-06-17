@@ -62,7 +62,7 @@ target_compile_options(clang-proc PRIVATE -Wno-comment)
 target_compile_options(clang-proc PRIVATE -Wno-strict-aliasing)
 target_compile_options(clang-proc PRIVATE -Wno-switch)
 target_compile_options(clang-proc PRIVATE "-DCLANG_VERSION=${LLVM_VERSION_MAJOR}")
-target_compile_options(clang-proc PRIVATE "-DCLANG_BUILTIN_INCLUDE_PATH=\"${LLVM_INCLUDE_DIRS}\"")
+target_compile_options(clang-proc PRIVATE "-DCLANG_BUILTIN_INCLUDE_PATH=\"${LLVM_INCLUDE_DIR}\"")
 target_link_directories(clang-proc PRIVATE ${LLVM_LIBDIR})
 
 target_link_libraries(clang-proc PRIVATE ${CLANG_PROC_LIBS})

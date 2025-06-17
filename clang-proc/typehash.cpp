@@ -6,6 +6,29 @@
 thread_local int short_ptr = 0;
 thread_local bool autoforward = false;
 
+std::string json_escape( const std::string &str ) {
+	std::string output;
+	for( unsigned i = 0; i < str.length(); ++i ) {
+		switch( str[i] ) {
+			case '\"': output += "\\\""; break;
+			case '\\': output += "\\\\"; break;
+			case '\b': output += "\\b";  break;
+			case '\f': output += "\\f";  break;
+			case '\n': output += "\\n";  break;
+			case '\r': output += "\\r";  break;
+			case '\t': output += "\\t";  break;
+			default  :
+			{
+				if ((static_cast<unsigned>(str[i])<0x80)&&(static_cast<unsigned>(str[i])>0x1F)) { // Ignore non-ASCII characters
+					output += str[i];
+				}
+				break;
+			}
+		}
+	}
+	return output;
+}
+
   void DbJSONClassConsumer::buildTemplateArgumentsString(const TemplateArgumentList& Args,
 		  std::string& typeString, std::pair<bool,unsigned long long> extraArg) {
 
@@ -23,10 +46,12 @@ thread_local bool autoforward = false;
 				  QualType T = A.getAsType();
 				  const TemplateTypeParmType* TTP = T->getAs<TemplateTypeParmType>();
 				  if (TTP) {
-					  assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type");
+					//   assert(!TTP->isCanonicalUnqualified() && "Only canonical template parm type3");
 				  }
 				  std::string Tstr;
+				  autoforward = true;
 				  buildTypeString(T,Tstr);
+				  autoforward = false;
 				  template_args.push_back(std::pair<std::string,unsigned>(Tstr,I));
 			  }
 			  else if (A.getKind() == TemplateArgument::Template) {
@@ -227,7 +252,8 @@ thread_local bool autoforward = false;
 			  else {
 				  tpII = II->getName().str();
 			  }
-			  ss << "R:" << outerFn << qualifierString << ":" << tpII << ":";
+			  //   FIXME: unnamed class inlined as template argument, added json_escape as a temporary workaround
+			  ss << "R:" << outerFn << qualifierString << ":" << json_escape(tpII) << ":";
 
 			  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Record(" << tpII
 					  << ")(" << qualifierString << ")\n" );
@@ -366,12 +392,14 @@ thread_local bool autoforward = false;
 			  QualType cT = QualType(tp->getClass(),0);
 			  std::stringstream ss;
 			  ss << "MP:" << qualifierString << ":";
-			  ss << T.getAsString() << ":";
+			  ss << json_escape(T.getAsString()) << ":";
 			  ss << Visitor.getTypeData(T).size;
 			  std::string mptrTstr;
 			  std::string cTstr;
 			  buildTypeString(mptrT,mptrTstr);
+			  autoforward = true;
 			  buildTypeString(cT,cTstr);
+			  autoforward = false;
 			  ss << ":" << mptrTstr << ":" << cTstr << ";";
 			  typeString.append(ss.str());
 		  }
@@ -421,7 +449,7 @@ thread_local bool autoforward = false;
                         std::stringstream ss;
 		  	ss << "DSA:" << qualifierString << ":";
 		  	QualType Qtp = QualType(tp,0);
-		  	ss << Qtp.getAsString() << ":";
+		  	ss << json_escape(Qtp.getAsString()) << ":";
 		  	std::set<const TemplateTypeParmType*> TPTS;
 		  	LookForTemplateTypeParameters(tp->getElementType(),TPTS);
                         if (tp->getSizeExpr()) {
@@ -447,7 +475,7 @@ thread_local bool autoforward = false;
 		  	std::stringstream ss;
 		  	ss << "PE:" << qualifierString << ":";
 		  	QualType Qtp = QualType(tp,0);
-		  	ss << Qtp.getAsString() << ";";
+		  	ss << json_escape(Qtp.getAsString()) << ";";
 		  	typeString.append(ss.str());
 		  }
 		  break;
@@ -457,7 +485,7 @@ thread_local bool autoforward = false;
 		  	std::stringstream ss;
 			ss << "TTP:" << qualifierString << ":";
 			QualType Qtp = QualType(tp,0);
-			ss << Qtp.getAsString() << ":" << tp->getDepth() << "," << tp->getIndex() <<";";
+			ss << json_escape(Qtp.getAsString()) << ":" << tp->getDepth() << "," << tp->getIndex() <<";";
 			typeString.append(ss.str());
 		  }
 		  break;
@@ -476,7 +504,7 @@ thread_local bool autoforward = false;
 				  buildRecordTypeString(T,TRD,qualifierString,rstr,extraArg );
 			  }
 			  else{
-				  rstr.append("RF:"+qualifierString+":"+T.getAsString()+";");
+				  rstr.append("RF:"+qualifierString+":"+json_escape(T.getAsString())+";");
 			  }
 			  ss << rstr;
 			  typeString.append(ss.str());
@@ -488,7 +516,9 @@ thread_local bool autoforward = false;
 				  QualType RT = Context.getRecordType(parentRecord);
 				  DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
 				  // build ahead of time
+				  autoforward=true;
 				  if(!RT_data.hash.size()) buildTypeString(RT,RT_data.hash);
+				  autoforward = false;
 				  parentRecordHash = RT_data.hash;
 				  parentRecordHash+="::";
 							  }
@@ -520,7 +550,7 @@ thread_local bool autoforward = false;
 		  	std::stringstream ss;
 			ss << "DN:" << qualifierString << ":";
 			QualType Qtp = QualType(tp,0);
-			ss << Qtp.getAsString() << ":";
+			ss << json_escape(Qtp.getAsString()) << ":";
 			for (auto i=TPTS.begin(); i!=TPTS.end(); ++i) {
 				const TemplateTypeParmType* tp = *i;
 				std::string ttpstr;
@@ -550,7 +580,7 @@ thread_local bool autoforward = false;
 		  	std::stringstream ss;
 		  	ss << "RS:" << qualifierString << ":";
 		  	QualType Qtp = QualType(tp,0);
-		  	ss << Qtp.getAsString() << ":";
+		  	ss << json_escape(Qtp.getAsString()) << ":";
 		  	TemplateName TN = tp->getTemplateName();
 		  	if (tp->getTemplateName().getKind()==TemplateName::Template) {
 		  		TemplateDecl* TD = TN.getAsTemplateDecl();
@@ -586,7 +616,7 @@ thread_local bool autoforward = false;
 		  	std::stringstream ss;
 			ss << "DTS:" << qualifierString << ":";
 			QualType Qtp = QualType(tp,0);
-			ss << Qtp.getAsString() << ";";
+			ss << json_escape(Qtp.getAsString()) << ";";
 			typeString.append(ss.str());
 		  }
 		  break;
@@ -644,7 +674,7 @@ thread_local bool autoforward = false;
 					  else {
 						  tpII = II->getName().str();
 					  }
-					  ss << "RF:" << qualifierString << ":" << tpII << ";";
+					  ss << "RF:" << qualifierString << ":" << json_escape(tpII) << ";";
 					  
 					  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Record forward(" << tpII
 					  		<< ")(" << qualifierString << ")\n" );
@@ -802,7 +832,7 @@ thread_local bool autoforward = false;
 					  else {
 						  tpII = II->getName().str();
 					  }
-					  ss << "E:" << qualifierString << ":" << tpII << ":";
+					  ss << "E:" << qualifierString << ":" << json_escape(tpII) << ":";
 					  for (auto i = ConstantValues.begin(); i!=ConstantValues.end();) {
 						  ss << (*i) << "@" << ConstantNames[i-ConstantValues.begin()];
 						  ++i;
@@ -857,7 +887,7 @@ thread_local bool autoforward = false;
 				  else {
 					  tpII = II->getName().str();
 				  }
-				  ss << "EF:" << qualifierString << ":" << tpII << ";";
+				  ss << "EF:" << qualifierString << ":" << json_escape(tpII) << ";";
 
 				  DBG(DEBUG_TYPESTRING, llvm::outs() << "build Enum forward(" << tpII
 						  << ")(" << qualifierString << ")\n" );
