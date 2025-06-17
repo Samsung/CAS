@@ -519,6 +519,14 @@ bool DbJSONClassVisitor::VisitTypedefDeclFromClass(TypedefDecl *D) {
 // Functions
 bool DbJSONClassVisitor::VisitFunctionDeclStart(const FunctionDecl *D) {
 
+	// add body ahead of time for initializer list
+	if(isa<CXXConstructorDecl>(D)){
+		auto CD = cast<CXXConstructorDecl>(D);
+		if(CD->doesThisDeclarationHaveABody()){
+			assert(csStack.empty() && "non-empty cs stack for CXXConstructor");
+			csStack.push_back(cast<CompoundStmt>(CD->getBody()));
+		}
+	}
 	DBG(DEBUG_NOTICE, llvm::outs() << "@notice VisitFunctionDeclStart(" << D << ")\n"; D->dump(llvm::outs()) );
 
 	if (D->hasBody()) {
@@ -749,7 +757,11 @@ bool DbJSONClassVisitor::VisitCompoundStmtStart(const CompoundStmt *CS) {
 		if (csStack.size()>0) {
 			parentCS = csStack.back();
 		}
-		csStack.push_back(CS);
+		// CXXConstructor body
+		if(parentCS == CS)
+			parentCS = 0;
+		else
+			csStack.push_back(CS);
 		if (lastFunctionDef) {
 			lastFunctionDef->csIdMap.insert(std::pair<const CompoundStmt*,long>(CS,lastFunctionDef->CSId++));
 			lastFunctionDef->csParentMap.insert(std::pair<const CompoundStmt*,const CompoundStmt*>(CS,parentCS));
