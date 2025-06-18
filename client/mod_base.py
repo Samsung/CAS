@@ -2,7 +2,7 @@ import fnmatch
 from functools import lru_cache
 import re
 from abc import abstractmethod
-from typing import Any, List, Dict, Optional, Tuple, Generator, Callable, Set
+from typing import Any, Iterator, List, Dict, Optional, Tuple, Generator, Callable, Set
 import argparse
 from flask import Response
 import libetrace
@@ -35,7 +35,7 @@ class ModulePipeline:
             printdbg("DEBUG: START pipeline step {}".format(mdl.args.module.__name__), mdl.args)
             if mdl.args.is_piped and self.last_module is not None and pipe_type is not None:
                 printdbg("DEBUG: >>>>>> piping {} -->> {} -->> {}".format(self.last_module.args.module.__name__, pipe_type.__name__, mdl.args.module.__name__), mdl.args)
-                if not isinstance(data, list) and not isinstance(data, libetrace.nfsdbOpensIter):
+                if not isinstance(data, list) and not isinstance(data, Iterator):
                     raise PipelineException("Input data '{}' module is not list ({}) - cannot proceed with next pipeline step!".format(mdl.args.module.__name__, type(data)))
                 elif len(data) == 0:
                     raise PipelineException("Input data to '{}' module is empty - cannot proceed with next pipeline step!".format(mdl.args.module.__name__))
@@ -507,13 +507,13 @@ class Module:
                                 negate_pattern=(dct["negate_pattern"] if "negate_pattern" in dct else False))
 
     def get_ext_paths(self, paths) -> "List[libcas.DepsParam|str]":
-        if len(paths) > 0:
-            for i, path in enumerate(paths):
-                if (path.startswith("(") or path.startswith("[")) and (path.endswith(")") or path.endswith("]")):
-                    path = path.replace('[', '(').replace(']', ')')
-                    for _ in range(path.count(" ")):
-                        path = path.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
-                    paths[i] = self.expand_to_deps_param(path if path.startswith("(") else "(file={})".format(path))
+        paths = list(paths)
+        for i, path in enumerate(paths):
+            if (path.startswith("(") or path.startswith("[")) and (path.endswith(")") or path.endswith("]")):
+                path = path.replace('[', '(').replace(']', ')')
+                for _ in range(path.count(" ")):
+                    path = path.replace("( ", "(").replace(" (", "(").replace(") ", ")").replace(" )", ")")
+                paths[i] = self.expand_to_deps_param(path if path.startswith("(") else "(file={})".format(path))
         return paths
 
     def get_deep_comps(self, comp_open: libetrace.nfsdbEntryOpenfile) -> Set[libetrace.nfsdbEntryOpenfile]:
