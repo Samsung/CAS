@@ -1577,6 +1577,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 	SHA_CTX c;
 	SHA_init(&c);
 
+	// FIX: added for some edge cases, think of a better solution
+	SHA_update(&c, func_data->signature.data(), func_data->signature.size());
 	SHA_update(&c, func_data->templatePars.data(), func_data->templatePars.size());
 
 	llvm::raw_string_ostream bstream(func_data->body);
