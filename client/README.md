@@ -435,13 +435,13 @@ On top of that there are additional endpoints:
 
 
 # FTDB creation
-CAS client has a functionality to create ftdb by adding `--create-ftdb` on the end of `cas` query. Example usage:
+CAS client has a functionality to create ftdb by adding `--ftdb-create` on the end of `cas` query. Example usage:
 ```bash
-    cas linked_modules --filter=<Filter> --create-ftdb
+    cas linked_modules --filter=<Filter> --ftdb-create
 ```
 or
 ```bash
-    cas deps_for --path=<Path> --create-ftdb
+    cas deps_for --path=<Path> --ftdb-create
 ```
 There are also additional parameters for ftdb creation.
 
