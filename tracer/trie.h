@@ -128,13 +128,13 @@ static struct trie_node *__trie_node_make(char *key, size_t size, void *priv,
  * @pos: position of already matched nodes
  */
 static int __trie_compress_node(struct trie_node *src, char *key, size_t size,
-				size_t pos)
+				size_t pos, gfp_t flags)
 {
 	char *buf;
 	size_t newsize;
 
 	newsize = src->size + size - pos;
-	buf = (char *) kvmalloc(newsize, GFP_KERNEL);
+	buf = (char *) kvmalloc(newsize, flags);
 	if (!buf)
 		return -ENOMEM;
 	memcpy(buf, key + pos - src->size, newsize);
@@ -154,11 +154,11 @@ static int __trie_compress_node(struct trie_node *src, char *key, size_t size,
  * @pos: position of already matched nodes
  */
 static int __trie_rotate_node(struct trie_node *src, char *key, size_t size,
-			      struct trie_node *parent, size_t pos)
+			      struct trie_node *parent, size_t pos, gfp_t flags)
 {
 	char *buf;
 
-	buf = (char *) kvmalloc(size, GFP_KERNEL);
+	buf = (char *) kvmalloc(size, flags);
 	if (!buf)
 		return -ENOMEM;
 	memcpy(buf, key, size);
@@ -303,7 +303,7 @@ static inline struct trie_node *trie_lookup(struct trie_root *root, char *key,
  * in an understandable manner.
  */
 static int trie_insert(struct trie_root *root, char *key, size_t size, void *priv,
-		       struct trie_node **inserted)
+		       struct trie_node **inserted, gfp_t flags)
 {
 	int ret;
 	char *buf;
@@ -326,7 +326,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 				     size,
 				     priv,
 				     (struct trie_node *) root,
-				     GFP_KERNEL);
+				     flags);
 		if (!n)
 			return -ENOMEM;
 		if (inserted)
@@ -347,7 +347,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 			 * If @last has no children, this means we can
 			 * just concat suffix of @key with @last->key.
 			 */
-			ret = __trie_compress_node(last, key, size, pos);
+			ret = __trie_compress_node(last, key, size, pos, flags);
 			if (inserted)
 				*inserted = last;
 			if (ret)
@@ -364,7 +364,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 					     size - pos,
 					     priv,
 					     last,
-					     GFP_KERNEL);
+					     flags);
 			if (inserted)
 				*inserted = n;
 			if (!n)
@@ -393,7 +393,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 						  last->size - pfxlen,
 						  last->priv,
 						  last,
-						  GFP_KERNEL);
+						  flags);
 			if (!suffix)
 				return -ENOMEM;
 
@@ -401,7 +401,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 			 * @last is our prefix node
 			 */
 			last->size = pfxlen;
-			buf = (char *) kvmalloc(last->size, GFP_KERNEL);
+			buf = (char *) kvmalloc(last->size, flags);
 			if (!buf)
 				return -ENOMEM;
 			memcpy(buf, last->key, pfxlen);
@@ -423,7 +423,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 					     size - pos - pfxlen,
 					     priv,
 					     last,
-					     GFP_KERNEL);
+					     flags);
 			if (!n)
 				return -ENOMEM;
 
@@ -449,7 +449,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 						 pfxlen,
 						 NULL,
 						 last->parent,
-						 GFP_KERNEL);
+						 flags);
 			if (!split)
 				return -ENOMEM;
 
@@ -457,7 +457,8 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 						 last->key + pfxlen,
 						 last->size - pfxlen,
 						 split,
-						 pos);
+						 pos,
+						 flags);
 			if (ret)
 				return ret;
 
@@ -470,7 +471,7 @@ static int trie_insert(struct trie_root *root, char *key, size_t size, void *pri
 					     size - pos - pfxlen,
 					     priv,
 					     split,
-					     GFP_KERNEL);
+					     flags);
 			if (!n)
 				return -ENOMEM;
 
@@ -626,7 +627,7 @@ static inline void trie_purge(struct trie_root *root,
  * to currently traversed leaf.
  */
 static inline int trie_iter(struct trie_root *root,
-			    void (*itfn)(struct trie_root *, struct trie_node *))
+			    void (*itfn)(struct trie_root *, struct trie_node *), gfp_t flags)
 {
 	struct trie_node *iter, *delim = (struct trie_node *) root;
 	struct __trie_selem *elem = NULL, *siter, *tmp;
@@ -637,7 +638,7 @@ static inline int trie_iter(struct trie_root *root,
 push:
 	list_for_each_entry(iter, &delim->children, siblings) {
 		elem = (struct __trie_selem *) kvmalloc(sizeof(struct __trie_selem),
-							GFP_KERNEL);
+							flags);
 		if (!elem)
 			goto nomem;
 		INIT_LIST_HEAD(&elem->head);
@@ -677,7 +678,7 @@ nomem:
  * @itfn: visitor function pointer
  */
 static inline int trie_iter_val(struct trie_root *root,
-	 			void (*itfn)(struct trie_root *, struct trie_node *))
+				void (*itfn)(struct trie_root *, struct trie_node *), gfp_t flags)
 {
 	struct trie_node *iter, *delim = (struct trie_node *) root;
 	struct __trie_selem *elem = NULL, *siter, *tmp;
@@ -688,7 +689,7 @@ static inline int trie_iter_val(struct trie_root *root,
 push:
 	list_for_each_entry(iter, &delim->children, siblings) {
 		elem = (struct __trie_selem *) kvmalloc(sizeof(struct __trie_selem),
-							GFP_KERNEL);
+							flags);
 		if (!elem)
 			goto nomem;
 		INIT_LIST_HEAD(&elem->head);

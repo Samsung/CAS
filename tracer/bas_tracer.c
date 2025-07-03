@@ -157,7 +157,6 @@ module_param(trace_env_vars, int, 0);
 // private global variables
 
 static DEFINE_MUTEX(list_mutex);
-static DEFINE_MUTEX(env_mutex);
 
 // access/change must be protected by list_mutex
 static u64 next_upid = 1;
@@ -197,7 +196,7 @@ struct traced_pid {
 };
 
 static RADIX_TREE(traced_pids, GFP_KERNEL);
-static DEFINE_TRIE(envs);
+static DEFINE_PER_CPU(struct trie_root, envs);
 
 static struct tracepoint *tracepoint_sched_process_fork = NULL;
 static struct tracepoint *tracepoint_sched_process_exit = NULL;
@@ -885,12 +884,12 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 	struct list_head *head;
 	struct __env_pid *cur, *pid = NULL;
 	struct trie_node *inserted;
+	struct trie_root *root;
 
-	mutex_lock(&env_mutex);
 	buffer = (char *) kvmalloc(env_size, GFP_KERNEL);
 	if (!buffer) {
 		pr_err("print_env_vars: allocation failed\n");
-		goto unlock;
+		return;
 	}
 
 	ret = copy_from_user(buffer, (char __user *) env_start, env_size);
@@ -900,15 +899,17 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 	}
 
 	start = buffer;
+	preempt_disable_notrace();
+	root = this_cpu_ptr(&envs);
 	while (start < buffer + env_size) {
-		ret = trie_node_lookup(&envs, start, strlen(start), &inserted, NULL, NULL);
+		ret = trie_node_lookup(root, start, strlen(start), &inserted, NULL, NULL);
 		if (ret == -ENOENT) {
-			head = kvmalloc(sizeof(struct list_head), GFP_KERNEL);
+			head = kvmalloc(sizeof(struct list_head), GFP_NOWAIT);
 			if (!head)
 				goto dealloc;
 			INIT_LIST_HEAD(head);
 			{
-				pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+				pid = kvmalloc(sizeof(struct __env_pid), GFP_NOWAIT);
 				if (!pid) {
 					kvfree(head);
 					goto dealloc;
@@ -918,7 +919,7 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 				pid->pid = p->pid;
 				list_add(&pid->head, head);
 			}
-			ret = trie_insert(&envs, start, strlen(start), head, NULL);
+			ret = trie_insert(root, start, strlen(start), head, NULL, GFP_NOWAIT);
 			if (ret == -ENOMEM)
 				pr_err("print_env_vars: trie_insert failed, allocation failed\n");
 			continue;
@@ -927,12 +928,12 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 
 		head = (struct list_head *) inserted->priv;
 		if (!head) {
-			head = kvmalloc(sizeof(struct list_head), GFP_KERNEL);
+			head = kvmalloc(sizeof(struct list_head), GFP_NOWAIT);
 			if (!head)
 				goto dealloc;
 			INIT_LIST_HEAD(head);
 			{
-				pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+				pid = kvmalloc(sizeof(struct __env_pid), GFP_NOWAIT);
 				if (!pid) {
 					kvfree(head);
 					goto dealloc;
@@ -953,7 +954,7 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 		}
 
 		if (!pid) {
-			pid = kvmalloc(sizeof(struct __env_pid), GFP_KERNEL);
+			pid = kvmalloc(sizeof(struct __env_pid), GFP_NOWAIT);
 			if (!pid)
 				goto dealloc;
 			INIT_LIST_HEAD(&pid->head);
@@ -966,9 +967,9 @@ static void print_env_vars(u64 upid, struct task_struct *p,
 	}
 
 dealloc:
+	preempt_enable_notrace();
+
 	kvfree(buffer);
-unlock:
-	mutex_unlock(&env_mutex);
 }
 
 // based on fs/proc/base.c:get_mm_cmdline()
@@ -1995,8 +1996,18 @@ static void register_tracepoints(struct tracepoint *tp, void *ignore)
 
 static int et_init(void)
 {
+	int cpu;
+	struct trie_root *root;
+
 	pr_info("BAS tracer [" TRACER_VERSION "]");
 	pr_info("et_init called\n");
+
+	for_each_online_cpu(cpu) {
+		root = per_cpu_ptr(&envs, cpu);
+
+		// Initialize trie roots
+		INIT_LIST_HEAD(&root->children);
+	}
 
 	if (ignore_repeated_opens) {
 		pr_info("Repeated open() calls will be ignored");
@@ -2135,6 +2146,7 @@ static void print_keys(struct trie_root *root, struct trie_node *n)
 
 static void et_exit(void)
 {
+	int cpu;
 	pr_info("et_exit called\n");
 
 	if (tracepoint_sched_process_fork)
@@ -2163,8 +2175,10 @@ static void et_exit(void)
 
 	clear_pids_list();
 	if (trace_env_vars) {
-		trie_iter_val(&envs, &print_keys);
-		trie_purge(&envs, &clean_trie);
+		for_each_online_cpu(cpu) {
+			trie_iter_val(per_cpu_ptr(&envs, cpu), &print_keys, GFP_KERNEL);
+			trie_purge(per_cpu_ptr(&envs, cpu), &clean_trie);
+		}
 	}
 	pr_info("Module unloaded\n");
 }
