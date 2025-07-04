@@ -11,7 +11,7 @@ import fnmatch
 from pathlib import Path
 from typing import Generator, Iterator, List, Optional, Set, Dict
 
-from flask import send_file
+from fastapi.responses import FileResponse
 
 from client.mod_modules import LinkedModules
 import libcas
@@ -493,9 +493,9 @@ class VSCodeProjectGenerator(Module, PipedModule, FilterableModule):
                         raise IDEGenerationException(str(err)) from err
                     printcli("- Done" , self.args)
                     if self.args.is_server:
-                        return send_file(self.output_zip,
-                            mimetype='application/zip',
-                            download_name=os.path.basename(self.output_zip))
+                        return FileResponse(self.output_zip,
+                            media_type='application/zip',
+                            filename=os.path.basename(self.output_zip))
 
                 else:
                     printcli("ERROR: Output dir is empty!" , self.args)

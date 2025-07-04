@@ -9,7 +9,7 @@ function nextFiles() {
     let idx = pid_div.innerText.split(":")[1];
     if (page < (parseInt(files_pages.innerText.split("/")[1]) - 1)) {
         page++;
-        let request = `${ctx}/proc?pid=${pid}&idx=${idx}&page=${page}`;
+        let request = `${ctx}proc?pid=${pid}&idx=${idx}&page=${page}`;
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -38,7 +38,7 @@ function prevFiles() {
     let idx = pid_div.innerText.split(":")[1];
     if (page > 0) {
         page--;
-        let request = `${ctx}/proc?pid=${pid}&idx=${idx}&page=${page}`;
+        let request = `${ctx}proc?pid=${pid}&idx=${idx}&page=${page}`;
         $.get(request, function (data) {
             Array.from(opens_div.getElementsByTagName("p")).forEach(element => {
                 element.remove();
@@ -79,7 +79,7 @@ fileModal.addEventListener('show.bs.modal', function (event) {
     let proc_details_div = fileModal.querySelector('.process_details')
     fileModal.querySelector('#prevFilesButton').setAttribute('disabled', '');
     fileModal.querySelector('#nextFilesButton').removeAttribute('disabled');
-    let request = `${ctx}/proc?pid=${pid}&idx=${idx}&page=${page}`
+    let request = `${ctx}proc?pid=${pid}&idx=${idx}&page=${page}`
     $.get(request, function (data) {
         pid_div.innerText = data.pid + ":" + data.idx;
         duration_div.innerText = nanoToStr(data["etime"])
@@ -125,7 +125,7 @@ fileModal.addEventListener('show.bs.modal', function (event) {
             }
             fileModal.querySelector('#linkerModal').style.display = "block";
             let linked_div = fileModal.querySelector('.linked_list');
-            linked_div.innerHTML += `<a href="${ctx}/deps_tree?path=${data["linked"]}" target="_blank">${data["linked"]}</a>`
+            linked_div.innerHTML += `<a href="${ctx}deps_tree?path=${data["linked"]}" target="_blank">${data["linked"]}</a>`
         }
         if (data.class === "linker" && data.class === "compiler"){
             if(fileModal.querySelector('#headingFiles').children[0].classList.contains("collapsed")){

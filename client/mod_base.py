@@ -4,7 +4,7 @@ import re
 from abc import abstractmethod
 from typing import Any, Iterator, List, Dict, Optional, Tuple, Generator, Callable, Set
 import argparse
-from flask import Response
+from fastapi import Response
 import libetrace
 import libcas
 import libftdb

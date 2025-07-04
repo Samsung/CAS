@@ -1,104 +1,57 @@
 import argparse
-import logging
+from asyncio import gather
+from contextlib import asynccontextmanager
+from copy import copy
+import datetime
+from functools import lru_cache
 import json
 from os import path
-from typing import Dict, Tuple
-from flask_cors import CORS
-from gevent.pywsgi import WSGIServer
-from flask import Blueprint, Flask, Response, render_template_string, request, stream_with_context
-import requests
-from gevent.pool import Pool
+import os
+from typing import Dict, cast
+from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.routing import APIRoute
+from fastapi.templating import Jinja2Templates
+from httpx import URL, AsyncClient, RequestError, Timeout
+import uvicorn
 
-template="""
-<!doctype html>
-<html>
-<head>
-    <title>Database List</title>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
-    <link  href="https://cdn.datatables.net/2.2.1/css/dataTables.dataTables.min.css" rel="stylesheet">
-    <script src="https://cdn.datatables.net/2.2.1/js/dataTables.min.js"></script>
-</head>
-<body>
-<div id="content">
-<div class="text-center" style="display:flex;justify-content: center">
-    <table class="table table-hover table-bordered align-middle table-responsive-sm display" id="buildTable" style="width: fit-content;padding: 20px">
-        <thead class="table-dark">
-        <tr>
-            <th scope="col">DB name</th>
-            <th scope="col">Host</th>
-            <th scope="col">Image<br/>version</th>
-            <th scope="col" style="width: 70px;">config<br/>file</th>
-            <th scope="col" style="width: 70px;">config<br/>loaded</th>
-            <th scope="col" style="width: 70px">nfsdb<br/>file</th>
-            <th scope="col" style="width: 70px">nfsdb<br/>loaded</th>
-            <th scope="col" style="width: 70px;">deps<br/>loaded</th>
-        </tr>
-        </thead>
-        <tbody>
-        {% for host, val in backend.items() %}
-          {% if val is not none %}
-            {% for endpoint, v in val.items() %}
-            {% if engine != v['image_version'] %}
-            <tr class="table-danger" title="Image version not compatibile with engine version!">
-            {%else%}
-            <tr>
-            {%endif%}
-                <td class="text-start fw-bolder"><a href='{{ web_ctx }}{{ endpoint }}'>{{ endpoint }}</a></td>
-                <td class="text-center">{{ v['host'] }}</td>
-                <td class="text-center">{{ v['image_version'] }}</td>
-                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['config_path']  else "bi-circle" }}"></i></td>
-                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['loaded_config'] else "bi-circle" }}"></i></td>
-                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['nfsdb_path'] else "bi-circle" }}"></i></td>
-                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['loaded_nfsdb'] else "bi-circle" }}"></i></td>
-                <td class="text-center"><i class="bi {{ "bi-check-circle-fill" if v['deps_path'] else "bi-circle" }}"></i></td>
-            </tr>
-            {% endfor %}
-          {% endif %}
-        {% endfor %}
-        </tbody>
-    </table>
-
-</div>
-{% for err in not_responding %}
-<div class="alert alert-warning" role="alert">
-    <strong>{{err}}</strong>
-</div>
-{% endfor %}
-</div>
-<div id="footer">
-
-</div>
-</body>
-<script>$(document).ready( function () {
-    new DataTable('#buildTable', {
-    lengthMenu: [
-        [50, 100, 500, -1],
-        [50, 100, 500, 'All']
-    ]
-});
-} );
-</script>
-</html>
-"""
+from cas_server import cas_router
 
 script_dir = path.dirname(path.realpath(__file__))
 config_file = path.join(script_dir,'gw_config.json')
-cas_gw = Blueprint('cas_gateway', __name__)
 host = "0.0.0.0"
 port = 8080
-ctx = "/"
 conf = {}
 engine_version = 4
+templates = Jinja2Templates(directory="client/templates")
+static = StaticFiles(directory="client/static")
 
-BACKEND_SERVERS_STATUS = {}
+BACKEND_SERVERS_STATUS: Dict[str, Dict[str, Dict[str, str]]] = {}
 if path.exists(config_file):
     with open(config_file, 'r', encoding="utf-8") as conffile:
         conf = json.load(conffile)
-p = Pool(len(conf["BACKEND_SERVERS"]))
 
+client: AsyncClient
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global client
+    # until https://github.com/fastapi/fastapi/issues/1773 is fixed
+    for route in app.routes:
+        if isinstance(route, APIRoute) and "GET" in route.methods:
+            new_route = copy(route)
+            new_route.methods = {"HEAD", "OPTIONS"}
+            new_route.include_in_schema = False
+            app.routes.append(new_route)
+    async with AsyncClient(follow_redirects=True) as c:
+        client = c
+        yield
+
+cas_gw = FastAPI(lifespan=lifespan)
+
+cas_gw.mount("/static", static, name="static")
+
+    
 def get_host_from_endpoint(endpoint):
     matched = [ host for host,endp in conf["BACKEND_SERVERS"].items() if endp == endpoint]
     if len(matched) == 1:
@@ -106,92 +59,119 @@ def get_host_from_endpoint(endpoint):
     else:
         return None
 
-def generate_stream(source_response):
-    for chunk in source_response.iter_content(chunk_size=8192):
-        yield chunk
 
-def get_response(host_info: Tuple) -> Tuple[str, Dict | None]:
-    host, url = host_info
+
+async def status_request(host: str, endpoint: URL):
     try:
-        return (host, requests.get(url, timeout=0.2).json())
-    except Exception:
-        return (host, None)
+        response = await client.get(url=endpoint.join("status"), timeout=5)
+    except RequestError as e:
+        return host, {"ERROR": str(e)}
+    return host, response.json()
 
-def get_status():
-    req = [(host, f"{addr}/status/") for host, addr in conf["BACKEND_SERVERS"].items()]
+async def get_status():
     ret = {}
-    rsp = p.map_async(get_response, req).get(True)
+    rev = {}
+    
+    rsp = await gather(*[status_request(host, URL(endpoint)) for host, endpoint in conf["BACKEND_SERVERS"].items()])
+    
     for host, dbs in rsp:
         url = conf["BACKEND_SERVERS"][host]
         if dbs is not None:
             ret[url] = {}
-            for x in dbs:
-                tmp = dbs[x]
-                tmp["host"] = host
-                ret[url][x] = tmp
+            if dbs.get("ERROR", None) is not None:
+                ret[url] = {"ERROR": dbs["ERROR"], host: host}
+                continue
+            for name, data in dbs.items():
+                cast(Dict, data)["host"] = host
+                ret[url][name] = data
+                rev[name] = { "url": url, "host": host, **cast(Dict, data)}
         else:
             ret[url] = None
-    return ret
+    rev["timestamp"] = datetime.datetime.now()
+    return ret, rev
 
-@cas_gw.route('/status/',methods=['GET'], strict_slashes=False)
-def status():
-    return Response(json.dumps( get_status(), indent=2),
-        mimetype="application/json"
-    )
+@cas_gw.get('/status')
+async def status():
+    return (await get_status())[0]
 
-@cas_gw.route('/<db>/', defaults={'cmd': ""}, methods=['GET', 'POST'])
-@cas_gw.route('/<db>/<cmd>', methods=['GET', 'POST'])
-def proxy(db, cmd):
-    global BACKEND_SERVERS_STATUS
-    endpoint = [ e for e in BACKEND_SERVERS_STATUS if BACKEND_SERVERS_STATUS[e] is not None and db in BACKEND_SERVERS_STATUS[e]]
-    if len(endpoint) == 0:
-        BACKEND_SERVERS_STATUS = get_status()
-        endpoint = [ e for e in BACKEND_SERVERS_STATUS if BACKEND_SERVERS_STATUS[e] is not None and db in BACKEND_SERVERS_STATUS[e]]
-
-    if len(endpoint) == 1:
-        try:
-            url = f"{endpoint[0]}/{request.full_path.replace(ctx,'')}"
-            method = request.method
-            headers = {'Content-Type': request.headers.get('Content-Type')}
-            data = request.get_json() if method in ['POST', 'PUT'] else None
-            source_response = requests.request(method, url, headers=headers, json=data, stream=True, timeout=2000)
-            # print (url)
-            return Response(stream_with_context(generate_stream(source_response)), content_type=source_response.headers['Content-Type'])
-        except requests.exceptions.ConnectionError as e:
-            return Response(json.dumps({"ERROR": str(e)}), mimetype="application/json", status=500)
-    else:
-        return Response(json.dumps({"ERROR": "Database not found!"}), mimetype="application/json", status=500)
-
-@cas_gw.route('/', methods=['GET', 'POST'])
-def main():
-    backends = get_status()
+@cas_gw.get("/")
+async def main_status(request: Request):
+    backends = (await get_status())[0]
     not_responding = [ f"WARNING: {get_host_from_endpoint(x)} is not responding! " for x in backends if backends[x] is None ]
-    return Response(render_template_string(template, backend=backends, servers=conf["BACKEND_SERVERS"],
-                                            not_responding=not_responding,engine=engine_version, web_ctx=""))
+    return templates.TemplateResponse(name="gw_dbs.html", request=request, context={"backend": backends, "servers": conf["BACKEND_SERVERS"],
+                                            "not_responding": not_responding, "engine": engine_version, "web_ctx": ctx + "/"})
 
-if __name__ == '__main__':
 
+def setup_proxy():
+    proxy_app = FastAPI()
+    @proxy_app.middleware("http")
+    async def proxy_middleware(request: Request, call_next):
+        global BACKEND_SERVERS_STATUS
+        db = request.path_params.get("db", None)
+        path = str(request.url).replace(str(request.base_url), "")
+        if datetime.datetime.now() - cast(datetime.datetime, 
+                                            BACKEND_SERVERS_STATUS.get("timestamp", 
+                                                                        datetime.datetime(1,1,1,1,1,1)
+                                                                    )
+                                        ) > datetime.timedelta(seconds=5): 
+            _, BACKEND_SERVERS_STATUS = await get_status()
+        
+        
+        if db is not None and BACKEND_SERVERS_STATUS.get(db, None) is not None:
+            proxied_url = URL(cast(str, BACKEND_SERVERS_STATUS[db]["url"]))
+            resp = await client.request(
+                url=proxied_url.join(path),
+                method=request.method,
+                follow_redirects=True,
+                content=request.stream(),
+                cookies=request.cookies,
+                headers={
+                    "X-Forwarded-For": request.client.host if request.client else "",
+                    **request.headers
+                },
+                timeout=Timeout(None)
+            )
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                headers=resp.headers,
+            )
+            
+        return await call_next(request)
+    
+    proxy_app.include_router(cas_router, include_in_schema=True)
+    cas_gw.mount("/{db}", proxy_app)
+    cas_gw.include_router(cas_router, prefix="/{db}", )
+
+
+
+a = argparse.Namespace()
+ctx: str = ""
+def get_app():
+    global a
+    global ctx
     arg_parser = argparse.ArgumentParser(description="CAS Gateway arguments")
     arg_parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
     arg_parser.add_argument("--host", type=str, default="0.0.0.0", help="server address")
     arg_parser.add_argument("--ctx", type=str, default='/', help="Web context")
     arg_parser.add_argument("--debug", action="store_true", help="debug mode")
+    arg_parser.add_argument("--workers", type=int, default=os.environ.get("WEB_CONCURRENCY", os.cpu_count() or 1), help="Number of worker processes to run")
 
     a = arg_parser.parse_args()
 
-    port = conf["PORT"] if "PORT" in conf else a.port
-    host = conf["HOST"] if "HOST" in conf else a.host
-    ctx = conf["WEB_CONTEXT"] if "WEB_CONTEXT" in conf else a.ctx
-
-    ctx = ctx if ctx.endswith("/") else ctx + "/"
+    ctx = cast(str, conf["WEB_CONTEXT"] if "WEB_CONTEXT" in conf else a.ctx).removesuffix("/")
+    cas_gw.root_path = ctx
+    setup_proxy()
+    if a.debug:
+        print(cas_gw.routes)
+    return cas_gw
+if __name__ == '__main__':
     try:
-        app = Flask(__name__, template_folder='client/templates', static_folder='client/static', static_url_path=path.join(ctx, 'static'))
-        CORS(app)
-        app.register_blueprint(cas_gw, url_prefix=ctx)
-        if a.debug:
-            print(app.url_map)
-        http_server = WSGIServer((host, port), app, log="default" if a.debug else None)
+        cas_gw = get_app()
+        port = conf["PORT"] if "PORT" in conf else a.port
+        host = conf["HOST"] if "HOST" in conf else a.host
+        uvicorn.run("cas_api_gateway:get_app", factory=True, host=host, port=port, log_level="debug" if a.debug else None, workers=a.workers)
         print("Started CAS API Gateway")
-        http_server.serve_forever()
+            
     except KeyboardInterrupt:
         print("Shutting down CAS API Gateway")

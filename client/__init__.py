@@ -1,0 +1,1 @@
+from client.__main__ import main

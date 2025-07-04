@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
+from contextlib import asynccontextmanager
+from copy import copy
+from enum import Enum
+import os
 import sys
+
+from fastapi.routing import APIRoute
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
     import libetrace as _
@@ -10,7 +18,7 @@ except ModuleNotFoundError:
 
 from argparse import Namespace
 from functools import lru_cache
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from os import path
 import json
@@ -19,10 +27,6 @@ import argparse
 from shlex import split as shell_split
 from urllib.parse import parse_qsl
 
-from flask import Flask, Blueprint, render_template, send_from_directory, request
-from flask.wrappers import Response
-from flask_cors import CORS
-from gevent.pywsgi import WSGIServer
 from libetrace import nfsdbEntry
 import libetrace
 from libcas import CASDatabase
@@ -32,9 +36,34 @@ from client.argparser import get_api_keywords
 from client.misc import access_from_code, get_file_info
 from client.exceptions import MessageException, LibFtdbException
 
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, ORJSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 
-cas_single = Blueprint('cas', __name__, template_folder='client/templates', static_folder='client/static')
-cas_multi = Blueprint('cas', __name__, template_folder='client/templates', static_folder='client/static')
+import uvicorn
+
+app = FastAPI()
+
+static = StaticFiles(directory="client/static")
+app.mount("/static", static, name="static")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # until https://github.com/fastapi/fastapi/issues/1773 is fixed
+    for route in app.routes:
+        if isinstance(route, APIRoute) and "GET" in route.methods:
+            new_route = copy(route)
+            new_route.methods = {"HEAD", "OPTIONS"}
+            new_route.include_in_schema = False
+            app.routes.append(new_route)
+    yield
+
+cas_router = APIRouter(lifespan=lifespan)
+
+templates = Jinja2Templates(directory="client/templates")
+
 
 allowed_modules = [keyw for keyw in get_api_keywords() if keyw not in ['parse', 'postprocess', 'pp', 'cache']]
 bool_args = [ "commands", "show-commands", "details", "t", "cdm", "compilation-dependency-map", "revdeps", "V", "reverse-dependency-map", "rdm", "recursive", "r", "with-children", "direct", "raw-command",
@@ -43,6 +72,8 @@ bool_args = [ "commands", "show-commands", "details", "t", "cdm", "compilation-d
              "body", "ubody", "declbody", "definition", "skip-linked", "skip-objects", "skip-asm", "deep-comps" ]
 
 args: Namespace = Namespace()
+
+
 dbs: DBProvider = DBProvider()
 
 
@@ -118,7 +149,7 @@ def translate_to_url(commandline: List[str]) -> str:
     return ret
 
 
-def process_request(db: str, commandline: List[str], org_url):
+def process_request(db: str, commandline: List[str], org_url: str, request: Request | None = None):
     if not any([x for x in commandline if x.startswith("-n=") or x.startswith("--entries-per-page=")]):
         commandline.append("-n=10")
         org_url += "&n=10"
@@ -129,30 +160,30 @@ def process_request(db: str, commandline: List[str], org_url):
     try:
         e = dbs.process_command(db, commandline)
     except (argparse.ArgumentError, LibFtdbException) as er:
-        return Response(json.dumps({"ERROR": er.message}), mimetype='text/json')
+        raise HTTPException(status_code=500, detail={"ERROR": er.message})
 
     if isinstance(e, Response):
         return e
 
-    if "--proc-tree" in commandline:
+    if "--proc-tree" in commandline and request:
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
-            return Response(render_template('proc_tree.html', exe=e, web_ctx=get_webctx(args.ctx, db), diable_search=True), mimetype='text/html')
+            return templates.TemplateResponse(name='proc_tree.html', request=request, context={"exe": e, "web_ctx": get_webctx(args.ctx, db), "disable_search": True})
         else:
-            return Response(json.dumps({"ERROR": "Returned data is not executable - add '&commands=true'"}), mimetype='application/json')
-    if "--deps-tree" in commandline:
+            return JSONResponse({"ERROR": "Returned data is not executable - add '&commands=true'"})
+    if "--deps-tree" in commandline and request:
         if isinstance(e, dict) and "entries" in e:
             e["origin_url"] = org_url
-            return Response(render_template('deps_tree.html', exe=e, web_ctx=get_webctx(args.ctx, db), diable_search=True), mimetype='text/html')
+            return templates.TemplateResponse(name='deps_tree.html', request=request, context={"exe": e, "web_ctx": get_webctx(args.ctx, db), "disable_search": True})
         else:
-            return Response(json.dumps({"ERROR": "Returned data is not executable - add '&commands=true'"}), mimetype='application/json')
+            return JSONResponse({"ERROR": "Returned data is not executable - add '&commands=true'"})
 
     if "--cdb" in commandline:
-        return Response(e, mimetype='application/json', headers={"Content-disposition": "attachment; filename=compile_database.json"})
+        return Response(e, media_type="application/json", headers={"Content-disposition": "attachment; filename=compile_database.json"})
     elif "--makefile" in commandline:
-        return Response(e, mimetype='text/plain', headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
+        return PlainTextResponse(e, headers={"Content-disposition": f"attachment; filename={'build.mk' if '--all' in commandline else 'static.mk'}"})
     else:
-        return Response(e, mimetype='application/json')
+        return Response(e, media_type="application/json")
 
 
 def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
@@ -209,7 +240,7 @@ def child_renderer(exe: nfsdbEntry, cas_db: CASDatabase | None = None, depth: in
         "pipe_eids": [f'[{o.pid},{o.index}]' for o in exe.pipe_eids],
         "stime": exe.stime if hasattr(exe, "stime") else "",
         "etime": exe.etime,
-        "children": [child_renderer(child, cas_db, depth - 1) for child in cas_db.get_eids([(c.pid,) for c in exe.child_cids])] if depth > 0 and len(exe.child_cids) > 0 else len(exe.child_cids),
+        "children": [child_renderer(child, cas_db, depth - 1) for child in cas_db.get_eids([(c.pid,) for c in exe.child_cids])] if cas_db is not None and depth > 0 and len(exe.child_cids) > 0 else len(exe.child_cids),
         "wpid": exe.wpid if exe.wpid else "",
         "open_len": len(exe.opens),
     }
@@ -253,48 +284,49 @@ def get_rdeps(db, path):
 
 
 @lru_cache()
-def get_webctx(ctx, db):
-    ret = path.join(ctx, db)
-    return ret if ret.endswith("/") else ret + "/"
+def get_webctx(ctx: str, db: str) -> str:
+    ret = path.join(ctx, db).removeprefix("/").removesuffix("/")
+    return f"/{ret}/".replace("//", "/")
 
 
-@cas_single.route('/reload_ftdb/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/reload_ftdb/', methods=['GET'], strict_slashes=False)
-def reload_ftdb(db: str):
-    ftd_path = request.args.get('path', None)
-    if ftd_path is None:
-        return Response("Path to ftdb image not provided", mimetype='text/plain')
-    dbs.switch_ftdb(db, ftd_path)
-    return Response("DB reloaded")
+@cas_router.get('/reload_ftdb')
+def reload_ftdb(db: str = "", path: str | None = None):
+    if path is None:
+        return "Path to ftdb image not provided"
+    dbs.switch_ftdb(db, path)
+    return "DB reloaded"
 
 
-@cas_single.route('/raw_cmd/', defaults={'db': ""}, methods=['GET', 'POST'], strict_slashes=False)
-@cas_multi.route('/<db>/raw_cmd/', methods=['GET', 'POST'], strict_slashes=False)
-def get_raw_cmd(db: str):
+class RawCmd(BaseModel):
+    cmd: str
+
+@cas_router.get('/raw_cmd')
+@cas_router.post('/raw_cmd')
+def get_raw_cmd(
+                request: Request,
+                db: str = "", 
+                cmd: str | None = None,
+                cmd_body: RawCmd | None = None,
+                ):
     org_url = request.url
-    raw_cmd = request.method == 'GET' and request.args.get('cmd', None) or (request.is_json and request.get_json().get('cmd')) or request.get_data(as_text=True)
+    raw_cmd = cmd or (cmd_body and cmd_body.cmd)
     if raw_cmd:
-        cmd = shell_split(raw_cmd)
-        if "--json" not in cmd:
-            cmd.append("--json")
+        split_cmd = shell_split(raw_cmd)
+        if "--json" not in split_cmd:
+            split_cmd.append("--json")
         try:
-            return process_request(db, cmd, org_url)
+            return process_request(db, split_cmd, str(org_url), request)
         except MessageException as exc:
-            return Response(json.dumps({
-                "ERROR": exc.message
-            }), mimetype='text/json')
+            raise HTTPException(status_code=500, detail={"ERROR": exc.message})
     else:
-        return Response(json.dumps({"ERROR": "Empty raw command or invalid content type (remember to set it to application/json if using JSON in the POST request body)"}),
-                        mimetype='text/json')
+        raise HTTPException(status_code=400, detail={"ERROR": "Empty raw command or invalid content type (remember to set it to application/json if using JSON in the POST request body)"})
 
 
-@cas_single.route('/proc_tree/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/proc_tree/', methods=['GET'], strict_slashes=False)
-def proc_tree(db: str) -> Response:
-    j = request.args
+@cas_router.get('/proc_tree', response_class=HTMLResponse)
+def proc_tree(request: Request, pid: int | None = None, idx: int | None = None, db: str = ""):
     cas_db = dbs.get_nfsdb(db)
-    if "pid" in j and "idx" not in j:
-        entries = cas_db.get_entries_with_pid(int(j["pid"]))
+    if pid is not None and idx is None:
+        entries = cas_db.get_entries_with_pid(pid)
         root_exe = {
             "count": len(entries),
             "page": 0,
@@ -312,78 +344,61 @@ def proc_tree(db: str) -> Response:
             "entries_per_page": 1,
             "num_entries": 1,
             "origin_url": None,
-            "entries": [child_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])))]
-            if "pid" in j and "idx" in j
+            "entries": [child_renderer(cas_db.get_exec(pid, idx))]
+            if pid is not None and idx is not None
             else [child_renderer(cas_db.get_exec_at_pos(0))]
         }
-    return Response(render_template('proc_tree.html', exe=root_exe, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    return templates.TemplateResponse(name='proc_tree.html', request=request, context={"exe": root_exe, "web_ctx": get_webctx(args.ctx, db)})
 
-
-@cas_single.route('/proc/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/proc/', methods=['GET'], strict_slashes=False)
-def proc(db: str) -> Response:
-    j = request.args
-    page = 0
-    if "page" in j:
-        page = int(j["page"])
-    if "pid" in j and "idx" in j:
-        cas_db = dbs.get_nfsdb(db)
-        data = process_info_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])), page)
-        return Response(
-            json.dumps(data),
-            mimetype='application/json')
-    return Response(
-        json.dumps({"ERROR": "No such pid/idx!"}),
-        mimetype='application/json')
-
-
-@cas_single.route('/proc_lookup', defaults={'db': ""}, methods=['GET'])
-@cas_multi.route('/<db>/proc_lookup', methods=['GET'])
-def proc_lookup(db: str) -> Response:
-    j = request.args
-    if "pid" in j and "idx" in j:
-        cas_db = dbs.get_nfsdb(db)
-        data = child_renderer(cas_db.get_exec(int(j["pid"]), int(j["idx"])))
-        return Response(
-            json.dumps(data),
-            mimetype='application/json')
-    return Response(
-        json.dumps({"ERROR": "No such pid/idx!"}),
-        mimetype='application/json')
-
-
-@cas_single.route('/children', defaults={'db': ""}, methods=['GET'])
-@cas_multi.route('/<db>/children', methods=['GET'])
-def children_of(db: str) -> Response:
-    j = request.args
-    etime_sort = True if "etime_sort" in j and j["etime_sort"] == "true" else False
-    hide_empty = True if "hide_empty" in j and j["hide_empty"] == "true" else False
-    depth = int(j["depth"]) if "depth" in j else 0
-    maxResults = int(j["max_results"]) if "max_results" in j else 20
-    page = int(j["page"]) if "page" in j else 0
+@cas_router.get('/proc', response_class=ORJSONResponse)
+def proc(pid: int, idx: int, db: str = "", page: int = 0):
+    
     cas_db = dbs.get_nfsdb(db)
-    e = cas_db.get_exec(int(j["pid"]), int(j["idx"]))
+    data = process_info_renderer(cas_db.get_exec(pid, idx), page)
+    return ORJSONResponse(data)
+
+
+@cas_router.get('/proc_lookup')
+def proc_lookup(pid: int, idx: int, db: str = ""):
+
+    cas_db = dbs.get_nfsdb(db)
+    data = child_renderer(cas_db.get_exec(pid, idx))
+    return data
+
+
+@cas_router.get('/children', response_class=ORJSONResponse)
+def children_of(
+                pid: Annotated[int, Query(ge=0)],
+                idx: Annotated[int, Query(ge=0)],
+                db: str = "",
+                etime_sort: bool = False,
+                hide_empty: bool = False,
+                max_results: Annotated[int, Query(ge=0)] = 20,
+                depth: Annotated[int, Query(ge=0)] = 0,
+                page: Annotated[int, Query(ge=0)] = 0,
+                ):
+    cas_db = dbs.get_nfsdb(db)
+    e = cas_db.get_exec(pid, idx)
     execs = cas_db.get_eids([(c.pid,) for c in e.child_cids])
     if etime_sort:
         execs = sorted(execs, key=lambda x: x.etime, reverse=True)
     if hide_empty:
         execs = sorted(execs, key=lambda x: (len(x.child_cids), len(x.binary), len(x.opens)), reverse=True)
-    pages = math.ceil(len(execs) / maxResults) if maxResults > 0 else -1
-    resultNum = page * maxResults if maxResults > 0 else 0
+    pages = math.ceil(len(execs) / max_results) if max_results > 0 else -1
+    resultNum = page * max_results if max_results > 0 else 0
 
-    data = [child_renderer(exe, cas_db, depth) for exe in execs[resultNum:(resultNum+maxResults if maxResults > 0 else None)]]
+    data = [child_renderer(exe, cas_db, depth) for exe in execs[resultNum:(resultNum+max_results if max_results > 0 else None)]]
     result = {"count": len(execs), "pages": pages, "page": page, "children": data}
-    return Response(
-        json.dumps(result),
-        mimetype='application/json', direct_passthrough=True)
+    return ORJSONResponse(result)
 
 
-@cas_single.route('/ancestors_of/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/ancestors_of/', methods=['GET'], strict_slashes=False)
-def ancestors_of(db: str) -> Response:
-    j = request.args
+@cas_router.get('/ancestors_of', response_class=ORJSONResponse)
+def ancestors_of(pid: Annotated[int, Query(ge=0)],
+                idx: Annotated[int, Query(ge=0)],
+                db: str = "",
+                ) -> Response:
     cas_db = dbs.get_nfsdb(db)
-    e = cas_db.get_exec(int(j["pid"]), int(j["idx"]))
+    e = cas_db.get_exec(pid, idx)
     a_path = [e]
     try:
         while hasattr(e, "parent_eid"):
@@ -395,117 +410,100 @@ def ancestors_of(db: str) -> Response:
         child_renderer(ent)
         for ent in reversed(a_path)
     ]
-    return Response(
-        json.dumps({"ancestors": data}),
-        mimetype='application/json',
-        direct_passthrough=True
-    )
+    return ORJSONResponse({"ancestors": data})
 
 
-@cas_single.route('/deps_of/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/deps_of/', methods=['GET'], strict_slashes=False)
-def deps_of(db: str) -> Response:
-    maxResults = 10
-    j = request.args
-    page = 0
+@cas_router.get('/deps_of', response_class=ORJSONResponse)
+def deps_of(
+            path: Annotated[str, Query()],
+            db: str = "",
+            max_results: Annotated[int, Query(ge=0)] = 0,
+            page: Annotated[int, Query(ge=0)] = 0,) -> Response:
     cas_db = dbs.get_nfsdb(db)
-    if "page" in j.keys():
-        page = int(j["page"])
-    if "path" in j.keys():
-        path = j["path"]
-        entries = [x
-                   for x in sorted(cas_db.db.mdeps(path, direct=True))
-                   if x.path != path and x.path in cas_db.linked_module_paths()]
-        result = {
-            "count": len(entries),
-            "page": page,
-            "page_max": page,
-            "num_entries": maxResults,
-            "entries": []
-        }
-        result["page_max"] = math.ceil(result["count"] / result["num_entries"])
-        for entry in entries[(page * maxResults):(page * maxResults + maxResults)]:
-            mdeps = {x.path for x in cas_db.db.mdeps(entry.path, direct=True)}
-            h = len([x for x in mdeps if x in cas_db.linked_module_paths() and x != entry.path])
-            result["entries"].append({"path": entry.path,
-                                      "num_deps": h,
-                                      "parent": str(entry.parent.eid.pid) + ":" + str(entry.parent.eid.index)})
-        result["entries"] = result["entries"]
-        result["num_entries"] = len(result["entries"])
-        return Response(
-            json.dumps(result),
-            mimetype='application/json', direct_passthrough=True)
-
-    return Response(
-        json.dumps({"ERROR": "No such path!"}),
-        mimetype='application/json')
+    entries = [x
+                for x in sorted(cas_db.db.mdeps(path, direct=True))
+                if x.path != path and x.path in cas_db.linked_module_paths()]
+    result = {
+        "count": len(entries),
+        "page": page,
+        "page_max": page,
+        "num_entries": max_results,
+        "entries": []
+    }
+    result["page_max"] = math.ceil(result["count"] / result["num_entries"])
+    for entry in entries[(page * max_results):(page * max_results + max_results)]:
+        mdeps = {x.path for x in cas_db.db.mdeps(entry.path, direct=True)}
+        h = len([x for x in mdeps if x in cas_db.linked_module_paths() and x != entry.path])
+        result["entries"].append({"path": entry.path,
+                                    "num_deps": h,
+                                    "parent": str(entry.parent.eid.pid) + ":" + str(entry.parent.eid.index)})
+    result["entries"] = result["entries"]
+    result["num_entries"] = len(result["entries"])
+    return ORJSONResponse(result)
 
 
-@cas_single.route('/search/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/search/', methods=['GET'], strict_slashes=False)
-def search_files(db) -> Response:
-    j = request.args.to_dict()
+@cas_router.get('/search', response_class=ORJSONResponse)
+def search_files(
+            filename: str | None = None,
+            cmd_filter: str | None = None,
+            db: str = "",
+            etime_sort: bool | None = None,
+            entries: Annotated[int, Query(ge=0)] = 0,
+            page: Annotated[int, Query(ge=0)] = 0,
+            ) -> Response:
     execs = []
     cas_db = dbs.get_nfsdb(db)
-    etime_sort = True if "etime_sort" in j and j["etime_sort"] == "true" else False
-    if "filter" in j.keys():
-        cmd_filter = CommandFilter(j["filter"], None, cas_db.config, cas_db.source_root)
-    else:
-        cmd_filter = None
+    command_filter = CommandFilter(cmd_filter, None, cas_db.config, cas_db.source_root) if cmd_filter is not None else None
 
-    if "filename" in j.keys():
-        filepaths = get_opened_files(db, j["filename"])
-        if cmd_filter:
+    if filename:
+        filepaths = get_opened_files(db, filename)
+        if command_filter:
             execs = [open.parent
                      for openedFile in filepaths
                      for open in cas_db.get_opens_of_path(openedFile)
-                     if cmd_filter.resolve_filters(open.parent)]
+                     if command_filter.resolve_filters(open.parent)]
         else:
             execs = [open.parent
                      for openedFile in filepaths
                      for open in cas_db.get_opens_of_path(openedFile)]
-    elif cmd_filter:
-        execs = cas_db.filtered_execs(cmd_filter.libetrace_filter)
+    elif command_filter:
+        execs = cas_db.filtered_execs(command_filter.libetrace_filter)
 
     if len(execs) == 0:
-        return Response(
-            json.dumps({"ERROR": "No matches!", "count": 0}),
-            mimetype='application/json')
+        raise HTTPException(status_code=404, detail={"ERROR": "No matches!", "count": 0})
 
     data = {
         "count": len(execs),
         "execs": []
     }
-    if etime_sort:
+    if etime_sort is not None:
         execs = sorted(execs, key=lambda x: x.etime, reverse=etime_sort)
-    if "entries" in j.keys() and "page" in j.keys():
-        execs = execs[int(j["page"]) * int(j["entries"]):(int(j["page"]) + 1) * int(j["entries"])]
+    if entries and page:
+        execs = execs[page * entries:(page + 1) * entries]
 
     for exec in execs:
         data["execs"].append(child_renderer(exec))
 
-    return Response(
-        json.dumps(data),
-        mimetype='application/json')
+    return ORJSONResponse(data)
 
 
-@cas_single.route('/deps_tree/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/deps_tree/', methods=['GET'], strict_slashes=False)
-def deps_tree(db: str) -> Response:
-    maxResults = 10
-    j = dict(request.args)
-    if "page" not in j:
-        page = 0
-    else:
-        page = int(j["page"])
+@cas_router.get('/deps_tree')
+def deps_tree(
+            request: Request,
+            db: str = "",
+            path: str | None = None,
+            filter: str | None = None,
+            max_results: Annotated[int, Query(ge=0)] = 10,
+            page: Annotated[int, Query(ge=0)] = 0,
+            ) -> Response:
     cas_db = dbs.get_nfsdb(db)
-    if "path" in j:
-        j["path"] = j["path"].replace(" ", "+")
+    if path is not None:
+        path = path.replace(" ", "+")
         entries = []
         entry: "libetrace.nfsdbEntryOpenfile | None" = None
-        for x in cas_db.db.mdeps(j["path"], direct=True):
+        for x in cas_db.db.mdeps(path, direct=True):
             if x.path in cas_db.linked_module_paths():
-                if x.path == j["path"]:
+                if x.path == path:
                     entry = x
                 else:
                     entries.append(x)
@@ -517,23 +515,23 @@ def deps_tree(db: str) -> Response:
             "entries_per_page": 1,
             "num_entries": 1,
             "origin_url": None,
-            "entries": [{"path": j["path"],
+            "entries": [{"path": path,
                          "num_deps": len(entries),
                          "parent": f"{entry.parent.eid.pid}:{entry.parent.eid.index}" if entry else ":"
                          }]
         }
-    elif "filter" in j and len(j["filter"]) > 0:
-        entries = [x for x in cas_db.linked_modules() if j["filter"] in x.path]
+    elif filter is not None:
+        entries = [x for x in cas_db.linked_modules() if filter in x.path]
         first_modules = {
             "count": len(entries),
             "page": page,
-            "page_max": len(entries) / maxResults,
-            "entries_per_page": maxResults,
+            "page_max": len(entries) / max_results,
+            "entries_per_page": max_results,
             "num_entries": 0,
-            "origin_url": f"{get_webctx(args.ctx,db)}/deps_tree?filter=" + str(j["filter"]) + "&page=" + str(page),
+            "origin_url": f"{get_webctx(args.ctx,db)}/deps_tree?filter=" + filter + "&page=" + str(page),
             "entries": []
         }
-        for mod in sorted(entries)[(page * maxResults):(page * maxResults + maxResults)]:
+        for mod in sorted(entries)[(page * max_results):(page * max_results + max_results)]:
             mdeps = {x.path for x in cas_db.db.mdeps(mod.path, direct=True)}
             y = len([x for x in mdeps if x in cas_db.linked_module_paths() and x != mod.path])
             first_modules["entries"].append({"path": mod.path, "num_deps": y, "parent": str(mod.parent.eid.pid) + ":" + str(mod.parent.eid.index)})
@@ -541,48 +539,47 @@ def deps_tree(db: str) -> Response:
         first_modules = {
             "count": len(cas_db.linked_module_paths()),
             "page": page,
-            "page_max": len(cas_db.linked_module_paths()) / maxResults,
-            "entries_per_page": maxResults,
+            "page_max": len(cas_db.linked_module_paths()) / max_results,
+            "entries_per_page": max_results,
             "num_entries": 0,
             "origin_url": f"{get_webctx(args.ctx,db)}/deps_tree?page=" + str(page),
             "entries": []
         }
-        for mod in sorted(cas_db.linked_modules())[(page * maxResults):(page * maxResults + maxResults)]:
+        for mod in sorted(cas_db.linked_modules())[(page * max_results):(page * max_results + max_results)]:
             mdeps = {x.path for x in cas_db.db.mdeps(mod.path, direct=True)}
             y = len([x for x in mdeps if x in cas_db.linked_module_paths() and x != mod.path])
             first_modules["entries"].append({"path": mod.path, "num_deps": y, "parent": str(mod.parent.eid.pid) + ":" + str(mod.parent.eid.index)})
 
     first_modules["num_entries"] = len(first_modules["entries"])
-    return Response(render_template('deps_tree.html', exe=first_modules, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    return templates.TemplateResponse(name='deps_tree.html', request=request, context={"exe": first_modules, "web_ctx": get_webctx(args.ctx, db)})
 
 
-@cas_single.route('/revdeps_tree/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/revdeps_tree/', methods=['GET'], strict_slashes=False)
-def revdeps_tree(db: str) -> Response:
-    maxResults = 15
-    j = dict(request.args)
-    if "page" not in j:
-        page = 0
-    else:
-        page = int(j["page"])
+@cas_router.get('/revdeps_tree')
+def revdeps_tree(
+            request: Request,
+            db: str = "",
+            path: str | None = None,
+            filter: Annotated[str | None, Query(min_length=1)] = None,
+            max_results: Annotated[int, Query(ge=0)] = 15,
+            page: Annotated[int, Query(ge=0)] = 0,
+    ) -> Response:
+    max_results = 15
     cas_db = dbs.get_nfsdb(db)
-    if "path" in j:
-        if not cas_db.db.path_exists(j["path"]):
-            return Response(
-                json.dumps({"ERROR": "No matches!", "count": 0}),
-                mimetype='application/json')
-        j["path"] = j["path"].replace(" ", "+")
-        entries = get_opens(db, j["path"])
+    if path is not None:
+        if not cas_db.db.path_exists(path):
+            raise HTTPException(status_code=404, detail={"ERROR": "No matches!", "count": 0})
+        path = path.replace(" ", "+")
+        entries = get_opens(db, path)
         first_modules = {
             "count": len(entries),
             "page": page,
-            "page_max": len(entries) / maxResults,
-            "entries_per_page": maxResults,
+            "page_max": len(entries) / max_results,
+            "entries_per_page": max_results,
             "num_entries": 0,
             "origin_url": None,
             "entries": []
         }
-        for entry in entries[(page * maxResults):(page * maxResults + maxResults)]:
+        for entry in entries[(page * max_results):(page * max_results + max_results)]:
             rdeps = get_rdeps(db, entry)
             first_modules["entries"].append({"path": entry,
                                              "num_deps": len(rdeps),
@@ -591,18 +588,18 @@ def revdeps_tree(db: str) -> Response:
                                              })
         first_modules["num_entries"] = len(first_modules["entries"])
 
-    elif "filter" in j and len(j["filter"]) > 0:
-        entries = get_opens(db, j["filter"], filter=True)
+    elif filter is not None:
+        entries = get_opens(db, filter, filter=True)
         first_modules = {
             "count": len(entries),
             "page": page,
-            "page_max": len(entries) / maxResults,
-            "entries_per_page": maxResults,
+            "page_max": len(entries) / max_results,
+            "entries_per_page": max_results,
             "num_entries": 0,
-            "origin_url": f"{get_webctx(args.ctx,db)}/revdeps_tree?filter=" + str(j["filter"]) + "&page=" + str(page),
+            "origin_url": f"{get_webctx(args.ctx,db)}/revdeps_tree?filter=" + filter + "&page=" + str(page),
             "entries": []
         }
-        for mod in entries[(page * maxResults):(page * maxResults + maxResults)]:
+        for mod in entries[(page * max_results):(page * max_results + max_results)]:
             rdeps = get_rdeps(db, mod)
             y = len(rdeps)
             first_modules["entries"].append({"path": mod, "num_deps": y, "class": mod in cas_db.linked_module_paths(), "parent": mod})
@@ -617,144 +614,147 @@ def revdeps_tree(db: str) -> Response:
             "origin_url": f"{get_webctx(args.ctx,db)}/revdeps_tree?page=0",
             "entries": []
         }
-    return Response(render_template('revdeps_tree.html', exe=first_modules, web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+    return templates.TemplateResponse(name='revdeps_tree.html', request=request, context={"exe": first_modules, "web_ctx": get_webctx(args.ctx, db)})
 
 
-@cas_single.route('/revdeps_of', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/revdeps_of', methods=['GET'], strict_slashes=False)
-def revdeps_of(db: str) -> Response:
-    maxResults = 10
-    j = request.args
-    page = 0
-    if "page" in j.keys():
-        page = int(j["page"])
+@cas_router.get('/revdeps_of', response_class=ORJSONResponse)
+def revdeps_of(
+            path: str,
+            db: str = "",
+            filter: Annotated[str | None, Query(min_length=1)] = None,
+            max_results: Annotated[int, Query(ge=0)] = 10,
+            page: Annotated[int, Query(ge=0)] = 0,
+            ) -> Response:
     cas_db = dbs.get_nfsdb(db)
-    if "path" in j.keys():
-        entries = get_rdeps(db, j["path"])
-        result = {
-            "count": len(entries),
-            "page": page,
-            "page_max": page,
-            "num_entries": maxResults,
-            "entries": []
-        }
-        result["page_max"] = math.ceil(result["count"] / result["num_entries"])
-        for entry in entries[(page * maxResults):(page * maxResults + maxResults)]:
-            h = len(get_rdeps(db, entry.path))
-            result["entries"].append({"path": entry.path,
-                                      "num_deps": h,
-                                      "class": entry.path in cas_db.linked_module_paths(),
-                                      "parent": str(entry.parent.eid.pid)
-                                      })
-        result["entries"] = result["entries"]
-        result["num_entries"] = len(result["entries"])
-        return Response(
-            json.dumps(result),
-            mimetype='application/json', direct_passthrough=True)
-
-    return Response(
-        json.dumps({"ERROR": "No such path!"}),
-        mimetype='application/json')
+    entries = get_rdeps(db, path)
+    result = {
+        "count": len(entries),
+        "page": page,
+        "page_max": page,
+        "num_entries": max_results,
+        "entries": []
+    }
+    result["page_max"] = math.ceil(result["count"] / result["num_entries"])
+    for entry in entries[(page * max_results):(page * max_results + max_results)]:
+        h = len(get_rdeps(db, entry.path))
+        result["entries"].append({"path": entry.path,
+                                    "num_deps": h,
+                                    "class": entry.path in cas_db.linked_module_paths(),
+                                    "parent": str(entry.parent.eid.pid)
+                                    })
+    result["entries"] = result["entries"]
+    result["num_entries"] = len(result["entries"])
+    return ORJSONResponse(result)
 
 
-@cas_single.route('/favicon.ico/', strict_slashes=False)
-@cas_multi.route('/favicon.ico/', strict_slashes=False)
-def favicon():
-    return send_from_directory(
-        path.join(cas_single.root_path, 'static'), 'favicon.ico',
-        mimetype='image/vnd.microsoft.icon')
+@cas_router.get('/favicon.ico', response_class=FileResponse)
+def favicon(request: Request):
+    path, stat_result = static.lookup_path('favicon.ico')
+    if not stat_result:
+        raise HTTPException(404)
+    resp = static.file_response(path, stat_result, scope=request.scope)
+    resp.media_type = "image/vnd.microsoft.icon"
+    return resp
 
-
-@cas_single.route('/status/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-@cas_multi.route('/<db>/status/', methods=['GET'], strict_slashes=False)
-@cas_multi.route('/status/', defaults={'db': ""}, methods=['GET'], strict_slashes=False)
-def status(db: Optional[str]):
+@cas_router.get('/status')
+@app.get('/status/')
+def status(db: Optional[str] = None):
     try:
-        return Response(
-            json.dumps(dbs.json(db), indent=2),
-            mimetype="application/json"
-        )
+        return dbs.json(db)
     except MessageException as exc:
-        return Response(json.dumps({
-            "ERROR": exc.message
-        }), mimetype='text/json')
+        raise HTTPException(status_code=500, detail={"ERROR": exc.message})
 
-@cas_single.route('/<module>/', defaults={'db': ""}, strict_slashes=False)
-@cas_multi.route('/<db>/<module>/', strict_slashes=False)
-def get_module(db: str, module: str) -> Response:
+AllowedModules = Enum("AllowedModules", dict(map(lambda m: (m, m), allowed_modules)))
+
+@cas_router.get('/{module}')
+def get_module(request: Request, module: AllowedModules, db: str = ""):
     org_url = request.url
-    query = request.query_string.decode()
+    query = request.query_params
     try:
-        commandline = translate_to_cmdline(module, query, args.ctx, db)
+        commandline = translate_to_cmdline(module.value, str(query), args.ctx, db)
         if "--json" not in commandline:
             commandline.append("--json")
-        return process_request(db, commandline, org_url)
+        return process_request(db, commandline, str(org_url), request)
     except MessageException as exc:
-        return Response(json.dumps({
-            "ERROR": exc.message
-        }), mimetype='text/json')
+        raise HTTPException(status_code=500, detail={"ERROR": exc.message})
     except libetrace.error as exc:
-        return Response(json.dumps({
-            "ERROR": str(exc)
-        }), mimetype='text/json')
+        raise HTTPException(status_code=500, detail={"ERROR": str(exc)})
 
 
-@cas_multi.route('/<db>/', methods=['GET'], strict_slashes=False)
-def print_api(db: str) -> Response:
+@cas_router.get('/')
+def print_api(request: Request, db: str) -> HTMLResponse:
     if db in dbs.get_dbs():
-        return Response(render_template('api_list.html', dbs=dbs.get_dbs(), web_ctx=get_webctx(args.ctx, db)), mimetype="text/html")
+        return templates.TemplateResponse(name='api_list.html', request=request, context={"dbs": dbs.get_dbs(), "web_ctx": get_webctx(args.ctx, db)})
     else:
-        return Response(json.dumps({ "ERROR": f"Endpoint database '{db}' does not exists!" }), mimetype='text/json')
+        raise HTTPException(status_code=404, detail={"ERROR": f"Endpoint database '{db}' does not exists!" })
 
-
-@cas_single.route('/', methods=['GET'], strict_slashes=False)
-@cas_multi.route('/', methods=['GET'], strict_slashes=False)
-def main() -> Response:
+@app.get('/')
+def main(request: Request) -> HTMLResponse:
     if dbs and dbs.multi_instance:
-        return Response(render_template('dbs.html', dbs=dbs.get_dbs(), web_ctx=args.ctx), mimetype="text/html")
+        return templates.TemplateResponse(name='dbs.html', request=request, context={"dbs": dbs.get_dbs(), "web_ctx": args.ctx})
     else:
-        return Response(render_template('api_list.html', dbs=dbs.get_dbs(), web_ctx=get_webctx(args.ctx, "")), mimetype="text/html")
+        return templates.TemplateResponse(name='api_list.html', request=request, context={"dbs": dbs.get_dbs(), "web_ctx": get_webctx(args.ctx, "")})
 
 
-def get_app(arg, is_test=False):
+class Config(BaseSettings):
+    model_config = SettingsConfigDict(json_file="config.json", env_file=".env")
+
+def get_app(arg: Namespace | None = None, is_test=False):
+    if arg is None:
+        arg = parse_server_args()[0]
     if is_test:
         # pytests require global access to args 
         # pylint: disable-next=global-statement
         global args
         args = arg
     dbs.lazy_init(args)
-    _app = Flask(__name__, template_folder='client/templates', static_folder='client/static', static_url_path=path.join(args.ctx, 'static'))
-    if path.exists('config.json'):
-        _app.config.from_file('config.json', json.load)
-    CORS(_app)
+    app.add_middleware(CORSMiddleware, 
+                       allow_origins=["*"],
+                       allow_methods=["*"],
+                       allow_headers=["*"],
+                       allow_credentials=True)
     if args.debug:
         print("Debug mode ON")
-        _app.debug = args.debug
-    args.ctx  = args.ctx if args.ctx.endswith("/") else args.ctx + "/"
-    _app.register_blueprint(cas_single if not args.dbs else cas_multi, url_prefix=args.ctx)
-    return _app
+        app.debug = args.debug
+    args.ctx  = args.ctx.removesuffix("/")
+    app.root_path = args.ctx
+    app.include_router(cas_router, prefix="/{db}" if args.dbs else "")
+    return app
 
-if __name__ == '__main__':
-
+def parse_server_args(argv = None):
+    global args
     arg_parser = argparse.ArgumentParser(description="CAS server arguments")
     arg_parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
     arg_parser.add_argument("--host", type=str, default="127.0.0.1", help="server address")
-    arg_parser.add_argument("--casdb", type=str, default=None, help="server nfsdb")
-    arg_parser.add_argument("--ftdb", type=str, default=None, help="server ftdb")
+    arg_parser.add_argument("--casdb", type=str, default=os.environ.get("CAS_DB", None), help="server nfsdb")
+    arg_parser.add_argument("--ftdb", type=str, default=os.environ.get("CAS_FTDB", None), help="server ftdb")
     arg_parser.add_argument("--debug", action="store_true", help="debug mode")
     arg_parser.add_argument("--verbose", action="store_true", help="verbose output")
-    arg_parser.add_argument("--dbs", type=str, default=None, help="Databases directory (subdirs are database names)")
-    arg_parser.add_argument("--ftd", type=str, default=None, help="Ftdb directory (subdirs match database names)")
-    arg_parser.add_argument("--ctx", type=str, default='/', help="Web context")
+    arg_parser.add_argument("--dbs", type=str, default=os.environ.get("CAS_DBS", None), help="Databases directory (subdirs are database names)")
+    arg_parser.add_argument("--ftd", type=str, default=os.environ.get("CAS_FTDBS", None), help="Ftdb directory (subdirs match database names)")
+    arg_parser.add_argument("--ctx", type=str, default=os.environ.get("CAS_CTX", "/"), help="Web context")
+    arg_parser.add_argument("--workers", type=int, default=os.environ.get("WEB_CONCURRENCY", os.cpu_count() or 1), help="Number of worker processes to run")
 
-    args = arg_parser.parse_args()
-
+    args, unknown = arg_parser.parse_known_args(argv)
+    return args, unknown
+def run(args=None):
+    args = args or parse_server_args()[0]
+    
+    # TODO: remove once https://github.com/encode/uvicorn/issues/2506 is fixed
+    original_uvicorn_is_alive = uvicorn.supervisors.multiprocess.Process.is_alive # type: ignore
+    def patched_is_alive(self) -> bool:
+        timeout = 300
+        return original_uvicorn_is_alive(self, timeout)
+    uvicorn.supervisors.multiprocess.Process.is_alive = patched_is_alive # type: ignore
+    
     try:
         app = get_app(args)
-        http_server = WSGIServer((args.host, args.port), app, log="default" if args.debug else None)
         if args.debug:
-            print(app.url_map)
+            print(app.routes)
+        uvicorn.run("cas_server:get_app", factory=True, host=args.host, port=args.port, log_level="debug" if args.debug else None, workers=args.workers)
         print("Started CAS Server")
-        http_server.serve_forever()
     except KeyboardInterrupt:
         print("Shutting down CAS Server")
+
+if __name__ == '__main__':
+    run()

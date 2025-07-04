@@ -1,0 +1,49 @@
+[project]
+name = "cas"
+version = "1.0.0"
+readme = "README.md"
+authors = [
+    { name = "MobileSecurity", email = "mbsec@samsung.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "jinja2>=3.1.6",
+    "orjson>=3.10.18",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.9.1",
+]
+
+[project.urls]
+Repository = "https://github.sec.samsung.net/CO7-SRPOL-Mobile-Security/CAS-OSS"
+
+
+[project.scripts]
+cas = "client:main"
+cas_server = "cas_server:run"
+
+
+[build-system]
+requires = ["py-build-cmake~=0.4.3"]
+build-backend = "py_build_cmake.build"
+
+[tool.py-build-cmake.sdist]
+include = ["CMakeLists.txt", "bas/**", "ftdb/**", "kflat/**", "cmake/*", "clang-proc/**"]
+
+[tool.py-build-cmake.module]
+name = "client"
+
+[tool.py-build-cmake.cmake]
+build_type = "Release"
+build_args = ["-j", "--target", "etrace", "ftdb"]
+install_components = ["libetrace", "libftdb"]
+
+[tool.py-build-cmake.cmake.options]
+CMAKE_C_COMPILER = "clang"
+CMAKE_CXX_COMPILER = "clang++"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "timeout-decorator>=0.5.0",
+]

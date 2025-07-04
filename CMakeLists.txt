@@ -1,6 +1,6 @@
 # Our previous CMakeLists was really bad and the one before it supposedly was too.
 # So we rewrote it for the third time.
-cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.15 FATAL_ERROR)
 
 project(cas)
 
