@@ -1,0 +1,10 @@
+{
+    "$schema": "https://inlang.com/schema/inlang-message-format",
+    "databaseClient": "Klient Bazy Danych",
+    "processTree": "Drzewo Procesów",
+    "updateWorkspace": "Aktualizuj Obszar Roboczy",
+    "editWorkspace": "Modyfikuj Obszar Roboczy",
+    "databaseTools": "Narzędzia Bazy Danych",
+    "shortcuts": "Skróty",
+    "search": "Szukaj"
+}

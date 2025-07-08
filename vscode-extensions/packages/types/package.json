@@ -1,0 +1,24 @@
+{
+    "name": "@cas/types",
+    "type": "module",
+    "scripts": {
+        "dev": "pnpm watch",
+        "watch": "pnpm run --stream \"/^watch:.*$/\"",
+        "watch:tsc": "tsc --preserveWatchOutput --watch --project tsconfig.json",
+        "build": "tsc --project tsconfig.json",
+        "check": "tsc --noEmit --project tsconfig.json"
+    },
+    "exports": {
+        "./*": {
+            "types": "./src/*",
+            "default": "./dist/*"
+        }
+    },
+    "devDependencies": {
+        "@cas/tsconfig": "workspace:*",
+        "@types/node": "catalog:",
+        "@types/vscode": "^1.101.0",
+        "typescript": "catalog:"
+    },
+    "license": "Apache-2.0"
+}

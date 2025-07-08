@@ -1,0 +1,1340 @@
+{
+	"name": "cas",
+	"displayName": "cas",
+	"description": "CAS Extension",
+	"version": "0.21.10",
+	"repository": "https://github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension.git",
+	"publisher": "Samsung",
+	"icon": "media/logo.png",
+	"author": {
+		"name": "Samsung Electronics Co., Ltd."
+	},
+	"engines": {
+		"vscode": "^1.101.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"onStartupFinished",
+		"onLanguage:json"
+	],
+	"main": "./dist/extension.js",
+	"extensionKind": [
+		"workspace"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "cas.inlineMacros.file",
+				"category": "CAS",
+				"title": "expand macros in range",
+				"enablement": "cas.MacroExpansion.supported"
+			},
+			{
+				"command": "cas.inlineMacros.diff",
+				"category": "CAS",
+				"title": "expand macros in range (preview)",
+				"enablement": "cas.MacroExpansion.supported"
+			},
+			{
+				"command": "cas.inlineMacros.function",
+				"category": "CAS",
+				"title": "expand macros in a function",
+				"enablement": "cas.MacroExpansion.supported"
+			},
+			{
+				"command": "cas.inlineMacros.function.preview",
+				"category": "CAS",
+				"title": "expand macros in a function (preview)",
+				"enablement": "cas.MacroExpansion.supported"
+			},
+			{
+				"command": "cas.history.back",
+				"category": "CAS",
+				"title": "Command history back"
+			},
+			{
+				"command": "cas.history.forward",
+				"category": "CAS",
+				"title": "Command history forward"
+			},
+			{
+				"command": "cas.db.pick.bas",
+				"category": "CAS",
+				"title": "BAS Database provider settings"
+			},
+			{
+				"command": "cas.db.pick.ft",
+				"category": "CAS",
+				"title": "FTDB Database provider settings"
+			},
+			{
+				"command": "cas.depsTree.ws.generate",
+				"category": "CAS",
+				"title": "Generate workspace from dependencies"
+			},
+			{
+				"command": "cas.depsTree.ws.add",
+				"category": "CAS",
+				"title": "Add module to workspace dependencies",
+				"icon": "$(sign-in)"
+			},
+			{
+				"command": "cas.depsTree.ws.remove",
+				"category": "CAS",
+				"title": "Remove module from workspace dependencies"
+			},
+			{
+				"command": "cas.depsTree.refreshEntry",
+				"title": "Refresh"
+			},
+			{
+				"command": "cas.ws.update",
+				"category": "CAS",
+				"title": "Update Workspace"
+			},
+			{
+				"command": "cas.ws.edit",
+				"category": "CAS",
+				"title": "Edit Workspace"
+			},
+			{
+				"command": "cas.ws.generate.selection",
+				"category": "CAS",
+				"title": "Generate Workspace from selection dependencies"
+			},
+			{
+				"command": "cas.process.ref",
+				"category": "CAS",
+				"title": "Get files read by this process"
+			},
+			{
+				"command": "cas.file.opens",
+				"category": "CAS (file)",
+				"title": "Get opens of this path",
+				"icon": "$(go-to-file)"
+			},
+			{
+				"command": "cas.file.faccess",
+				"category": "CAS (file)",
+				"title": "Get processess referencing this path",
+				"icon": "$(clippy)"
+			},
+			{
+				"command": "cas.file.compilation_info",
+				"category": "CAS (file)",
+				"title": "Get compilation info"
+			},
+			{
+				"command": "cas.file.revdeps",
+				"category": "CAS (file)",
+				"title": "Reverse dependencies"
+			},
+			{
+				"command": "cas.file.revdeps.recursive",
+				"category": "CAS (file)",
+				"title": "Full reverse dependencies"
+			},
+			{
+				"command": "cas.file.revcomps",
+				"category": "CAS (file)",
+				"title": "Reverse compilation dependencies"
+			},
+			{
+				"command": "cas.file.deps",
+				"category": "CAS (file)",
+				"title": "Dependencies"
+			},
+			{
+				"command": "cas.file.deps.direct",
+				"category": "CAS (file)",
+				"title": "Direct dependencies"
+			},
+			{
+				"command": "cas.file.moddeps",
+				"category": "CAS (file)",
+				"title": "Module dependencies"
+			},
+			{
+				"command": "cas.file.moddeps.direct",
+				"category": "CAS (file)",
+				"title": "Direct module dependencies"
+			},
+			{
+				"command": "cas.view.command",
+				"title": "Show command view",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.view.procTree",
+				"title": "Show Process view",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.view.flamegraph",
+				"title": "Show flamegraph",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.view.openGrok",
+				"title": "Search via OpenGrok",
+				"category": "OG"
+			},
+			{
+				"command": "cas.og.apiKey.set",
+				"title": "Set OpenGrok API Key",
+				"category": "OG"
+			},
+			{
+				"command": "cas.manifest.schema",
+				"title": "Show Manifest JSON Schema",
+				"category": "Developer",
+				"when": "cas.development"
+			},
+			{
+				"command": "cas.server.pick",
+				"category": "CAS",
+				"title": "Pick CAS server command"
+			},
+			{
+				"command": "cas.server.start",
+				"title": "Start CAS server",
+				"category": "CAS",
+				"when": "!cas.serverRunning"
+			},
+			{
+				"command": "cas.snippets.delete",
+				"category": "CAS",
+				"title": "Delete a snippet"
+			},
+			{
+				"command": "cas.verify.workspace",
+				"title": "Verify build commands",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.verify.single",
+				"title": "Verify current file",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.verify.generate.script.sh",
+				"title": "Generate build commands script (sh)",
+				"category": "CAS"
+			},
+			{
+				"command": "cas.verify.generate.script.mk",
+				"title": "Generate build commands script (makefile)",
+				"category": "CAS"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "cas.history.back",
+				"when": "activeWebviewPanelId === 'cas.CASCmdView'",
+				"key": "alt+left"
+			},
+			{
+				"command": "cas.history.forward",
+				"when": "activeWebviewPanelId === 'cas.CASCmdView'",
+				"key": "alt+right"
+			},
+			{
+				"command": "cas.inlineMacros.file",
+				"key": "ctrl+alt+m"
+			},
+			{
+				"command": "cas.inlineMacros.diff",
+				"key": "ctrl+alt+shift+m"
+			},
+			{
+				"command": "cas.inlineMacros.function",
+				"key": "ctrl+alt+f"
+			},
+			{
+				"command": "cas.inlineMacros.function.preview",
+				"key": "ctrl+alt+shift+f"
+			}
+		],
+		"submenus": [
+			{
+				"label": "BAS File actions",
+				"id": "cas.file"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "cas.process.ref",
+					"when": "false"
+				},
+				{
+					"command": "cas.ws.generate.selection",
+					"when": "false"
+				},
+				{
+					"command": "cas.depsTree.ws.add",
+					"when": "false"
+				},
+				{
+					"command": "cas.depsTree.ws.remove",
+					"when": "false"
+				},
+				{
+					"command": "cas.depsTree.ws.generate",
+					"when": "false"
+				},
+				{
+					"command": "cas.snippets.delete",
+					"when": "false"
+				}
+			],
+			"view/title": [
+				{
+					"command": "cas.depsTree.refreshEntry",
+					"when": "view == 'cas.depsTree'",
+					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "cas.depsTree.ws.generate",
+					"when": "view == 'cas.depsTree'",
+					"group": "CAS"
+				},
+				{
+					"command": "cas.depsTree.ws.add",
+					"when": "view == 'cas.depsTree' && cas.isGenerated ",
+					"group": "CAS"
+				},
+				{
+					"command": "cas.depsTree.ws.remove",
+					"when": "view == 'cas.depsTree' && cas.isGenerated ",
+					"group": "CAS"
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "cas.file.opens",
+					"group": "CAS"
+				},
+				{
+					"command": "cas.file.compilation_info",
+					"group": "CAS",
+					"when": "resourcePath in cas.files.compiled"
+				},
+				{
+					"command": "cas.verify.generate.script.sh",
+					"group": "CAS",
+					"when": "resourcePath in cas.files.compiled || explorerResourceIsFolder"
+				},
+				{
+					"command": "cas.verify.generate.script.mk",
+					"group": "CAS",
+					"when": "resourcePath in cas.files.compiled || explorerResourceIsFolder"
+				},
+				{
+					"command": "cas.file.faccess",
+					"group": "CAS.file@1"
+				},
+				{
+					"command": "cas.file.deps",
+					"group": "CAS.file@2",
+					"when": "resourcePath in cas.files.linked || resourcePath in cas.files.write"
+				},
+				{
+					"command": "cas.file.deps.direct",
+					"group": "CAS.file@3",
+					"when": "resourcePath in cas.files.linked || resourcePath in cas.files.write"
+				},
+				{
+					"command": "cas.file.revdeps",
+					"group": "CAS.file@4"
+				},
+				{
+					"command": "cas.file.revdeps.recursive",
+					"group": "CAS.file@5"
+				},
+				{
+					"command": "cas.file.moddeps",
+					"group": "CAS.file@6",
+					"when": "resourcePath in cas.files.linked"
+				},
+				{
+					"command": "cas.file.moddeps.direct",
+					"group": "CAS.file@7",
+					"when": "resourcePath in cas.files.linked"
+				},
+				{
+					"command": "cas.file.revcomps",
+					"group": "CAS.file@8",
+					"when": "resourcePath in cas.files.compiled"
+				}
+			],
+			"webview/context": [
+				{
+					"command": "cas.file.deps",
+					"when": "elem_type == 'module'"
+				},
+				{
+					"command": "cas.view.procTree",
+					"when": "elem_type == 'pid'"
+				},
+				{
+					"command": "cas.process.ref",
+					"when": "elem_type == 'pid'"
+				},
+				{
+					"command": "cas.file.opens",
+					"when": "elem_type == 'path'"
+				},
+				{
+					"command": "cas.file.faccess",
+					"when": "elem_type == 'path'"
+				},
+				{
+					"command": "cas.file.compilation_info",
+					"when": "elem_type == 'compiled' || (webviewId === 'cas.CASCmdView' && class == 'compiled')"
+				},
+				{
+					"command": "cas.file.deps",
+					"when": "elem_type == 'linked' || (webviewId === 'cas.CASCmdView' && class == 'linked')"
+				},
+				{
+					"command": "cas.ws.generate.selection",
+					"when": "webviewId === 'cas.CASCmdView'"
+				},
+				{
+					"command": "cas.snippets.delete",
+					"when": "elem_type == 'snippet'"
+				}
+			],
+			"editor/title": [
+				{
+					"command": "cas.file.opens",
+					"when": "resourceScheme === 'opengrok'",
+					"group": "navigation"
+				},
+				{
+					"command": "cas.file.faccess",
+					"when": "resourceScheme === 'opengrok'",
+					"group": "navigation"
+				},
+				{
+					"command": "cas.depsTree.ws.add",
+					"when": "resourceScheme === 'opengrok' && cas.isGenerated",
+					"group": "navigation"
+				},
+				{
+					"command": "cas.verify.single",
+					"group": "navigation"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "cas.inlineMacros.file",
+					"when": "(resourceLangId == c || resourceLangId == cpp) && cas.MacroExpansion.supported",
+					"group": "0_navigation@3"
+				},
+				{
+					"command": "cas.inlineMacros.diff",
+					"when": "(resourceLangId == c || resourceLangId == cpp) && cas.MacroExpansion.supported",
+					"group": "0_navigation@4"
+				}
+			]
+		},
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "cas-toolbox",
+					"title": "CAS Toolbox",
+					"icon": "$(database)"
+				}
+			]
+		},
+		"views": {
+			"cas-toolbox": [
+				{
+					"type": "webview",
+					"id": "cas.toolboxView",
+					"name": "CAS Utils"
+				},
+				{
+					"type": "tree",
+					"id": "cas.depsTree",
+					"name": "CAS dependency tree"
+				}
+			],
+			"explorer": [
+				{
+					"type": "webview",
+					"id": "cas.fileInfo",
+					"name": "BAS File Information",
+					"when": "casFile"
+				}
+			]
+		},
+		"configuration": {
+			"title": "CAS",
+			"properties": {
+				"cas.basDatabase": {
+					"type": "object",
+					"default": null,
+					"description": "Selected BAS database path",
+					"properties": {
+						"scheme": {
+							"type": "string",
+							"enum": [
+								"bas_file",
+								"bas_url"
+							]
+						},
+						"path": {
+							"type": "string"
+						}
+					}
+				},
+				"cas.ftdbDatabase": {
+					"type": "object",
+					"default": null,
+					"description": "Selected FTDB database path",
+					"properties": {
+						"scheme": {
+							"type": "string",
+							"enum": [
+								"ftdb_file",
+								"ftdb_url"
+							]
+						},
+						"path": {
+							"type": "string"
+						}
+					}
+				},
+				"cas.remoteBase": {
+					"description": "Automatically search this server for existing BAS servers for your databases",
+					"type": "string"
+				},
+				"cas.useRemoteBase": {
+					"description": "Search for and use remote databases instead of local files",
+					"type": "boolean",
+					"default": true
+				},
+				"cas.server": {
+					"type": "string",
+					"default": null,
+					"description": "CAS server path"
+				},
+				"cas.concurency": {
+					"type": "number",
+					"default": 4,
+					"description": "Number of threads that CAS Build verifier will use (defaults to number of cores in system)"
+				},
+				"cas.basDatabases": {
+					"type": "array",
+					"default": [],
+					"description": "List of local BAS databases and server URLs"
+				},
+				"cas.ftdbDatabases": {
+					"type": "array",
+					"default": [],
+					"description": "List of local FTDB databases and server URLs"
+				},
+				"cas.projectName": {
+					"type": "string",
+					"default": null,
+					"description": "Workspace project name"
+				},
+				"cas.serverPortRange": {
+					"type": "string",
+					"default": "8080:8180",
+					"description": "Port range of spawned cas servers"
+				},
+				"cas.telemetryEnabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable telemetry collection",
+					"tags": [
+						"telemetry",
+						"usesOnlineServices"
+					]
+				},
+				"cas.telemetryHost": {
+					"type": "string",
+					"default": "http://localhost:8000",
+					"description": "URL of the telemetry server",
+					"tags": [
+						"telemetry",
+						"usesOnlineServices"
+					]
+				},
+				"cas.openGrokUrl": {
+					"type": "string",
+					"description": "URL of the OpenGrok server"
+				},
+				"cas.openGrokApiKey": {
+					"type": "null",
+					"markdownDescription": "[Set API Key for the OpenGrok server](command:cas.og.apiKey.set)",
+					"readOnly": true,
+					"const": "null"
+				},
+				"cas.snippets": {
+					"type": "array",
+					"title": "Snippets",
+					"description": "Shortcuts for commonly used commands",
+					"items": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Snippet name"
+							},
+							"command": {
+								"type": "string",
+								"description": "Command to run"
+							}
+						}
+					}
+				},
+				"cas.trace.server": {
+					"scope": "window",
+					"type": "string",
+					"enum": [
+						"off",
+						"messages",
+						"verbose"
+					],
+					"default": "off",
+					"description": "Traces the communication between VS Code and the language server."
+				},
+				"cas.selfUpdateEnabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable automatically installing and updating the extension on remote (typically SSH) hosts"
+				},
+				"cas.macroPreview": {
+					"type": "string",
+					"enum": [
+						"peek",
+						"diff"
+					],
+					"enumDescriptions": [
+						"open an inline diff preview inside a peek window",
+						"open a separate editor tab with the diff"
+					],
+					"description": "How to show macro expansion results preview",
+					"title": "Macro Preview",
+					"default": "diff"
+				},
+				"cas.manifest": {
+					"$schema": "http://json-schema.org/draft-07/schema#",
+					"type": "object",
+					"properties": {
+						"version": {
+							"anyOf": [
+								{
+									"anyOf": [
+										{
+											"type": "string",
+											"pattern": "^(?<major>0|[1-9]\\d*)(\\.(?<minor>0|[1-9]\\d*)(\\.(?<patch>0|[1-9]\\d*)(?:-(?<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?)?)?$"
+										},
+										{
+											"type": "number"
+										}
+									]
+								},
+								{
+									"type": "object",
+									"properties": {},
+									"required": [],
+									"additionalProperties": false
+								}
+							],
+							"default": "1.0"
+						},
+						"basProvider": {
+							"anyOf": [
+								{
+									"anyOf": [
+										{
+											"type": "object",
+											"properties": {
+												"type": {
+													"const": "file"
+												},
+												"path": {
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												}
+											},
+											"required": [
+												"type",
+												"path"
+											]
+										},
+										{
+											"type": "object",
+											"properties": {
+												"type": {
+													"const": "url"
+												},
+												"path": {
+													"anyOf": [
+														{
+															"type": "string",
+															"format": "uri"
+														},
+														{
+															"type": "string",
+															"pattern": "(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])(?:\\.(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])){3}(:\\d+)?"
+														},
+														{
+															"type": "string",
+															"pattern": "\\[?(?:(?:[\\da-f]{1,4}:){7}[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,7}:|(?:[\\da-f]{1,4}:){1,6}:[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,5}(?::[\\da-f]{1,4}){1,2}|(?:[\\da-f]{1,4}:){1,4}(?::[\\da-f]{1,4}){1,3}|(?:[\\da-f]{1,4}:){1,3}(?::[\\da-f]{1,4}){1,4}|(?:[\\da-f]{1,4}:){1,2}(?::[\\da-f]{1,4}){1,5}|[\\da-f]{1,4}:(?::[\\da-f]{1,4}){1,6}|:(?:(?::[\\da-f]{1,4}){1,7}|:)|fe80:(?::[\\da-f]{0,4}){0,4}%[\\da-z]+|::(?:f{4}(?::0{1,4})?:)?(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)|(?:[\\da-f]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d))\\]?(:\\d+)?"
+														}
+													]
+												}
+											},
+											"required": [
+												"type",
+												"path"
+											]
+										}
+									]
+								},
+								{
+									"type": "object",
+									"properties": {},
+									"required": [],
+									"additionalProperties": false
+								}
+							]
+						},
+						"ftdbProvider": {
+							"anyOf": [
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "file"
+										},
+										"path": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+												},
+												{
+													"type": "string",
+													"pattern": "((?:[^\\/]*\\/)*)(.*)"
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"path"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "url"
+										},
+										"path": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"type": "string",
+													"pattern": "(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])(?:\\.(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])){3}(:\\d+)?"
+												},
+												{
+													"type": "string",
+													"pattern": "\\[?(?:(?:[\\da-f]{1,4}:){7}[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,7}:|(?:[\\da-f]{1,4}:){1,6}:[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,5}(?::[\\da-f]{1,4}){1,2}|(?:[\\da-f]{1,4}:){1,4}(?::[\\da-f]{1,4}){1,3}|(?:[\\da-f]{1,4}:){1,3}(?::[\\da-f]{1,4}){1,4}|(?:[\\da-f]{1,4}:){1,2}(?::[\\da-f]{1,4}){1,5}|[\\da-f]{1,4}:(?::[\\da-f]{1,4}){1,6}|:(?:(?::[\\da-f]{1,4}){1,7}|:)|fe80:(?::[\\da-f]{0,4}){0,4}%[\\da-z]+|::(?:f{4}(?::0{1,4})?:)?(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)|(?:[\\da-f]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d))\\]?(:\\d+)?"
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"path"
+									]
+								}
+							]
+						},
+						"remote": {
+							"anyOf": [
+								{
+									"type": "object",
+									"properties": {
+										"hostname": {
+											"type": "string"
+										},
+										"port": {
+											"type": "integer"
+										},
+										"username": {
+											"type": "string"
+										},
+										"keyFile": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+												},
+												{
+													"type": "string",
+													"pattern": "((?:[^\\/]*\\/)*)(.*)"
+												}
+											]
+										}
+									},
+									"required": [
+										"hostname"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {},
+									"required": [],
+									"additionalProperties": false
+								}
+							]
+						},
+						"sourceRepo": {
+							"anyOf": [
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "local"
+										},
+										"sourceRoot": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+												},
+												{
+													"type": "string",
+													"pattern": "((?:[^\\/]*\\/)*)(.*)"
+												}
+											]
+										}
+									},
+									"required": [
+										"type"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "sftp"
+										},
+										"sourceRoot": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+												},
+												{
+													"type": "string",
+													"pattern": "((?:[^\\/]*\\/)*)(.*)"
+												}
+											]
+										},
+										"hostname": {
+											"type": "string"
+										},
+										"port": {
+											"type": "integer"
+										},
+										"username": {
+											"type": "string"
+										},
+										"keyFile": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+												},
+												{
+													"type": "string",
+													"pattern": "((?:[^\\/]*\\/)*)(.*)"
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"hostname"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "p4"
+										},
+										"server": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"type": "string",
+													"pattern": "(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])(?:\\.(?:(?:[1-9]|1\\d|2[0-4])?\\d|25[0-5])){3}(:\\d+)?"
+												},
+												{
+													"type": "string",
+													"pattern": "\\[?(?:(?:[\\da-f]{1,4}:){7}[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,7}:|(?:[\\da-f]{1,4}:){1,6}:[\\da-f]{1,4}|(?:[\\da-f]{1,4}:){1,5}(?::[\\da-f]{1,4}){1,2}|(?:[\\da-f]{1,4}:){1,4}(?::[\\da-f]{1,4}){1,3}|(?:[\\da-f]{1,4}:){1,3}(?::[\\da-f]{1,4}){1,4}|(?:[\\da-f]{1,4}:){1,2}(?::[\\da-f]{1,4}){1,5}|[\\da-f]{1,4}:(?::[\\da-f]{1,4}){1,6}|:(?:(?::[\\da-f]{1,4}){1,7}|:)|fe80:(?::[\\da-f]{0,4}){0,4}%[\\da-z]+|::(?:f{4}(?::0{1,4})?:)?(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)|(?:[\\da-f]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d)\\.){3}(?:25[0-5]|(?:2[0-4]|1?\\d)?\\d))\\]?(:\\d+)?"
+												}
+											]
+										},
+										"mappings": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"clSync": {
+														"type": "integer"
+													},
+													"clPartial": {
+														"type": "array",
+														"items": {
+															"type": "integer"
+														}
+													},
+													"mapping": {
+														"type": "array",
+														"items": {
+															"type": "string",
+															"pattern": "^\\/\\/([^@#*\\n](?<!\\.\\.\\.|%%\\d))+(\\.\\.\\.|\\*|@[^@#*\\n]+|#[^@#*\\n]+)? \\/\\/([^@#\\n](?<!%%\\d))+(\\.\\.\\.)?$"
+														}
+													},
+													"rootPath": {
+														"anyOf": [
+															{
+																"type": "string",
+																"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+															},
+															{
+																"type": "string",
+																"pattern": "((?:[^\\/]*\\/)*)(.*)"
+															}
+														]
+													}
+												},
+												"required": [
+													"clSync",
+													"clPartial",
+													"mapping",
+													"rootPath"
+												]
+											}
+										},
+										"cleanSourceList": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												}
+											]
+										},
+										"intermediateArchive": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												},
+												{
+													"type": "object",
+													"properties": {
+														"url": {
+															"type": "string",
+															"format": "uri"
+														},
+														"artifactory": {
+															"type": "boolean",
+															"default": false
+														}
+													},
+													"required": [
+														"url"
+													]
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"server",
+										"mappings",
+										"cleanSourceList",
+										"intermediateArchive"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "repo"
+										},
+										"server": {
+											"type": "string",
+											"format": "uri"
+										},
+										"branch": {
+											"type": "string"
+										},
+										"mappings": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"rootPath": {
+														"anyOf": [
+															{
+																"type": "string",
+																"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+															},
+															{
+																"type": "string",
+																"pattern": "((?:[^\\/]*\\/)*)(.*)"
+															}
+														]
+													},
+													"targetPath": {
+														"anyOf": [
+															{
+																"type": "string",
+																"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+															},
+															{
+																"type": "string",
+																"pattern": "((?:[^\\/]*\\/)*)(.*)"
+															}
+														]
+													}
+												},
+												"required": [
+													"rootPath",
+													"targetPath"
+												]
+											}
+										},
+										"intermediateArchive": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												},
+												{
+													"type": "object",
+													"properties": {
+														"url": {
+															"type": "string",
+															"format": "uri"
+														},
+														"artifactory": {
+															"type": "boolean",
+															"default": false
+														}
+													},
+													"required": [
+														"url"
+													]
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"server",
+										"mappings",
+										"intermediateArchive"
+									]
+								},
+								{
+									"type": "object",
+									"properties": {
+										"type": {
+											"const": "archive"
+										},
+										"source": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												},
+												{
+													"type": "object",
+													"properties": {
+														"url": {
+															"type": "string",
+															"format": "uri"
+														},
+														"artifactory": {
+															"type": "boolean",
+															"default": false
+														}
+													},
+													"required": [
+														"url"
+													]
+												}
+											]
+										},
+										"archiveFormat": {
+											"enum": [
+												"zip",
+												"tar"
+											]
+										},
+										"intermediateArchive": {
+											"anyOf": [
+												{
+													"type": "string",
+													"format": "uri"
+												},
+												{
+													"anyOf": [
+														{
+															"type": "string",
+															"pattern": "^[a-zA-Z]:\\\\(((?![<>:\"/\\\\|?*]).)+((?<![ .])\\\\)?)*$"
+														},
+														{
+															"type": "string",
+															"pattern": "((?:[^\\/]*\\/)*)(.*)"
+														}
+													]
+												},
+												{
+													"type": "object",
+													"properties": {
+														"url": {
+															"type": "string",
+															"format": "uri"
+														},
+														"artifactory": {
+															"type": "boolean",
+															"default": false
+														}
+													},
+													"required": [
+														"url"
+													]
+												}
+											]
+										}
+									},
+									"required": [
+										"type",
+										"source",
+										"archiveFormat",
+										"intermediateArchive"
+									]
+								}
+							],
+							"default": {
+								"type": "local"
+							}
+						},
+						"opengrok": {
+							"type": "object",
+							"properties": {
+								"url": {
+									"type": "string",
+									"format": "uri"
+								},
+								"apiKey": {
+									"type": "string"
+								}
+							},
+							"required": [
+								"url",
+								"apiKey"
+							]
+						},
+						"snippets": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"name": {
+										"type": "string"
+									},
+									"command": {
+										"type": "string"
+									}
+								},
+								"required": [
+									"name",
+									"command"
+								]
+							}
+						}
+					},
+					"required": []
+				}
+			}
+		},
+		"languages": [
+			{
+				"id": "json",
+				"filenames": [
+					"vscode.manifest"
+				]
+			}
+		]
+	},
+	"vsce": {
+		"dependencies": false
+	},
+	"scripts": {
+		"build": "pnpm run compile",
+		"compile": "pnpm run check && node esbuild.mjs",
+		"check": "tsc --noEmit",
+		"watch": "pnpm run --stream \"/^watch:.*/\"",
+		"dev": "pnpm watch",
+		"watch:esbuild": "node esbuild.mjs --watch",
+		"watch:tsc": "tsc --preserveWatchOutput --noEmit --watch --project tsconfig.json",
+		"vscode:prepublish": "pnpm run package",
+		"package": "pnpm run check && node esbuild.mjs --production",
+		"pretest": "pnpm run compile",
+		"test": "vscode-test",
+		"package:extension": "node scripts/packageSetup.mjs && vsce package"
+	},
+	"test": "vscode-test",
+	"devDependencies": {
+		"@cas/http": "workspace:*",
+		"@cas/tsconfig": "workspace:*",
+		"@cas/types": "workspace:*",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/auto-instrumentations-node": "^0.60.1",
+		"@opentelemetry/sdk-metrics": "^2.0.1",
+		"@opentelemetry/sdk-node": "^0.202.0",
+		"@opentelemetry/sdk-trace-node": "^2.0.1",
+		"@opliko/vscode-js-profile-core": "^1.0.21",
+		"@opliko/vscode-js-profile-flame": "^1.0.32",
+		"@supercharge/promise-pool": "^3.2.0",
+		"@types/glob": "^8.1.0",
+		"@types/minimatch": "^5.1.2",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "catalog:",
+		"@types/semver": "^7.7.0",
+		"@types/ssh2": "^1.15.5",
+		"@types/stream-chain": "^2.1.0",
+		"@types/stream-json": "^1.7.8",
+		"@types/vscode": "^1.101.0",
+		"@valibot/to-json-schema": "^1.1.0",
+		"@vscode/test-cli": "catalog:",
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.5.0",
+		"@zip.js/zip.js": "^2.7.62",
+		"add": "^2.0.6",
+		"cas-updater": "workspace:^",
+		"core-js": "^3.43.0",
+		"domutils": "^3.2.2",
+		"esbuild": "catalog:",
+		"esbuild-plugin-cp": "^1.0.2",
+		"esbuild-plugin-inline-import": "^1.1.0",
+		"htmlparser2": "^10.0.0",
+		"mocha": "catalog:",
+		"node-ssh": "^13.2.1",
+		"p-debounce": "^4.0.0",
+		"p4": "link:extensions/p4",
+		"quick-lru": "catalog:",
+		"semver": "^7.7.2",
+		"shlex": "^2.1.2",
+		"ssh-config": "^5.0.3",
+		"ssh2": "^1.16.0",
+		"stream-chain": "^3.4.0",
+		"stream-json": "^1.9.1",
+		"typescript": "catalog:",
+		"updater": "link:extensions/updater",
+		"valibot": "catalog:",
+		"vscode-languageclient": "^9.0.1",
+		"vscode-languageserver": "9.0.1",
+		"vscode-languageserver-textdocument": "1.0.12"
+	},
+	"dependencies": {
+		"@cas/deps": "workspace:*",
+		"@cas/helpers": "workspace:*",
+		"@cas/manifest": "workspace:*",
+		"@cas/vscode-variables": "workspace:*",
+		"@cas/webview": "workspace:*",
+		"@protobufjs/base64": "^1.1.2",
+		"devtools-protocol": "^0.0.1473885",
+		"json-stream-stringify": "^3.1.6"
+	},
+	"files": [
+		"LICENSE",
+		"package.json",
+		"dist/**/!(*.map)",
+		"media/**"
+	]
+}

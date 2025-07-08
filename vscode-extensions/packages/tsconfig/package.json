@@ -1,0 +1,10 @@
+{
+  "name": "@cas/tsconfig",
+  "version": "1.0.0",
+  "description": "Repo-wide typescript defaults",
+  "private": true,
+  "keywords": [
+    "typescript"
+  ],
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,221 @@
+// See https://go.microsoft.com/fwlink/?LinkId=733558
+// for the documentation about the tasks.json format
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "dev",
+			"presentation": {
+				"revealProblems": "onProblem",
+				"reveal": "never",
+				"group": "watch"
+			},
+			"type": "npm",
+			"script": "dev",
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			},
+			"runOptions": {
+				"runOn": "folderOpen"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"fileLocation": [
+					"search",
+					{
+						"include": ["${workspaceFolder}/extensions/cas/src", "${workspaceFolder}/packages/webview/src"]
+					}
+				],
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "^@?cas\\/?(?:[\\w\\d:-]+)*:[ \\t>.]*(?:[\\w\\d-]+:?)*[ \\t]*(?:\\[watch\\] build started|vite dev).*$"
+					},
+					"endsPattern": {
+						"regexp":  "^@?cas\\/?(?:[\\w\\d:-]+)*:[ \\t>\\.]*([\\w\\d-]+:?)*[ \\t]*(?:\\d+:?|\\s*PM|\\s*AM)*[ \\t-]*(?:(?:vite|VITE) v\\d+\\.\\d+\\.\\d+\\s+(?:building|ready)|✔ done|\\[watch\\] build finished|Found \\d+ errors. Watching for file changes.).*$"
+					},
+				},
+				"pattern": [
+					{
+						"regexp": "@?cas\\/?(-[\\w\\d:-])*:[\\s.]*[✘▲] ([\\[\\]A-Z]+) (.+)",
+						"severity": 1,
+						"message": 2
+					},
+					{
+						"regexp": "@?cas\\/?(-[\\w\\d:-])*:[\\s.]*(?:\\s|\\s{4})(?!\\s)([^:]+)(?::([0-9]+))?(?::([0-9]+))?:$",
+						"file": 1,
+						"line": 2,
+						"column": 3
+					},
+					{
+						"regexp": "@?cas\\/?(-[\\w\\d:-])*:[\\s.]*(Warning|Error):\\s+(.*)$",
+						"file": 1,
+						"line": 2,
+						"column": 3,
+						"severity": 4,
+						"message": 5
+					}
+				]
+			},
+		},
+		{
+			"label": "watch",
+			"dependsOn": [
+				"npm: cas:watch",
+				// "npm: cas:watch:esbuild",
+				"npm: @cas/webview:watch",
+			],
+			"presentation": {
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "watch:cas",
+			"dependsOn": [
+				"npm: cas:watch:tsc",
+				"npm: cas:watch:esbuild",
+				"npm: @cas/webview:watch"
+			],
+			"presentation": {
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		
+		{
+			"type": "npm",
+			"script": "cas:watch",
+			"problemMatcher": {
+				"owner": "esbuild",
+				"source": "esbuild",
+				"applyTo": "closedDocuments",
+				"fileLocation": ["relative", "${workspaceFolder}/extensions/cas/src"],
+				"pattern": [
+					{
+						"regexp": "^[✘▲] ([\\[\\]A-Z]+) (.+)",
+						"severity": 1,
+						"message": 2
+					},
+					{
+						"regexp": "^(?:\\s|\\s{4})(?!\\s)([^:]+)(?::([0-9]+))?(?::([0-9]+))?:$",
+						"file": 1,
+						"line": 2,
+						"column": 3
+					}
+				],
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "\\[watch\\] build started"
+					},
+					"endsPattern": {
+						"regexp": "\\[watch\\] build finished"
+					}
+				}
+			},
+			"isBackground": true,
+			"label": "npm: cas:watch",
+			"presentation": {
+				"group": "watch",
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build"
+			}
+		},
+		{
+			"type": "npm",
+			"script": "cas:watch:tsc",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"label": "npm: cas:watch:tsc",
+			"presentation": {
+				"group": "watch",
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build"
+			}
+		},
+		{
+			"type": "npm",
+			"script": "@cas/webview:dev",
+			"problemMatcher": {
+				"owner": "typescript",
+				"source": "ts",
+				"applyTo": "closedDocuments",
+				"fileLocation": ["relative", "${workspaceFolder}/packages/@cas/webview"],
+				"pattern": {
+					"regexp": "^(Warning|Error):\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "^> vite dev$"
+					},
+					"endsPattern": {
+						"regexp": "\\s*(vite|VITE) v\\d+\\.\\d+\\.\\d+\\s+(building|ready) .+$"
+					}
+				}
+			},
+			"isBackground": true,
+			"label": "npm: @cas/webview:dev",
+			"presentation": {
+				"group": "watch",
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build"
+			}
+		},
+		{
+			"type": "npm",
+			"script": "@cas/webview:watch",
+			"problemMatcher": {
+				"owner": "typescript",
+				"source": "ts",
+				"applyTo": "closedDocuments",
+				"fileLocation": ["relative", "${workspaceFolder}/packages/@cas/webview"],
+				"pattern": {
+					"regexp": "^(Warning|Error):\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": {
+						"regexp": "^build started...\\s*$"
+					},
+					"endsPattern": {
+						"regexp": "\\s*✔ done.*$"
+					}
+				}
+			},
+			"isBackground": true,
+			"label": "npm: @cas/webview:watch",
+			"presentation": {
+				"group": "watch",
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build"
+			}
+		}
+	]
+}

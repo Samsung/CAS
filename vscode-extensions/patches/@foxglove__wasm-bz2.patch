@@ -1,0 +1,25 @@
+diff --git a/wasm/module.js b/wasm/module.js
+index b1d4d2c9af43e5c7f802e9726a0816538b20441e..90691f2a6b07180282b40c52326fc68ab9e7d2c2 100644
+--- a/wasm/module.js
++++ b/wasm/module.js
+@@ -42,15 +42,15 @@ Module['ready'] = new Promise(function(resolve, reject) {
+ /* eslint-disable */
+ 
+ Module.locateFile = function (input, prefix) {
+-  if (ENVIRONMENT_IS_NODE) {
+-    // In node, no special handling is needed
+-    return prefix + input;
+-  }
++  // if (ENVIRONMENT_IS_NODE) {
++  //   // In node, no special handling is needed
++  //   return prefix + input;
++  // }
+   if (input.endsWith(".wasm")) {
+     // In a web context, the bundler (e.g. webpack) will see this require(), include the .wasm file
+     // in its output, and replace this with a correct URL to the file.
+     const wasmPath = require("./module.wasm");
+-    return wasmPath;
++    return prefix + wasmPath;
+   }
+ 
+   return input;

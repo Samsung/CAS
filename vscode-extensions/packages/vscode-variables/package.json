@@ -1,0 +1,33 @@
+{
+    "name": "@cas/vscode-variables",
+    "type": "module",
+    "scripts": {
+        "dev": "pnpm watch",
+        "watch": "pnpm run --stream \"/^watch:.*$/\"",
+        "watch:tsc": "tsc --preserveWatchOutput --watch --project tsconfig.json",
+        "build": "tsc --project tsconfig.json",
+        "check": "tsc --noEmit --project tsconfig.json"
+    },
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./*": {
+            "types": "./src/*",
+            "default": "./dist/*"
+        }
+    },
+    "devDependencies": {
+        "@cas/tsconfig": "workspace:*",
+        "@types/node": "catalog:",
+        "@types/vscode": "^1.101.0",
+        "esbuild": "catalog:",
+        "typescript": "catalog:",
+        "winston": "^3.17.0"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "quick-lru": "catalog:"
+    }
+}

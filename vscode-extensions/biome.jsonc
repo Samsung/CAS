@@ -1,0 +1,60 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+	"files": {
+		"includes": [
+			"**/src/**/*.ts",
+			"**/src/**/*.svelte",
+			"**/src/**/*.css",
+			"**/media/**/*.css"
+		]
+	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": false,
+			"correctness": {
+				"noSwitchDeclarations": "warn",
+				"noUndeclaredVariables": "off",
+				"noUnusedVariables": "warn"
+			},
+			"style": {
+				"useBlockStatements": "warn",
+				"useNamingConvention": {
+					"level": "off"
+				}
+			},
+			"suspicious": {
+				"noControlCharactersInRegex": "warn",
+				"noDoubleEquals": "warn",
+				"noPrototypeBuiltins": "warn"
+			}
+		},
+		"includes": ["**", "!**/out", "!**/dist", "!**/*.d.ts"]
+	},
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true,
+		"defaultBranch": "main"
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.svelte"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						// Biome can't see usage outside of <script> tags yet
+						"noUnusedVariables": "off",
+						"noUnusedImports": "off"
+					},
+					"style": {
+						// same as above - this would break bind: declarations
+						"useConst": "off",
+						"useImportType": "off"
+					}
+				}
+			}
+		}
+	]
+}

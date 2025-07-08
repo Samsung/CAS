@@ -1,0 +1,309 @@
+diff --git a/clang-tools-extra/clangd/ClangdLSPServer.cpp b/clang-tools-extra/clangd/ClangdLSPServer.cpp
+index a87da252b7a7..a97e65adee2d 100644
+--- a/clang-tools-extra/clangd/ClangdLSPServer.cpp
++++ b/clang-tools-extra/clangd/ClangdLSPServer.cpp
+@@ -565,64 +565,45 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
+            {"change", (int)TextDocumentSyncKind::Incremental},
+            {"save", true},
+        }},
+-      {"documentFormattingProvider", true},
+-      {"documentRangeFormattingProvider", true},
++      {"documentFormattingProvider", false},
++      {"documentRangeFormattingProvider", false},
+       {"documentOnTypeFormattingProvider",
+        llvm::json::Object{
+            {"firstTriggerCharacter", "\n"},
+            {"moreTriggerCharacter", {}},
+        }},
+-      {"completionProvider",
+-       llvm::json::Object{
+-           // We don't set `(` etc as allCommitCharacters as they interact
+-           // poorly with snippet results.
+-           // See https://github.com/clangd/vscode-clangd/issues/357
+-           // Hopefully we can use them one day without this side-effect:
+-           //     https://github.com/microsoft/vscode/issues/42544
+-           {"resolveProvider", false},
+-           // We do extra checks, e.g. that > is part of ->.
+-           {"triggerCharacters", {".", "<", ">", ":", "\"", "/", "*"}},
+-       }},
+-      {"semanticTokensProvider",
+-       llvm::json::Object{
+-           {"full", llvm::json::Object{{"delta", true}}},
+-           {"range", false},
+-           {"legend",
+-            llvm::json::Object{{"tokenTypes", semanticTokenTypes()},
+-                               {"tokenModifiers", semanticTokenModifiers()}}},
+-       }},
+       {"signatureHelpProvider",
+        llvm::json::Object{
+            {"triggerCharacters", {"(", ")", "{", "}", "<", ">", ","}},
+        }},
+-      {"declarationProvider", true},
+-      {"definitionProvider", true},
+-      {"implementationProvider", true},
+-      {"typeDefinitionProvider", true},
+-      {"documentHighlightProvider", true},
++      {"declarationProvider", false},
++      {"definitionProvider", false},
++      {"implementationProvider", false},
++      {"typeDefinitionProvider", false},
++      {"documentHighlightProvider", false},
+       {"documentLinkProvider",
+        llvm::json::Object{
+            {"resolveProvider", false},
+        }},
+-      {"hoverProvider", true},
++      {"hoverProvider", false},
+       {"selectionRangeProvider", true},
+-      {"documentSymbolProvider", true},
+-      {"workspaceSymbolProvider", true},
+-      {"referencesProvider", true},
+-      {"astProvider", true}, // clangd extension
+-      {"typeHierarchyProvider", true},
++      {"documentSymbolProvider", false},
++      {"workspaceSymbolProvider", false},
++      {"referencesProvider", false},
++      {"astProvider", false}, // clangd extension
++      {"typeHierarchyProvider", false},
+       // Unfortunately our extension made use of the same capability name as the
+       // standard. Advertise this capability to tell clients that implement our
+       // extension we really have support for the standardized one as well.
+-      {"standardTypeHierarchyProvider", true}, // clangd extension
+-      {"memoryUsageProvider", true},           // clangd extension
++      {"standardTypeHierarchyProvider", false}, // clangd extension
++      {"memoryUsageProvider", false},           // clangd extension
+       {"compilationDatabase",                  // clangd extension
+        llvm::json::Object{{"automaticReload", true}}},
+-      {"inactiveRegionsProvider", true}, // clangd extension
+-      {"callHierarchyProvider", true},
+-      {"clangdInlayHintsProvider", true},
+-      {"inlayHintProvider", true},
+-      {"foldingRangeProvider", true},
++      {"inactiveRegionsProvider", false}, // clangd extension
++      {"callHierarchyProvider", false},
++      {"clangdInlayHintsProvider", false},
++      {"inlayHintProvider", false},
++      {"foldingRangeProvider", false},
+   };
+ 
+   {
+@@ -1594,6 +1575,34 @@ void ClangdLSPServer::onAST(const ASTParams &Params,
+   Server->getAST(Params.textDocument.uri.file(), Params.range, std::move(CB));
+ }
+ 
++void ClangdLSPServer::onMacroExpandRange(const DocumentRangeFormattingParams &Params, Callback<WorkspaceEdit>CB){
++  auto Action = [this, CB = std::move(CB)](
++                    llvm::Expected<Tweak::Effect> R) mutable {
++    if (!R)
++      return CB(R.takeError());
++
++    assert(R->ShowMessage || (!R->ApplyEdits.empty() && "tweak has no effect"));
++
++    if (R->ShowMessage) {
++      ShowMessageParams Msg;
++      Msg.message = *R->ShowMessage;
++      Msg.type = MessageType::Info;
++      ShowMessage(Msg);
++    }
++    if (auto Err = validateEdits(*Server, R->ApplyEdits))
++      return CB(std::move(Err));
++
++    WorkspaceEdit WE;
++    WE.changes.emplace();
++    for (const auto &It : R->ApplyEdits) {
++      (*WE.changes)[URI::createFile(It.first()).toString()] =
++          It.second.asTextEdits();
++    }
++    CB(WE);
++  };
++  Server->applyTweak(Params.textDocument.uri.file(),Params.range,"ExpandRange",std::move(Action));
++}
++
+ ClangdLSPServer::ClangdLSPServer(Transport &Transp, const ThreadsafeFS &TFS,
+                                  const ClangdLSPServer::Options &Opts)
+     : ShouldProfile(/*Period=*/std::chrono::minutes(5),
+@@ -1640,6 +1649,7 @@ void ClangdLSPServer::bindMethods(LSPBinder &Bind,
+   Bind.method("textDocument/documentHighlight", this, &ClangdLSPServer::onDocumentHighlight);
+   Bind.method("workspace/symbol", this, &ClangdLSPServer::onWorkspaceSymbol);
+   Bind.method("textDocument/ast", this, &ClangdLSPServer::onAST);
++  Bind.method("cas.MacroExpandRange", this, &ClangdLSPServer::onMacroExpandRange);
+   Bind.notification("textDocument/didOpen", this, &ClangdLSPServer::onDocumentDidOpen);
+   Bind.notification("textDocument/didClose", this, &ClangdLSPServer::onDocumentDidClose);
+   Bind.notification("textDocument/didChange", this, &ClangdLSPServer::onDocumentDidChange);
+diff --git a/clang-tools-extra/clangd/ClangdLSPServer.h b/clang-tools-extra/clangd/ClangdLSPServer.h
+index 79579c22b788..59462aa95d04 100644
+--- a/clang-tools-extra/clangd/ClangdLSPServer.h
++++ b/clang-tools-extra/clangd/ClangdLSPServer.h
+@@ -100,6 +100,7 @@ private:
+   void onDocumentDidClose(const DidCloseTextDocumentParams &);
+   void onDocumentDidSave(const DidSaveTextDocumentParams &);
+   void onAST(const ASTParams &, Callback<std::optional<ASTNode>>);
++  void onMacroExpandRange(const DocumentRangeFormattingParams &, Callback<WorkspaceEdit>);
+   void onDocumentOnTypeFormatting(const DocumentOnTypeFormattingParams &,
+                                   Callback<std::vector<TextEdit>>);
+   void onDocumentRangeFormatting(const DocumentRangeFormattingParams &,
+diff --git a/clang-tools-extra/clangd/refactor/tweaks/ExpandMacro.cpp b/clang-tools-extra/clangd/refactor/tweaks/ExpandMacro.cpp
+index 29e681c3d44f..c194cf987044 100644
+--- a/clang-tools-extra/clangd/refactor/tweaks/ExpandMacro.cpp
++++ b/clang-tools-extra/clangd/refactor/tweaks/ExpandMacro.cpp
+@@ -15,6 +15,8 @@
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/STLExtras.h"
+ #include "llvm/Support/Error.h"
++#include "support/Logger.h"
++#include "XRefs.h"
+ #include <string>
+ namespace clang {
+ namespace clangd {
+@@ -131,6 +133,151 @@ std::string ExpandMacro::title() const {
+   return std::string(llvm::formatv("Expand macro '{0}'", MacroName));
+ }
+ 
++
++class ExpandRange : public Tweak {
++public:
++  const char *id() const final;
++  llvm::StringLiteral kind() const override {
++    return CodeAction::REFACTOR_KIND;
++  }
++
++  bool prepare(const Selection &Inputs) override;
++  Expected<Tweak::Effect> apply(const Selection &Inputs) override;
++  std::string title() const override;
++
++private:
++  std::vector<syntax::TokenBuffer::Expansion> Expansions;
++};
++
++bool ExpandRange::prepare(const Selection &Inputs) {
++  // log("RANGE: {0} : {1}",Inputs.SelectionBegin,Inputs.SelectionEnd);
++  auto &Tokens = Inputs.AST->getTokens();
++  auto &SM = Tokens.sourceManager();
++  auto Spelled = Tokens.spelledTokens(SM.getMainFileID());
++  const clang::syntax::Token *T1 = llvm::partition_point(Spelled,
++      [&](const syntax::Token &Tok) { return SM.getFileOffset(Tok.endLocation()) <= Inputs.SelectionBegin;});
++  const clang::syntax::Token *T2 = llvm::partition_point(Spelled,
++      [&](const syntax::Token &Tok) { return SM.getFileOffset(Tok.location()) <= Inputs.SelectionEnd;});
++  auto SpelledRange = Spelled.slice(T1 - Spelled.data(),T2 - T1);
++  // log("T1: {0}\tT2: {1}",T1->text(SM),T2->text(SM));
++  llvm::copy_if(Tokens.expansionsOverlapping(SpelledRange),std::back_inserter(Expansions),
++      [&SM](const clang::syntax::TokenBuffer::Expansion &E){return E.Spelled.front().text(SM) != "#";});
++  return !Expansions.empty();
++}
++
++Expected<Tweak::Effect> ExpandRange::apply(const Selection &Inputs) {
++  auto &SM = Inputs.AST->getSourceManager();
++
++  tooling::Replacements Reps;
++  for(auto &Expansion : Expansions){
++    std::string Replacement;
++    for (const syntax::Token &T : Expansion.Expanded) {
++      Replacement += T.text(SM);
++      Replacement += " ";
++    }
++    if (!Replacement.empty()) {
++      assert(Replacement.back() == ' ');
++      Replacement.pop_back();
++    }
++
++    CharSourceRange MacroRange =
++        CharSourceRange::getCharRange(Expansion.Spelled.front().location(),
++                                      Expansion.Spelled.back().endLocation());
++
++    llvm::cantFail(Reps.add(tooling::Replacement(SM, MacroRange, Replacement)));
++  }
++  return Effect::mainFileEdit(SM, std::move(Reps));
++}
++
++std::string ExpandRange::title() const {
++  return std::string(llvm::formatv("Expand selected range"));
++}
++
++REGISTER_TWEAK(ExpandRange)
++
++
++
++
++
++
++class ExpandFunction : public Tweak {
++public:
++  const char *id() const final;
++  llvm::StringLiteral kind() const override {
++    return CodeAction::REFACTOR_KIND;
++  }
++
++  bool prepare(const Selection &Inputs) override;
++  Expected<Tweak::Effect> apply(const Selection &Inputs) override;
++  std::string title() const override;
++
++private:
++  ExpandRange FuncRange;
++  std::function<Expected<Tweak::Effect>()>delayed_apply;
++  std::vector<syntax::TokenBuffer::Expansion> Expansions;
++};
++
++bool ExpandFunction::prepare(const Selection &Inputs) {
++  // log("Expand function");
++  SelectionTree::createEach(Inputs.AST->getASTContext(),Inputs.AST->getTokens(),Inputs.SelectionBegin,Inputs.SelectionEnd,[](SelectionTree T){return true;});
++  auto &SM = Inputs.AST->getSourceManager();
++  auto Root = &Inputs.ASTSelection.root();
++  while (true){
++    // log("{0}: {1}",Root->kind(),Root->Children.size());
++    if(Root->Children.size()!=1) break;
++    Root = Root->Children.front();
++  }
++
++  auto Node = Inputs.ASTSelection.commonAncestor();
++  while(Node){
++    // log("NODE: {0}",Node->kind());
++    if(Node->kind() == "FunctionDecl") break;
++    Node = Node->Parent;
++  }
++  if(Node){
++    const FunctionDecl *F = Node->ASTNode.get<FunctionDecl>();
++    auto Bpos = clangd::sourceLocToPosition(SM,F->getBeginLoc());
++    auto Epos = clangd::sourceLocToPosition(SM,F->getEndLoc());
++    Selection Inner(Inputs.Index,*Inputs.AST,
++        clangd::positionToOffset(Inputs.Code,Bpos).get(), clangd::positionToOffset(Inputs.Code,Epos).get(),
++        SelectionTree::createRight(Inputs.AST->getASTContext(),Inputs.AST->getTokens(),0,0),Inputs.FS);
++    delayed_apply = [&,this](){return FuncRange.apply(Inner);};
++    return FuncRange.prepare(Inner);
++  }
++  // log("FAILED, NO NODE");
++  return false;
++
++
++  auto pos = clangd::sourceLocToPosition(Inputs.AST->getSourceManager(),Inputs.Cursor);
++  auto sym = clangd::locateSymbolAt(*Inputs.AST,pos,Inputs.Index);
++  if(sym.size() == 1 && sym.front().Definition && sym.front().Definition->range.contains(pos)){
++    auto Node = Inputs.ASTSelection.commonAncestor();
++    if(!Node || Node->kind() != "FunctionDecl")
++      return false;
++    auto Bpos = clangd::sourceLocToPosition(SM,Node->ASTNode.get<FunctionDecl>()->getBeginLoc());
++    auto Epos = clangd::sourceLocToPosition(SM,Node->ASTNode.get<FunctionDecl>()->getEndLoc());
++    Selection Inner(Inputs.Index,*Inputs.AST,
++    clangd::positionToOffset(Inputs.Code,Bpos).get(), clangd::positionToOffset(Inputs.Code,Epos).get(),
++    SelectionTree::createRight(Inputs.AST->getASTContext(),Inputs.AST->getTokens(),0,0),Inputs.FS);
++    // log("Epxansions found: {0}",FuncRange.prepare(Inner));
++    delayed_apply = [&,this](){return FuncRange.apply(Inner);};
++    // log("SUCCESS");
++    return true;
++  }
++  // log("FAILED");
++  return false;
++}
++
++Expected<Tweak::Effect> ExpandFunction::apply(const Selection &Inputs) {
++  return delayed_apply();
++}
++
++std::string ExpandFunction::title() const {
++  return std::string(llvm::formatv("Expand selected function body"));
++}
++
++REGISTER_TWEAK(ExpandFunction)
++
+ } // namespace
+ } // namespace clangd
+ } // namespace clang

@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.vscode-dark, .vscode-dark *));
+@plugin "@githubocto/tailwind-vscode";

@@ -1,0 +1,10 @@
+{
+	"extends": "@cas/tsconfig/base.json",
+	"compilerOptions": {
+		"rootDir": "src",
+        "skipLibCheck": true,
+		"outDir": "dist",
+		"noEmit": false
+	},
+    "include": ["src"]
+}

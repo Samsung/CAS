@@ -1,0 +1,36 @@
+packages:
+  - packages/*
+  - extensions/*
+
+allowUnusedPatches: true
+
+catalog:
+  '@types/triple-beam': ^1.3.5
+  '@types/node': 24.0.3
+  '@types/vscode-webview': ^1.57.5
+  '@vscode/test-cli': ^0.0.11
+  chokidar: ^4.0.3
+  comlink: ^4.4.2
+  esbuild: ^0.25.5
+  lru-cache: ^11.1.0
+  mocha: ^11.6.0
+  object-inspect: ^1.13.4
+  svelte: ^5.34.3
+  svelte-check: ^4.2.1
+  tailwindcss: ^4.1.10
+  triple-beam: ^1.4.1
+  typescript: ^5.8.3
+  valibot: ^1.1.0
+  vite: ^6.3.5
+  winston: ^3.17.0
+  winston-transport-vscode: ^0.1.0
+  quick-lru: ^7.0.1
+  llvm-project: github:llvm/llvm-project#release/18.x
+
+patchedDependencies:
+  '@types/cacache': patches/@types__cacache.patch
+  vite: patches/vite.patch
+  ssh2: patches/ssh2.patch
+  vscode-languageclient: patches/vscode-languageclient.patch
+  '@foxglove/wasm-bz2': patches/@foxglove__wasm-bz2.patch
+  18.x: patches/clangd.patch

@@ -1,0 +1,13 @@
+diff --git a/dist/node/chunks/dep-DBxKXgDP.js b/dist/node/chunks/dep-DBxKXgDP.js
+index 2cd82a2f105df2ac39d49cc8c8f787325d882f81..df528ea6dc2b2e8089c75a26de0224bfa3ca9f38 100644
+--- a/dist/node/chunks/dep-DBxKXgDP.js
++++ b/dist/node/chunks/dep-DBxKXgDP.js
+@@ -40012,7 +40012,7 @@ function webWorkerPostPlugin() {
+   };
+ }
+ function webWorkerPlugin(config) {
+-  const isBuild = config.command === "build";
++  const isBuild = true;
+   const isWorker = config.isWorker;
+   return {
+     name: "vite:worker",

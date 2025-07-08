@@ -1,0 +1,6 @@
+{
+	"extends": "@cas/tsconfig/base.json",
+	"compilerOptions": {
+		"rootDir": "src"
+	}
+}

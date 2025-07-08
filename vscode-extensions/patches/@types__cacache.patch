@@ -1,0 +1,115 @@
+diff --git a/index.d.ts b/index.d.ts
+index ef16a1aec301aa87bcdda9a97bee90af6ddb6f6f..d5b569c7ecab5d3de3c837f9964f17e9c1067f14 100644
+--- a/index.d.ts
++++ b/index.d.ts
+@@ -6,7 +6,7 @@ export interface CacheObject {
+     /** Key the entry was looked up under. Matches the key argument. */
+     key: string;
+     /** User-assigned metadata associated with the entry/content. */
+-    metadata?: any;
++    metadata?: unknown;
+     /** Filesystem path where content is stored, joined with cache argument. */
+     path: string;
+     /** Timestamp the entry was first added on. */
+@@ -16,7 +16,7 @@ export interface CacheObject {
+ }
+ 
+ export interface GetCacheObject {
+-    metadata?: any;
++    metadata?: unknown;
+     integrity: string;
+     data: Buffer;
+     size?: number;
+@@ -33,7 +33,7 @@ export namespace get {
+         sri: {
+             algorithm: string;
+             digest: string;
+-            options: any[];
++            options: string[];
+             source: string;
+         };
+     }
+@@ -156,7 +156,7 @@ export namespace put {
+         integrity?: string | undefined;
+ 
+         /** Arbitrary metadata to be attached to the inserted key. */
+-        metadata?: any;
++        metadata?: unknown;
+ 
+         /**
+          * Default: `null`
+@@ -240,7 +240,7 @@ export namespace tmp {
+          *
+          * Note: might be called more than once on the same entry.
+          */
+-        filter?: string | false | undefined;
++        filter?: (entry: CacheObject) => boolean;
+ 
+         /**
+          * Custom logger function:
+@@ -249,7 +249,7 @@ export namespace tmp {
+          *   log.silly('verify', 'verifying cache at', cache)
+          * ```
+          */
+-        log?: Record<string, (...args: any[]) => any> | undefined;
++        log?: Record<string, (...args: unknown[]) => unknown> | undefined;
+ 
+         /**
+          * Default: `null`
+@@ -307,7 +307,7 @@ export namespace verify {
+          *
+          * Note: might be called more than once on the same entry.
+          */
+-        filter?: string | false | undefined;
++        filter?: (entry: CacheObject) => boolean;
+ 
+         /**
+          * Custom logger function:
+@@ -316,7 +316,7 @@ export namespace verify {
+          *   log.silly('verify', 'verifying cache at', cache)
+          * ```
+          */
+-        log?: Record<string, (...args: any[]) => any> | undefined;
++        log?: Record<string, (...args: unknown[]) => unknown> | undefined;
+     }
+ 
+     /**
+@@ -428,7 +428,7 @@ export function put(cachePath: string, key: string, data: any, opts?: put.Option
+  * entries), use `rm.content`. Or, to safely vacuum any unused content,
+  * use `verify`.
+  */
+-export function rm(cachePath: string, key: string): Promise<any>;
++export function rm(cachePath: string, key: string): Promise<void>;
+ 
+ /**
+  * Checks out and fixes up your cache:
+@@ -444,4 +444,28 @@ export function rm(cachePath: string, key: string): Promise<any>;
+  * verification process, including amount of storage reclaimed, number of valid
+  * entries, number of entries removed, etc.
+  */
+-export function verify(cachePath: string, opts?: verify.Options): Promise<any>;
++export function verify(cachePath: string, opts?: verify.Options): Promise<{
++    verifiedContent: number;
++    reclaimedCount: number;
++    reclaimedSize: number;
++    badContentCount: number;
++    keptSize: number;
++}>;
++
++export namespace index {
++    export interface entry {
++        key: string;
++        integrity: string;
++        path: string;
++        size: number;
++        time: number;
++       metadata: unknown;
++     }
++    export function insert(
++        cache: string,
++        key: string,
++        integrity: string,
++        opts: { metadata: unknown; size: number; time: number },
++    ): Promise<entry>;
++    export function find(cache: string, key: string): Promise<entry>;
++}

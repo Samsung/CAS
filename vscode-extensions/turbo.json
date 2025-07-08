@@ -1,0 +1,63 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"tasks": {
+		"cas#build": {
+			"dependsOn": [
+				"^check",
+				"@cas/webview#build"
+			]
+		},
+		"build": {
+			"inputs": [
+				"src/**",
+				"static/**",
+				"*.config.js",
+				"*.config.ts"
+			],
+			"outputs": [
+				"dist/**",
+				".svelte-kit/**"
+			],
+			"dependsOn": [
+				"^check",
+				"^build"
+			]
+		},
+		"check": {},
+		"watch": {
+			"persistent": true,
+			"inputs": [
+				"src/**",
+				"static/**",
+				"*.config.js",
+				"*.config.ts"
+			],
+			"outputs": [
+				"dist/**",
+				".svelte-kit/**"
+			]
+		},
+		"dev": {
+			"persistent": true,
+			"cache": false
+		},
+		"package:extension": {
+			"dependsOn": [
+				"^build"
+			],
+			"outputs": [
+				"*.vsix",
+				"dist/*.vsix"
+			]
+		},
+		"cas#package:extension": {
+			"dependsOn": [
+				"^build",
+				"cas-updater#package:extension"
+			],
+			"outputs": [
+				"*.vsix"
+			]
+		}
+	}
+}

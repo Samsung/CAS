@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html >
+
+<head>
+	<meta charset="utf-8" />
+	<link rel="icon" href="%sveltekit.assets%/favicon.png" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<base href="{{webview.baseUri}}" />
+	<script type="module" nonce="{{webview.nonce}}">
+		window.page = "{{webview.page}}"
+		const vscapi = acquireVsCodeApi();
+		window.acquireVsCodeApi = () => vscapi;
+	</script>
+	<link rel="stylesheet" href="%sveltekit.assets%/codicon.css" id="vscode-codicon-stylesheet">
+	%sveltekit.head%
+</head>
+
+<body data-sveltekit-preload-data="hover">
+	<div class="svelte-app" style="display: contents">%sveltekit.body%</div>
+</body>
+
+</html>

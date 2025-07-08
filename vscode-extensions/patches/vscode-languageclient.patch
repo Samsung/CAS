@@ -1,0 +1,13 @@
+diff --git a/lib/common/client.js b/lib/common/client.js
+index e49c166a72b82b877b67b18075f6731f415186ae..c42bffdffbc7768cd2a352ae98518cc80f382c54 100644
+--- a/lib/common/client.js
++++ b/lib/common/client.js
+@@ -774,7 +774,7 @@ class BaseLanguageClient {
+         }
+         catch (error) {
+             this.$state = ClientState.StartFailed;
+-            this.error(`${this._name} client: couldn't create connection to server.`, error, 'force');
++            this.error(`${this._name} client: couldn't create connection to server.`, error, false);
+             reject(error);
+         }
+         return this._onStart;

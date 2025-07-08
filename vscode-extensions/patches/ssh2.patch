@@ -1,0 +1,26 @@
+diff --git a/lib/protocol/constants.js b/lib/protocol/constants.js
+index ad7759257d6bdbcafa353dec8946258d64c14eb0..e51140594b0c757d1a5b05df6a3588453ff37872 100644
+--- a/lib/protocol/constants.js
++++ b/lib/protocol/constants.js
+@@ -3,9 +3,6 @@
+ const crypto = require('crypto');
+ 
+ let cpuInfo;
+-try {
+-  cpuInfo = require('cpu-features')();
+-} catch {}
+ 
+ const { bindingAvailable, CIPHER_INFO, MAC_INFO } = require('./crypto.js');
+ 
+diff --git a/package.json b/package.json
+index 06b143bc823c16e426a6331c8daf943b92d687b3..fdfd97596d3024811d300a53c7912d30af413ac5 100644
+--- a/package.json
++++ b/package.json
+@@ -16,7 +16,6 @@
+     "eslint": "^7.32.0"
+   },
+   "optionalDependencies": {
+-    "cpu-features": "~0.0.10",
+     "nan": "^2.20.0"
+   },
+   "scripts": {

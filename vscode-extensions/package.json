@@ -1,0 +1,72 @@
+{
+	"name": "cas-vscode-extensions",
+	"version": "0.21.10",
+	"description": "Monorepo for CAS-related VSCode tooling",
+	"scripts": {
+		"build": "turbo build",
+		"check": "turbo check",
+		"watch": "turbo run watch",
+		"dev": "turbo dev --concurrency 16",
+		"lint": "biome check",
+		"lint:fix": "biome check --write",
+		"package:extensions": "turbo package:extension && cpx -uv 'extensions/*/*.vsix' dist",
+		"package:cas": "turbo package:extension --filter cas",
+		"cas:watch:esbuild": "pnpm --filter cas watch:esbuild",
+		"cas:watch": "pnpm --filter cas watch",
+		"@cas/webview:dev": "turbo dev --filter @cas/webview",
+		"@cas/webview:watch": "turbo run watch --filter @cas/webview",
+		"clean": "rimraf -g ./extensions/*/dist ./packages/*/dist",
+		"clean:cache": "rimraf -g ./**/.turbo",
+		"clean:packages": "rimraf -g ./**/node_modules",
+		"clean:all": "pnpm run '/^clean($|:(?!all).+)/'",
+		"postinstall": "lefthook install",
+		"build:clangd": "BUILD_CLANGD=1 pnpm install --no-frozen-lockfile && mkdir -p .clangd && cmake -G Ninja -B .clangd -S node_modules/llvm-project/llvm -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra' -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build .clangd --target clangd && pnpm install --no-frozen-lockfile && ln -s $PWD/.clangd extensions/cas/.clangd"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension"
+	},
+	"license": "Apache-2.0",
+	"devDependencies": {
+		"@biomejs/biome": "2.0.0",
+		"cpx": "^1.5.0",
+		"lefthook": "^1.11.14",
+		"rimraf": "^6.0.1",
+		"turbo": "^2.5.4"
+	},
+	"optionalDependencies": {
+		"llvm-project": "catalog:"
+	},
+	"packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac",
+	"pnpm": {
+		"overrides": {
+			"postcss": "^8.4.47",
+			"svelte": "catalog:",
+			"@githubocto/tailwind-vscode>tailwindcss": "^4.1.6"
+		},
+		"onlyBuiltDependencies": [
+			"@biomejs/biome",
+			"@tailwindcss/oxide",
+			"@vscode/vsce-sign",
+			"core-js",
+			"cpu-features",
+			"esbuild",
+			"keytar",
+			"lefthook",
+			"protobufjs",
+			"ssh2",
+			"svelte-preprocess-react"
+		],
+		"patchedDependencies": {
+			"@types/cacache": "patches/@types__cacache.patch",
+			"vite": "patches/vite.patch",
+			"ssh2": "patches/ssh2.patch",
+			"vscode-languageclient": "patches/vscode-languageclient.patch",
+			"@foxglove/wasm-bz2": "patches/@foxglove__wasm-bz2.patch",
+			"18.x": "patches/clangd.patch"
+		}
+	},
+	"dependencies": {
+		"corepack": "^0.33.0"
+	}
+}
