@@ -1241,7 +1241,6 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 		case Stmt::UnaryExprOrTypeTraitExprClass:
 		case Stmt::PredefinedExprClass:
 		case Stmt::PackExpansionExprClass:
-		case Stmt::CXXTemporaryObjectExprClass:
 		case Stmt::CXXNullPtrLiteralExprClass:
 		case Stmt::CXXBoolLiteralExprClass:
 		case Stmt::DependentScopeDeclRefExprClass:
@@ -1309,6 +1308,7 @@ void DbJSONClassVisitor::lookForDeclRefWithMemberExprsInternal(const Expr* E, DR
 		case Stmt::UnresolvedMemberExprClass:
 		case Stmt::UnresolvedLookupExprClass:
 		case Stmt::CXXUnresolvedConstructExprClass:
+		case Stmt::CXXTemporaryObjectExprClass:
 		case Stmt::CXXThisExprClass:
 		{
 			ExprRef_t v;
@@ -1998,25 +1998,30 @@ bool DbJSONClassVisitor::lookForUnaryExprOrTypeTraitExpr(const Expr* E, std::vec
 	  switch (attr->getKind()) {
 	  	  case clang::attr::Aligned:
 	  	  {
-	  		  const AlignedAttr *a = cast<AlignedAttr>(attr);
-	  		  const Expr* e = a->getAlignmentExpr();
-                          if (e) {
-	  		      if (lookForUnaryExprOrTypeTraitExpr(e,QV)) break;
-	  		      else {
-	  		    	std::set<ValueHolder> refs;
-	  			    lookForDeclRefExprs(e,refs);
-	  			    if (refs.size()>0) {
-	  				    for (auto i=refs.begin(); i!=refs.end(); ++i) {
-	  					    if ((*i).getValue()->getKind()==Decl::EnumConstant) {
-	  						    const EnumConstantDecl *ECD = cast<EnumConstantDecl>((*i).getValue());
-							    const EnumDecl *ED = static_cast<const EnumDecl*>(ECD->getDeclContext());
-						 	    QualType ET = Context.getEnumType(ED);
-							    QV.push_back(ET);
-	  					    }
-	  				    }
-	  			    }
-	  		      }
-                          }
+	  		  const clang::AlignedAttr *a = cast<clang::AlignedAttr>(attr);
+			  if(!a->isAlignmentExpr()){
+				QV.push_back(a->getAlignmentType()->getType());
+			  }
+			  else{
+				const Expr* e = a->getAlignmentExpr();
+				if (e) {
+					if (lookForUnaryExprOrTypeTraitExpr(e,QV)) break;
+					else {
+						std::set<ValueHolder> refs;
+						lookForDeclRefExprs(e,refs);
+						if (refs.size()>0) {
+							for (auto i=refs.begin(); i!=refs.end(); ++i) {
+								if ((*i).getValue()->getKind()==Decl::EnumConstant) {
+									const EnumConstantDecl *ECD = cast<EnumConstantDecl>((*i).getValue());
+									const EnumDecl *ED = static_cast<const EnumDecl*>(ECD->getDeclContext());
+									QualType ET = Context.getEnumType(ED);
+									QV.push_back(ET);
+								}
+							}
+						}
+					}
+				}
+			  }
 	  		  break;
 	  	  }
 	  	  default:
@@ -2127,6 +2132,11 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
 					  }
 				  }
 			  }
+		  }
+		  break;
+		  case Type::DeducedTemplateSpecialization:
+		  {
+		  	const DeducedTemplateSpecializationType *tp = cast<DeducedTemplateSpecializationType>(T);
 		  }
 		  break;
 		  case Type::DependentTemplateSpecialization:

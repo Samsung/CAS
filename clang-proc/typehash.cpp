@@ -610,6 +610,16 @@ std::string json_escape( const std::string &str ) {
 			typeString.append(ss.str());
 		  }
 		  break;
+		  case Type::DeducedTemplateSpecialization:
+		  {
+			const DeducedTemplateSpecializationType *tp = cast<DeducedTemplateSpecializationType>(T);
+			std::stringstream ss;
+			ss << "DCTS:" << qualifierString << ":";
+			QualType Qtp = QualType(tp,0);
+			ss << json_escape(Qtp.getAsString()) << ";";
+			typeString.append(ss.str());
+		  }
+		  break;
 		  case Type::DependentTemplateSpecialization:
 		  {
 		  	const DependentTemplateSpecializationType *tp = cast<DependentTemplateSpecializationType>(T);

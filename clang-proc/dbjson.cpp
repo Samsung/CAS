@@ -3562,6 +3562,17 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  }
 		  }
 		  break;
+		  case Type::DeducedTemplateSpecialization:
+		  {
+			  const DeducedTemplateSpecializationType *tp = cast<DeducedTemplateSpecializationType>(T);
+			  TOut << Indent << "\t\t\"class\": \"" << "record_specialization" << "\",\n";
+			  TOut << Indent << "\t\t\"str\": \"" << "DCT<X>" << "\",\n";
+			  TOut << Indent << "\t\t\"dependent\": " << tp->isDependentType() << ",\n";
+			  TOut << Indent << "\t\t\"cxxrecord\": " << "true" << ",\n";
+			  TOut << Indent << "\t\t\"refs\": " << "[]" << ",\n";
+			  TOut << Indent << "\t\t\"usedrefs\": " << "[]" << "\n";
+		  }
+		  break;
 		  case Type::DependentTemplateSpecialization:
 		  {
 			  const DependentTemplateSpecializationType *tp = cast<DependentTemplateSpecializationType>(T);

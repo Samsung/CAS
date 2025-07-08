@@ -521,6 +521,14 @@ void DbJSONClassVisitor::notice_field_attributes(RecordDecl* rD, std::vector<Qua
 			  }
 		  }
 		  break;
+		  case Type::DeducedTemplateSpecialization:
+		  {
+			  const DeducedTemplateSpecializationType *tp = cast<DeducedTemplateSpecializationType>(T);
+			  DBG(DEBUG_NOTICE, llvm::outs() << "@notice DeducedTemplateSpecialization (" << qualifierString << ")\n";
+			  	  	  tp->dump() );
+			  assert(!tp->isSugared() && "Skipped sugar DeducedTemplateSpecialization type added to database");
+		  }
+		  break;
 		  case Type::DependentTemplateSpecialization:
 		  {
 			  const DependentTemplateSpecializationType *tp = cast<DependentTemplateSpecializationType>(T);
