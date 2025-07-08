@@ -1,0 +1,28 @@
+{
+	"additionalProperties": true,
+	"optionalProperties": {
+		"template_mapping": {
+			"elements": {
+				"type": "string"
+			}
+		},
+		"view": {
+			"elements": {
+				"type": "string"
+			}
+		},
+		"changelist": {
+			"type": "uint32"
+		},
+		"changelists": {
+			"elements": {
+				"type": "uint32"
+			}
+		},
+		"partials": {
+			"elements": {
+				"type": "uint32"
+			}
+		}
+	}
+}

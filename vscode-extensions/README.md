@@ -16,6 +16,10 @@ You can also use a command:
 
 ## Usage
 
+Currently there are two extensions included:
+[main CAS extension](extensions/cas) and [cas-p4](extensions/p4) which adds
+support for downloading perforce-based workspaces.
+
 ### CAS Server usage
 
 The extension supports CAS-server based functionality, including:
@@ -39,6 +43,7 @@ The extension supports CAS-server based functionality, including:
 - includes several ways of getting sources into the generated workspace:
   - local files (meant for working on the same device the database was generated on)
   - sftp
+  - perforce (requires installation of cas-p4 plugin)
 > [!NOTE]
 > workspace generators other than `local` require a manifest setup
 - supports updating the workspaces to add or remove files
@@ -91,17 +96,19 @@ This monorepo is divided into two main package sources - `extensions` for all
 packages that ultimately result in an extension `vsix` file and `packages` for
 everything else.
 
-Currently there is one extension included:
+Currently there are two extensions included:
 
 - [CAS](extensions/cas): the "main" extension containing most of the relevant
   featues
+- [CAS-P4](extensions/p4): support for Perforce-based workspaces generated via
+  the [CAS extension](extensions/cas)
 
 ### Debugging
 
 The easiest way to check and debug the extensions is by using one of the
 included VSCode launch configurations:
 
-![screenshot of available launch configurations - Run Extensions, Run Extension (cas) and Run Extensions (production)](media/debug-configurations.png)
+![screenshot of available launch configurations - Run Extensions, Run Extension (cas), Run Extension (p4) and Run Extensions (production)](media/debug-configurations.png)
 
 The default configuration preferred for most use cases is Run Extensions, as it
 will allow for simultaincously debugging all included extensions.

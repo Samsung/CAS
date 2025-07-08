@@ -12,8 +12,10 @@
 			"args": [
 				"--enable-source-maps",
 				"--extensionDevelopmentPath=${workspaceFolder}/extensions/cas",
+				"--extensionDevelopmentPath=${workspaceFolder}/extensions/p4",
 				"--enable-proposed-api=mbsec.cas",
-				"--log=Samsung.cas:trace"
+				"--log=Samsung.cas:trace",
+				"--log=Samsung.cas-p4:trace"
 			],
 			"debugWebviews": true,
 			"sourceMaps": true,
@@ -53,14 +55,32 @@
 			"trace": true
 		},
 		{
+			"name": "Run Extension (p4)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--enable-source-maps",
+				"--extensionDevelopmentPath=${workspaceFolder}/extensions/p4",
+				"--enable-proposed-api=mbsec.cas",
+				"--log=Samsung.cas-p4:trace",
+			],
+			"outFiles": [
+				"${workspaceFolder}/extensions/*/dist/**/*.js",
+			],
+			"preLaunchTask": "dev",
+			"trace": true
+		},
+		{
 			"name": "Run Extensions (production)",
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
 				"--enable-source-maps",
 				"--extensionDevelopmentPath=${workspaceFolder}/extensions/cas",
+				"--extensionDevelopmentPath=${workspaceFolder}/extensions/p4",
 				"--enable-proposed-api=mbsec.cas",
 				"--log=Samsung.cas:trace",
+				"--log=Samsung.cas-p4:trace",
 				"-c",
                 "Release"
 			],
@@ -81,8 +101,11 @@
 				"--enable-source-maps",
 				"--extensionDevelopmentPath=${workspaceFolder}/extensions/cas",
 				"--extensionTestsPath=${workspaceFolder}/extensions/cas/dist/test/suite/index",
+				"--extensionTestsPath=${workspaceFolder}/extensions/p4/dist/test/suite/index",
+				"--extensionDevelopmentPath=${workspaceFolder}/extensions/p4",
 				"--enable-proposed-api=mbsec.cas",
 				"--log=Samsung.cas:trace",
+				"--log=Samsung.cas-p4:trace",
 				"--log=Samsung.CAS:trace"
 			],
 			"outFiles": [

@@ -10,6 +10,7 @@
 	"typescript.tsc.autoDetect": "off",
 	"typescript.tsdk": "node_modules/typescript/lib",
 	"npm.packageManager": "pnpm",
+	"cas.server": "/home/j.blizniuk/projects/CAS/cas_server.py",
 	"editor.defaultFormatter": "biomejs.biome",
 	"[javascript]": {
 		"editor.defaultFormatter": "vscode.typescript-language-features"

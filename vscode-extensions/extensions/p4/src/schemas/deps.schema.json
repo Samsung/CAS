@@ -1,0 +1,52 @@
+{
+	"additionalProperties": true,
+	"properties": {
+		"entries": {
+			"elements": {
+				"additionalProperties": true,
+				"properties": {
+					"filename": {
+						"type": "string"
+					}
+				},
+				"optionalProperties": {
+					"original_path": {
+						"type": "string"
+					},
+					"ppid": {
+						"type": "float64"
+					},
+					"type": {
+						"type": "string"
+					},
+					"access": {
+						"type": "string"
+					},
+					"exists": {
+						"type": "uint8"
+					},
+					"link": {
+						"type": "uint8"
+					}
+				}
+			}
+		}
+	},
+	"optionalProperties": {
+		"count": {
+			"type": "float64"
+		},
+		"page": {
+			"type": "float64"
+		},
+		"page_max": {
+			"type": "float64"
+		},
+		"entries_per_page": {
+			"type": "float64"
+		},
+		"num_entries": {
+			"type": "float64"
+		}
+	}
+}

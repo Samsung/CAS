@@ -1,0 +1,193 @@
+{
+	"name": "cas-p4",
+	"displayName": "CAS P4 Workspace",
+	"description": "Synchronizes a workspace created by cas extension to the file system",
+	"version": "0.2.4",
+	"publisher": "Samsung",
+	"engines": {
+		"vscode": "^1.101.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"workspaceContains:deps.json"
+	],
+	"main": "./dist/extension.js",
+	"repository": "https://github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension",
+	"contributes": {
+		"commands": [
+			{
+				"command": "cas-p4.setMappingTemplatePath",
+				"title": "Set mapping template path"
+			},
+			{
+				"command": "cas-p4.fetchWorkspace",
+				"title": "Create or update P4 workspace from deps.json",
+				"enablement": "cas-p4.depsDetected"
+			},
+			{
+				"command": "cas-p4.deleteWorkspace",
+				"title": "Delete local P4 workspace",
+				"enablement": "cas-p4.depsDetected"
+			},
+			{
+				"command": "cas-p4.sync",
+				"title": "Synchronize P4 workspace",
+				"enablement": "cas-p4.depsDetected"
+			}
+		],
+		"configuration": {
+			"type": "object",
+			"title": "CAS Fetch Workspace",
+			"properties": {
+				"cas-p4.mappingTemplatePath": {
+					"type": "string",
+					"scope": "resource",
+					"description": "Path to a workspace mapping JSON file",
+					"default": "${userHome}/workspace_mapping.json"
+				},
+				"cas-p4.p4Path": {
+					"type": "string",
+					"scope": "resource",
+					"description": "Path to a workspace mapping JSON file",
+					"default": "p4"
+				},
+				"cas-p4.maxP4Tries": {
+					"type": "number",
+					"scope": "resource",
+					"description": "Path to a workspace mapping JSON file",
+					"default": 5
+				},
+				"cas-p4.systemBuildMapping": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"cas-p4.vendorBuildMapping": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"cas-p4.systemClSync": {
+					"type": "integer"
+				},
+				"cas-p4.systemClPartial": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					}
+				},
+				"cas-p4.vendorClSync": {
+					"type": "integer"
+				},
+				"cas-p4.vendorClPartial": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					}
+				},
+				"cas-p4.p4Server": {
+					"type": "string",
+					"description": "P4 server (and port) to use"
+				},
+				"cas-p4.useArtifactoryExtraction": {
+					"title": "Use server-side extraction on Artifactory archives",
+					"type": "boolean",
+					"default": false
+				}
+			}
+		},
+		"walkthroughs": [
+			{
+				"id": "setup",
+				"title": "Set up CAS workspace plugin",
+				"description": "Follow these steps to finish setup",
+				"steps": [
+					{
+						"id": "template_mapping_path",
+						"title": "Set up a template_mapping.json Path",
+						"description": "Set a valid path to a mapping file\n[Select File](command:cas-p4.setMappingTemplatePath)",
+						"media": {
+							"markdown": "media/workspace.md"
+						},
+						"completionEvents": [
+							"onSettingChanged:cas-p4.mappingTemplatePath"
+						]
+					},
+					{
+						"id": "cas_extension",
+						"title": "Install main CAS extension",
+						"description": "You might also want to install the [CAS extension](https://github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension)",
+						"media": {
+							"image": "media/cas-logo.png",
+							"altText": "CAS logo"
+						},
+						"completionEvents": [
+							"onExtensionInstalled:Samsung.cas"
+						]
+					}
+				]
+			}
+		]
+	},
+	"scripts": {
+		"vscode:prepublish": "pnpm run package",
+		"compile": "pnpm run check && node esbuild.mjs",
+		"build": "pnpm compile",
+		"dev": "pnpm watch",
+		"watch": "pnpm run --stream \"/^watch:.*$/\"",
+		"watch:esbuild": "node esbuild.mjs --watch",
+		"watch:tsc": "tsc --preserveWatchOutput --noEmit --watch --project tsconfig.json",
+		"package": "pnpm run check && node esbuild.mjs --production",
+		"package:extension": "vsce package",
+		"compile-tests": "tsc -p . --outDir out",
+		"watch-tests": "tsc -p . -w --outDir out",
+		"pretest": "pnpm run compile-tests && pnpm run compile",
+		"check": "tsc --noEmit",
+		"test": "vscode-test"
+	},
+	"devDependencies": {
+		"@cas/deps": "workspace:*",
+		"@cas/helpers": "workspace:*",
+		"@cas/http": "workspace:*",
+		"@cas/manifest": "workspace:*",
+		"@cas/tsconfig": "workspace:*",
+		"@foxglove/wasm-bz2": "^0.1.1",
+		"@opliko/eventual-result": "^0.12.1",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "catalog:",
+		"@types/object-inspect": "^1.13.0",
+		"@types/stream-chain": "^2.1.0",
+		"@types/stream-json": "^1.7.8",
+		"@types/triple-beam": "catalog:",
+		"@types/vscode": "^1.101.0",
+		"@vscode/test-cli": "catalog:",
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.5.0",
+		"@zip.js/zip.js": "^2.7.62",
+		"ajv": "^8.17.1",
+		"esbuild": "catalog:",
+		"logform": "2.7.0",
+		"lru-cache": "catalog:",
+		"object-inspect": "catalog:",
+		"stream-chain": "^3.4.0",
+		"stream-json": "^1.9.1",
+		"triple-beam": "catalog:",
+		"typescript": "catalog:",
+		"winston": "catalog:",
+		"winston-transport-vscode": "catalog:",
+		"yaml": "^2.8.0"
+	},
+	"packageManager": "pnpm@9.6.0",
+	"vsce": {
+		"dependencies": false,
+		"baseContentUrl": "github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension",
+		"baseImagesUrl": "github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension"
+	},
+	"extensionDependencies": [
+		"Samsung.cas"
+	]
+}

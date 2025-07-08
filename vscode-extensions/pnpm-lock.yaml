@@ -293,6 +293,99 @@ importers:
         specifier: 1.0.12
         version: 1.0.12
 
+  extensions/p4:
+    devDependencies:
+      '@cas/deps':
+        specifier: workspace:*
+        version: link:../../packages/deps
+      '@cas/helpers':
+        specifier: workspace:*
+        version: link:../../packages/helpers
+      '@cas/http':
+        specifier: workspace:*
+        version: link:../../packages/http
+      '@cas/manifest':
+        specifier: workspace:*
+        version: link:../../packages/manifest
+      '@cas/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@foxglove/wasm-bz2':
+        specifier: ^0.1.1
+        version: 0.1.1(patch_hash=c910f421fbf6ffdc9ccb619bb23b3cfd393163618ba8e7f72d0c9bb6a8177876)
+      '@opliko/eventual-result':
+        specifier: ^0.12.1
+        version: 0.12.1
+      '@types/mocha':
+        specifier: ^10.0.10
+        version: 10.0.10
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.0.3
+      '@types/object-inspect':
+        specifier: ^1.13.0
+        version: 1.13.0
+      '@types/stream-chain':
+        specifier: ^2.1.0
+        version: 2.1.0
+      '@types/stream-json':
+        specifier: ^1.7.8
+        version: 1.7.8
+      '@types/triple-beam':
+        specifier: 'catalog:'
+        version: 1.3.5
+      '@types/vscode':
+        specifier: ^1.101.0
+        version: 1.101.0
+      '@vscode/test-cli':
+        specifier: 'catalog:'
+        version: 0.0.11
+      '@vscode/test-electron':
+        specifier: ^2.5.2
+        version: 2.5.2
+      '@vscode/vsce':
+        specifier: ^3.5.0
+        version: 3.5.0
+      '@zip.js/zip.js':
+        specifier: ^2.7.62
+        version: 2.7.62
+      ajv:
+        specifier: ^8.17.1
+        version: 8.17.1
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.25.5
+      logform:
+        specifier: 2.7.0
+        version: 2.7.0
+      lru-cache:
+        specifier: 'catalog:'
+        version: 11.1.0
+      object-inspect:
+        specifier: 'catalog:'
+        version: 1.13.4
+      stream-chain:
+        specifier: ^3.4.0
+        version: 3.4.0
+      stream-json:
+        specifier: ^1.9.1
+        version: 1.9.1
+      triple-beam:
+        specifier: 'catalog:'
+        version: 1.4.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.8.3
+      winston:
+        specifier: 'catalog:'
+        version: 3.17.0
+      winston-transport-vscode:
+        specifier: 'catalog:'
+        version: 0.1.0(winston@3.17.0)
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.0
+
   extensions/updater:
     devDependencies:
       '@cas/helpers':
@@ -992,6 +1085,9 @@ packages:
   '@formatjs/intl-localematcher@0.6.1':
     resolution: {integrity: sha512-ePEgLgVCqi2BBFnTMWPfIghu6FkbZnnBVhO2sSxvLfrdFw7wCHAHiDoM2h4NRgjbaY7+B7HgOLZGkK187pZTZg==}
 
+  '@foxglove/wasm-bz2@0.1.1':
+    resolution: {integrity: sha512-huMVZ//J9S1TAh689pj7U5tstbmtGhH1g9/HCj9jE3UPaLF83dTeJIOLE0+pe16ha1iH4QRvYgv35aykikHkvA==}
+
   '@githubocto/tailwind-vscode@1.0.5':
     resolution: {integrity: sha512-RP2fFkom0VwdxVz2SNHQPSpKzUYKWeu8YCFa+Cmjz2FzVEERsjO8OGHiv3JL2A7/R9CUY0W3HFBj+MvlFy9hqQ==}
     peerDependencies:
@@ -1574,6 +1670,9 @@ packages:
     engines: {node: '>=20.0.0'}
     peerDependencies:
       svelte: ^5.34.3
+
+  '@opliko/eventual-result@0.12.1':
+    resolution: {integrity: sha512-p4MPqPt0dpbjDN5ao/o8QrcVBsALDOQF7W5rQXulU0oGzyWAUUqmg7sienvH2iVBqaoKE7s/WYnt6eGBtm8x5w==}
 
   '@opliko/vscode-js-profile-core@1.0.21':
     resolution: {integrity: sha512-NjnTeoD4SB3u5B6kpqVrAEybybo+RTqi+1JJT6TrFjqwc9Dk4nIrQQ0BLvgzaK1qeZvYfVdccDEFNeDktNadmQ==}
@@ -5406,6 +5505,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@foxglove/wasm-bz2@0.1.1(patch_hash=c910f421fbf6ffdc9ccb619bb23b3cfd393163618ba8e7f72d0c9bb6a8177876)':
+    dependencies:
+      tslib: 2.8.1
+
   '@githubocto/tailwind-vscode@1.0.5(tailwindcss@4.1.10)':
     dependencies:
       tailwindcss: 4.1.10
@@ -6239,6 +6342,8 @@ snapshots:
     dependencies:
       ag-grid-community: 33.3.2
       svelte: 5.34.3
+
+  '@opliko/eventual-result@0.12.1': {}
 
   '@opliko/vscode-js-profile-core@1.0.21':
     dependencies:
@@ -9984,8 +10089,7 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  yaml@2.8.0:
-    optional: true
+  yaml@2.8.0: {}
 
   yargs-parser@21.1.1: {}
 

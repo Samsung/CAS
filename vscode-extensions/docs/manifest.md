@@ -22,7 +22,7 @@ All keys under `cas.manifest` are optional. In rough order of importance the ava
   - `type` - `file` or `url` - `file` starts local server with a give nfsdb path while `url` links to an existing server URL 
   - `path` - path to `.nfsdb` or URL to a running server
 - `sourceRepo` - where to get the files from
-  - `type` - `local`, `sftp`
+  - `type` - `local`, `sftp`, `p4` (note: `p4` requires `cas-p4` plugin)
   - for `"type": "local"`:
     - `sourceRoot` - root path the files should be linked from, if different than in BAS database
   - for `"type": "sftp"`
@@ -31,6 +31,16 @@ All keys under `cas.manifest` are optional. In rough order of importance the ava
     - `port` - defaults to 22
     - `username` - what user to connect as
     - `keyFile` - path to private key file to use when connecting, password auth is not supported.
+  - for `"type": "p4"`
+    - `server` - p4 server address
+    - `mappings` - a list of mapping objects defining where files are found on P4
+      - `mapping` - list of string mappings
+      - `clSync` - main changelist to sync to
+      - `clPartial` - list of partial changelests to sync to
+      - `rootPath` - the path this mapping is mapped to - e.g. `system` or `vendor`
+    - `cleanSourceList` - url or path to a file with a list of files from before the build
+    - `intermediateArchive` - url, path or an object with `url` and `artifactory` (boolean) properties (e.g. `{"url": "...", "artifactry": true}`) to an archive with intermediate files from the build, required in cases of files that are not in perforce
+      note: `artifactory` links use artifactory optimization to allow for downloading individual files instead of the whole archive
   - `opengrok` - OpenGrok setup
     - `url` - link to the OG instance
     - `apiKey` - API key, required for most OG functionality
@@ -77,12 +87,27 @@ A rough more json-like schema from [#69](https://github.sec.samsung.net/CO7-SRPO
             },
             "sourceRepo": { // required=False
                 // If not used the "local" repo type is assumed
-                "type": <string:"local">|<string:"sftp">,
+                "type": <string:"local">|<string:"p4">|<string:"sftp">,
                 // <local specific keys>
                 "sourceRoot": <string>, // Only required in "local" and "sftp" repo type to point to existing source directory
                                         // When using other source type the source directory is created in workspace directory
                                         // If this key is not present the source root is taken from the BAS database
                                         // (if BAS related features are disabled then no source directory will be created)
+                // <p4 specific keys>
+                "server": <string>,
+                "mappings": [
+                    {
+                        "clSync": <int>,
+                        "clPartial": [<int>,(...)],
+                        "mapping": { <p4Mapping> },
+                        "rootPath": <string>
+                    }
+                ],
+                cleanSourceList: <string/url>,
+                intermediateArchive: { 
+                	"url": <string>,
+                	"aftifactory": <boolean> // optional, assumed false
+                },
                 // <sftp specific keys>
                 "sourceRoot": <string>,
                 "hostname": <string>,

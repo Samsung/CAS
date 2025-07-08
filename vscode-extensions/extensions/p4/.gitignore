@@ -1,0 +1,10 @@
+out
+dist
+node_modules
+.vscode-test/
+*.vsix
+
+deps*.json
+!deps.schema.json
+workspace_mapping.json
+ws.yaml
