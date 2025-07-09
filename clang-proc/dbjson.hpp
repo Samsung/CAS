@@ -78,6 +78,8 @@ public:
     while (!BaseType->isSpecifierType()) {
       if (isa<TypedefType>(BaseType))
         break;
+      if (isa<UsingType>(BaseType))
+        break;
       else if (const PointerType* PTy = BaseType->getAs<PointerType>())
         BaseType = PTy->getPointeeType();
       else if (const BlockPointerType *BPy = BaseType->getAs<BlockPointerType>())
@@ -1370,6 +1372,8 @@ public:
     QualType BaseType = T;
     while (!BaseType->isSpecifierType()) {
       if (isa<TypedefType>(BaseType))
+        break;
+      if (isa<UsingType>(BaseType))
         break;
       else if (const PointerType* PTy = BaseType->getAs<PointerType>())
         BaseType = PTy->getPointeeType();
