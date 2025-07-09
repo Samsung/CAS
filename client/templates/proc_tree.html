@@ -4,7 +4,7 @@
 {{ super() }}
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script>let ctx = "{{web_ctx}}" </script>
-    <script src="{{ url_for('static', path = '/main.js')}}"></script>
+    <script src="{{ relative_url_for(request, 'static', path = '/main.js')}}"></script>
 {% endblock %}
 {% block content %}
 <div class="sticky">
@@ -173,7 +173,7 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('static', path = '/modal.js')}}"></script>
+<script src="{{ relative_url_for(request, 'static', path = '/modal.js')}}"></script>
 
 <div class="modal fade" id="search_modal" tabindex="-1" aria-labelledby="search_modalLabel" aria-hidden="true"  data-bs-backdrop="static">
   <div class="modal-dialog modal-xl">

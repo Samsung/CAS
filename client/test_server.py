@@ -47,7 +47,7 @@ def is_status_for(response: Response, db_key) -> bool:
             "loaded_config" in response.json()[db_key] and \
             "last_access" in response.json()[db_key] and \
             "image_version" in response.json()[db_key] and \
-            "db_verison" in response.json()[db_key]
+            "db_version" in response.json()[db_key]
 
 def check_opens(response: Response):
     for i in response.json()['entries']:

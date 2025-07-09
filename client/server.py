@@ -72,7 +72,7 @@ class DBProvider:
                 "ftdb": None,
                 "config": None,
                 "last_access": None,
-                "db_verison": libcas.CASDatabase.get_db_version(nfsdb_path),
+                "db_version": libcas.CASDatabase.get_db_version(nfsdb_path),
                 "image_version": libcas.CASDatabase.get_img_version(nfsdb_path)
             }
             tmp_db_map[db_key]["ftdb_files"] = [x for x in ftfiles if os.path.join(ft_dir, db_key) in x]
@@ -95,7 +95,7 @@ class DBProvider:
                 "ftdb": None,
                 "config": None,
                 "last_access": None,
-                "db_verison": libcas.CASDatabase.get_db_version(nfsdb_path),
+                "db_version": libcas.CASDatabase.get_db_version(nfsdb_path),
                 "image_version": libcas.CASDatabase.get_img_version(nfsdb_path)
             }
 
@@ -165,7 +165,7 @@ class DBProvider:
                     "loaded_config": self.db_map[db]["config"].config_file if self.db_map[db]["config"] else None,
                     "last_access": self.db_map[db]["last_access"],
                     "image_version": self.db_map[db]["image_version"],
-                    "db_verison": self.db_map[db]["db_verison"]
+                    "db_version": self.db_map[db]["db_version"]
                 }
             }
         for db_name in self.db_map:
@@ -180,7 +180,7 @@ class DBProvider:
                 "loaded_config": self.db_map[db_name]["config"].config_file if self.db_map[db_name]["config"] else None,
                 "last_access": self.db_map[db_name]["last_access"],
                 "image_version": self.db_map[db_name]["image_version"],
-                "db_verison": self.db_map[db_name]["db_verison"]
+                "db_version": self.db_map[db_name]["db_version"]
             }
         if db and db not in self.db_map:
             raise EndpointException(f"Endpoint database '{db}' does not exists!")

@@ -9,6 +9,8 @@ from os import path
 import os
 from typing import Dict, cast
 from fastapi import APIRouter, FastAPI, Request, Response
+from starlette.background import BackgroundTask
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.routing import APIRoute
 from fastapi.templating import Jinja2Templates
@@ -60,13 +62,12 @@ def get_host_from_endpoint(endpoint):
         return None
 
 
-
 async def status_request(host: str, endpoint: URL):
     try:
         response = await client.get(url=endpoint.join("status"), timeout=5)
-    except RequestError as e:
+        return host, response.json()
+    except (RequestError, json.JSONDecodeError) as e:
         return host, {"ERROR": str(e)}
-    return host, response.json()
 
 async def get_status():
     ret = {}
@@ -119,22 +120,25 @@ def setup_proxy():
         
         if db is not None and BACKEND_SERVERS_STATUS.get(db, None) is not None:
             proxied_url = URL(cast(str, BACKEND_SERVERS_STATUS[db]["url"]))
-            resp = await client.request(
+            headers = request.headers.mutablecopy()
+            headers["X-Forwarded-For"] = request.headers.get("X-Forwarded-For", request.client.host if request.client else "")
+            headers["X-Forwarded-Host"] = request.headers.get("X-Forwarded-Host", request.url.hostname or host)
+            headers["X-Forwarded-Scheme"] = request.headers.get("X-Forwarded-Scheme", request.headers.get("X-Forwarded-Proto", "http"))
+            headers["X-Forwarded-Proto"] = headers["X-Forwarded-Scheme"]
+            req = client.build_request(
                 url=proxied_url.join(path),
                 method=request.method,
-                follow_redirects=True,
                 content=request.stream(),
                 cookies=request.cookies,
-                headers={
-                    "X-Forwarded-For": request.client.host if request.client else "",
-                    **request.headers
-                },
-                timeout=Timeout(None)
+                headers=headers,
+                timeout=Timeout(None),
             )
-            return Response(
-                content=resp.content,
+            resp = await client.send(req, stream=True, follow_redirects=True)
+            return StreamingResponse(
+                content=resp.aiter_raw(),
                 status_code=resp.status_code,
                 headers=resp.headers,
+                background=BackgroundTask(resp.aclose),
             )
             
         return await call_next(request)

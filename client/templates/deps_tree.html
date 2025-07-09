@@ -4,7 +4,7 @@
 {{ super() }}
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script>let ctx = "{{web_ctx}}"</script>
-    <script src="{{ url_for('static', path = '/deps.js') }}"></script>
+    <script src="{{ relative_url_for(request, 'static', path = '/deps.js') }}"></script>
 {% endblock %}
 {% block content %}
 
@@ -78,7 +78,7 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('static', path = '/deps_modal.js')}}"></script>
+<script src="{{ relative_url_for(request, 'static', path = '/deps_modal.js')}}"></script>
 
 {% if exe and exe["count"] > exe["num_entries"] %}
 <script>

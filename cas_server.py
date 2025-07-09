@@ -6,7 +6,7 @@ import os
 import sys
 
 from fastapi.routing import APIRoute
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, RootModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
@@ -18,10 +18,10 @@ except ModuleNotFoundError:
 
 from argparse import Namespace
 from functools import lru_cache
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, Dict, List, Optional, Literal
+from typing_extensions import TypedDict
 
 from os import path
-import json
 import math
 import argparse
 from shlex import split as shell_split
@@ -224,9 +224,26 @@ def process_info_renderer(exe: nfsdbEntry, page=0, maxEntry=50):
         })
     return ret
 
+ChildData = TypedDict("ChildData", {
+    "class": Literal["compiler", "linker", "command"],
+    "pid": int,
+    "idx": int,
+    "ppid": int,
+    "pidx": int,
+    "bin": str,
+    "cmd": List[str],
+    "cwd": str,
+    "pipe_eids": List[str],
+    "stime": int  | Literal[""],
+    "etime": int,
+    "children": int | List["ChildData"],
+    "wpid": int | Literal[""],
+    "open_len": int
+})
+    
 
-def child_renderer(exe: nfsdbEntry, cas_db: CASDatabase | None = None, depth: int = 0):
-    ret = {
+def child_renderer(exe: nfsdbEntry, cas_db: CASDatabase | None = None, depth: int = 0) -> ChildData:
+    ret: ChildData = {
         "class": "compiler" if exe.compilation_info is not None
         else "linker" if exe.linked_file is not None
         else "command",
@@ -288,11 +305,15 @@ def get_webctx(ctx: str, db: str) -> str:
     ret = path.join(ctx, db).removeprefix("/").removesuffix("/")
     return f"/{ret}/".replace("//", "/")
 
+def relative_url_for(request: Request, name: str, **path_params: Any) -> str:
+    url = request.url_for(name, **path_params)
+    return url.path
+templates.env.globals["relative_url_for"] = relative_url_for
+
 
 @cas_router.get('/reload_ftdb')
-def reload_ftdb(db: str = "", path: str | None = None):
-    if path is None:
-        return "Path to ftdb image not provided"
+def reload_ftdb(path: Annotated[str, Query(description="Path the the database file to load")], db: str = ""):
+    """Reloads the ftdb database from a new image file"""
     dbs.switch_ftdb(db, path)
     return "DB reloaded"
 
@@ -305,9 +326,10 @@ class RawCmd(BaseModel):
 def get_raw_cmd(
                 request: Request,
                 db: str = "", 
-                cmd: str | None = None,
+                cmd: Annotated[str | None, Query(description="Command to execute")] = None,
                 cmd_body: RawCmd | None = None,
                 ):
+    """Executes a CAS command or pipeline from a string, just like CLI would"""
     org_url = request.url
     raw_cmd = cmd or (cmd_body and cmd_body.cmd)
     if raw_cmd:
@@ -324,6 +346,7 @@ def get_raw_cmd(
 
 @cas_router.get('/proc_tree', response_class=HTMLResponse)
 def proc_tree(request: Request, pid: int | None = None, idx: int | None = None, db: str = ""):
+    """Process tree web UI"""
     cas_db = dbs.get_nfsdb(db)
     if pid is not None and idx is None:
         entries = cas_db.get_entries_with_pid(pid)
@@ -351,32 +374,65 @@ def proc_tree(request: Request, pid: int | None = None, idx: int | None = None, 
     return templates.TemplateResponse(name='proc_tree.html', request=request, context={"exe": root_exe, "web_ctx": get_webctx(args.ctx, db)})
 
 @cas_router.get('/proc', response_class=ORJSONResponse)
-def proc(pid: int, idx: int, db: str = "", page: int = 0):
+def proc(
+        pid: Annotated[int, Query(description="Process ID")],
+        idx: Annotated[int, Query(description="Process index, for discriminating processes with same pid")],
+        db: str = "",
+        page: Annotated[int, Query(ge=0, description="Page number for open files results")] = 0,
+        ) -> Response:
+    """Returns detailed process information including:
+    - Process metadata (PID, index, parent info)
+    - Command and working directory
+    - Open files (paginated)
+    - Compilation/linking details if applicable
+    """
     
     cas_db = dbs.get_nfsdb(db)
     data = process_info_renderer(cas_db.get_exec(pid, idx), page)
     return ORJSONResponse(data)
 
 
-@cas_router.get('/proc_lookup')
-def proc_lookup(pid: int, idx: int, db: str = ""):
-
+@cas_router.get('/proc_lookup', response_class=ORJSONResponse)
+def proc_lookup(
+        pid: Annotated[int, Query(description="Process ID")],
+        idx: Annotated[int, Query(description="Process index, for discriminating processes with same pid")],
+        db: str = "",
+        ) -> ChildData:
+    """Returns basic process information including:
+    - Process ID and index
+    - Parent process info (if available)
+    - Command and working directory
+    - Number of child processes
+    Returns data in same format as children_of endpoint
+    """
     cas_db = dbs.get_nfsdb(db)
     data = child_renderer(cas_db.get_exec(pid, idx))
     return data
 
+class ChildResponse(BaseModel):
+    count: int
+    pages: int
+    page: int
+    children: List[ChildData]
 
-@cas_router.get('/children', response_class=ORJSONResponse)
+@cas_router.get('/children', response_class=ORJSONResponse, response_model=ChildResponse)
 def children_of(
-                pid: Annotated[int, Query(ge=0)],
-                idx: Annotated[int, Query(ge=0)],
-                db: str = "",
-                etime_sort: bool = False,
-                hide_empty: bool = False,
-                max_results: Annotated[int, Query(ge=0)] = 20,
-                depth: Annotated[int, Query(ge=0)] = 0,
-                page: Annotated[int, Query(ge=0)] = 0,
-                ):
+        pid: Annotated[int, Query(ge=0, description="Parent process ID")],
+        idx: Annotated[int, Query(ge=0, description="Parent process index")],
+        db: str = "",
+        etime_sort: Annotated[bool, Query(description="Sort children by execution time instead of PID")] = False,
+        hide_empty: Annotated[bool, Query(description="Hide processes with no children/files/commands")] = False,
+        max_results: Annotated[int, Query(ge=0, description="Maximum number of results per page")] = 20,
+        depth: Annotated[int, Query(ge=0, description="Recursion depth (0 for direct children only)")] = 0,
+        page: Annotated[int, Query(ge=0, description="Page number for paginated results")] = 0,
+        ) -> ORJSONResponse:
+    """Returns a paginated list of child processes with options to:
+    - Sort by execution time or process ID
+    - Filter out empty processes
+    - Control recursion depth
+    - Paginate results
+    Returns data in same format as proc_lookup endpoint
+    """
     cas_db = dbs.get_nfsdb(db)
     e = cas_db.get_exec(pid, idx)
     execs = cas_db.get_eids([(c.pid,) for c in e.child_cids])
@@ -391,12 +447,21 @@ def children_of(
     result = {"count": len(execs), "pages": pages, "page": page, "children": data}
     return ORJSONResponse(result)
 
+class AncestorsResponse(BaseModel):
+    ancestors: List[ChildData]
 
-@cas_router.get('/ancestors_of', response_class=ORJSONResponse)
-def ancestors_of(pid: Annotated[int, Query(ge=0)],
-                idx: Annotated[int, Query(ge=0)],
-                db: str = "",
-                ) -> Response:
+@cas_router.get('/ancestors_of', response_class=ORJSONResponse, response_model=AncestorsResponse)
+def ancestors_of(
+        pid: Annotated[int, Query(ge=0, description="Process ID to find ancestors for")],
+        idx: Annotated[int, Query(ge=0, description="Process index to find ancestors for")],
+        db: str = "",
+        ) -> ORJSONResponse:
+    """Returns a list of ancestor processes including:
+    - Direct parent process
+    - Grandparent processes
+    - All the way up to root process
+    Returns data in same format as proc_lookup endpoint
+    """
     cas_db = dbs.get_nfsdb(db)
     e = cas_db.get_exec(pid, idx)
     a_path = [e]
@@ -413,12 +478,30 @@ def ancestors_of(pid: Annotated[int, Query(ge=0)],
     return ORJSONResponse({"ancestors": data})
 
 
-@cas_router.get('/deps_of', response_class=ORJSONResponse)
+class DepsEntry(BaseModel):
+    path: str
+    num_deps: str
+    parent: str
+
+class DepsResponse(BaseModel):
+    count: int
+    page: int
+    page_max: int
+    num_entries: int
+    entries: List[DepsEntry]
+
+@cas_router.get('/deps_of', response_class=ORJSONResponse, response_model=DepsResponse)
 def deps_of(
-            path: Annotated[str, Query()],
-            db: str = "",
-            max_results: Annotated[int, Query(ge=0)] = 0,
-            page: Annotated[int, Query(ge=0)] = 0,) -> Response:
+        path: Annotated[str, Query(description="Path to module to find dependencies for")],
+        db: str = "",
+        max_results: Annotated[int, Query(ge=0, description="Maximum number of results per page")] = 0,
+        page: Annotated[int, Query(ge=0, description="Page number for paginated results")] = 0,
+        ) -> ORJSONResponse:
+    """Returns a paginated list of modules that directly depend on the given module, including:
+    - Module path
+    - Number of dependencies each module has
+    - Parent process information
+    """
     cas_db = dbs.get_nfsdb(db)
     entries = [x
                 for x in sorted(cas_db.db.mdeps(path, direct=True))
@@ -442,15 +525,20 @@ def deps_of(
     return ORJSONResponse(result)
 
 
-@cas_router.get('/search', response_class=ORJSONResponse)
+class SearchResponse(BaseModel):
+    count: int
+    execs: List[ChildData]
+
+@cas_router.get('/search', response_class=ORJSONResponse, response_model=SearchResponse)
 def search_files(
             filename: str | None = None,
             cmd_filter: str | None = None,
             db: str = "",
-            etime_sort: bool | None = None,
-            entries: Annotated[int, Query(ge=0)] = 0,
-            page: Annotated[int, Query(ge=0)] = 0,
-            ) -> Response:
+            etime_sort: Annotated[bool | None, Query(description="Sort results by how long they ran for")] = None,
+            entries: Annotated[int, Query(ge=0, description="Number of entries per page")] = 0,
+            page: Annotated[int, Query(ge=0, description="Page number to return, 0-indexed")] = 0,
+            ) -> ORJSONResponse:
+    """Find processes that opened a given file"""
     execs = []
     cas_db = dbs.get_nfsdb(db)
     command_filter = CommandFilter(cmd_filter, None, cas_db.config, cas_db.source_root) if cmd_filter is not None else None
@@ -487,15 +575,21 @@ def search_files(
     return ORJSONResponse(data)
 
 
-@cas_router.get('/deps_tree')
+@cas_router.get('/deps_tree', response_class=HTMLResponse)
 def deps_tree(
-            request: Request,
-            db: str = "",
-            path: str | None = None,
-            filter: str | None = None,
-            max_results: Annotated[int, Query(ge=0)] = 10,
-            page: Annotated[int, Query(ge=0)] = 0,
-            ) -> Response:
+        request: Request,
+        db: str = "",
+        path: Annotated[str | None, Query(description="Path to module to show dependencies for")] = None,
+        filter: Annotated[str | None, Query(description="Filter pattern for module paths")] = None,
+        max_results: Annotated[int, Query(ge=0, description="Maximum number of results per page")] = 10,
+        page: Annotated[int, Query(ge=0, description="Page number for paginated results")] = 0,
+        ) -> HTMLResponse:
+    """Dependency tree web UI showing:
+    - Module dependencies
+    - Number of dependencies per module
+    - Parent process information
+    Supports filtering and pagination
+    """
     cas_db = dbs.get_nfsdb(db)
     if path is not None:
         path = path.replace(" ", "+")
@@ -554,15 +648,21 @@ def deps_tree(
     return templates.TemplateResponse(name='deps_tree.html', request=request, context={"exe": first_modules, "web_ctx": get_webctx(args.ctx, db)})
 
 
-@cas_router.get('/revdeps_tree')
+@cas_router.get('/revdeps_tree', response_class=HTMLResponse)
 def revdeps_tree(
-            request: Request,
-            db: str = "",
-            path: str | None = None,
-            filter: Annotated[str | None, Query(min_length=1)] = None,
-            max_results: Annotated[int, Query(ge=0)] = 15,
-            page: Annotated[int, Query(ge=0)] = 0,
-    ) -> Response:
+        request: Request,
+        db: str = "",
+        path: Annotated[str | None, Query(description="Path to file to show reverse dependencies for")] = None,
+        filter: Annotated[str | None, Query(min_length=1, description="Filter pattern for file paths")] = None,
+        max_results: Annotated[int, Query(ge=0, description="Maximum number of results per page")] = 15,
+        page: Annotated[int, Query(ge=0, description="Page number for paginated results")] = 0,
+        ) -> HTMLResponse:
+    """Reverse dependency tree web UI showing:
+    - Files that depend on the given file
+    - Number of dependencies per file
+    - File type information
+    Supports filtering and pagination
+    """
     max_results = 15
     cas_db = dbs.get_nfsdb(db)
     if path is not None:
@@ -617,14 +717,27 @@ def revdeps_tree(
     return templates.TemplateResponse(name='revdeps_tree.html', request=request, context={"exe": first_modules, "web_ctx": get_webctx(args.ctx, db)})
 
 
-@cas_router.get('/revdeps_of', response_class=ORJSONResponse)
+class RevDepsEntry(BaseModel):
+    path: str
+    num_deps: int
+    class_: bool = Field(alias="class")
+    parent: str
+
+class RevDepsResponse(BaseModel):
+    count: int
+    page: int
+    page_max: int
+    num_entries: int
+    entries: List[RevDepsEntry]
+
+@cas_router.get('/revdeps_of', response_class=ORJSONResponse, response_model=RevDepsResponse)
 def revdeps_of(
-            path: str,
+            path: Annotated[str, Query(description="Path to a file")],
             db: str = "",
-            filter: Annotated[str | None, Query(min_length=1)] = None,
-            max_results: Annotated[int, Query(ge=0)] = 10,
-            page: Annotated[int, Query(ge=0)] = 0,
-            ) -> Response:
+            max_results: Annotated[int, Query(ge=0, description="How many results can each page have")] = 10,
+            page: Annotated[int, Query(ge=0, description="Paget o return")] = 0,
+            ) -> ORJSONResponse:
+    """Returns a list of files that depend on a given file"""
     cas_db = dbs.get_nfsdb(db)
     entries = get_rdeps(db, path)
     result = {
@@ -647,7 +760,7 @@ def revdeps_of(
     return ORJSONResponse(result)
 
 
-@cas_router.get('/favicon.ico', response_class=FileResponse)
+@cas_router.get('/favicon.ico', response_class=FileResponse, include_in_schema=False)
 def favicon(request: Request):
     path, stat_result = static.lookup_path('favicon.ico')
     if not stat_result:
@@ -656,9 +769,30 @@ def favicon(request: Request):
     resp.media_type = "image/vnd.microsoft.icon"
     return resp
 
-@cas_router.get('/status')
-@app.get('/status/')
+class DBStatus(BaseModel):
+    db_dir: str
+    nfsdb_path: str
+    deps_path: str
+    ftdb_paths: List[str]
+    config_path: str
+    loaded_nfsdb: Optional[str]
+    loaded_ftdb: Optional[str]
+    loaded_config: Optional[str]
+    last_access: Optional[float]
+    image_version: int
+    db_version: str
+
+StatusResponse = RootModel[Dict[str, DBStatus]]
+
+@cas_router.get('/status', response_class=ORJSONResponse, response_model=StatusResponse)
+@app.get('/status/', response_class=ORJSONResponse, response_model=StatusResponse)
 def status(db: Optional[str] = None):
+    """Returns detailed database information including:
+    - Database directory and file paths
+    - Load status of nfsdb, ftdb and config
+    - Last access timestamp
+    - Version information
+    """
     try:
         return dbs.json(db)
     except MessageException as exc:
@@ -668,6 +802,7 @@ AllowedModules = Enum("AllowedModules", dict(map(lambda m: (m, m), allowed_modul
 
 @cas_router.get('/{module}')
 def get_module(request: Request, module: AllowedModules, db: str = ""):
+    """Calls any supported CAS module taking the query string as arguments"""
     org_url = request.url
     query = request.query_params
     try:
@@ -683,6 +818,7 @@ def get_module(request: Request, module: AllowedModules, db: str = ""):
 
 @cas_router.get('/')
 def print_api(request: Request, db: str) -> HTMLResponse:
+    """Lists and links the available endpoints with simple descriptions"""
     if db in dbs.get_dbs():
         return templates.TemplateResponse(name='api_list.html', request=request, context={"dbs": dbs.get_dbs(), "web_ctx": get_webctx(args.ctx, db)})
     else:
@@ -751,7 +887,7 @@ def run(args=None):
         app = get_app(args)
         if args.debug:
             print(app.routes)
-        uvicorn.run("cas_server:get_app", factory=True, host=args.host, port=args.port, log_level="debug" if args.debug else None, workers=args.workers)
+        uvicorn.run("cas_server:get_app", factory=True, host=args.host, port=args.port, log_level="debug" if args.debug else None, workers=args.workers, forwarded_allow_ips="*")
         print("Started CAS Server")
     except KeyboardInterrupt:
         print("Shutting down CAS Server")
