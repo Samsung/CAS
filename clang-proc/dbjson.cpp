@@ -2846,7 +2846,8 @@ std::string DbJSONClassVisitor::getAbsoluteLocation(SourceLocation Loc){
 			  QualType T = innerD->getType();
 			  if (innerD->isBitField()) {
 				  extraArg.first = EXTRA_BITFIELD;
-				  extraArg.second = innerD->getBitWidthValue(Context);
+				  if(!innerD->getBitWidth()->isValueDependent())
+				  	extraArg.second = innerD->getBitWidthValue(Context);
 			  }
 			  return Visitor.getTypeData(T).id;
 		  }

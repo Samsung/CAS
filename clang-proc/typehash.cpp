@@ -136,7 +136,8 @@ std::string json_escape( const std::string &str ) {
 			  std::pair<int,unsigned long long> extraArg(0,0);
 			  if (innerD->isBitField()) {
 				  extraArg.first = EXTRA_BITFIELD;
-				  extraArg.second = innerD->getBitWidthValue(Context);
+				  if(!innerD->getBitWidth()->isValueDependent())
+				  	extraArg.second = innerD->getBitWidthValue(Context);
 			  }
 			  QualType T = innerD->getType();
 			  if (T->getTypeClass()==Type::Typedef) {

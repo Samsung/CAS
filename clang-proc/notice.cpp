@@ -860,7 +860,7 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 		)
 		case Type::UnaryTransform:{
 			auto tp = cast<UnaryTransformType>(T);
-			assert(tp->getUTTKind() == UnaryTransformType::EnumUnderlyingType && "Not an enum!");
+			// assert(tp->getUTTKind() == UnaryTransformType::EnumUnderlyingType && "Not an enum!");
 			if(tp->isSugared())
 				return typeForMap(tp->getUnderlyingType().withFastQualifiers(quals));
 			else

@@ -78,8 +78,10 @@ public:
     while (!BaseType->isSpecifierType()) {
       if (isa<TypedefType>(BaseType))
         break;
+      COMPAT_VERSION_GE(14,
       if (isa<UsingType>(BaseType))
         break;
+      )
       else if (const PointerType* PTy = BaseType->getAs<PointerType>())
         BaseType = PTy->getPointeeType();
       else if (const BlockPointerType *BPy = BaseType->getAs<BlockPointerType>())
@@ -1373,8 +1375,10 @@ public:
     while (!BaseType->isSpecifierType()) {
       if (isa<TypedefType>(BaseType))
         break;
+      COMPAT_VERSION_GE(14,
       if (isa<UsingType>(BaseType))
         break;
+      )
       else if (const PointerType* PTy = BaseType->getAs<PointerType>())
         BaseType = PTy->getPointeeType();
       else if (const BlockPointerType *BPy = BaseType->getAs<BlockPointerType>())
