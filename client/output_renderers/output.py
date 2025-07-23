@@ -283,6 +283,7 @@ class OutputRenderer:
         pass
 
     def makefile_data_renderer(self):
+        length = len(self.data)
         if not self.args.all or self.args.static:
             yield ".PHONY: all"
             for i in range(0, len(self.data)):
@@ -298,12 +299,12 @@ class OutputRenderer:
             yield ".PHONY: all"
             yield "ADDITIONAL_OPTS_PREFIX:="
             yield "ADDITIONAL_OPTS_POSTFIX:="
-            for i in range(0, len(self.data)):
+            for i in range(0, length):
                 yield ".PHONY: cmd_%d" % i
-            yield "all: {}\n\t@echo Done!\n".format(" ".join(["cmd_%d" % i for i in range(0, len(self.data))]))
+            yield "all: {}\n\t@echo Done!\n".format(" ".join(["cmd_%d" % i for i in range(0, length)]))
             for i, exe in enumerate(self.data):
                 yield "cmd_%d:" % i
-                yield "\t@echo \"%s %d\"" % ("CMD", i)
+                yield "\t@echo \"%s %d / %d\"" % ("CMD", i, length)
                 yield "\t@(cd %s && $(ADDITIONAL_OPTS_PREFIX)%s)" % (exe.cwd, fix_cmd_makefile(exe.argv)+" $(ADDITIONAL_OPTS_POSTFIX)")
 
     def assert_not_implemented(self):

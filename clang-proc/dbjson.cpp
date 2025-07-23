@@ -71,6 +71,11 @@ QualType resolve_Typedef_Integer_Type(QualType T) {
 		return resolve_Typedef_Integer_Type(tp->getUnderlyingType());
 	}
 	)
+	if (T->getTypeClass() == Type::UnaryTransform) {
+		const UnaryTransformType *tp = cast<UnaryTransformType>(T);
+		// assert(tp->getUTTKind() == UnaryTransformType::EnumUnderlyingType && "Not an enum!");
+		return resolve_Typedef_Integer_Type(tp->getUnderlyingType());
+	}
 	else if (T->getTypeClass()==Type::Builtin) {
 		return T;
 	}

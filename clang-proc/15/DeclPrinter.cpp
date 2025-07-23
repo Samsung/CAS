@@ -911,9 +911,13 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
         }
         return;
       }
+      else if(T->isMemberPointerType()){
+        // print normally
+      }
       else if(T->isReferenceType()){
         //replace with char[] of proper size
         Out << "char " << D->getName() << "[" << Ctx.getTypeSizeInChars(T).getQuantity() << "]";
+        return;
       }
       else if(T->isArrayType()){
         if(GetBaseType(T)->isBuiltinType()){
@@ -952,12 +956,12 @@ void DeclPrinter::VisitFieldDecl(FieldDecl *D) {
         return;
       }
       else if(T->isVectorType()){
-        Out << "";
+        // print normally
       }
       else{
         llvm::errs() << "Unhandled type: [" << T->getTypeClassName() << "] " << T.getAsString()<<'\n';
         D->dumpColor();
-        llvm_unreachable("Encountered unhandled type. Exiting.");
+        // llvm_unreachable("Encountered unhandled type. Exiting.");
       }
     }
   }

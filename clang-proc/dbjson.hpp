@@ -86,6 +86,8 @@ public:
         BaseType = PTy->getPointeeType();
       else if (const BlockPointerType *BPy = BaseType->getAs<BlockPointerType>())
         BaseType = BPy->getPointeeType();
+      else if (const MemberPointerType *MPy = BaseType->getAs<MemberPointerType>())
+        BaseType = MPy->getPointeeType();
       else if (const ArrayType* ATy = dyn_cast<ArrayType>(BaseType))
         BaseType = ATy->getElementType();
       else if (const FunctionType* FTy = BaseType->getAs<FunctionType>())
@@ -1179,7 +1181,14 @@ public:
     return D->getCanonicalDecl();
   }
   VarData& getVarData(const VarDecl *D){
-    return VarMap.at(VarForMap(D));
+    D = VarForMap(D);
+    
+	  if (VarMap.find(D)==VarMap.end()) {
+		  llvm::outs()<<"Var not in map:"<<D<<'\n';
+		  D->dump();
+		  assert(0);
+	  }
+    return VarMap.at(D);
   }
 
   size_t getFuncNum() {
@@ -1191,6 +1200,11 @@ public:
   }
   
   FuncData &getFuncData(const FunctionDecl *D){
+	  if (FuncMap.find(D)==FuncMap.end()) {
+		  llvm::outs()<<"Func not in map:"<<D<<'\n';
+		  D->dump();
+		  assert(0);
+	  }
     return FuncMap.at(D);
   }
 
@@ -1230,6 +1244,8 @@ public:
   bool VisitCXXMethodDecl(const CXXMethodDecl* D);
   bool VisitDecl(Decl *D);
   bool TraverseDecl(Decl *D);
+  // bypass Visitor incorrectly visiting requires-expr parameters twice
+  bool TraverseRequiresExprBodyDecl(RequiresExprBodyDecl *D){return true;}
   bool VisitFunctionDeclStart(const FunctionDecl *D);
   bool VisitFunctionDeclComplete(const FunctionDecl *D);
   bool handleCallDeclRefOrMemberExpr(const Expr* E, std::set<ValueHolder> callrefs, std::set<LiteralHolder> literalRefs, const QualType* baseType = 0, const CallExpr* CE = 0);
@@ -1243,6 +1259,7 @@ public:
   const Expr* stripCastsEx(const Expr* E, std::vector<CStyleCastOrType>& vC);
   const UnaryOperator* lookForUnaryOperatorInCallExpr(const Expr* E);
   const ArraySubscriptExpr* lookForArraySubscriptExprInCallExpr(const Expr* E);
+  bool VisitAlignedAttr(AlignedAttr *A);
   bool VisitExpr(const Expr *Node);
   bool VisitClassTemplateDecl(const ClassTemplateDecl *D);
   bool VisitClassTemplateSpecializationDecl(const ClassTemplateSpecializationDecl *D);
@@ -1383,6 +1400,8 @@ public:
         BaseType = PTy->getPointeeType();
       else if (const BlockPointerType *BPy = BaseType->getAs<BlockPointerType>())
         BaseType = BPy->getPointeeType();
+      else if (const MemberPointerType *MPy = BaseType->getAs<MemberPointerType>())
+        BaseType = MPy->getPointeeType();
       else if (const ArrayType* ATy = dyn_cast<ArrayType>(BaseType))
         BaseType = ATy->getElementType();
       else if (const FunctionType* FTy = BaseType->getAs<FunctionType>())

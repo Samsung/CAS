@@ -2077,6 +2077,19 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
 		  }
 		  )
 		  break;
+		  case Type::UnaryTransform:
+		  {
+			  const UnaryTransformType *tp = cast<UnaryTransformType>(T);
+			  if(tp->isSugared()){
+				QualType uT = tp->getUnderlyingType();
+				LookForTemplateTypeParameters(uT,s);
+			  }
+			  else{
+				QualType uT = tp->getBaseType();
+				LookForTemplateTypeParameters(uT,s);
+			  }
+		  }
+		  break;
 		  case Type::Decltype:
 		  {
 			  const DecltypeType* tp = cast<DecltypeType>(T);
@@ -2315,7 +2328,7 @@ void DbJSONClassConsumer::LookForTemplateTypeParameters(QualType T, std::set<con
                    break;
   		  default:
   		  {
-  			  llvm::outs() << "UNSUPPORTED: " << T->getTypeClassName() << "\n";
+  			  llvm::errs() << "UNSUPPORTED: " << T->getTypeClassName() << "\n";
   		  }
   	}
   }

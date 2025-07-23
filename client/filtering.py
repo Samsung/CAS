@@ -531,8 +531,11 @@ class CommandFilter(Filter):
         def get_class(flt: Dict) -> Optional[Tuple[str,int]]:
             cls_vals:int = 0
             if "class" in flt:
-                for cls_v in [command_class[c_val] for c_val in flt['class'].split("|")]:
-                    cls_vals = cls_vals | cls_v
+                try:
+                    for cls_v in [command_class[c_val] for c_val in flt['class'].split("|")]:
+                        cls_vals = cls_vals | cls_v
+                except KeyError as e:
+                    raise FilterException(f"No such command filter class '{flt['class']}' choose between [{', '.join(command_class.keys())}]")
             return ("is_class", cls_vals) if cls_vals != 0 else None
 
         def get_src_root(flt: Dict) -> Optional[Tuple[str,None]]:

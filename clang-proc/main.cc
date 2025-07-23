@@ -67,6 +67,8 @@ public:
         new DbJSONClassConsumer(Compiler.getASTContext(),file_id,Compiler.getPreprocessor(),opts.save_expansions));
   }
   bool BeginSourceFileAction(CompilerInstance &CI) override {
+    // CI.getInvocation().generateCC1CommandLine([](const llvm::Twine &arg){llvm::errs()<<arg<<' ';});
+    // llvm::errs()<<'\n';
 	  Preprocessor &PP = CI.getPreprocessor();
     return true;
   }
@@ -119,6 +121,7 @@ cl::opt<bool> ExitOnErrorOption("E", cl::cat(ctCategory));
 cl::opt<bool> CustomStructDefs("csd",cl::cat(ctCategory));
 cl::opt<bool> enableStaticAssert("sa", cl::cat(ctCategory));
 
+cl::opt<bool> modifyStandardIncludes("nostdinc", cl::cat(ctCategory));
 cl::opt<bool> MultiOption("multi", cl::cat(ctCategory));
 cl::opt<unsigned int> ThreadCount("tc",cl::cat(ctCategory),cl::init(0));
 
@@ -153,6 +156,33 @@ void run(const CompilationDatabase &compilations,const CommandLineArguments &sou
     for (unsigned i = 0; i != AdditionalIncludePathsOption.size(); ++i) {
       auto arg = "-I" + AdditionalIncludePathsOption[i];
       Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+    }
+
+    if(modifyStandardIncludes.getValue()){
+      std::string arg = "-nostdinc";
+      std::string path;
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+
+      arg = "-isystem";
+      path = "prebuilts/clang/host/linux-x86/clang-r522817/lib/clang/18/include";
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(path.c_str()));
+
+      path = "prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8/sysroot/usr/local/include";
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(path.c_str()));
+
+      path = "prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8/sysroot/usr/include/x86_64-linux-gnu";
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(path.c_str()));
+
+      path = "prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8/sysroot/include";
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(path.c_str()));
+
+      path = "prebuilts/gcc/linux-x86/host/x86_64-linux-glibc2.17-4.8/sysroot/usr/include";
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(arg.c_str()));
+      Tool.appendArgumentsAdjuster(getInsertArgumentAdjuster(path.c_str()));
     }
 
     for (auto &token : macroReplacementTokens) {

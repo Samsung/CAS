@@ -69,6 +69,23 @@ class progressbar:
     def __iter__(self):
         return self.pb.__iter__()
 
+def process_command(exe):
+    pn = subprocess.Popen([exe.binary,*exe.argv[1:],'-###'],cwd=exe.cwd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, err = pn.communicate()
+    out2 = out.decode("utf-8")
+    next = False
+    command = exe.argv
+    command[0] = exe.binary
+    command.append('-nostdinc')
+    for c in out2.split(' '):
+        if next:
+            command.append('-isystem')
+            command.append(c.strip('"'))
+            next = False
+        else:
+            if c.endswith("-isystem\""):
+                next =True
+    return command
 
 # external use
 def mkunique_compile_commands(dbpath,debug=False,dry_run=False,ignoreDirPathEntries=set()):
@@ -108,6 +125,8 @@ def mkunique_compile_commands(dbpath,debug=False,dry_run=False,ignoreDirPathEntr
     with open(dbpath,"w") as f:
         f.write(json.dumps(ndb,indent=4, separators=(',', ': ')))
 
+    os.unlink(dbpath+".bak")
+
     return 0
 
 def make_unique_compile_commands(cdbfile):
@@ -135,6 +154,8 @@ def make_unique_compile_commands(cdbfile):
 
     with open(cdbfile,"w") as f:
         f.write(json.dumps(db,indent=4, separators=(',', ': ')))
+
+    os.unlink(cdbfile+".bak")
 
 def find_processor_binary(proc_bin):
     # user provided binary

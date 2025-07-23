@@ -63,6 +63,13 @@ bool DbJSONClassVisitor::VisitDecl(Decl *D) {
 	return true;
 }
 
+bool DbJSONClassVisitor::VisitAlignedAttr(AlignedAttr *A){
+	if(!A->isAlignmentExpr()){
+		noticeTypeClass(A->getAlignmentType()->getType());
+	}
+	return true;
+}
+
 // Variables
 bool DbJSONClassVisitor::VisitVarDeclStart(const VarDecl *D) {
 	fopsVarDecl.push_back(D);
@@ -247,13 +254,13 @@ bool DbJSONClassVisitor::VisitVarDecl(const VarDecl *D) {
 		lastFunctionDef->refTypes.insert(D->getType());
 	}
 	if(D->getKind() == Decl::Kind::Var){
-		if(D->isStaticDataMember()) return true;
+		// if(D->isStaticDataMember()) return true;
 		if(!D->hasGlobalStorage()) return true;
 		if(D->isStaticLocal()) return true;
 		std::string name = D->getQualifiedNameAsString();
 		// D->getNameAsString();
 		if(!unique_name.insert(name).second) return true;
-		int linkage = D->isExternallyVisible();
+		int linkage = D->isExternallyVisible() || D->isStaticDataMember();
 		int def_kind = D->hasDefinition();
 		
 		for( const VarDecl *RD : D->getCanonicalDecl()->redecls()){
@@ -1267,16 +1274,14 @@ bool DbJSONClassVisitor::VisitDeclRefExpr(DeclRefExpr *DRE){
 }
 
 bool DbJSONClassVisitor::VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *UTTE){
-	if(lastFunctionDef || lastGlobalVarDecl || !recordDeclStack.empty()){
-		if (UTTE->isArgumentType()) {
-			QualType UT = UTTE->getArgumentType();
-			noticeTypeClass(UT);
-			if (lastFunctionDef) {
-				lastFunctionDef->refTypes.insert(UT);
-			}
-			if (lastGlobalVarDecl) {
-				getVarData(lastGlobalVarDecl).g_refTypes.insert(UT);
-			}
+	if (UTTE->isArgumentType()) {
+		QualType UT = UTTE->getArgumentType();
+		noticeTypeClass(UT);
+		if (lastFunctionDef) {
+			lastFunctionDef->refTypes.insert(UT);
+		}
+		if (lastGlobalVarDecl) {
+			getVarData(lastGlobalVarDecl).g_refTypes.insert(UT);
 		}
 	}
 	return true;
@@ -1773,6 +1778,8 @@ bool DbJSONClassVisitor::VisitMemberExpr(MemberExpr *Node) {
 	const CallExpr* CE = 0;
 	if (MEHaveParentCE.find(Node)!=MEHaveParentCE.end()) {
 		CE = MEHaveParentCE[Node];
+		// prevent conflicts for template specailizations
+		MEHaveParentCE.erase(Node);
 	}
 	lookForDeclRefWithMemberExprsInternal(Node,DREMap,&MInfoList,castVec,0,CE);
 

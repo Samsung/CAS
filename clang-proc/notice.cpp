@@ -886,9 +886,7 @@ QualType DbJSONClassVisitor::typeForMap(QualType T){
 		}
 		case Type::Paren:{
 			auto tp = cast<ParenType>(T);
-			// TODO: forward qualifiers (never has any?)
-			assert(!quals && "qualified paren type");
-			return typeForMap(tp->getInnerType());
+			return typeForMap(tp->getInnerType().withFastQualifiers(quals));
 		}
 		case Type::TypeOfExpr:{
 			auto tp = cast<TypeOfExprType>(T);

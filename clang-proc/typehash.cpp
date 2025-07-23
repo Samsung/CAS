@@ -71,7 +71,7 @@ std::string json_escape( const std::string &str ) {
 			  }
 			  else if (A.getKind() == TemplateArgument::Integral) {
 				  llvm::APSInt Iv = A.getAsIntegral();
-				  template_args.push_back(std::pair<std::string,unsigned>("\""+compatibility::toString(Iv)+"\"",I));
+				  template_args.push_back(std::pair<std::string,unsigned>(compatibility::toString(Iv),I));
 			  }
 			  else {
 				  if (opts.exit_on_error) {
@@ -515,12 +515,10 @@ std::string json_escape( const std::string &str ) {
 			  if (Visitor.recordParentDeclMap.find(TRD)!=Visitor.recordParentDeclMap.end()) {
 				  CXXRecordDecl* parentRecord = Visitor.recordParentDeclMap[TRD];
 				  QualType RT = Context.getRecordType(parentRecord);
-				  DbJSONClassVisitor::TypeData &RT_data = Visitor.getTypeData(RT);
-				  // build ahead of time
+				  // TODO: used record forward, maybe fix with hash rework
 				  autoforward=true;
-				  if(!RT_data.hash.size()) buildTypeString(RT,RT_data.hash);
+				  buildTypeString(RT,parentRecordHash);
 				  autoforward = false;
-				  parentRecordHash = RT_data.hash;
 				  parentRecordHash+="::";
 							  }
 			  typeString.insert(3,parentRecordHash);
@@ -593,7 +591,10 @@ std::string json_escape( const std::string &str ) {
 	  				CTD = CTD->getMostRecentDecl();
 		  			const InjectedClassNameType* IT = static_cast<const InjectedClassNameType*>(CTD->getTemplatedDecl()->getTypeForDecl());
 		  			std::string tstr;
-		  			buildTypeString(QualType(IT,0),tstr);
+					// TODO: used record forward, maybe fix with hash rework
+					autoforward=true;
+					buildTypeString(QualType(IT,0),tstr);
+					autoforward = false;
 		  			ss << tstr << ":";
 		  			tstr.clear();
 					
