@@ -68,7 +68,6 @@ Errorable<void> StreamParser::parse_line(const char *line, size_t size, uint64_t
         _process_map.insert(std::make_pair(event_tuple.pid, Process(event_tuple.pid, event_tuple)));
     else
         map_lookup->second.event_list.push_back(event_tuple);
-
     schedule_processing(event_tuple);
 
     return {};
@@ -1053,7 +1052,11 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
     auto end_it = process.event_list.end();
     for (auto it = process.event_list.begin(); it != end_it; ) {
+        Execution& execution = process.executions.back();
         auto &evln = *it;
+        if (!execution.cpus.size() || execution.cpus.back().cpu != evln.cpu) {
+            execution.cpus.push_back(CpuTime{evln.timestamp - first_event_time(), evln.cpu});
+        }
         switch (evln.tag) {
         case Tag::NewProc: {
             std::string program_interpreter;
@@ -1100,6 +1103,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
             bound_check_iter(it, end_it);
 
+            execution.cpus.push_back(CpuTime{evln.timestamp - first_event_time(), evln.cpu});
+
             if ((*it).tag != Tag::EndOfArgs)
                 return UnexpectedArgumentEndError((*it).line_number);
 
@@ -1131,8 +1136,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 return result;
             it++;
             argnfo = result.value();
-            Execution &e = process.executions.back();
-            e.children.push_back(Child(argnfo.cpid, 0));
+            execution.children.push_back(Child(argnfo.cpid, 0));
 
             register_child(argnfo.cpid, evln.pid, process.executions.size() - 1);
             n_processed++;
@@ -1163,9 +1167,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
                     return result;
                 it++;
                 argnfo_fork = result.value();
-                Execution &e = process.executions.back();
 
-                e.children.push_back(Child(argnfo_fork.cpid, argnfo.flags));
+                execution.children.push_back(Child(argnfo_fork.cpid, argnfo.flags));
 
                 register_child(argnfo_fork.cpid, evln.pid, process.executions.size() - 1);
                 n_processed += 2;
@@ -1180,8 +1183,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (result.is_error())
                 return result;
             argnfo = result.value();
-
-            Execution& execution = process.executions.back();
 
             auto file_lookup = execution.fd_table.find(argnfo.fd);
             if (file_lookup != execution.fd_table.end() && file_lookup->second.original_path != "") {
@@ -1257,7 +1258,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 bound_check_iter(it, end_it);
             }
 
-            Execution &execution = process.executions.back();
             execution.mounts.push_back(Mount(source, target, type, argnfo.flags, evln.timestamp));
 
             n_processed++;
@@ -1285,7 +1285,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (size != argnfo.targetnamesize)
                 return SizeMismatchError(last_it->line_number, size, argnfo.targetnamesize);
 
-            // Execution &execution = process.executions.back();
             n_processed++;
         } break;
         case Tag::Open: {
@@ -1316,8 +1315,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
 
             if (size != argnfo.forigsize)
                 return SizeMismatchError(last_it->line_number, size, argnfo.forigsize);
-
-            Execution &execution = process.executions.back();
 
             opened_file.mode = argnfo.flags & 0x03;
             opened_file.absolute_path = absolute_path;
@@ -1376,8 +1373,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 if (size != argnfo_RT.fnamesize)
                     return SizeMismatchError(last_it->line_number, argnfo_RT.fnamesize, size);
 
-                Execution &e = process.executions.back();
-
                 from.mode = O_RDONLY;
                 from.absolute_path = from_path;
                 from.original_path = from_path;
@@ -1388,8 +1383,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 to.original_path = to_path;
                 to.open_timestamp = evln.timestamp;
 
-                e.add_open_file(from);
-                e.add_open_file(to);
+                execution.add_open_file(from);
+                execution.add_open_file(to);
 
                 n_processed += 2;
                 _stats_collector.increment_rename();
@@ -1467,8 +1462,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 if (size != argnfo_LT.fnamesize)
                     return SizeMismatchError(last_it->line_number, size, argnfo_LT.fnamesize);
 
-                Execution &e = process.executions.back();
-
                 to.mode = O_WRONLY;
                 to.absolute_path = to_path;
                 to.original_path = to_path;
@@ -1479,8 +1472,8 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 from.original_path = from_path;
                 from.open_timestamp = evln.timestamp;
 
-                e.add_open_file(to);
-                e.add_open_file(from);
+                execution.add_open_file(to);
+                execution.add_open_file(from);
 
                 n_processed += 2;
                 _stats_collector.increment_link();
@@ -1530,8 +1523,6 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (size != argnfo.linknamesize)
                 return SizeMismatchError(last_it->line_number, size, argnfo.linknamesize);
 
-            Execution &e = process.executions.back();
-
             to.mode = O_WRONLY;
             to.absolute_path = absolute_symlink;
             to.original_path = absolute_symlink;
@@ -1543,10 +1534,10 @@ Errorable<void> StreamParser::process_events(Process &process) {
                 from.original_path = absolute_target;
                 from.open_timestamp = evln.timestamp;
 
-                e.add_open_file(from);
+                execution.add_open_file(from);
             }
 
-            e.add_open_file(to);
+            execution.add_open_file(to);
             n_processed += 2;
             _stats_collector.increment_symlink();
         } break;
@@ -1557,8 +1548,7 @@ Errorable<void> StreamParser::process_events(Process &process) {
             if (result.is_error())
                 return result;
             auto args = result.value();
-            Execution &e = process.executions.back();
-            e.exit_code = args.status;
+            execution.exit_code = args.status;
             n_processed++;
             _stats_collector.increment_exit();
             append_syscall(syscall_raw(process.pid, syscall_raw::SYS_EXIT, evln.timestamp - first_event_time()));

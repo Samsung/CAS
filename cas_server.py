@@ -260,6 +260,7 @@ def child_renderer(exe: nfsdbEntry, cas_db: CASDatabase | None = None, depth: in
         "children": [child_renderer(child, cas_db, depth - 1) for child in cas_db.get_eids([(c.pid,) for c in exe.child_cids])] if cas_db is not None and depth > 0 and len(exe.child_cids) > 0 else len(exe.child_cids),
         "wpid": exe.wpid if exe.wpid else "",
         "open_len": len(exe.opens),
+        "cpus": [cputime.json() for cputime in exe.cpus or []],
     }
     return ret
 
@@ -759,6 +760,13 @@ def revdeps_of(
     result["num_entries"] = len(result["entries"])
     return ORJSONResponse(result)
 
+@cas_router.get('/threads', response_class=ORJSONResponse)
+def threads(db: str = ""):
+    cas_db = dbs.get_nfsdb(db)
+    return ORJSONResponse({
+            "count": cas_db.db.thread_count,
+            "threads": list(cas_db.db.threads),
+        })
 
 @cas_router.get('/favicon.ico', response_class=FileResponse, include_in_schema=False)
 def favicon(request: Request):

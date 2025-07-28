@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+import argparse
+from collections import Counter
+from itertools import pairwise,chain
+from datetime import timedelta
+import sys
+
+import libetrace
+
+def progress_bar(frac, width=20, charset=" ▏▎▍▌▋▊▉█"):
+    """
+    Create a text-based progress bar for terminal output
+    
+    Args:
+        frac (float): Completion fraction between 0.0-1.0
+        width (int): Bar width in characters (default: 20)
+        charset (str): Characters for progress visualization where:
+            - First character: empty space
+            - Last character: full block
+            - Middle characters: partial fills
+    
+    Returns:
+        str: Progress bar string
+    """
+    frac = max(0.0, min(1.0, frac))
+    num_steps = len(charset) - 1  # Number of partial steps between empty and full
+    total_units = width * num_steps
+    
+    filled = int(frac * total_units)
+    full_blocks, partial = divmod(filled, num_steps)
+    
+    bar = charset[-1] * full_blocks
+    remaining = width - full_blocks
+    
+    if remaining > 0:
+        # Add partial character if needed
+        bar += charset[partial] if partial > 0 else charset[0]
+        # Fill remaining space with empty characters
+        bar += charset[0] * (remaining - 1)
+    
+    return bar
+
+parser = argparse.ArgumentParser(description='Process CPU statistics')
+parser.add_argument('img_file', help='Path to the main image file')
+parser.add_argument('--sort', choices=['time', 'cpu', 'time_asc', 'cpu_dsc'], default='time',
+                    help='Sort results by time or CPU usage')
+
+args = parser.parse_args()
+
+nfsdb = libetrace.nfsdb()
+nfsdb.load(args.img_file,quiet=True)
+
+thread_counter = Counter({i: 0 for i in nfsdb.threads})
+
+for entry in nfsdb.iter():
+    if len(entry.cpus) == 0:
+        continue
+    for current,next in pairwise(
+                            chain(
+                                [libetrace.nfsdbCputime(entry.cpus[0].cpu, entry.stime)],
+                                entry.cpus,
+                                [libetrace.nfsdbCputime(entry.cpus[-1].cpu, entry.stime + entry.etime)]
+                            )
+                        ):
+        thread_counter.update({
+            current.cpu: abs(next.timestamp - current.timestamp)
+        })
+
+print(f"Ran on {nfsdb.thread_count} threads:")
+
+
+def sort_key(element):
+    if args.sort.startswith('cpu'):
+        return element[0]
+    return element[1]
+
+total = thread_counter.total()
+for thread_id, time in sorted(thread_counter.items(), key=sort_key, reverse=args.sort in ['time', 'cpu_dsc']):
+    print(f"thread{thread_id:>4}:\t{time:>15}us\t{time / total * 100:>5.2f}% of total time\t{progress_bar(time/total, width=30)}\t{timedelta(microseconds=time)}")

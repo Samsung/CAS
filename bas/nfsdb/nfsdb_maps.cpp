@@ -22,10 +22,10 @@ unsigned long nfsdb_has_unique_keys(const struct nfsdb* nfsdb) {
 
 	std::set<struct eid, eid_cmp> kset;
 	for (unsigned long u=0; u<nfsdb->nfsdb_count; ++u) {
-		if (kset.find(nfsdb->nfsdb[u].eid)!=kset.end()) {
+		if (kset.find(nfsdb->nfsdb_entry[u].eid)!=kset.end()) {
 			return u;
 		}
-		kset.insert(nfsdb->nfsdb[u].eid);
+		kset.insert(nfsdb->nfsdb_entry[u].eid);
 	}
 
 	return 0;
@@ -170,7 +170,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 	std::map<unsigned long,struct nfsdb_entry*> linkedMap;
 	for (unsigned long u=0; u<nfsdb->nfsdb_count; ++u) {
 
-		struct nfsdb_entry* entry = &nfsdb->nfsdb[u];
+		struct nfsdb_entry* entry = &nfsdb->nfsdb_entry[u];
 
 		unsigned long pid = entry->eid.pid;
 		processMap[pid].push_back(entry);
@@ -308,7 +308,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		node->rd_entry_count = rdSet.size();
 		size_t u=0;
 		for (openfileHandleSet::iterator j=rdSet.begin(); j!=rdSet.end(); ++j,++u) {
-			node->rd_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->rd_entry_list[u] = &nfsdb->nfsdb_entry[(*j).first];
 			node->rd_entry_index[u] = (*j).second;
 		}
 		node->wr_entry_list = (struct nfsdb_entry**)malloc(wrSet.size()*sizeof(struct nfsdb_entry*));
@@ -316,7 +316,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		node->wr_entry_count = wrSet.size();
 		u=0;
 		for (openfileHandleSet::iterator j=wrSet.begin(); j!=wrSet.end(); ++j,++u) {
-			node->wr_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->wr_entry_list[u] = &nfsdb->nfsdb_entry[(*j).first];
 			node->wr_entry_index[u] = (*j).second;
 		}
 		node->rw_entry_list = (struct nfsdb_entry**)malloc(rwSet.size()*sizeof(struct nfsdb_entry*));
@@ -324,7 +324,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		node->rw_entry_count = rwSet.size();
 		u=0;
 		for (openfileHandleSet::iterator j=rwSet.begin(); j!=rwSet.end(); ++j,++u) {
-			node->rw_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->rw_entry_list[u] = &nfsdb->nfsdb_entry[(*j).first];
 			node->rw_entry_index[u] = (*j).second;
 		}
 		node->ga_entry_list = (struct nfsdb_entry**)malloc(gaSet.size()*sizeof(struct nfsdb_entry*));
@@ -332,7 +332,7 @@ int nfsdb_maps(struct nfsdb* nfsdb, int show_stats) {
 		node->ga_entry_count = gaSet.size();
 		u=0;
 		for (openfileHandleSet::iterator j=gaSet.begin(); j!=gaSet.end(); ++j,++u) {
-			node->ga_entry_list[u] = &nfsdb->nfsdb[(*j).first];
+			node->ga_entry_list[u] = &nfsdb->nfsdb_entry[(*j).first];
 			node->ga_entry_index[u] = (*j).second;
 		}
 		node->global_access = std::get<4>((*i).second);

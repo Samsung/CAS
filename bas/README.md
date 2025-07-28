@@ -83,7 +83,8 @@ BAS is a tool for extracting information regarding executed processes and opened
                                                // otherwise it is 0 (integrated compiler)
       },
       "l": <path_to_linked_file_created_by_this_linker_process> // exists only if this execution was a linker
-      "t": <type of the linked module> // 1 for the really linked executable/shared object and 0 for the ar archive
+      "t": <type of the linked module>, // 1 for the really linked executable/shared object and 0 for the ar archive
+      "u": [{"t": <timestamp>,"c":<cpu_id>}] // ids of the cpus the process was running on with timestamps of the first event on that cpu
     },
     (...)
   ]

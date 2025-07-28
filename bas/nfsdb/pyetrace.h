@@ -204,28 +204,28 @@ static PyMethodDef libetrace_methods[] = {
 __attribute__((unused))
 #endif
 static struct PyModuleDef libetrace_module = {
-    PyModuleDef_HEAD_INIT,
+	PyModuleDef_HEAD_INIT,
     "libetrace",   				/* name of module */
     "etrace Python tooling",	/* module documentation, may be NULL */
     -1,							/* size of per-interpreter state of the module,
-                 	 	 	 	   or -1 if the module keeps state in global variables. */
+								or -1 if the module keeps state in global variables. */
 	libetrace_methods,
 };
 
 typedef struct {
     PyObject_HEAD
 	int verbose;
-    int debug;
-    int init_done;
+	int debug;
+	int init_done;
 
 	CUnflatten unflatten;
 	CUnflatten unflatten_deps;
 
-    const struct nfsdb* nfsdb;
-    const struct nfsdb_deps* nfsdb_deps;
-    PyObject* libetrace_nfsdb_entry_openfile_filterMap;
-    PyObject* libetrace_nfsdb_entry_command_filterMap;
-    PyObject* reMatchFunction;
+	const struct nfsdb* nfsdb;
+	const struct nfsdb_deps* nfsdb_deps;
+	PyObject* libetrace_nfsdb_entry_openfile_filterMap;
+	PyObject* libetrace_nfsdb_entry_command_filterMap;
+	PyObject* reMatchFunction;
 } libetrace_nfsdb_object;
 
 void libetrace_nfsdb_dealloc(libetrace_nfsdb_object* self);
@@ -269,6 +269,8 @@ PyObject* libetrace_nfsdb_module_dependencies(libetrace_nfsdb_object *self, PyOb
 PyObject* libetrace_nfsdb_module_dependencies_count(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_reverse_module_dependencies(libetrace_nfsdb_object *self, PyObject *args, PyObject* kwargs);
 PyObject* libetrace_nfsdb_filemap_has_path(libetrace_nfsdb_object *self, PyObject *args);
+PyObject* libetrace_nfsdb_thread_count(PyObject* self, void* closure);
+PyObject* libetrace_nfsdb_threads(PyObject* self, void* closure);
 int libetrace_nfsdb_entry_has_shared_argv(const struct nfsdb_entry * entry);
 
 #ifdef __cplusplus
@@ -318,6 +320,8 @@ static PyGetSetDef libetrace_nfsdb_getset[] = {
 	{"filemap",libetrace_nfsdb_get_filemap,0,"nfsdb filemap object (maps a path to the corresponding openfile entry (or the nfsdb entry where the file was opened)",0},
 	{"source_root",libetrace_nfsdb_get_source_root,0,"nfsdb database source root",0},
 	{"dbversion",libetrace_nfsdb_get_dbversion,0,"nfsdb database version string",0},
+	{"thread_count", libetrace_nfsdb_thread_count, 0, "Returns the total number of threads in the database", 0},
+	{"threads", libetrace_nfsdb_threads, 0, "Set with all threads used in the database"},
 	{0,0,0,0,0},
 };
 
@@ -326,16 +330,16 @@ static PyMemberDef libetrace_nfsdb_members[] = {
 };
 
 static PyNumberMethods libetrace_nfsdb_number_methods = {
-		.nb_bool = libetrace_nfsdb_bool,
+	.nb_bool = libetrace_nfsdb_bool,
 };
 
 static PySequenceMethods libetrace_nfsdb_sequence_methods = {
-		.sq_length = libetrace_nfsdb_sq_length,
-		.sq_item = libetrace_nfsdb_sq_item,
+	.sq_length = libetrace_nfsdb_sq_length,
+	.sq_item = libetrace_nfsdb_sq_item,
 };
 
 static PyMappingMethods libetrace_nfsdb_mapping_methods = {
-		.mp_subscript = libetrace_nfsdb_mp_subscript,
+	.mp_subscript = libetrace_nfsdb_mp_subscript,
 };
 
 #ifdef __cplusplus
@@ -398,8 +402,8 @@ static PyTypeObject libetrace_nfsdbType = {
 typedef struct {
     PyObject_HEAD
 	const struct nfsdb_entry* entry;
-    unsigned long nfsdb_index;
-    const struct nfsdb* nfsdb;
+	unsigned long nfsdb_index;
+	libetrace_nfsdb_object* nfsdb_object;
 } libetrace_nfsdb_entry_object;
 
 void libetrace_nfsdb_entry_dealloc(libetrace_nfsdb_entry_object* self);
@@ -444,6 +448,7 @@ PyObject* libetrace_nfsdb_entry_get_linked_type(PyObject* self, void* closure);
 PyObject* libetrace_nfsdb_entry_get_compilation_info(PyObject* self, void* closure);
 Py_hash_t libetrace_nfsdb_entry_hash(PyObject *o);
 PyObject* libetrace_nfsdb_entry_richcompare(PyObject *self, PyObject *other, int op);
+PyObject* libetrace_nfsdb_entry_cpus(PyObject* self, void* closure);
 
 static PyMethodDef libetrace_nfsdbEntry_methods[] = {
 	{"json",(PyCFunction)libetrace_nfsdb_entry_json,METH_VARARGS,"Returns the json representation of the nfsdb entry"},
@@ -491,6 +496,7 @@ static PyGetSetDef libetrace_nfsdbEntry_getset[] = {
 	{"linked_type",libetrace_nfsdb_entry_get_linked_type,0,"nfsdb entry linked file type",0},
 	{"compilation_info",libetrace_nfsdb_entry_get_compilation_info,0,"nfsdb entry compilation info",0},
 	{"ptr",libetrace_nfsdb_entry_get_ptr,0,"nfsdb entry low level index value",0},
+	{"cpus", libetrace_nfsdb_entry_cpus, 0, "nfsdb entry cpus list", 0},
 	{0,0,0,0,0},
 };
 
@@ -512,9 +518,9 @@ static PyTypeObject libetrace_nfsdbEntryType = {
 typedef struct {
     PyObject_HEAD
 	unsigned long start;
-    unsigned long step;
-    unsigned long end;
-    const struct nfsdb* nfsdb;
+	unsigned long step;
+	unsigned long end;
+	libetrace_nfsdb_object* nfsdb_object;
 } libetrace_nfsdb_iter_object;
 
 void libetrace_nfsdb_iter_dealloc(libetrace_nfsdb_iter_object* self);
@@ -544,7 +550,7 @@ typedef struct {
     unsigned long step;
     unsigned long end;
     unsigned long open_index;
-    const struct nfsdb* nfsdb;
+    libetrace_nfsdb_object* nfsdb_object;
 } libetrace_nfsdb_opens_iter_object;
 
 void libetrace_nfsdb_opens_iter_dealloc(libetrace_nfsdb_opens_iter_object* self);
@@ -570,14 +576,14 @@ static PyTypeObject libetrace_nfsdbOpensIterType = {
 
 typedef struct {
     PyObject_HEAD
-    libetrace_nfsdb_object* nfsdb;
-    unsigned long patch_size;
+    libetrace_nfsdb_object* nfsdb_object;
+	unsigned long patch_size;
     struct file_filter** cflts;
     size_t* cflts_size;
     struct file_filter* fflts[1];
-    size_t fflts_size[1];
+	size_t fflts_size[1];
     struct file_filter* fast_filter;
-    Py_ssize_t filter_count;
+	Py_ssize_t filter_count;
     struct rb_node* filemap_node;
 } libetrace_nfsdb_filtered_opens_paths_iter_object;
 
@@ -604,15 +610,15 @@ static PyTypeObject libetrace_nfsdbFilteredOpensPathsIterType = {
 
 typedef struct {
     PyObject_HEAD
-    libetrace_nfsdb_object* nfsdb;
-    unsigned long patch_size;
+    libetrace_nfsdb_object* nfsdb_object;
+	unsigned long patch_size;
     unsigned long path_index;	/* Index of a nfsdbEntry in a given path to flush next */
     struct file_filter** cflts;
     size_t* cflts_size;
     struct file_filter* fflts[1];
-    size_t fflts_size[1];
+	size_t fflts_size[1];
     struct file_filter* fast_filter;
-    Py_ssize_t filter_count;
+	Py_ssize_t filter_count;
     struct rb_node* filemap_node;
 } libetrace_nfsdb_filtered_opens_iter_object;
 
@@ -622,7 +628,7 @@ Py_ssize_t libetrace_nfsdb_filtered_opens_iter_sq_length(PyObject* self);
 PyObject* libetrace_nfsdb_filtered_opens_iter_next(PyObject *self);
 
 static PySequenceMethods libetrace_nfsdbFilteredOpensIter_sequence_methods = {
-		.sq_length = libetrace_nfsdb_filtered_opens_iter_sq_length,
+	.sq_length = libetrace_nfsdb_filtered_opens_iter_sq_length,
 };
 
 static PyTypeObject libetrace_nfsdbFilteredOpensIterType = {
@@ -639,15 +645,15 @@ static PyTypeObject libetrace_nfsdbFilteredOpensIterType = {
 
 typedef struct {
     PyObject_HEAD
-    libetrace_nfsdb_object* nfsdb;
-    unsigned long patch_size;
+    libetrace_nfsdb_object* nfsdb_object;
+	unsigned long patch_size;
     struct command_filter** cflts;
     size_t* cflts_size;
     struct command_filter* fflts[1];
-    size_t fflts_size[1];
+	size_t fflts_size[1];
     struct command_filter* fast_filter;
-    Py_ssize_t filter_count;
-    unsigned long command_index;
+	Py_ssize_t filter_count;
+	unsigned long command_index;
 } libetrace_nfsdb_filtered_commands_iter_object;
 
 void libetrace_nfsdb_filtered_commands_iter_dealloc(libetrace_nfsdb_filtered_commands_iter_object* self);
@@ -656,7 +662,7 @@ Py_ssize_t libetrace_nfsdb_filtered_commands_iter_sq_length(PyObject* self);
 PyObject* libetrace_nfsdb_filtered_commands_iter_next(PyObject *self);
 
 static PySequenceMethods libetrace_nfsdbFilteredCommandsIter_sequence_methods = {
-		.sq_length = libetrace_nfsdb_filtered_commands_iter_sq_length,
+	.sq_length = libetrace_nfsdb_filtered_commands_iter_sq_length,
 };
 
 static PyTypeObject libetrace_nfsdbFilteredCommandsIterType = {
@@ -674,7 +680,7 @@ static PyTypeObject libetrace_nfsdbFilteredCommandsIterType = {
 typedef struct {
     PyObject_HEAD
 	unsigned long pid;
-    unsigned long exeidx;
+	unsigned long exeidx;
 } libetrace_nfsdb_entry_eid_object;
 
 void libetrace_nfsdb_entry_eid_dealloc(libetrace_nfsdb_entry_eid_object* self);
@@ -709,7 +715,7 @@ static PyTypeObject libetrace_nfsdbEntryEidType = {
 typedef struct {
     PyObject_HEAD
 	unsigned long pid;
-    unsigned long flags;
+	unsigned long flags;
 } libetrace_nfsdb_entry_cid_object;
 
 void libetrace_nfsdb_entry_cid_dealloc(libetrace_nfsdb_entry_cid_object* self);
@@ -736,17 +742,17 @@ static PyTypeObject libetrace_nfsdbEntryCidType = {
 typedef struct {
     PyObject_HEAD
 	unsigned long path;
-    unsigned long mode;
-    unsigned long size;
-    unsigned long original_path;
+	unsigned long mode;
+	unsigned long size;
+	unsigned long original_path;
 	unsigned long open_timestamp;
 	unsigned long close_timestamp;
-    const struct nfsdb* nfsdb;
-    unsigned long parent; /* Parent nfsdb entry that contains this openfile */
+	libetrace_nfsdb_object* nfsdb_object;
+	unsigned long parent; /* Parent nfsdb entry that contains this openfile */
     unsigned long index; /* Index of this openfile in the parent nfsdb entry */
-    unsigned long opaque; /* Index to the nfsdb entry with particular opaque type (i.e. compilation or linking)
-                             which references this openfile through its opaque type specific functionality
-                             (i.e. reference to compiled file used by the compilation nfsdb entry) */
+	unsigned long opaque; /* Index to the nfsdb entry with particular opaque type (i.e. compilation or linking)
+							 which references this openfile through its opaque type specific functionality
+							 (i.e. reference to compiled file used by the compilation nfsdb entry) */
 } libetrace_nfsdb_entry_openfile_object;
 
 void libetrace_nfsdb_entry_openfile_dealloc(libetrace_nfsdb_entry_openfile_object* self);
@@ -784,7 +790,7 @@ PyObject* libetrace_nfsdb_entry_openfile_path_modified(libetrace_nfsdb_entry_ope
 PyObject* libetrace_nfsdb_entry_openfile_has_opaque_entry(libetrace_nfsdb_entry_openfile_object *self, PyObject *args);
 Py_hash_t libetrace_nfsdb_entry_openfile_hash(PyObject *o);
 PyObject* libetrace_nfsdb_entry_openfile_richcompare(PyObject *self, PyObject *other, int op);
-libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(const struct nfsdb* nfsdb,
+libetrace_nfsdb_entry_openfile_object* libetrace_nfsdb_create_openfile_entry(libetrace_nfsdb_object* nfsdb,
 		const struct nfsdb_entry* entry,unsigned long entry_index, unsigned long nfsdb_index);
 
 static PyMemberDef libetrace_nfsdb_entry_openfile_members[] = {
@@ -848,8 +854,8 @@ static PyTypeObject libetrace_nfsdbEntryOpenfileType = {
 typedef struct {
     PyObject_HEAD
 	struct compilation_info* ci;
-    const struct nfsdb* nfsdb;
-    unsigned long parent; /* Parent nfsdb entry that contains this compilation info */
+    libetrace_nfsdb_object* nfsdb_object;
+	unsigned long parent; /* Parent nfsdb entry that contains this compilation info */
 } libetrace_nfsdb_entry_compilation_info;
 
 void libetrace_nfsdb_entry_compilation_info_dealloc(libetrace_nfsdb_entry_compilation_info* self);
@@ -902,8 +908,8 @@ static PyTypeObject libetrace_nfsdbEntryCompilationInfoType = {
 };
 
 typedef struct {
-    PyObject_HEAD
-    const struct nfsdb* nfsdb;
+	PyObject_HEAD
+	libetrace_nfsdb_object* nfsdb_object;
 } libetrace_nfsdb_filemap;
 
 void libetrace_nfsdb_filemap_dealloc(libetrace_nfsdb_filemap* self);
@@ -919,7 +925,7 @@ static PyGetSetDef libetrace_nfsdb_filemap_getset[] = {
 };
 
 static PyMappingMethods libetrace_nfsdb_filemap_mapping_methods = {
-		.mp_subscript = libetrace_nfsdb_filemap_mp_subscript,
+	.mp_subscript = libetrace_nfsdb_filemap_mp_subscript,
 };
 
 static PyTypeObject libetrace_nfsdbFileMapType = {
@@ -932,6 +938,47 @@ static PyTypeObject libetrace_nfsdbFileMapType = {
 	.tp_members = libetrace_nfsdb_filemap_members,
 	.tp_getset = libetrace_nfsdb_filemap_getset,
 	.tp_new = libetrace_nfsdb_filemap_new,
+};
+
+typedef struct
+{
+    PyObject_HEAD
+    unsigned long cpu;
+    unsigned long timestamp;
+} libetrace_cputime_object;
+
+void libetrace_cputime_dealloc(libetrace_cputime_object *self);
+
+PyObject* libetrace_cputime_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds);
+
+PyObject* libetrace_cputime_repr(PyObject *self);
+
+PyObject* libetrace_cputime_richcompare(PyObject *self, PyObject *other, int op);
+PyObject* libetrace_nfsdb_cputime_json(libetrace_cputime_object *self, PyObject *args);
+
+
+static PyMemberDef libetrace_cputime_members[] = {
+    {"cpu", T_ULONG, offsetof(libetrace_cputime_object, cpu), READONLY},
+    {"timestamp", T_ULONG, offsetof(libetrace_cputime_object, timestamp), READONLY},
+    {0} /* Sentinel */
+};
+
+static PyMethodDef libetrace_nfsdb_cputime_methods[] = {
+	{"json",(PyCFunction)libetrace_nfsdb_cputime_json,METH_VARARGS,"Returns the json representation of the cputime object"},
+	{NULL,NULL,0,NULL} /* Sentinel */
+};
+
+static PyTypeObject libetrace_nfsdbCputimeType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libetrace.nfsdbCputime",
+    .tp_basicsize = sizeof(libetrace_cputime_object),
+    .tp_dealloc = (destructor)libetrace_cputime_dealloc,
+    .tp_repr = (reprfunc)libetrace_cputime_repr,
+    .tp_doc = "libetrace CPU time type",
+    .tp_richcompare = (richcmpfunc)libetrace_cputime_richcompare,
+    .tp_members = libetrace_cputime_members,
+	.tp_methods = libetrace_nfsdb_cputime_methods,
+    .tp_new = libetrace_cputime_new,
 };
 
 #endif /* __PYETRACE_H_ */

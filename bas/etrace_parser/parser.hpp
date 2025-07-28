@@ -208,6 +208,11 @@ struct Mount {
     uint64_t mount_timestamp;
 };
 
+struct CpuTime {
+    uint64_t timestamp;
+    unsigned cpu;
+};
+
 struct Execution {
     Execution() = default;
     Execution(upid_t pid)
@@ -229,6 +234,7 @@ struct Execution {
     std::vector<std::string> arguments;
     std::vector<Child> children;
     uint8_t exit_code = 0;
+    std::vector<CpuTime> cpus;
 
     void add_open_file(File &file) {
         auto lookup = opened_files.find(file.original_path);

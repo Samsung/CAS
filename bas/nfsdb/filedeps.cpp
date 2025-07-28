@@ -639,7 +639,7 @@ static long depproc_process_written_file(libetrace_nfsdb_object* self, struct de
 		}
 		context->all_writing_process_list.insert(writing_pid);
 		libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
-				self->nfsdb,writing_entry,writing_open_index,writing_entry->nfsdb_index);
+				self,writing_entry,writing_open_index,writing_entry->nfsdb_index);
 		if (!context->openfile_deps.insert(openfile).second) {
 			Py_DecRef((PyObject*)openfile);
 		}
@@ -751,7 +751,7 @@ static long get_process_read_files(libetrace_nfsdb_object* self, struct depproc_
 					}
 					if ((context->files_set.find(rdh)==context->files_set.end()) && (context->fdone.find(rdh)==context->fdone.end())) {
 						libetrace_nfsdb_entry_openfile_object* openfile = libetrace_nfsdb_create_openfile_entry(
-								self->nfsdb,entry,i,entry->nfsdb_index);
+								self,entry,i,entry->nfsdb_index);
 						if (!context->openfile_deps.insert(openfile).second) {
 							Py_DecRef((PyObject*)openfile);
 						}

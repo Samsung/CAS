@@ -124,6 +124,13 @@ void flush_entries(ParsingResults& results, pipe_map_t& pipe_map, std::ostream& 
             }
         }
 
+        output << "],\"u\":[";
+        for (auto u = execution.cpus.begin(); u != execution.cpus.end(); ++u) {
+            if (u != execution.cpus.begin())
+                output << ",";
+
+            output << "{\"c\":" << (*u).cpu << ",\"t\":" << (*u).timestamp << "}";
+        }
         output << "]";
     };
 

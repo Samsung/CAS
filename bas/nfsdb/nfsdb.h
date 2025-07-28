@@ -13,7 +13,7 @@
  */
 #define NFSDB_MAGIC_NUMBER			0x424453464e42494cULL	/* b'LIBNFSDB' */
 #define NFSDB_DEPS_MAGIC_NUMBER		0x5350454442494cULL		/* b'LIBDEPS\0' */
-#define LIBETRACE_VERSION			4ULL
+#define LIBETRACE_VERSION			5ULL
 
 
 struct eid {
@@ -39,6 +39,11 @@ struct openfile {
 struct pp_def {
 	unsigned long name;
 	unsigned long value;
+};
+
+struct cputime {
+	unsigned long cpu;
+	unsigned long timestamp;
 };
 
 struct nfsdb_entry_file_index {
@@ -93,6 +98,8 @@ struct nfsdb_entry {
 	int linked_type;
 	int has_shared_argv;
 	int return_code;
+	struct cputime* cpu;
+	unsigned long cpu_count;
 };
 
 struct nfsdb_deps {
@@ -113,7 +120,7 @@ struct nfsdb {
 	unsigned long long db_version;
 	/* End of FTDB.img header */
 
-	struct nfsdb_entry* nfsdb;
+	struct nfsdb_entry* nfsdb_entry;
 	unsigned long nfsdb_count;
 	const char* source_root;
 	unsigned long source_root_size;
@@ -137,6 +144,10 @@ struct nfsdb {
 	struct rb_root revstringmap;
 	struct rb_root filemap;
 	struct rb_root linkedmap;
+	unsigned long* threads;
+	unsigned long threads_count;
 };
+
+
 
 #endif /* __NFSDB_H__ */

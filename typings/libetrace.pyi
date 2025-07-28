@@ -19,6 +19,16 @@ class nfsdb:
     """
     database version - set at cache creation
     """
+    
+    thread_count: int
+    """
+    Number of threads used in all processes in the database
+    """
+    
+    threads: Set[int]
+    """
+    Set of thread numbers used in all processes in the database
+    """
 
     filemap: Dict[str,List[nfsdbEntryOpenfile]]
     """
@@ -117,7 +127,6 @@ class nfsdb:
         :type no_map_memory: bool
         :return: True if load succeed otherwise False
         """
-
     def create_deps_cache(self, depmap, direct_depmap, deps_cache_db_filename, show_stats=False) -> bool:
         """
         Function create dependencies cache file based on provided dependency maps.
@@ -739,6 +748,7 @@ class nfsdbEntry:
     linked_type: int
     compilation_info: nfsdbEntryCompilationInfo
     return_code: int
+    cpus: List[nfsdbCputime]
 
     def json(self) -> Dict:
         """
@@ -829,6 +839,14 @@ class nfsdbFilteredCommandsIter(Iterator, Sized):
     Iterator for filtered execs results.
     """
 
+class nfsdbCputime():
+    """
+    Chronological CPU threads
+    """
+    cpu: int
+    """thread used"""
+    timestamp: int
+    """usage start timestamp"""
 class clang:
 
     allow_pp_in_compilations:bool

@@ -1127,7 +1127,9 @@ class CASDatabase:
         if debug:
             print("Before parse")
             print_mem_usage()
-        libetrace.parse_nfsdb(tracer_db_filename, json_db_filename, '-j'+str(threads))
+        ret = libetrace.parse_nfsdb(tracer_db_filename, json_db_filename, '-j'+str(threads))
+        if ret is None:
+            raise RuntimeError("Parser finished with an error")
         if debug:
             print("After parse")
             print_mem_usage()
