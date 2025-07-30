@@ -1,7 +1,7 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import * as t from "$lib/paraglide/messages.js";
 import { type CasApiEvent, vscode } from "$lib/vscode";
-import { onMount } from "svelte";
 
 let isGenerated = $state(false);
 let snippets = $state<[string, string][]>([]);

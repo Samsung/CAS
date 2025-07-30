@@ -1,17 +1,10 @@
-import { History } from "@cas/helpers/history.js";
+import { CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
 import { Paged } from "@cas/types/cas_server.js";
-import type { historyEntry } from "@cas/webview/src/lib/cas/types";
-import { basename } from "path";
-import { scheduler } from "timers/promises";
-import { isDeepStrictEqual } from "util";
+import { getLogger } from "@logtape/logtape";
 import * as vscode from "vscode";
 import { DBProvider } from "../db/index";
-import { internalSnippets, Snippets } from "../db/snippets";
-import { debug } from "../logger";
 import { Settings } from "../settings";
-import { CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
 import { createWebviewPanel } from "../webview";
-import { WorkspaceGenerator } from "../workspaces/generator";
 
 export class CASCompilationInfo {
 	private panel: vscode.WebviewPanel | undefined = undefined;
@@ -19,6 +12,7 @@ export class CASCompilationInfo {
 	private dbProvider: DBProvider;
 	private readonly s: Settings;
 	private readonly telemetry: CasTelemetryLogger;
+	private readonly logger = getLogger(["CAS", "view", "compilation_info"]);
 	constructor(
 		context: vscode.ExtensionContext,
 		dbProvider: DBProvider,
@@ -76,7 +70,7 @@ export class CASCompilationInfo {
 			let initDone: (v?: unknown) => unknown;
 			const initialized = new Promise((resolve) => (initDone = resolve));
 			this.panel.onDidDispose(() => {
-				debug("onDidDispose");
+				this.logger.debug`Webview disposed`;
 				this.panel?.dispose();
 				this.panel = undefined;
 			});
@@ -102,7 +96,7 @@ export class CASCompilationInfo {
 
 			this.panel.onDidChangeViewState(
 				async (msg: vscode.WebviewPanelOnDidChangeViewStateEvent) => {
-					debug("onDidChangeViewState" + msg);
+					this.logger.debug`Webview view state changed: ${msg}`;
 				},
 			);
 			await initialized;

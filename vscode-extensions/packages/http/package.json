@@ -20,16 +20,16 @@
   },
   "devDependencies": {
     "@cas/tsconfig": "workspace:*",
-    "@types/cacache": "^19.0.0",
+    "@types/cacache": "catalog:",
     "@types/node": "catalog:",
-    "@types/vscode": "^1.101.0",
+    "@types/vscode": "^1.101",
     "esbuild": "catalog:",
     "typescript": "catalog:",
-    "winston": "^3.17.0"
+    "winston": "catalog:"
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "cacache": "^19.0.1",
-    "ky": "^1.8.1"
+    "cacache": "catalog:",
+    "ky": "catalog:"
   }
 }

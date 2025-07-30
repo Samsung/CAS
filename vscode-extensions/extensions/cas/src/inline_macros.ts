@@ -1,4 +1,5 @@
 import { sleep } from "@cas/helpers/promise.js";
+import { getLogger } from "@logtape/logtape";
 import QuickLRU from "quick-lru";
 import * as vscode from "vscode";
 import {
@@ -18,7 +19,6 @@ import {
 	Trace,
 	WorkspaceEdit,
 } from "vscode-languageclient/node";
-import { error } from "./logger";
 import { Settings } from "./settings";
 
 const _inlineMacroKind: vscode.CodeActionKind =
@@ -44,6 +44,7 @@ export class InlineMacrosProvider implements vscode.Disposable {
 	client: LanguageClient;
 	macroFeature: MacroExpansionFeature;
 	settings: Settings;
+	private logger = getLogger(["CAS", "inline-macros", "provider"]);
 	constructor(ctx: vscode.ExtensionContext, settings: Settings) {
 		this.#ctx = ctx;
 		this.settings = settings;
@@ -212,7 +213,9 @@ export class InlineMacrosProvider implements vscode.Disposable {
 					),
 				),
 			)
-			.catch((err) => error(`couldn't start server: ${err}`));
+			.catch((err) => {
+				this.logger.error`Failed to start LSP server: ${err}`;
+			});
 	}
 
 	async dispose() {
@@ -338,6 +341,7 @@ class InlinedMacroFSProvider implements vscode.FileSystemProvider {
 //#region MacroExpansionFeature
 class MacroExpansionFeature implements StaticFeature {
 	client: LanguageClient;
+	private logger = getLogger(["CAS", "inline-macros", "feature"]);
 	constructor(client: LanguageClient) {
 		this.client = client;
 	}
@@ -346,6 +350,8 @@ class MacroExpansionFeature implements StaticFeature {
 		document: vscode.TextDocument,
 		range: vscode.Range,
 	): Promise<vscode.WorkspaceEdit> {
+		this.logger
+			.debug`Expanding macros in ${document.uri.fsPath} at ${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
 		let doneInlining = false;
 		const inliningTimer = setTimeout(async () => {
 			if (!doneInlining) {
@@ -387,6 +393,8 @@ class MacroExpansionFeature implements StaticFeature {
 		document: vscode.TextDocument,
 		range: vscode.Range,
 	) {
+		this.logger
+			.debug`Expanding function macros in ${document.uri.fsPath} at ${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
 		const actions: vscode.CodeAction[] = await vscode.commands.executeCommand(
 			"vscode.executeCodeActionProvider",
 			document.uri,
@@ -502,6 +510,7 @@ class MacroExpansionFeature implements StaticFeature {
 		_capabilities: ServerCapabilities,
 		_documentSelector: vscode.DocumentSelector | undefined,
 	): void {
+		this.logger.debug`Initializing macro expansion feature`;
 		vscode.commands.executeCommand(
 			"setContext",
 			"cas.MacroExpansion.supported",

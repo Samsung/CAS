@@ -1,5 +1,7 @@
 import { MaybePromise } from "@cas/helpers";
+import { CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
 import type { CasApiEvent } from "@cas/types/webview.js";
+import { getLogger } from "@logtape/logtape";
 import * as v from "valibot";
 import {
 	commands,
@@ -10,7 +12,6 @@ import {
 } from "vscode";
 import { OGSearchQuery, OGSearchQuerySchema, OpenGrokApi } from "../og";
 import { Settings } from "../settings";
-import { CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
 import { createWebviewPanel } from "../webview";
 
 const getLineEvent = v.object({
@@ -26,6 +27,7 @@ export class OGView {
 	readonly #s: Settings;
 	readonly #telemetry: CasTelemetryLogger;
 	readonly #og: OpenGrokApi;
+	readonly #logger = getLogger(["CAS", "view", "opengrok"]);
 	constructor(context: ExtensionContext, settings: Settings, og: OpenGrokApi) {
 		this.#ctx = context;
 		this.#s = settings;

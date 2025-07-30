@@ -1,5 +1,4 @@
-import { dirname } from "path";
-import { WorkspaceFolder, window } from "vscode";
+import { window } from "vscode";
 
 export function currentFilePath() {
 	return window.activeTextEditor?.document.uri.fsPath;

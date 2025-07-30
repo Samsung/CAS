@@ -1,8 +1,6 @@
 import { DepsSchema } from "@cas/deps";
 import type { MaybePromise } from "@cas/helpers/promise.ts";
 import { Manifest } from "@cas/manifest";
-import { BASFile } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
 import { ExtensionContext, Progress } from "vscode";
 import { DBProvider } from "../../db";
 import { Settings } from "../../settings";

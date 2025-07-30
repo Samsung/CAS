@@ -1,6 +1,6 @@
 <script lang="ts">
-import { browser } from "$app/environment";
 import { onDestroy, onMount, type Snippet } from "svelte";
+import { browser } from "$app/environment";
 
 interface props {
 	children: Snippet;

@@ -1,5 +1,3 @@
-import type { TypedArray } from "./array";
-
 type ValidEncodingLabel =
 	| "unicode-1-1-utf-8"
 	| "utf-8"

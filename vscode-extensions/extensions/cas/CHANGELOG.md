@@ -14,6 +14,28 @@
   * dependencies
     * @cas/webview bumped to 0.0.20
 
+## [0.21.11](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/compare/cas-extension-v0.21.10...cas-extension-v0.21.11) (2025-07-18)
+
+
+### Features
+
+* open telemetry ([73b3dce](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/commit/73b3dce2c4a3d74a8a928b1ee35b55e7cc44355f))
+* opentelemetry ([#140](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/issues/140)) ([73b3dce](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/commit/73b3dce2c4a3d74a8a928b1ee35b55e7cc44355f))
+
+
+### Bug Fixes
+
+* vscode versions ([1cbb8a6](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/commit/1cbb8a67f35f9ecee6f8b66b6ab49faa01470711))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @cas/webview bumped to 0.1.5
+  * devDependencies
+    * cas-updater bumped to 0.0.6
+
 ## [0.21.10](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/compare/cas-extension-v0.21.9...cas-extension-v0.21.10) (2025-06-18)
 
 

@@ -6,7 +6,6 @@ import {
 	Position,
 	Range,
 	TextDocument,
-	Uri,
 } from "vscode";
 import type { OpenGrokApi } from ".";
 

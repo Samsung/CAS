@@ -24,6 +24,7 @@ import { RowSelectionModule, type ColDef,
     RowAutoHeightModule,
     CsvExportModule,
     AllCommunityModule,
+    type Module,
 } from "ag-grid-community"
 import { copyToClipboard } from "@svelte-put/copy";
 import CasResultCell from "./CasResultCell.svelte";
@@ -284,7 +285,7 @@ let gridOptions: GridOptions<entry> = {
 	},	
 };
 
-const modules = [InfiniteRowModelModule, RowSelectionModule, ColumnAutoSizeModule, PaginationModule, RowAutoHeightModule, CsvExportModule, AllCommunityModule];
+const modules: Module[] = [InfiniteRowModelModule, RowSelectionModule, ColumnAutoSizeModule, PaginationModule, RowAutoHeightModule, CsvExportModule, AllCommunityModule];
 </script>
 
 {#if firstResult === undefined || error}

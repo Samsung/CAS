@@ -20,12 +20,13 @@ export type TypedArray =
  */
 
 export function* chunk<T>(arr: Iterable<T>, size: number): Generator<T[]> {
-	const acc: T[] = Array(size);
+	let acc: T[] = Array(size);
 	let i = 0;
 	for (const item of arr) {
 		if (i === size) {
 			i = 0;
 			yield acc;
+			acc = Array(size);
 		}
 		acc[i++] = item;
 	}

@@ -1,14 +1,13 @@
 import { DepSchema, DepsSchema } from "@cas/deps";
-import { encodeText, withTrailingSlash } from "@cas/helpers";
 import { readJSON } from "@cas/helpers/vscode/fs.js";
-import { BASFile } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
+import { getLogger } from "@logtape/logtape";
 import { existsSync, readdirSync, rmdirSync } from "fs";
 import { mkdir, symlink } from "fs/promises";
-import { dirname, join, normalize, parse, relative } from "path";
+import { dirname, join, normalize, relative } from "path";
 import { FileSystemError, Uri, workspace } from "vscode";
-import { debug, error, info } from "../../logger";
-import { DepsGenerator, DepsGeneratorOptions } from "./generator";
+import { DepsGenerator } from "./generator";
+
+const logger = getLogger(["CAS", "workspace", "local"]);
 
 const { fs } = workspace;
 
@@ -35,7 +34,7 @@ const localGenerator: DepsGenerator = {
 		let symlinkCount = 0;
 		let skipCount = 0;
 		const depsRoots = new Set<string>();
-		info(`deps.entries ${deps.entries.length} `);
+		logger.info`Processing ${deps.entries.length} dependencies`;
 		deps.entries = (
 			await Promise.allSettled(
 				deps.entries
@@ -52,17 +51,12 @@ const localGenerator: DepsGenerator = {
 						await symlink(entry.original_path, entry.workspace_path, "file")
 							.then((_) => {
 								symlinkCount++;
-								debug(
-									`[generator.local] createDeps() ADDED link ${entry.original_path} -> ${entry.workspace_path}`,
-								);
+								logger.debug`Created symlink: ${entry.original_path} -> ${entry.workspace_path}`;
 							})
 							.catch((err: FileSystemError) => {
 								skipCount++;
 								if (err.code !== "EEXIST") {
-									error(
-										`[generator.local] (${entry.original_path}) ${err.message}`,
-										true,
-									);
+									logger.error`Failed to create symlink for ${entry.original_path}: ${err.message}`;
 									throw err;
 								}
 							});
@@ -79,9 +73,7 @@ const localGenerator: DepsGenerator = {
 			.filter((result) => result.status === "fulfilled")
 			.map((result) => result.value);
 
-		info(
-			`[generator.local] Linked files new=${symlinkCount} skipped=${skipCount}`,
-		);
+		logger.info`Symlinks created: ${symlinkCount} new, ${skipCount} skipped`;
 		deps.count = deps.entries.length;
 		deps.num_entries = deps.entries.length;
 		deps.version = 2;
@@ -102,10 +94,10 @@ const localGenerator: DepsGenerator = {
 				if (path?.startsWith(out)) {
 					return fs.delete(Uri.file(path)).then(
 						(_done) => {
-							debug(`[generator.local] REMOVED ${path}`);
+							logger.debug`Removed file: ${path}`;
 							let dirPath = dirname(path);
 							while (existsSync(dirPath) && readdirSync(dirPath).length === 0) {
-								debug(`[generator.local] REMOVED empty dir ${dirPath}`);
+								logger.debug`Removed empty directory: ${dirPath}`;
 								let ndirPath = dirname(dirPath);
 								rmdirSync(dirPath);
 								dirPath = ndirPath;

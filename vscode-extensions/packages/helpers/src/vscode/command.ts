@@ -1,9 +1,4 @@
-import {
-	ExtensionTerminalOptions,
-	Terminal,
-	TerminalOptions,
-	window,
-} from "vscode";
+import { Terminal, TerminalOptions, window } from "vscode";
 import { withAbort } from "../promise";
 
 type ExitCode = number;

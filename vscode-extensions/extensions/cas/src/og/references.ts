@@ -1,3 +1,4 @@
+import { getLogger } from "@logtape/logtape";
 import {
 	CancellationToken,
 	Location,
@@ -6,13 +7,11 @@ import {
 	ReferenceContext,
 	ReferenceProvider,
 	TextDocument,
-	Uri,
 } from "vscode";
-import { debug } from "../logger";
 import type { OpenGrokApi } from ".";
-
 export class OGReferenceProvider implements ReferenceProvider {
 	#og: OpenGrokApi;
+	#logger = getLogger(["CAS", "OG", "ReferenceProvider"]);
 	constructor(og: OpenGrokApi) {
 		this.#og = og;
 	}
@@ -25,7 +24,7 @@ export class OGReferenceProvider implements ReferenceProvider {
 		const abort = new AbortController();
 		token.onCancellationRequested(abort.abort);
 		abort.signal.addEventListener("abort", () => {
-			debug("aborted");
+			this.#logger.debug("aborted");
 		});
 		const projects = (document.uri.fragment || "android").split(",");
 		const results = await this.#og.search(

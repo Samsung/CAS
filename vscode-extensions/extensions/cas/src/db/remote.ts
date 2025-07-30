@@ -1,15 +1,17 @@
 import { withTrailingSlash } from "@cas/helpers";
-import { exponentialBackoff, sleep } from "@cas/helpers/promise.js";
+import { exponentialBackoff } from "@cas/helpers/promise.js";
+import { http } from "@cas/http";
 import { CASResult } from "@cas/types/cas_server.js";
-import { ReadableStream, TextDecoderStream } from "stream/web";
+import { getLogger } from "@logtape/logtape";
+import { ReadableStream } from "stream/web";
 import { DBInfo } from "../db/index";
-import { debug } from "../logger";
 import { Settings } from "../settings";
 import { CASDatabase } from "./generic";
 
 export class RemoteCASDatabase extends CASDatabase {
 	serverUrl: URL;
 	readonly supportsStreaming = true;
+	protected readonly logger = getLogger(["CAS", "db", "remote"]);
 	constructor(
 		casPath: DBInfo,
 		ftPath: DBInfo | undefined,
@@ -30,15 +32,16 @@ export class RemoteCASDatabase extends CASDatabase {
 			max: 60_000,
 			signal: this.abort,
 		})) {
-			const res = await fetch(this.serverUrl, {
-				method: "HEAD",
-				mode: "no-cors",
-				signal: this.abort
-					? AbortSignal.any([AbortSignal.timeout(500), this.abort])
-					: AbortSignal.timeout(500),
-			}).catch(() => ({
-				ok: false,
-			}));
+			const res = await http
+				.head(this.serverUrl, {
+					mode: "no-cors",
+					signal: this.abort
+						? AbortSignal.any([AbortSignal.timeout(500), this.abort])
+						: AbortSignal.timeout(500),
+				})
+				.catch(() => ({
+					ok: false,
+				}));
 			if (res.ok) {
 				this.setRunning?.(true);
 				return this.serverUrl.toString();
@@ -51,11 +54,11 @@ export class RemoteCASDatabase extends CASDatabase {
 		this.resetStatus();
 	}
 	async switchFtdb(): Promise<void> {
-		debug("[cas.CASDatabase] SWITCH FTDB");
+		this.logger.debug`Switching FTDB`;
 		const reqUrl = `${this.serverUrl}/reload_ftdb?path=${this.ftPath?.path}&debug=true`;
-		debug(`[cas.CASDatabase] url ${reqUrl}`);
-		const res = await fetch(reqUrl, { signal: this.abort });
-		debug(await res.text());
+		this.logger.debug`Request URL: ${reqUrl}`;
+		const res = await http.get(reqUrl, { signal: this.abort });
+		this.logger.debug`Response: ${await res.text()}`;
 	}
 	// runRawCmd(cmd: string, streaming: true): Promise<ReadableStream<string>>;
 	// runRawCmd(cmd: string, streaming: false): Promise<string>;
@@ -80,9 +83,9 @@ export class RemoteCASDatabase extends CASDatabase {
 		const search = new URLSearchParams(query.split("?", 2).at(1) ?? query);
 		const reqUrl = new URL(query, this.serverUrl);
 		reqUrl.search = search.toString();
-		debug(`[cas.CASDatabase] UrlBackend.runQuery '${reqUrl}'`);
+		this.logger.debug`Running query: ${reqUrl}`;
 		try {
-			const res = await fetch(reqUrl, { signal: this.abort });
+			const res = await http.get(reqUrl, { signal: this.abort });
 			if (!res.ok) {
 				const data = (await res.json()) as CASResult;
 				if (data.ERROR) {

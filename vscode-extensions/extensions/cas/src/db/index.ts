@@ -1,9 +1,9 @@
-import { join, normalize } from "node:path";
+import { normalize } from "node:path";
 import { withTrailingSlash } from "@cas/helpers";
 import { http } from "@cas/http";
 import { ModelStatus, ServerStatus } from "@cas/types/cas_server.js";
+import { getLogger } from "@logtape/logtape";
 import * as vscode from "vscode";
-import { debug, error } from "../logger";
 import { Settings } from "../settings";
 import { CASDatabase } from "./generic";
 import { RemoteCASDatabase } from "./remote";
@@ -44,6 +44,7 @@ export class DBProvider implements vscode.Disposable {
 	ctx: vscode.ExtensionContext;
 
 	#dbSubscriptionIndex?: number;
+	private readonly logger = getLogger(["CAS", "db", "provider"]);
 
 	constructor(context: vscode.ExtensionContext, settings: Settings) {
 		this.s = settings;
@@ -173,14 +174,18 @@ export class DBProvider implements vscode.Disposable {
 					`cas.server.useRemoteFor.${x.dbinfo.path}`,
 					event.button.tooltip !== "Use a local server for this path",
 				);
-				await x.funct(x.dbinfo, this).catch(error);
+				await x
+					.funct(x.dbinfo, this)
+					.catch((e) => this.logger.error`Error handling button click: ${e}`);
 				quickPick.dispose();
 			}
 		});
 		quickPick.onDidChangeSelection(async (selection) => {
 			if (selection[0]) {
 				const x = itemsMap[selection[0].label];
-				await x.funct(x.dbinfo!, this).catch(error);
+				await x
+					.funct(x.dbinfo!, this)
+					.catch((e) => this.logger.error`Error handling selection: ${e}`);
 
 				quickPick.dispose();
 			}
@@ -202,7 +207,7 @@ export class DBProvider implements vscode.Disposable {
 		});
 		if (result) {
 			const dbInfo: DBInfo = { path: result, scheme: "bas_url" };
-			debug("[cas.DBProvider] showBASUrlInputBox == " + JSON.stringify(dbInfo));
+			this.logger.debug`BAS URL input: ${JSON.stringify(dbInfo)}`;
 			let dbs: DBInfo[] | undefined = instance.s.basDBs;
 			dbs?.push(dbInfo);
 			dbs = Object.values(
@@ -226,9 +231,7 @@ export class DBProvider implements vscode.Disposable {
 		});
 		if (result) {
 			const dbInfo: DBInfo = { path: result, scheme: "ftdb_url" };
-			debug(
-				"[cas.DBProvider] showFTDBUrlInputBox == " + JSON.stringify(dbInfo),
-			);
+			this.logger.debug`FTDB URL input: ${JSON.stringify(dbInfo)}`;
 			let dbs: DBInfo[] | undefined = instance.s.FTDBs;
 			dbs?.push(dbInfo);
 			dbs = Object.values(
@@ -254,7 +257,7 @@ export class DBProvider implements vscode.Disposable {
 
 		if (result) {
 			const dbInfo: DBInfo = { path: result.fsPath, scheme: "bas_file" };
-			debug(`[cas.DBProvider] showBASPicker == ${JSON.stringify(dbInfo)}`);
+			this.logger.debug`BAS picker selection: ${JSON.stringify(dbInfo)}`;
 			let dbs: DBInfo[] = instance.s.basDBs;
 			dbs.push(dbInfo);
 			dbs = Object.values(
@@ -285,7 +288,7 @@ export class DBProvider implements vscode.Disposable {
 
 		if (result) {
 			const dbInfo: DBInfo = { path: result.fsPath, scheme: "ftdb_file" };
-			debug(`[cas.DBProvider] showFTDBPicker == ${JSON.stringify(dbInfo)}`);
+			this.logger.debug`FTDB picker selection: ${JSON.stringify(dbInfo)}`;
 			let dbs: DBInfo[] = instance.s.FTDBs;
 			dbs.push(dbInfo);
 			dbs = Object.values(
@@ -298,7 +301,7 @@ export class DBProvider implements vscode.Disposable {
 	}
 
 	async selectOption(dbInfo: DBInfo, instance: DBProvider): Promise<void> {
-		debug(`[cas.DBProvider] selectOption == ${JSON.stringify(dbInfo)}`);
+		this.logger.debug`Selected option: ${JSON.stringify(dbInfo)}`;
 
 		// compatibility with previous setting names
 		// TODO: remove in a couple versions
@@ -310,13 +313,13 @@ export class DBProvider implements vscode.Disposable {
 	}
 	// region DBProvider.switchDB
 	async switchDB(dbInfo: DBInfo) {
-		debug(`[cas.DBProvider] switchDB == ${JSON.stringify(dbInfo)}`);
+		this.logger.debug`Switching DB: ${JSON.stringify(dbInfo)}`;
 		if (dbInfo) {
 			// compatibility with previous scheme names
 			// TODO: remove in a couple versions
 			dbInfo.scheme = dbInfo.scheme.replace("cas", "bas") as DBInfo["scheme"];
 			if (dbInfo.scheme === "bas_file" || dbInfo.scheme === "bas_url") {
-				debug(`[cas.DBProvider] switchDB to >>> ${dbInfo.path}`);
+				this.logger.debug`Switching to BAS DB: ${dbInfo.path}`;
 				this.s.set("basDatabase", dbInfo);
 				await this.setCurrentDb(dbInfo);
 				this.basStatusBarWidget.text = `BAS: ${this.currentDb?.casPath.path}`;
@@ -327,7 +330,7 @@ export class DBProvider implements vscode.Disposable {
 				(dbInfo?.scheme === "ftdb_file" || dbInfo?.scheme === "ftdb_url")
 			) {
 				this.currentDb.ftPath = dbInfo;
-				debug(`[cas.DBProvider] switchDB to >>> ${this.currentDb.ftPath.path}`);
+				this.logger.debug`Switching to FTDB: ${this.currentDb.ftPath.path}`;
 				this.currentDb.switchFtdb();
 				this.ftdbStatusBarWidget.text = `FTDB: ${this.currentDb.ftPath.path}`;
 				this.ftdbStatusBarWidget.show();

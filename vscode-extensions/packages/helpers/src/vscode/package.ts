@@ -1,6 +1,4 @@
 import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import type { Plugin } from "esbuild";
 
 export type AnyJSONSchema = Record<string, any>;
 export async function addConfigurationSchema(

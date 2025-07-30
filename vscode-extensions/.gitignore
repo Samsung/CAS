@@ -3,3 +3,5 @@ node_modules
 .clangd
 dist/*
 !dist/.gitkeep
+
+.tmp

@@ -3,9 +3,9 @@ import { overwriteGetLocale } from "$lib/paraglide/runtime.js";
 import { telemetryInit, trackPageview } from "$lib/telemetry";
 import "../app.css";
 
+import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { vscode } from "$lib/vscode";
-import { onMount } from "svelte";
 import "@vscode-elements/elements/dist/vscode-button";
 import "@vscode-elements/elements/dist/vscode-table";
 import "@vscode-elements/elements/dist/vscode-table-body";

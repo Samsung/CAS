@@ -1,11 +1,11 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
 	"files": {
 		"includes": [
-			"**/src/**/*.ts",
-			"**/src/**/*.svelte",
-			"**/src/**/*.css",
-			"**/media/**/*.css"
+			"{packages,extensions}/*/src/**/*.ts",
+			"{packages,extensions}/*/src/**/*.svelte",
+			"{packages,extensions}/*/src/**/*.css",
+			"{packages,extensions}/*/src/**/*.css"
 		]
 	},
 	"assist": { "actions": { "source": { "organizeImports": "on" } } },
@@ -16,12 +16,14 @@
 			"correctness": {
 				"noSwitchDeclarations": "warn",
 				"noUndeclaredVariables": "off",
-				"noUnusedVariables": "warn"
+				"noUnusedVariables": "warn",
+				"noUnusedImports": "warn"
 			},
 			"style": {
 				"useBlockStatements": "warn",
 				"useNamingConvention": {
-					"level": "off"
+					"level": "off",
+					"options": {}
 				}
 			},
 			"suspicious": {
@@ -29,8 +31,7 @@
 				"noDoubleEquals": "warn",
 				"noPrototypeBuiltins": "warn"
 			}
-		},
-		"includes": ["**", "!**/out", "!**/dist", "!**/*.d.ts"]
+		}
 	},
 	"vcs": {
 		"enabled": true,
@@ -40,7 +41,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["**/*.svelte"],
+			"includes": ["**/*.svelte", "**/*.svelte.ts"],
 			"linter": {
 				"rules": {
 					"correctness": {

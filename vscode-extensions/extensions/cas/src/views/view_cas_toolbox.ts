@@ -1,9 +1,10 @@
+import { type CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
 import type { CasApiEvent } from "@cas/types/webview.js";
+import { getLogger } from "@logtape/logtape";
 import * as vscode from "vscode";
 import type { DBProvider } from "../db/index";
 import { Snippets } from "../db/snippets";
 import type { Settings } from "../settings";
-import { type CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
 import type { CASCmdView } from "../views/view_cas_cmd";
 import { loadWebviewView } from "../webview";
 import type { WorkspaceGenerator } from "../workspaces/generator";
@@ -18,6 +19,7 @@ export class CASToolboxView implements vscode.WebviewViewProvider {
 	private readonly s: Settings;
 	private readonly telemetry: CasTelemetryLogger;
 	private snippets: Snippets;
+	private readonly logger = getLogger(["CAS", "view", "toolbox"]);
 	constructor(
 		context: vscode.ExtensionContext,
 		cmdView: CASCmdView,

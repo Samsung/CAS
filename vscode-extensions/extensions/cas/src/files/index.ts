@@ -1,4 +1,4 @@
-import { ExtensionContext, languages, window, workspace } from "vscode";
+import { ExtensionContext, languages, window } from "vscode";
 import { DBProvider } from "../db";
 import { ActionProvider } from "./actions";
 import { CasFileDecorationProvider } from "./decorations";

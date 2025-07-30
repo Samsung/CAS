@@ -1,6 +1,6 @@
-import type { TimelineColors } from "$lib/TimelineRuler.svelte";
 import * as PIXI from "pixi.js";
 import { Plugin, Viewport } from "pixi-viewport";
+import type { TimelineColors } from "$lib/TimelineRuler.svelte";
 
 export class ThreadIdRulerPlugin extends Plugin {
 	private graphics: PIXI.Graphics;

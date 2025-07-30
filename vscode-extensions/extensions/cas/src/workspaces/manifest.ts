@@ -4,6 +4,7 @@ import {
 	WorkspaceFile,
 	WorkspaceSchema,
 } from "@cas/manifest";
+import { getLogger } from "@logtape/logtape";
 import { toJsonSchema } from "@valibot/to-json-schema";
 import * as v from "valibot";
 import {
@@ -16,7 +17,6 @@ import {
 } from "vscode";
 import { DBInfo, DBProvider } from "../db/index";
 import { Snippets } from "../db/snippets";
-import { debug, error, warn } from "../logger";
 import { Settings } from "../settings";
 
 export class ManifestSettings {
@@ -26,6 +26,7 @@ export class ManifestSettings {
 	#db: DBProvider;
 	#parsedManifestEventEmitter = new EventEmitter<Manifest | undefined>();
 	#snippets: Snippets;
+	private logger = getLogger(["CAS", "workspace", "manifest"]);
 	public onParsedManifest = this.#parsedManifestEventEmitter.event;
 	#initDone = new EventEmitter<void>();
 	public onInitDone = this.#initDone.event;
@@ -69,7 +70,7 @@ export class ManifestSettings {
 		original: unknown,
 	) {
 		if (result.success) {
-			debug("successfully parsed manifest");
+			this.logger.debug`Successfully parsed manifest`;
 			const manifest =
 				"folders" in result.output
 					? result.output.settings["cas.manifest"]
@@ -82,13 +83,13 @@ export class ManifestSettings {
 
 		for (const topIssue of result.issues) {
 			for (const issue of topIssue.issues ?? []) {
-				debug(`${issue.type} issue found in manifest: ${issue.message}`);
+				this.logger
+					.debug`${issue.type} issue found in manifest: ${issue.message}`;
 				if (
 					issue.path?.map((item) => item.key).join(".") === "sourceRepo.type"
 				) {
-					warn(
-						`invalid manifest type: ${issue.input} (supported types: ${issue.issues?.map((i) => i.expected)}); trying with type:local instead`,
-					);
+					this.logger
+						.warn`Invalid manifest type: ${issue.input} (supported types: ${issue.issues?.map((i) => i.expected)}); trying with type:local instead`;
 
 					(original as WorkspaceFile).settings["cas.manifest"].sourceRepo = {
 						type: "local",
@@ -97,8 +98,10 @@ export class ManifestSettings {
 				}
 			}
 		}
-		debug(`manifest errors: ${JSON.stringify(result.issues, null, 2)}`);
-		error(`failed parsing manifest`);
+		this.logger.debug(
+			(l) => l`Manifest errors: ${JSON.stringify(result.issues, null, 2)}`,
+		);
+		this.logger.error`Failed parsing manifest`;
 	}
 
 	/**

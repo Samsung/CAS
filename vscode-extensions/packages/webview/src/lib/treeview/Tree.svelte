@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { MaybeAsync } from "$lib/types.d.ts";
 import { type Snippet } from "svelte";
+import type { MaybeAsync } from "$lib/types.d.ts";
 import type { ProcNode as NodeType } from "../types";
 import Branch from "./Branch.svelte";
 import type { Node, TreeType } from "./types";

@@ -4,7 +4,8 @@
 		"rootDir": "src",
         "skipLibCheck": true,
 		"outDir": "dist",
-		"noEmit": false
+		"noEmit": false,
+		"typeRoots": ["./node_modules/@types"]
 	},
     "include": ["src"]
 }

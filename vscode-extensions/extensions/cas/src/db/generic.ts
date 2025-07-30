@@ -8,6 +8,7 @@ import {
 	CASSuccessResults,
 	Paged,
 } from "@cas/types/cas_server.js";
+import { getLogger } from "@logtape/logtape";
 import QuickLRU from "quick-lru";
 import { ReadableStream } from "stream/web";
 import { chain } from "stream-chain";
@@ -15,7 +16,6 @@ import { Parser, parser } from "stream-json";
 import { connectTo as asmConnectTo } from "stream-json/Assembler";
 import { commands, Disposable } from "vscode";
 import { DBInfo } from "../db/index";
-import { debug } from "../logger";
 import { Settings } from "../settings";
 export abstract class CASDatabase implements Disposable {
 	casPath: DBInfo;
@@ -25,6 +25,7 @@ export abstract class CASDatabase implements Disposable {
 	setRunning?: (value: boolean | PromiseLike<boolean>) => void;
 	settings: Settings;
 	cache = new QuickLRU<string, string>({ maxSize: 10 });
+	protected readonly logger = getLogger(["CAS", "db", "generic"]);
 
 	readonly supportsStreaming: boolean = false;
 	//#region constructor and utils
@@ -110,8 +111,9 @@ export abstract class CASDatabase implements Disposable {
 				: this.cache.get(cmd)!;
 		}
 		await this.running;
-		debug(
-			`[cas.CASDatabase] runCmd '${cmd.length > 1000 ? cmd.slice(0, 1000) + "..." : cmd}'`,
+		this.logger.debug(
+			(l) =>
+				l`Running command: ${cmd.length > 1000 ? cmd.slice(0, 1000) + "..." : cmd}`,
 		);
 		const result = await this.runRawCmd(
 			cmd,
@@ -144,7 +146,7 @@ export abstract class CASDatabase implements Disposable {
 
 	async getQueryResponse<T>(query: string): Promise<T> {
 		await this.running;
-		debug(`[cas.CASDatabase] getQueryResponse '${query}'`);
+		this.logger.debug`Getting query response for: ${query}`;
 		const result = await this.runQuery(query, this.supportsStreaming);
 		if (this.supportsStreaming) {
 			const pipeline = chain([result, parser()] as

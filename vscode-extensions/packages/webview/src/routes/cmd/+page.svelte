@@ -1,13 +1,13 @@
 <script lang="ts">
+import { History } from "@cas/helpers/history.js";
+import { promiseWithResolvers } from "@cas/helpers/promise.js";
+import { isEqual } from "lodash-es";
+import { onMount } from "svelte";
 import { SvelteHistory } from "$lib/base/svelteHistory.svelte";
 import CasCommand from "$lib/cas/CasCommand.svelte";
 import CasResults from "$lib/cas/CasResults.svelte";
 import type { CASResults, EntryArray, historyEntry } from "$lib/cas/types";
 import { vscode } from "$lib/vscode";
-import { History } from "@cas/helpers/history.js";
-import { promiseWithResolvers } from "@cas/helpers/promise.js";
-import { isEqual } from "lodash-es";
-import { onMount } from "svelte";
 
 interface CasResultsEvent {
 	func: string;

@@ -1,5 +1,5 @@
-import { browser } from "$app/environment";
 import { SvelteMap } from "svelte/reactivity";
+import { browser } from "$app/environment";
 import { mapToThemeId } from "./getThemeId";
 export function observeThemeId() {
 	let theme = $state("dark-plus");

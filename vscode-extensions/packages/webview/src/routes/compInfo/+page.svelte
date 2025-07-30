@@ -1,11 +1,10 @@
 <script lang="ts">
+import { copy } from "@svelte-put/copy";
+import { onMount } from "svelte";
 import type { ElementTypes } from "$lib/cas/CasResults.svelte";
 import * as t from "$lib/paraglide/messages";
 import { type CasApiEvent, vscode } from "$lib/vscode";
 import VsCodePagedTable from "$lib/vscode/VSCodePagedTable.svelte";
-import { copy } from "@svelte-put/copy";
-
-import { onMount } from "svelte";
 
 interface CompilationInfo {
 	command: {

@@ -1,6 +1,6 @@
 {
 	"name": "cas-vscode-extensions",
-	"version": "0.21.10",
+	"version": "0.21.11",
 	"description": "Monorepo for CAS-related VSCode tooling",
 	"scripts": {
 		"build": "turbo build",
@@ -31,16 +31,16 @@
 	},
 	"license": "Apache-2.0",
 	"devDependencies": {
-		"@biomejs/biome": "2.0.0",
-		"cpx": "^1.5.0",
-		"lefthook": "^1.11.14",
-		"rimraf": "^6.0.1",
-		"turbo": "^2.5.4"
+		"@biomejs/biome": "catalog:",
+		"cpx": "catalog:",
+		"lefthook": "catalog:",
+		"rimraf": "catalog:",
+		"turbo": "catalog:"
 	},
 	"optionalDependencies": {
 		"llvm-project": "catalog:"
 	},
-	"packageManager": "pnpm@10.12.1+sha512.f0dda8580f0ee9481c5c79a1d927b9164f2c478e90992ad268bbb2465a736984391d6333d2c327913578b2804af33474ca554ba29c04a8b13060a717675ae3ac",
+	"packageManager": "pnpm@10.13.1+sha512.37ebf1a5c7a30d5fabe0c5df44ee8da4c965ca0c5af3dbab28c3a1681b70a256218d05c81c9c0dcf767ef6b8551eb5b960042b9ed4300c59242336377e01cfad",
 	"pnpm": {
 		"overrides": {
 			"postcss": "^8.4.47",
@@ -59,17 +59,9 @@
 			"protobufjs",
 			"ssh2",
 			"svelte-preprocess-react"
-		],
-		"patchedDependencies": {
-			"@types/cacache": "patches/@types__cacache.patch",
-			"vite": "patches/vite.patch",
-			"ssh2": "patches/ssh2.patch",
-			"vscode-languageclient": "patches/vscode-languageclient.patch",
-			"@foxglove/wasm-bz2": "patches/@foxglove__wasm-bz2.patch",
-			"18.x": "patches/clangd.patch"
-		}
+		]
 	},
 	"dependencies": {
-		"corepack": "^0.33.0"
+		"corepack": "catalog:"
 	}
 }

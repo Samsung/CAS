@@ -1,7 +1,9 @@
 import { readdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { sleep } from "@cas/helpers/promise.js";
-import { gt, rcompare } from "semver";
+import { setupLogger } from "@cas/logs";
+import { getLogger } from "@logtape/logtape";
+import { gt } from "semver";
 import {
 	commands,
 	ExecServer,
@@ -13,7 +15,6 @@ import {
 	workspace,
 } from "vscode";
 import { ExtensionInstaller } from "./install";
-import { getLogger, initLogger } from "./logger";
 
 const casExtNameRegex = /samsung.cas-(?<version>\d+\.\d+\.\d+)/i;
 
@@ -38,10 +39,12 @@ export async function activate(context: ExtensionContext) {
 		env.remoteName &&
 		(execServer = await workspace.getRemoteExecServer(env.remoteAuthority))
 	) {
-		await initLogger(context);
-		const logger = getLogger("Updater");
+		const extName =
+			context.extension.packageJSON.displayName ?? context.extension.id;
+		await setupLogger(extName);
+		const logger = getLogger(["Updater"]);
 
-		logger.info("started update checks");
+		logger.info`started update checks`;
 
 		const casDirName = (await readdir(dirname(context.extensionPath)))
 			.filter((name) => casExtNameRegex.test(name))
@@ -57,9 +60,7 @@ export async function activate(context: ExtensionContext) {
 			);
 		const localVersion = casDirName.match(casExtNameRegex)?.groups?.version;
 		if (!casDirName || !localVersion) {
-			logger.error(
-				"CAS extension not found locally! If this was intentional, please uninstall CAS Updater extension as well",
-			);
+			logger.error`CAS extension not found locally! If this was intentional, please uninstall CAS Updater extension as well`;
 			return;
 		}
 		const existingExtension = extensions.getExtension("Samsung.cas", true);
@@ -81,10 +82,10 @@ export async function activate(context: ExtensionContext) {
 			try {
 				const success = await installer.installExtension();
 				if (!success) {
-					logger.error("Failed installing extension");
+					logger.error`Failed installing extension`;
 				}
 			} catch (e) {
-				logger.error(`error installing extension: ${e}`);
+				logger.error`error installing extension: ${e}`;
 			}
 		} else {
 			logger.info(

@@ -1,15 +1,16 @@
 import { setupApi } from "@cas/http";
+import { setupLogger, vscodeSink } from "@cas/logs";
+import { getOtelSink, setupTelemetry } from "@cas/telemetry";
+import { getLogger } from "@logtape/logtape";
 import updaterPackageJSON from "cas-updater/package.json" with { type: "json" };
-import { gt, lt, lte } from "semver";
+import { gt } from "semver";
 import * as vscode from "vscode";
 import { Builder } from "./cas_tools/builder";
 import { DBProvider } from "./db/index";
 import { registerEnrichment } from "./files";
 import { InlineMacrosProvider } from "./inline_macros";
-import { debug, info, warn } from "./logger";
 import { OpenGrokApi } from "./og";
 import { Settings } from "./settings";
-import { createLogger } from "./telemetry";
 import { CASCmdView } from "./views/view_cas_cmd";
 import { CASToolboxView } from "./views/view_cas_toolbox";
 import { CASCompilationInfo } from "./views/view_compilation_info";
@@ -23,7 +24,38 @@ import { ManifestSettings } from "./workspaces/manifest";
 import { RemoteConnctionManager } from "./workspaces/remote";
 
 export async function activate(context: vscode.ExtensionContext) {
-	debug("[cas.activate] Starting cas extension ...");
+	const startTime = Date.now();
+
+	// Initialize settings first (needed for logger config)
+	const settings = new Settings(context);
+	await settings.initSettings();
+
+	// Setup telemetry and logging
+	const telemetry = setupTelemetry(context, settings.telemetryProvider, {
+		endpoint: settings.telemetryHost,
+	});
+
+	await setupLogger("CAS", {
+		sinks: {
+			telemetry: getOtelSink(),
+		},
+		additionalSinks: {
+			vscodeServer: vscodeSink("CAS Server"),
+		},
+		filters: {},
+		lowestLevel: "debug",
+		additionalLoggers: [
+			{
+				category: ["CAS", "Server"],
+				parentSinks: "override",
+				sinks: ["console", "vscodeServer"],
+			},
+		],
+	});
+
+	const logger = getLogger(["CAS", "extension"]);
+	logger.debug`Starting cas extension ...`;
+
 	await vscode.commands.executeCommand(
 		"setContext",
 		"cas.development",
@@ -36,9 +68,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		"timeline",
 	];
 
-	info("creating settings");
-	const settings = new Settings(context);
-	await settings.initSettings();
+	// Track activation
+	telemetry.logUsage("extension.activate.start", {
+		environment: process.env.NODE_ENV || "development",
+		remoteName: vscode.env.remoteName || "local",
+		extensionVersion: context.extension.packageJSON.version,
+		telemetryEnabled: settings.telemetryEnabled,
+		telemetryProvider: settings.telemetryProvider,
+		remoteBaseEnabled: settings.useRemoteBase,
+	});
 
 	// prepare HTTP client
 	await setupApi(context);
@@ -57,20 +95,24 @@ export async function activate(context: vscode.ExtensionContext) {
 				vscode.Uri.joinPath(context.extensionUri, "dist/updater.vsix"),
 			);
 		} catch {
-			warn("Failed to install cas-updater extension");
+			logger.warn`Failed to install cas-updater extension`;
 		}
 	}
 	if (
 		vscode.env.remoteName &&
 		context.extension.extensionKind === vscode.ExtensionKind.UI
 	) {
-		debug("running in remote as a UI extension - ending early");
+		logger.debug`running in remote as a UI extension - ending early`;
 		return;
 	}
 	//#endregion
 
-	const telemetry = createLogger(settings, context);
-	telemetry.logUsage("init");
+	telemetry.logUsage("extension.init", {
+		activationTime: Date.now() - startTime,
+		remoteConnection: vscode.env.remoteName || "none",
+		workspaceFolders: vscode.workspace.workspaceFolders?.length || 0,
+		settingsLoaded: true,
+	});
 	const dbProvider = new DBProvider(context, settings);
 	const manifestSettings = new ManifestSettings(context, settings, dbProvider);
 	const _remoteConnectionManager = new RemoteConnctionManager(
@@ -119,5 +161,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	const _inlineMacros = new InlineMacrosProvider(context, settings);
 	registerEnrichment(context, dbProvider);
 
-	info("[cas.activate] CAS extension activated.");
+	logger.info`CAS extension activated`;
+	telemetry.logUsage("extension.activate.complete", {
+		totalTime: Date.now() - startTime,
+		componentsInitialized: [
+			"dbProvider",
+			"manifestSettings",
+			"remoteConnectionManager",
+			"workspaceGenerator",
+			"views",
+		],
+	});
 }

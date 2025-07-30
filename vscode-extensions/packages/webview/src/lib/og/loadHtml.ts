@@ -1,7 +1,7 @@
-import { browser } from "$app/environment";
-import loadHtmlWorker from "$lib/og/loadHtmlWorker?worker&inline";
 import { type Remote, wrap } from "comlink";
 import { join } from "pathe";
+import { browser } from "$app/environment";
+import loadHtmlWorker from "$lib/og/loadHtmlWorker?worker&inline";
 
 let workerLoaders: Remote<typeof import("$lib/og/loadHtmlHelpers")>[] = [];
 

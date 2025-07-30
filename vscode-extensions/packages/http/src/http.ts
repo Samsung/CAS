@@ -160,5 +160,8 @@ export async function setupApi(context: ExtensionContext) {
 		retry: {
 			statusCodes: [401, 408, 413, 429, 500, 502, 503, 504],
 		},
+		headers: {
+			"User-Agent": "CAS/extension",
+		},
 	});
 }

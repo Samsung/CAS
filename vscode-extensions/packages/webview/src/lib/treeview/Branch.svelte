@@ -1,9 +1,9 @@
 <svelte:options runes={true} />
 <script lang="ts">
-import { eidToStr } from "$lib/helpers";
-import VsCodePaginator from "$lib/vscode/VSCodePaginator.svelte";
 import { debounce } from "@melt-ui/svelte/internal/helpers";
 import { onDestroy, onMount, type Snippet, tick } from "svelte";
+import { eidToStr } from "$lib/helpers";
+import VsCodePaginator from "$lib/vscode/VSCodePaginator.svelte";
 // TODO: fix some generics issue
 import type { ProcNode as NodeType } from "../types";
 import Branch from "./Branch.svelte";

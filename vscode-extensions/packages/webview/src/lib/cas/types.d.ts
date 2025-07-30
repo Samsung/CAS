@@ -35,7 +35,7 @@ export interface CasDefs {
 
 export type entry = string | BASFile | CasCommand | CasAccess | CasDefs;
 
-export type SingleTypeMap<T, U> = U extends any ? Map<string, U> : never;
+export type SingleTypeMap<_T, U> = U extends any ? Map<string, U> : never;
 export type SingleTypeArray<T> = T extends any ? T[] : never;
 type EntryArray = SingleTypeArray<entry>;
 export interface CASSuccessResults {

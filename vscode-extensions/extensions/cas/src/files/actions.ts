@@ -1,19 +1,16 @@
-import { CommandInfo, FileMode } from "@cas/types/bas.js";
+import { CommandInfo } from "@cas/types/bas.js";
 import { Paged } from "@cas/types/cas_server.js";
 import { VSCodeContext } from "@cas/types/webview.js";
 import { relativePath } from "@cas/vscode-variables/helpers.js";
-import { join } from "path";
 import {
 	CancellationToken,
 	CodeLens,
 	CodeLensProvider,
 	Command,
 	commands,
-	Event,
 	EventEmitter,
 	ExtensionContext,
 	Position,
-	ProviderResult,
 	Range,
 	TextDocument,
 	Uri,

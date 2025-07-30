@@ -2,24 +2,21 @@ import { DepSchema, DepsSchema } from "@cas/deps";
 import {
 	batchProcess,
 	decodeText,
-	encodeText,
 	resolveHome,
 	testAccess,
-	withTrailingSlash,
 } from "@cas/helpers";
 import { readJSON } from "@cas/helpers/vscode/fs.js";
 import { Manifest } from "@cas/manifest";
-import { BASFile } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
-import { mkdir, readdir, rmdir, symlink } from "fs/promises";
+import { getLogger } from "@logtape/logtape";
+import { mkdir, readdir, rmdir } from "fs/promises";
 import { NodeSSH } from "node-ssh";
 import { homedir } from "os";
-import { dirname, join, normalize, parse, relative } from "path";
-import SSHConfig, { parse as sshParse } from "ssh-config";
-import { promisify } from "util";
+import { dirname, join, normalize, relative } from "path";
+import { parse as sshParse } from "ssh-config";
 import { FileSystemError, Uri, workspace } from "vscode";
-import { debug, error, info } from "../../logger";
-import { DepsGenerator, DepsGeneratorOptions } from "./generator";
+import { DepsGenerator } from "./generator";
+
+const logger = getLogger(["CAS", "workspace", "ssh"]);
 
 import "core-js/actual/array/from-async";
 
@@ -128,10 +125,7 @@ const sshGenerator: DepsGenerator = {
 								.catch((err: FileSystemError) => {
 									if (err.code !== "EEXIST") {
 										failCount++;
-										error(
-											`[generator.ssh] (${entry.original_path}) ${err.message}`,
-											true,
-										);
+										logger.error`Failed to download ${entry.original_path}: ${err.message}`;
 										throw err;
 									} else {
 										skipCount++;
@@ -158,9 +152,7 @@ const sshGenerator: DepsGenerator = {
 		).flat();
 		sftp.end();
 		ssh.dispose();
-		info(
-			`[generator.ssh] Downloaded new=${fileCount} existing=${skipCount} failed=${failCount}`,
-		);
+		logger.info`Downloaded files: ${fileCount} new, ${skipCount} existing, ${failCount} failed`;
 		deps.count = deps.entries.length;
 		deps.num_entries = deps.entries.length;
 		deps.version = 2;
@@ -182,13 +174,13 @@ const sshGenerator: DepsGenerator = {
 				if (path?.startsWith(out)) {
 					return fs.delete(Uri.file(path)).then(
 						async () => {
-							debug(`[generator.ssh] REMOVED ${path}`);
+							logger.debug`Removed file: ${path}`;
 							let dirPath = dirname(path);
 							while (
 								(await testAccess(dirPath)) &&
 								(await readdir(dirPath)).length === 0
 							) {
-								debug(`[generator.ssh] REMOVED empty dir ${dirPath}`);
+								logger.debug`Removed empty directory: ${dirPath}`;
 								let ndirPath = dirname(dirPath);
 								await rmdir(dirPath);
 								dirPath = ndirPath;

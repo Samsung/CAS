@@ -1,14 +1,14 @@
 <script lang="ts">
-import type { SvelteHistory } from "$lib/base/svelteHistory.svelte";
-// import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
-import type { InputEventFor, MaybeAsync } from "$lib/types.d.ts";
-import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
 import type {
 	VscodeSingleSelect,
 	VscodeTextfield,
 } from "@vscode-elements/elements";
 import { onMount, type Snippet } from "svelte";
 import type { HTMLAttributes } from "svelte/elements";
+import type { SvelteHistory } from "$lib/base/svelteHistory.svelte";
+// import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
+import type { InputEventFor, MaybeAsync } from "$lib/types.d.ts";
+import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
 import CasSnippet from "./CasSnippet.svelte";
 import type { CASResults, historyEntry } from "./types";
 

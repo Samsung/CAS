@@ -1,12 +1,10 @@
 import { depsSchema } from "@cas/deps";
 import { decodeText } from "@cas/helpers";
-import { BASFile, FileMode, FileType } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
+import { FileMode, FileType } from "@cas/types/bas.js";
+import { getLogger } from "@logtape/logtape";
 import { parse } from "valibot";
 import { commands, ExtensionContext, Uri, window, workspace } from "vscode";
 import type { DBProvider } from "../db";
-import { debug, warn } from "../logger";
-import { WorkspaceGenerator } from "../workspaces/generator";
 
 type ExtendedFileMode = FileMode | `${FileMode}x`;
 interface LimitedFileInfo {
@@ -25,6 +23,7 @@ export class FileData {
 	db: DBProvider;
 	initLoadDone?: PromiseWithResolvers<void>;
 	static fd: FileData;
+	private readonly logger = getLogger(["CAS", "files", "data"]);
 	private constructor(context: ExtensionContext, db: DBProvider) {
 		this.db = db;
 		const watcher = workspace.createFileSystemWatcher("deps.json");
@@ -53,16 +52,15 @@ export class FileData {
 	}
 
 	async loadDeps(depsPath: Uri) {
-		debug("[file_data] loading deps");
+		this.logger.debug`Loading dependencies`;
 		const deps = parse(
 			depsSchema,
 			JSON.parse(decodeText(await workspace.fs.readFile(depsPath))),
 		);
 		// every version since v2 is supported
 		if (deps.version === 1) {
-			warn(
-				"Workspace is using old deps.json format, some features will not be available. Updating the workspace is recommended.",
-			);
+			this.logger
+				.warn`Workspace is using old deps.json format, some features will not be available. Updating the workspace is recommended.`;
 			const action = await window.showWarningMessage(
 				"Workspace is using old deps.json format, some features may not be available.",
 				"Update workspace",
@@ -73,7 +71,7 @@ export class FileData {
 			return;
 		}
 
-		debug("[file_data] processing files");
+		this.logger.debug`Processing files`;
 
 		for (const file of deps.entries) {
 			this.deps.set(file.workspace_path, {
@@ -85,7 +83,7 @@ export class FileData {
 				type: file.type,
 			});
 		}
-		debug("[file_data] setting context for files");
+		this.logger.debug`Setting context for files`;
 		setImmediate(() => this.setContext());
 	}
 

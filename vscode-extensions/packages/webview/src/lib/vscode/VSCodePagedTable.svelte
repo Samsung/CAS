@@ -1,9 +1,9 @@
 <script lang="ts">
-import type { MaybeAsync } from "$lib/types.d.ts";
 import uFuzzy from "@leeoniya/ufuzzy";
 import { copy } from "@svelte-put/copy";
 import type { Snippet } from "svelte";
 import { fade } from "svelte/transition";
+import type { MaybeAsync } from "$lib/types.d.ts";
 import VsCodePaginator from "./VSCodePaginator.svelte";
 
 interface Props {

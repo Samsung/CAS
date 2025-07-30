@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { InputEventFor } from "$lib/types";
 import { createPagination, melt } from "@melt-ui/svelte";
 import type { ChangeFn } from "@melt-ui/svelte/internal/helpers";
 import type { VscodeTextfield } from "@vscode-elements/elements";
+import type { InputEventFor } from "$lib/types";
 
 interface Props {
 	onChange?: (event: UIEvent) => unknown;

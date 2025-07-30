@@ -1,12 +1,12 @@
 <script lang="ts">
+import type { ProcessWithChildren } from "@cas/types/bas.js";
+import chroma, { type Color } from "chroma-js";
+import { onMount, tick } from "svelte";
 import ProcessBottomTab from "$lib/cas/ProcessBottomTab.svelte";
 import FlameGraph from "$lib/FlameGraph.svelte";
 import { eidToStr, procHasChildren } from "$lib/helpers";
 import { vscode } from "$lib/vscode";
 import { observeCssVar } from "$lib/vscode/themeObserver.svelte";
-import type { ProcessWithChildren } from "@cas/types/bas.js";
-import chroma, { type Color } from "chroma-js";
-import { onMount, tick } from "svelte";
 
 let proc = $state<ProcessWithChildren>();
 let source_root = $state<string>();

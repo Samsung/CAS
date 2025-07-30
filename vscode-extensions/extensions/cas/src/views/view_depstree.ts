@@ -1,12 +1,12 @@
 import { exponentialBackoff } from "@cas/helpers";
+import { CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
+import { getLogger } from "@logtape/logtape";
 import { existsSync, readFileSync } from "fs";
 import { basename, join } from "path";
 import * as vscode from "vscode";
 import { DBProvider } from "../db/index";
 import { internalSnippets } from "../db/snippets";
-import { debug, error } from "../logger";
 import { Settings } from "../settings";
-import { CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
 import { WorkspaceGenerator } from "../workspaces/generator";
 import { ManifestSettings } from "../workspaces/manifest";
 
@@ -19,6 +19,7 @@ export class DepsTree implements vscode.TreeDataProvider<Dependency> {
 	private readonly s: Settings;
 	private readonly telemetry: CasTelemetryLogger;
 	private readonly ws: ManifestSettings;
+	private readonly logger = getLogger(["CAS", "view", "depstree"]);
 
 	private linkedModulesPaths: string[] = [];
 
@@ -77,11 +78,11 @@ export class DepsTree implements vscode.TreeDataProvider<Dependency> {
 	}
 
 	private updateModules() {
-		let modules = [];
+		let modules: string[] = [];
 		let modFile = join(Settings.getWorkspaceDir(), "modules.json");
 		if (existsSync(modFile)) {
 			modules = JSON.parse(readFileSync(modFile, "utf-8"));
-			debug("[cas.DepsTree] loaded modules: " + JSON.stringify(modules));
+			this.logger.debug((l) => l`Loaded modules: ${JSON.stringify(modules)}`);
 		}
 		this.modules = modules;
 	}
@@ -191,7 +192,7 @@ export class DepsTree implements vscode.TreeDataProvider<Dependency> {
 				});
 			}
 		}
-		error("No linked modules found", true);
+		this.logger.error`No linked modules found`;
 		return [];
 	}
 

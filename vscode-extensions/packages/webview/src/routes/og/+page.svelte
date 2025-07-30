@@ -1,4 +1,9 @@
 <script lang="ts">
+import { debounce } from "@melt-ui/svelte/internal/helpers";
+import QuickLRU from "quick-lru";
+import sanitize from "sanitize-html";
+import { onMount, tick } from "svelte";
+import { SvelteSet } from "svelte/reactivity";
 import { browser } from "$app/environment";
 import TooltipText from "$lib/base/TooltipText.svelte";
 import { decodeHtmlCharCodes } from "$lib/helpers";
@@ -13,11 +18,6 @@ import * as t from "$lib/paraglide/messages.js";
 import { type CasApiEvent, vscode } from "$lib/vscode";
 import { observeThemeId } from "$lib/vscode/themeObserver.svelte";
 import VsCodePaginator from "$lib/vscode/VSCodePaginator.svelte";
-import { debounce } from "@melt-ui/svelte/internal/helpers";
-import QuickLRU from "quick-lru";
-import sanitize from "sanitize-html";
-import { onMount, tick } from "svelte";
-import { SvelteSet } from "svelte/reactivity";
 
 let projects: string[] = $state([]);
 let enabled = $state(true);

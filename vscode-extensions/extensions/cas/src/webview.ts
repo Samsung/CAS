@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { decodeText } from "@cas/helpers";
+import { http } from "@cas/http";
+import {
+	getTelemetryHost,
+	isTelemetryEnabled,
+	onTelemetryEnabledStateChange,
+} from "@cas/telemetry";
+import { getLogger } from "@logtape/logtape";
 import {
 	type Event,
 	type ExtensionContext,
@@ -15,11 +22,6 @@ import {
 	window,
 	workspace,
 } from "vscode";
-import {
-	getTelemetryHost,
-	isTelemetryEnabled,
-	onTelemetryEnabledStateChange,
-} from "./telemetry";
 
 export async function createWebviewPanel(
 	page: string,
@@ -77,6 +79,7 @@ export class SvelteWebview implements Webview {
 	webview: Webview;
 	#ctx: ExtensionContext;
 	#page: string;
+	private logger = getLogger(["CAS", "webview"]);
 	get options() {
 		return this.webview.options;
 	}
@@ -104,6 +107,7 @@ export class SvelteWebview implements Webview {
 		this.#ctx = ctx;
 		this.onDidReceiveMessage = webview.onDidReceiveMessage;
 		webview.onDidReceiveMessage((msg) => {
+			this.logger.debug`Received webview message: ${msg.func}`;
 			if (msg.func === "telemetry") {
 				webview.postMessage({
 					...msg,
@@ -120,6 +124,7 @@ export class SvelteWebview implements Webview {
 	}
 
 	async loadHTML(): Promise<void> {
+		this.logger.debug`Loading webview HTML for page: ${this.#page}`;
 		let file: string;
 		let cspSource = this.cspSource;
 		const nonce = randomUUID();
@@ -127,6 +132,7 @@ export class SvelteWebview implements Webview {
 			this.#ctx.extensionMode === ExtensionMode.Production ||
 			process.env.NODE_ENV === "production"
 		) {
+			this.logger.debug`Loading production webview HTML`;
 			file = decodeText(
 				await workspace.fs.readFile(
 					Uri.joinPath(
@@ -139,9 +145,10 @@ export class SvelteWebview implements Webview {
 			);
 			file = file.replaceAll("//{{webview.production}}", "");
 		} else {
+			this.logger.debug`Loading development webview from Vite server`;
 			const server = "http://localhost:5173";
 			cspSource += ` ${server} `;
-			file = await (await fetch(`${server}/${this.#page}`)).text();
+			file = await (await http.get(`${server}/${this.#page}`)).text();
 			file = file
 				.replaceAll(
 					'<base href="{{webview.baseUri}}" />',
@@ -155,7 +162,10 @@ export class SvelteWebview implements Webview {
 		this.webview.html = file
 			.replaceAll("{{webview.page}}", this.#page)
 			.replaceAll("{{webview.cspSource}}", cspSource)
-			.replaceAll("{{webview.telemetryHost}}", getTelemetryHost())
+			.replaceAll(
+				"{{webview.telemetryHost}}",
+				getTelemetryHost() ?? "http://localhost",
+			)
 			.replaceAll("{{webview.nonce}}", nonce)
 			.replaceAll(
 				"{{webview.build}}",

@@ -1,9 +1,4 @@
 <script lang="ts">
-import { nsFormat } from "$lib/helpers";
-import * as t from "$lib/paraglide/messages";
-import type { ProcessInfoEventData, ProcNode } from "$lib/types";
-import { vscode } from "$lib/vscode";
-import VsCodePagedTable from "$lib/vscode/VSCodePagedTable.svelte";
 import type {
 	FileMode,
 	ProcessInfo,
@@ -12,6 +7,11 @@ import type {
 import { createDialog, melt } from "@melt-ui/svelte";
 import { copy } from "@svelte-put/copy";
 import { join as shJoin } from "shlex";
+import { nsFormat } from "$lib/helpers";
+import * as t from "$lib/paraglide/messages";
+import type { ProcessInfoEventData, ProcNode } from "$lib/types";
+import { vscode } from "$lib/vscode";
+import VsCodePagedTable from "$lib/vscode/VSCodePagedTable.svelte";
 
 interface Props {
 	node: ProcessWithChildren;

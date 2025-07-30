@@ -5,34 +5,24 @@ import { deepMerge } from "@cas/helpers/object.js";
 import { Manifest } from "@cas/manifest";
 import { CompCommands } from "@cas/types/bas.js";
 import { Paged } from "@cas/types/cas_server.js";
-import {
-	mkdir,
-	open,
-	readdir,
-	readFile,
-	rm,
-	rmdir,
-	symlink,
-	writeFile,
-} from "fs/promises";
+import { getLogger } from "@logtape/logtape";
+import { mkdir, open, readdir, rm, rmdir, writeFile } from "fs/promises";
 import { JsonStreamStringify } from "json-stream-stringify";
 import { join, normalize } from "path";
 import { split } from "shlex";
-import { Readable } from "stream";
 import { pipeline } from "stream/promises";
-import { disassembler } from "stream-json/Disassembler.js";
-import { stringer } from "stream-json/Stringer.js";
 import * as vscode from "vscode";
 import { DBProvider } from "../db/index.js";
-import { debug, error } from "../logger.js";
 import { Settings } from "../settings.js";
 import { DepsGenerator, DepsGeneratorOptions } from "./generators/generator.js";
+
 import localGenerator from "./generators/local.js";
 import NotImplementedGenerator from "./generators/notImplemented.js";
 import p4Generator from "./generators/p4.js";
 import sshGenerator from "./generators/ssh.js";
 import { ManifestSettings } from "./manifest.js";
 
+const logger = getLogger(["CAS", "workspace", "generator"]);
 export class WorkspaceGenerator {
 	ctx: vscode.ExtensionContext;
 	dbProvider: DBProvider;
@@ -132,12 +122,12 @@ export class WorkspaceGenerator {
 	) {
 		cmd ??= this.s.genCmd;
 		if (!cmd) {
-			error("No command defined", true);
+			logger.error`No command defined`;
 			throw new Error("No command defined");
 		}
 		projectName ??= this.s.projName;
 		if (!projectName) {
-			error("No project name", true);
+			logger.error`No project name`;
 			throw new Error("No project name");
 		}
 		const createDeps = await this.getDepsGenerator();
@@ -148,7 +138,7 @@ export class WorkspaceGenerator {
 			(update ? (createDeps.updateSteps ?? 0) : 0);
 		const db = this.dbProvider.getDB();
 		if (!db) {
-			error("No BAS Database", true);
+			logger.error`No BAS Database`;
 			throw new Error("No BAS Database");
 		}
 		await vscode.window.withProgress(
@@ -173,7 +163,7 @@ export class WorkspaceGenerator {
 						return deps;
 					})
 					.catch((err) => {
-						error("[ws_generator] ERROR " + err.message, true);
+						logger.error`Error generating dependencies: ${err.message}`;
 						throw err;
 					});
 				const binaries = (await db.runCmd<Paged<string>>("binaries -n=0", true))
@@ -187,7 +177,7 @@ export class WorkspaceGenerator {
 						return value.source_root;
 					})
 					.catch((err) => {
-						error("[ws_generator] ERROR " + err.message, true);
+						logger.error`Error getting source root: ${err.message}`;
 						throw err;
 					});
 				const out = update
@@ -238,12 +228,12 @@ export class WorkspaceGenerator {
 				if (modifiedDeps.num_entries > 5000) {
 					// for large deps files use a streaming writer to avoid hitting the string length limit
 					const t = Date.now();
-					debug("starting writing deps");
+					logger.debug`Starting writing deps file`;
 					await pipeline([
 						new JsonStreamStringify(modifiedDeps),
 						depsFile.createWriteStream({ encoding: "utf-8" }),
 					]);
-					debug(`writing took: ${Date.now() - t}ms`);
+					logger.debug`Writing deps file took ${Date.now() - t}ms`;
 				} else {
 					// for smaller files we can afford to "prettify" them with spaces
 					await depsFile.writeFile(JSON.stringify(modifiedDeps, null, 2), {
@@ -260,9 +250,7 @@ export class WorkspaceGenerator {
 					sourceRoot,
 					out,
 				);
-				debug(
-					"[ws_generator.ts] Compile commands length = " + compCommands.length,
-				);
+				logger.debug`Compile commands length: ${compCommands.length}`;
 				const ccFile = join(out, "compile_commands.json");
 				const modulesFile = join(out, "modules.json");
 				const wsFile = join(out, `${projectName}.code-workspace`);

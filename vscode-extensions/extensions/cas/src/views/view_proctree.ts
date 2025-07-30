@@ -1,11 +1,10 @@
 import { encodeText } from "@cas/helpers";
-import { Eid, FileMode, ProcessInfo } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
+import { CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
+import { Eid, ProcessInfo } from "@cas/types/bas.js";
+import { getLogger } from "@logtape/logtape";
 import * as vscode from "vscode";
 import { DBProvider } from "../db/index";
-import { debug } from "../logger";
 import { Settings } from "../settings";
-import { CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
 import { createWebviewPanel } from "../webview";
 import { WorkspaceGenerator } from "../workspaces/generator";
 
@@ -16,6 +15,7 @@ export class CASProcTreeView {
 	private readonly wsGenerator: WorkspaceGenerator;
 	private readonly s: Settings;
 	private readonly telemetry: CasTelemetryLogger;
+	private readonly logger = getLogger(["CAS", "view", "proctree"]);
 
 	constructor(
 		context: vscode.ExtensionContext,
@@ -160,26 +160,26 @@ export class CASProcTreeView {
 			});
 
 			this.panel?.onDidDispose(() => {
-				debug("onDidDispose");
+				this.logger.debug`Webview disposed`;
 				this.panel?.dispose();
 				this.panel = undefined;
 			});
 
 			this.dbProvider.onDBChange(async () => {
-				debug("onDBChange");
+				this.logger.debug`Database changed`;
 				this.refreshContent(pidList?.map(([pid, idx]) => ({ pid, idx })) ?? []);
 			});
 
 			this.panel?.onDidChangeViewState(
 				async (msg: vscode.WebviewPanelOnDidChangeViewStateEvent) => {
-					debug("onDidChangeViewState" + msg);
+					this.logger.debug`Webview view state changed: ${msg}`;
 				},
 			);
 		}
 	}
 
 	async saveProcessJSON(eid: Eid) {
-		debug(`saving process ${eid.pid}:${eid.idx}`);
+		this.logger.debug`Saving process ${eid.pid}:${eid.idx}`;
 		const target = await vscode.window.showSaveDialog({
 			title: `Save process ${eid.pid}:${eid.idx}`,
 			filters: {
@@ -192,10 +192,10 @@ export class CASProcTreeView {
 			),
 		});
 		if (!target) {
-			debug(`savind process ${eid.pid}:${eid.idx} cancelled`);
+			this.logger.debug`Saving process ${eid.pid}:${eid.idx} cancelled`;
 			return undefined;
 		}
-		debug(`exporting process ${eid.pid}:${eid.idx} to JSON`);
+		this.logger.debug`Exporting process ${eid.pid}:${eid.idx} to JSON`;
 		const process = await this.dbProvider
 			.getDB()
 			?.getQueryResponse<ProcessInfo>(
@@ -225,12 +225,12 @@ export class CASProcTreeView {
 			target,
 			encodeText(JSON.stringify(process, undefined, 2)),
 		);
-		debug(`saved process ${eid.pid}:${eid.idx} to ${target.fsPath}`);
+		this.logger.debug`Saved process ${eid.pid}:${eid.idx} to ${target.fsPath}`;
 		return target;
 	}
 
 	refreshContent(pidList: { pid: number; idx: number }[], id?: string) {
-		debug("refreshContent");
+		this.logger.debug`Refreshing content`;
 		if (pidList.length) {
 			this.sendDataToView(
 				{
@@ -248,8 +248,8 @@ export class CASProcTreeView {
 			?.getRootPid()
 			.then(async (x: number) => {
 				pidList = [{ pid: x, idx: 0 }];
-				debug(`No pid defined root pid = ${x}`);
-				this.sendDataToView(
+				this.logger.debug`No pid defined, using root pid: ${x}`;
+				await this.sendDataToView(
 					{
 						func: "init",
 						id: id ?? "",

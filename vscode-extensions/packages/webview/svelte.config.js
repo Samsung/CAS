@@ -46,6 +46,9 @@ const config = {
     serviceWorker: {
       register: false,
     },
+    prerender: {
+      handleHttpError: "warn",
+    },
   },
   vitePlugin: {
     inspector: process.env.VITE_MODE === "development",

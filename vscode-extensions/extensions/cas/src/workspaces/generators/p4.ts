@@ -1,13 +1,6 @@
 import { DepSchema } from "@cas/deps";
-import { encodeText, withTrailingSlash } from "@cas/helpers";
-import { readJSON } from "@cas/helpers/vscode/fs.js";
-import { BASFile } from "@cas/types/bas.js";
-import { Paged } from "@cas/types/cas_server.js";
-import { mkdir, symlink } from "fs/promises";
-import { dirname, join, normalize, parse, relative } from "path";
-import { FileSystemError, Uri, workspace } from "vscode";
-import { error, info } from "../../logger";
-import { DepsGenerator, DepsGeneratorOptions } from "./generator";
+import { join, normalize, relative } from "path";
+import { DepsGenerator } from "./generator";
 
 const p4Generator: DepsGenerator = {
 	createSteps: 1,

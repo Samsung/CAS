@@ -1,8 +1,6 @@
-import { nsFormat } from "$lib/helpers";
 import * as PIXI from "pixi.js";
 import { Plugin, Viewport } from "pixi-viewport";
-import type { Container } from "svelte-pixi";
-import { observeCssVar } from "./vscode/themeObserver.svelte";
+import { nsFormat } from "$lib/helpers";
 
 export interface TimelineColors {
 	lineColor: number;

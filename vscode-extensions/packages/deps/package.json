@@ -21,18 +21,18 @@
     "devDependencies": {
         "@cas/tsconfig": "workspace:*",
         "@types/node": "catalog:",
-        "@types/stream-chain": "^2.1.0",
-        "@types/stream-json": "^1.7.8",
-        "@types/vscode": "^1.101.0",
+        "@types/stream-chain": "catalog:",
+        "@types/stream-json": "catalog:",
+        "@types/vscode": "^1.101",
         "esbuild": "catalog:",
-        "stream-chain": "^3.4.0",
-        "stream-json": "^1.9.1",
+        "stream-chain": "catalog:",
+        "stream-json": "catalog:",
         "typescript": "catalog:",
-        "winston": "^3.17.0"
+        "winston": "catalog:"
     },
     "license": "Apache-2.0",
     "dependencies": {
-        "@valibot/to-json-schema": "^1.1.0",
-        "valibot": "1.1.0"
+        "@valibot/to-json-schema": "catalog:",
+        "valibot": "catalog:"
     }
 }

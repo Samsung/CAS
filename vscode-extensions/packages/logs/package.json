@@ -1,0 +1,33 @@
+{
+  "name": "@cas/logs",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm watch",
+    "watch": "pnpm run --stream \"/^watch:.*$/\"",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --preserveWatchOutput --noEmit --watch --project tsconfig.json",
+    "build": "node esbuild.js",
+    "check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/http.js"
+    }
+  },
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "devDependencies": {
+    "@cas/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/vscode": "^1.101",
+    "esbuild": "catalog:",
+    "typescript": "catalog:"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@logtape/logtape": "catalog:",
+    "@logtape/otel": "catalog:"
+  }
+}

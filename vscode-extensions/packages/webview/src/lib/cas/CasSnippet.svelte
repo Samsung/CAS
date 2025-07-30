@@ -1,7 +1,7 @@
 <script lang="ts">
+import { createDialog, melt } from "@melt-ui/svelte";
 import { vscode } from "$lib/vscode";
 import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
-import { createDialog, melt } from "@melt-ui/svelte";
 
 const { command } = $props<{ command: string }>();
 const {

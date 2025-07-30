@@ -1,7 +1,7 @@
 <script lang="ts">
-import { type CasApiEvent, vscode } from "$lib/vscode";
 import type { FileMode, FileType } from "@cas/types/bas.js";
 import { onMount } from "svelte";
+import { type CasApiEvent, vscode } from "$lib/vscode";
 
 type FileData = {
 	filename: string;

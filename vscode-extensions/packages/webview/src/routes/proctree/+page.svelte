@@ -1,5 +1,10 @@
 <svelte:options runes={true} />
 <script lang="ts">
+import { sleep, withAbort } from "@cas/helpers/promise.js";
+import type { Process } from "@cas/types/bas.js";
+import { copy } from "@svelte-put/copy";
+import { join as shjoin } from "shlex";
+import { onMount, tick } from "svelte";
 import ProcessModal from "$lib/cas/ProcessModal.svelte";
 import ProcSearch, {
 	queryToSearch,
@@ -25,11 +30,6 @@ import type {
 } from "$lib/types";
 import { vscode } from "$lib/vscode";
 import VsCodeTooltipButton from "$lib/vscode/VSCodeTooltipButton.svelte";
-import { sleep, withAbort } from "@cas/helpers/promise.js";
-import type { Process } from "@cas/types/bas.js";
-import { copy } from "@svelte-put/copy";
-import { join as shjoin } from "shlex";
-import { onMount, tick } from "svelte";
 
 let initialized = $state<false | true | "failed">(false);
 onMount(async () => {

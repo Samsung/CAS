@@ -1,12 +1,13 @@
 import { exponentialBackoff, sleep, withAbort } from "@cas/helpers";
 import { CommandResult, runCommand } from "@cas/helpers/vscode/command.js";
+import { http } from "@cas/http";
 import { CASResult } from "@cas/types/cas_server.js";
+import { getLogger } from "@logtape/logtape";
 import { createServer } from "http";
 import { ReadableStream } from "stream/web";
 import * as v from "valibot";
 import { StatusBarAlignment, StatusBarItem, window } from "vscode";
 import { DBInfo } from "../db/index";
-import { debug, error, srvLog, warn } from "../logger";
 import { Settings } from "../settings";
 import { CASDatabase } from "./generic";
 
@@ -22,6 +23,8 @@ export class LocalServerCASDatabase extends CASDatabase {
 	serverProcess?: CommandResult;
 	serverStatus: StatusBarItem;
 	readonly supportsStreaming = true;
+	protected readonly logger = getLogger(["CAS", "db", "server"]);
+	private readonly serverLogger = getLogger(["CAS", "Server"]);
 	constructor(
 		casPath: DBInfo,
 		ftPath: DBInfo | undefined,
@@ -55,34 +58,34 @@ export class LocalServerCASDatabase extends CASDatabase {
 
 	async checkRunning(): Promise<string> {
 		let range = this.portRange;
-		debug("[cas.CASDatabase] looking for existing servers");
+		this.logger.debug`Looking for existing servers`;
 		return Promise.any(
 			Array.from(
 				{ length: range[1] - range[0] + 1 },
 				(_, i) => range[0] + i,
 			).map(async (port) => {
 				const url = `http://localhost:${port}`;
-				const check = await fetch(`${url}/status`, {
-					method: "HEAD",
+				const check = await http.head(`${url}/status`, {
 					mode: "no-cors",
 					signal: this.abort
 						? AbortSignal.any([AbortSignal.timeout(1000), this.abort])
 						: AbortSignal.timeout(1000),
 				});
 				if (check.ok) {
-					const response = await fetch(`${url}/status`, {
-						method: "GET",
+					const response = await http.get(`${url}/status`, {
 						signal: this.abort
 							? AbortSignal.any([AbortSignal.timeout(500), this.abort])
 							: AbortSignal.timeout(500),
 					});
 					const data = v.parse(statusSchema, response.json());
 					if (this.casPath && data.loaded_databases.cas !== this.casPath.path) {
-						error("Server has different BAS path loaded than specified", true);
+						this.logger
+							.error`Server has different BAS path loaded than specified`;
 						throw new Error("Different BAS path");
 					}
 					if (this.ftPath && data.loaded_databases.ftdb !== this.ftPath.path) {
-						error("Server has different FTDB path loaded than specified", true);
+						this.logger
+							.error`Server has different FTDB path loaded than specified`;
 						throw new Error("Different FTDB path");
 					}
 					return url;
@@ -108,10 +111,10 @@ export class LocalServerCASDatabase extends CASDatabase {
 		let range = this.portRange;
 		for (let index = range[0]; index < range[1]; index++) {
 			if (await this.isPortAvailable(index)) {
-				debug(`[cas.get_first_free_port] first free ${index}`);
+				this.logger.debug`Found free port: ${index}`;
 				return index;
 			} else {
-				debug(`[cas.get_first_free_port] port ${index} not free `);
+				this.logger.debug`Port ${index} is not free`;
 			}
 		}
 		return -1;
@@ -127,13 +130,15 @@ export class LocalServerCASDatabase extends CASDatabase {
 			max: 30_000,
 			signal: this.abort,
 		})) {
-			const res = await fetch(url, {
-				method: "HEAD",
-				mode: "no-cors",
-				signal: this.abort
-					? AbortSignal.any([AbortSignal.timeout(500), this.abort])
-					: AbortSignal.timeout(500),
-			}).catch(() => ({ ok: false }));
+			const res = await http
+				.head(url, {
+					mode: "no-cors",
+					signal: this.abort
+						? AbortSignal.any([AbortSignal.timeout(500), this.abort])
+						: AbortSignal.timeout(500),
+					throwHttpErrors: false,
+				})
+				.catch(() => ({ ok: false }));
 			if (res.ok) {
 				return true;
 			}
@@ -144,13 +149,13 @@ export class LocalServerCASDatabase extends CASDatabase {
 	async start(iteration?: number): Promise<string | undefined> {
 		const existing = await this.checkRunning().catch(() => undefined);
 		if (existing) {
-			debug(`[cas.CASDatabase] found existing server: ${existing}`);
+			this.logger.debug`Found existing server: ${existing}`;
 			return existing;
 		}
-		debug("[cas.CASDatabase] start() No existing server found");
+		this.logger.debug`No existing server found`;
 		// ensure casPath and casServer are defined
 		if (!this.casPath || !this.settings.casServer) {
-			error("CAS server isn't configured correctly!", true);
+			this.logger.error`CAS server isn't configured correctly!`;
 			return;
 		}
 
@@ -159,10 +164,8 @@ export class LocalServerCASDatabase extends CASDatabase {
 
 		const port = await this.getFirstFreePort();
 		if (port === -1) {
-			error(
-				`No port available in the configured range ${this.portRange[0]}-${this.portRange[1]}`,
-				true,
-			);
+			this.logger
+				.error`No port available in the configured range ${this.portRange[0]}-${this.portRange[1]}`;
 			this.serverStatus.text = "$(alert) CAS Server: No port available!";
 			return;
 		}
@@ -182,18 +185,19 @@ export class LocalServerCASDatabase extends CASDatabase {
 			reject: rejectStart,
 		} = Promise.withResolvers<void>();
 		this.serverProcess = runCommand(this.settings.casServer, args, {
-			onOutput(output) {
+			onOutput: (output) => {
 				if (output.includes("already in use")) {
-					error("Port already in use");
+					this.serverLogger.error("Port already in use");
 					rejectStart("Port already in use");
 				}
 				if (output.includes("Start")) {
 					confirmStart();
 				}
-				srvLog(output);
+				this.serverLogger.debug`Server output: ${output}`;
 			},
 		});
-		srvLog(`cas.Database start ${this.settings.casServer} ${args.join(" ")}`);
+		this.serverLogger
+			.debug`Starting server: ${this.settings.casServer} ${args.join(" ")}`;
 		try {
 			await Promise.all([
 				withAbort(this.serverProcess.started, AbortSignal.timeout(2000)),
@@ -203,14 +207,14 @@ export class LocalServerCASDatabase extends CASDatabase {
 				),
 			]);
 		} catch (e) {
-			error(`failed starting CAS Server: ${e}`);
+			this.logger.error`Failed starting CAS Server: ${e}`;
 			setImmediate(this.serverProcess.kill);
 			if ((iteration ?? 0) > 5) {
-				error(`failed starting CAS Server after 5 tries: ${e}`, true);
+				this.logger.error`failed starting CAS Server after 5 tries: ${e}`;
 				throw e;
 			}
 			await sleep(500 * 2 ** (iteration ?? 0));
-			debug("attemting to start the server again");
+			this.logger.debug("attemting to start the server again");
 			return this.start((iteration ?? 0) + 1);
 		}
 		this.serverUrl = new URL(url);
@@ -224,38 +228,41 @@ export class LocalServerCASDatabase extends CASDatabase {
 	async stop(): Promise<void> {
 		this.resetStatus();
 		if (this.serverProcess !== undefined) {
-			debug("[cas.CASDatabase] stop() Stopping server");
+			this.logger.debug`Stopping server`;
 			try {
 				const signal = await withAbort(
 					this.serverProcess.kill("SIGINT"),
 					AbortSignal.timeout(250),
 				).catch(() =>
-					setImmediate(() => this.serverProcess?.kill("SIGKILL").catch(debug)),
+					setImmediate(() =>
+						this.serverProcess?.kill("SIGKILL").catch(this.serverLogger.debug),
+					),
 				);
-				debug(signal);
+				this.logger.debug`Server stopped with signal: ${signal}`;
 			} catch (e) {
-				warn(`error stopping server: ${e}`);
+				this.logger.warn`Error stopping server: ${e}`;
 			}
 			if (
 				await withAbort(
 					this.serverProcess.finished,
 					AbortSignal.timeout(100),
-				).catch((e) =>
-					debug(`server process not finished before timeout: ${e}`),
+				).catch(
+					(e) =>
+						this.logger.debug`Server process not finished before timeout: ${e}`,
 				)
 			) {
-				debug("[cas.CASDatabase] stop() terminated");
+				this.logger.debug`Server terminated`;
 				this.serverProcess = undefined;
 			}
 			this.serverUrl = undefined;
 		}
 	}
 	async switchFtdb(): Promise<void> {
-		debug("[cas.CASDatabase] SWITCH FTDB");
+		this.logger.debug`Switching FTDB`;
 		const reqUrl = `${this.serverUrl}/reload_ftdb?path=${this.ftPath?.path}&debug=true`;
-		debug(`[cas.CASDatabase] url ${reqUrl}`);
-		const res = await fetch(reqUrl, { signal: this.abort });
-		debug(await res.text());
+		this.logger.debug`Request URL: ${reqUrl}`;
+		const res = await http.get(reqUrl, { signal: this.abort });
+		this.logger.debug`Response: ${await res.text()}`;
 	}
 	// runRawCmd(cmd: string, streaming: true): Promise<ReadableStream<string>>;
 	// runRawCmd(cmd: string, streaming: false): Promise<string>;
@@ -280,9 +287,9 @@ export class LocalServerCASDatabase extends CASDatabase {
 		const search = new URLSearchParams(query.split("?", 2).at(1) ?? query);
 		const reqUrl = new URL(query, this.serverUrl);
 		reqUrl.search = search.toString();
-		debug(`[cas.CASDatabase] UrlBackend.runQuery '${reqUrl}'`);
+		this.logger.debug`Running query: ${reqUrl}`;
 		try {
-			const res = await fetch(reqUrl, { signal: this.abort });
+			const res = await http.get(reqUrl, { signal: this.abort });
 			if (!res.ok) {
 				const data = (await res.json()) as CASResult;
 				if (data.ERROR) {

@@ -1,8 +1,8 @@
 import { homedir } from "os";
-import { dirname, parse, relative, sep } from "path";
+import { parse, sep } from "path";
 import QuickLRU from "quick-lru";
 import { Range, Uri, WorkspaceFolder, window, workspace } from "vscode";
-import { currentFilePath, relativePath } from "./helpers";
+import { relativePath } from "./helpers";
 
 export type Substitution =
 	| string

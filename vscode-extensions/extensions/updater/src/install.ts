@@ -1,7 +1,8 @@
 //@ts-ignore
 import contentTypes from "inline:../media/contentTypes.xml";
+import { getLogger, type Logger } from "@logtape/logtape";
 import { FS, fs, ZipDirectoryEntry, ZipFileEntry } from "@zip.js/zip.js";
-import { open, stat } from "fs/promises";
+import { stat } from "fs/promises";
 import { join } from "path/posix";
 import { ReadableStream } from "stream/web";
 import {
@@ -14,8 +15,6 @@ import {
 	window,
 	workspace,
 } from "vscode";
-import { Logger } from "winston";
-import { getLogger } from "./logger";
 
 const { readDirectory, readFile } = workspace.fs;
 

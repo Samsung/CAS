@@ -1,4 +1,3 @@
-import languages from "$lib/og/languages.json";
 import {
 	transformerRemoveLineBreak,
 	transformerRenderWhitespace,
@@ -8,6 +7,7 @@ import { extname } from "pathe";
 import QuickLRU from "quick-lru";
 import type { HighlighterCore } from "shiki";
 import { type ShikiTransformer } from "shiki/core";
+import languages from "$lib/og/languages.json";
 import { highlighter } from "./shiki-bundle";
 
 export function transformerHideFarLines(

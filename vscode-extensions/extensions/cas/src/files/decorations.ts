@@ -2,13 +2,11 @@ import { FileType } from "@cas/types/bas.js";
 import {
 	Event,
 	EventEmitter,
-	ExtensionContext,
 	FileDecoration,
 	FileDecorationProvider,
 	ThemeColor,
 	Uri,
 } from "vscode";
-import { DBProvider } from "../db";
 import { FileData } from "./file_data";
 
 const fileColors: Record<FileType, ThemeColor | undefined> = {

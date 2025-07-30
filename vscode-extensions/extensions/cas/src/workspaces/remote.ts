@@ -4,21 +4,24 @@
  * Handles connections to a remote workspaces
  */
 
+import { Manifest } from "@cas/manifest";
+import { getLogger } from "@logtape/logtape";
+import { commands, ExtensionContext, env, Uri, workspace } from "vscode";
+import { ManifestSettings } from "./manifest";
+
+const logger = getLogger(["CAS", "workspace", "remote"]);
+
 import { homedir } from "node:os";
 import { normalize } from "node:path";
-import { dirname, extname } from "node:path/posix";
+import { dirname } from "node:path/posix";
 import {
 	decodeText,
 	encodeText,
 	withLeadingSlash,
 	withTrailingSlash,
 } from "@cas/helpers";
-import { Manifest } from "@cas/manifest";
 import { encode as encodeBase64 } from "@protobufjs/base64";
 import { parse as sshParse, stringify } from "ssh-config";
-import { commands, ExtensionContext, env, Uri, workspace } from "vscode";
-import { debug, info } from "../logger";
-import { ManifestSettings } from "./manifest";
 
 interface HostInfo {
 	hostname: string;
@@ -183,11 +186,9 @@ export class RemoteConnctionManager {
 	 * Check for SSH workspace state setting and configure the workspace if necessary
 	 */
 	public async checkSSHState() {
-		debug(
-			`remote name: ${env.remoteName} remote authority: ${env.remoteAuthority}`,
-		);
+		logger.debug`remote name: ${env.remoteName} remote authority: ${env.remoteAuthority}`;
 		if (!env.remoteName) {
-			debug("[cas.remote] workspace is local - skipping remote data check");
+			logger.debug`Workspace is local - skipping remote data check`;
 			return;
 		}
 		for (const folder of workspace.workspaceFolders ?? []) {
@@ -197,12 +198,11 @@ export class RemoteConnctionManager {
 			if (!state || !Object.keys(state).length) {
 				continue;
 			}
-			info(
-				`[cas.remote] Loaded SSH workspace for the first time for ${folder.name} (at ${folder.uri.toString()})`,
+			logger.info`Loaded SSH workspace for the first time for ${folder.name} (at ${folder.uri.toString()})`;
+			logger.debug(
+				(l) => l`Loaded manifest: ${JSON.stringify(state, null, 2)}`,
 			);
-			debug(`[cas.remote] Loaded manifest: ${JSON.stringify(state, null, 2)}`);
-			this.#manifest.parseManifestObject(state);
-
+			this.#manifest.parseManifestObject(state) ?? undefined;
 			// move state to workspace-local
 			await this.#ctx.workspaceState.update(
 				`ssh-state.${env.remoteName}.${env.remoteAuthority}`,
@@ -219,14 +219,14 @@ export class RemoteConnctionManager {
 		const localState = this.#ctx.workspaceState.get(
 			`ssh-state.${env.remoteName}.${env.remoteAuthority}`,
 		);
-		debug(
-			`[cas.remote] Loaded local manifest: ${JSON.stringify(localState, null, 2)}`,
+		logger.debug(
+			(l) => l`Loaded local manifest: ${JSON.stringify(localState, null, 2)}`,
 		);
 		if (localState && Object.keys(localState).length) {
-			info("[cas.remote] Loaded SSH workspace from local state");
-			this.#manifest.parseManifestObject(localState);
+			logger.info`Loaded SSH workspace from local state`;
+			this.#manifest.parseManifestObject(localState) ?? undefined;
 		}
-		debug("[cas.remote] No SSH state found");
+		logger.debug`No SSH state found`;
 	}
 	private normalizePath(path: string) {
 		return withLeadingSlash(

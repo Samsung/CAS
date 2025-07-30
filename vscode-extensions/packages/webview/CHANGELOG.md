@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/compare/webview-v0.1.4...webview-v0.1.5) (2025-07-18)
+
+
+### Features
+
+* open telemetry ([73b3dce](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/commit/73b3dce2c4a3d74a8a928b1ee35b55e7cc44355f))
+* opentelemetry ([#140](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/issues/140)) ([73b3dce](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/commit/73b3dce2c4a3d74a8a928b1ee35b55e7cc44355f))
+
 ## [0.1.4](github.sec.samsung.net/CO7-SRPOL-Mobile-Security/cas-vscode-extension/compare/webview-v0.1.3...webview-v0.1.4) (2025-06-17)
 
 

@@ -1,9 +1,6 @@
-import {
-	testAccess,
-	withLeadingSlash,
-	withoutLeadingSlash,
-} from "@cas/helpers";
+import { withLeadingSlash, withoutLeadingSlash } from "@cas/helpers";
 import { http } from "@cas/http";
+import { getLogger } from "@logtape/logtape";
 import { getElementById } from "domutils";
 import { ElementType, parseDocument } from "htmlparser2";
 import { dirname, join } from "path";
@@ -21,7 +18,6 @@ import {
 	workspace,
 } from "vscode";
 import { CancellationToken } from "vscode-languageclient";
-import { debug, error, warn } from "../logger";
 import { Settings } from "../settings";
 import { ManifestSettings } from "../workspaces/manifest";
 import { OGDefinitionProvider } from "./definitions";
@@ -36,6 +32,7 @@ export class OpenGrokApi {
 	readonly #ctx: ExtensionContext;
 	readonly #s: Settings;
 	readonly #manifest: ManifestSettings;
+	readonly #logger = getLogger(["CAS", "OG", "api"]);
 
 	get url() {
 		try {
@@ -110,7 +107,7 @@ export class OpenGrokApi {
 					password: true,
 				});
 				if (apiKey !== undefined) {
-					debug(`changed API Key for ${this.#s.OGUrl}`);
+					this.#logger.debug`Changed API Key for ${this.#s.OGUrl}`;
 					await this.setApiKey(apiKey);
 				}
 			}),
@@ -160,7 +157,7 @@ export class OpenGrokApi {
 			signal,
 		});
 		if (!results.ok) {
-			warn(`search failed: ${results.status} ${results.statusText}`);
+			this.#logger.warn`Search failed: ${results.status} ${results.statusText}`;
 			return {
 				time: 0,
 				resultCount: 0,
@@ -172,10 +169,11 @@ export class OpenGrokApi {
 		try {
 			const data = await results.json();
 			const ogResults = v.parse(OGSearchResults, data);
-			debug(`found ${ogResults.resultCount} results in ${ogResults.time}ms`);
+			this.#logger
+				.debug`Found ${ogResults.resultCount} results in ${ogResults.time}ms`;
 			return ogResults;
 		} catch (e) {
-			error(`failed parsing results: ${e}`);
+			this.#logger.error`Failed parsing results: ${e}`;
 			return {
 				time: 0,
 				resultCount: 0,

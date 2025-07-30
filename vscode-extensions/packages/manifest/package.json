@@ -21,15 +21,15 @@
     "devDependencies": {
         "@cas/tsconfig": "workspace:*",
         "@types/node": "catalog:",
-        "@types/vscode": "^1.101.0",
+        "@types/vscode": "^1.101",
         "esbuild": "catalog:",
         "typescript": "catalog:",
-        "winston": "^3.17.0"
+        "winston": "catalog:"
     },
     "license": "Apache-2.0",
     "dependencies": {
         "@cas/vscode-variables": "workspace:*",
-        "@valibot/to-json-schema": "^1.1.0",
-        "valibot": "1.1.0"
+        "@valibot/to-json-schema": "catalog:",
+        "valibot": "catalog:"
     }
 }

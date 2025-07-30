@@ -1,0 +1,53 @@
+{
+  "name": "@cas/telemetry",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm watch",
+    "watch": "pnpm run --stream \"/^watch:.*$/\"",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --preserveWatchOutput --noEmit --watch --project tsconfig.json",
+    "build": "node esbuild.js",
+    "check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/http.js"
+    }
+  },
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "devDependencies": {
+    "@cas/helpers": "workspace:*",
+    "@cas/tsconfig": "workspace:*",
+    "@types/cacache": "catalog:",
+    "@types/node": "catalog:",
+    "@types/vscode": "^1.101",
+    "esbuild": "catalog:",
+    "typescript": "catalog:",
+    "winston": "catalog:"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@logtape/otel": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/api-logs": "catalog:",
+    "@opentelemetry/auto-instrumentations-node": "catalog:",
+    "@opentelemetry/exporter-logs-otlp-grpc": "catalog:",
+    "@opentelemetry/exporter-logs-otlp-http": "catalog:",
+    "@opentelemetry/exporter-metrics-otlp-grpc": "catalog:",
+    "@opentelemetry/exporter-metrics-otlp-http": "catalog:",
+    "@opentelemetry/exporter-prometheus": "catalog:",
+    "@opentelemetry/exporter-trace-otlp-grpc": "catalog:",
+    "@opentelemetry/exporter-trace-otlp-http": "catalog:",
+    "@opentelemetry/sdk-logs": "catalog:",
+    "@opentelemetry/sdk-metrics": "catalog:",
+    "@opentelemetry/sdk-node": "catalog:",
+    "@opentelemetry/sdk-trace-node": "catalog:",
+    "add": "catalog:",
+    "cacache": "catalog:",
+    "ky": "catalog:",
+    "remove": "catalog:"
+  }
+}

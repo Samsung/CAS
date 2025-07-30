@@ -1,32 +1,13 @@
-import { Profiler } from "node:inspector/promises";
-import { basename } from "node:path";
-import { batchProcess, MaybePromise, queueProcess } from "@cas/helpers";
-import { SimpleQueue } from "@cas/helpers/queue.js";
-import { Eid, Peid, Process } from "@cas/types/bas.js";
-import {
-	CASChildrenResult,
-	CASResult,
-	CASSuccessResults,
-} from "@cas/types/cas_server.js";
+import { MaybePromise } from "@cas/helpers";
+import { CasTelemetryLogger, getTelemetryLoggerFor } from "@cas/telemetry";
+import { Eid, Process } from "@cas/types/bas.js";
 import type { CasApiEvent } from "@cas/types/webview.js";
-import type {
-	IComputedNode,
-	ILocation,
-	IProfileModel,
-} from "@opliko/vscode-js-profile-core/cpu/model.js";
+import { getLogger } from "@logtape/logtape";
 import * as v from "valibot";
-import {
-	commands,
-	ExtensionContext,
-	Uri,
-	ViewColumn,
-	WebviewPanel,
-} from "vscode";
+import { commands, ExtensionContext, ViewColumn, WebviewPanel } from "vscode";
 import { DBProvider } from "../db";
-import { OGSearchQuery, OGSearchQuerySchema, OpenGrokApi } from "../og";
 import { Settings } from "../settings";
-import { CasTelemetryLogger, getTelemetryLoggerFor } from "../telemetry";
-import { createWebviewPanel, SvelteWebviewPanel } from "../webview";
+import { createWebviewPanel } from "../webview";
 
 interface ProcessWithChildren extends Omit<Process, "children"> {
 	children: number | ProcessWithChildren[];
@@ -42,6 +23,7 @@ export class FlamegraphView {
 	readonly #s: Settings;
 	readonly #telemetry: CasTelemetryLogger;
 	readonly #dbProvider: DBProvider;
+	readonly #logger = getLogger(["CAS", "view", "flamegraph"]);
 	constructor(
 		context: ExtensionContext,
 		settings: Settings,

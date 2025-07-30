@@ -1,17 +1,18 @@
+import { ExporterType } from "@cas/telemetry";
 import { resolve } from "@cas/vscode-variables";
+import { getLogger } from "@logtape/logtape";
 import { execSync } from "child_process";
 import { existsSync, realpathSync } from "fs";
 import { cpus } from "os";
 import { dirname, normalize } from "path";
-import { keyof } from "valibot";
 import * as vscode from "vscode";
 import { DBInfo } from "./db/index";
 import { Snippets } from "./db/snippets";
-import { debug } from "./logger";
 
 export class Settings {
 	readonly context: vscode.ExtensionContext;
 	readonly id = "cas";
+	private logger = getLogger(["CAS", "settings"]);
 
 	//#region initialization
 	constructor(context: vscode.ExtensionContext) {
@@ -58,7 +59,7 @@ export class Settings {
 					serverCmd,
 					vscode.ConfigurationTarget.Global,
 				).then(() => {
-					debug(`[cas.Settings] guessed cas.server = ${serverCmd}`);
+					this.logger.debug`Guessed cas.server: ${serverCmd}`;
 				});
 			}
 		}
@@ -67,12 +68,13 @@ export class Settings {
 			Snippets.init(this.context).set(name, command);
 		}
 
-		debug(`[cas.Settings] isGenerated       = ${this.isGenerated}`);
-		debug(`[cas.Settings] cas.basDatabase   = ${JSON.stringify(this.basDB)}`);
-		debug(`[cas.Settings] cas.basDatabases  = ${JSON.stringify(this.basDBs)}`);
-		debug(`[cas.Settings] cas.ftdbDatabase  = ${JSON.stringify(this.FTDB)}`);
-		debug(`[cas.Settings] cas.ftdbDatabases = ${JSON.stringify(this.FTDBs)}`);
-		debug(`[cas.Settings] cas.server        = ${this.casServer}`);
+		this.logger.debug`Settings initialized`;
+		this.logger.debug`isGenerated: ${this.isGenerated}`;
+		this.logger.debug`basDatabase: ${this.basDB}`;
+		this.logger.debug`basDatabases: ${this.basDBs}`;
+		this.logger.debug`ftdbDatabase: ${this.FTDB}`;
+		this.logger.debug`ftdbDatabases: ${this.FTDBs}`;
+		this.logger.debug`server: ${this.casServer}`;
 	}
 
 	//#region generic get/set
@@ -239,6 +241,22 @@ export class Settings {
 		return this.get("useRemoteBase", true);
 	}
 
+	public get telemetryProvider(): ExporterType {
+		const value = this.get<string>("telemetryProvider", "console");
+		switch (value.toLowerCase()) {
+			case "otlp": {
+				return ExporterType.OTLP;
+			}
+			case "prometheus": {
+				return ExporterType.Prometheus;
+			}
+			case "console":
+			default: {
+				return ExporterType.Console;
+			}
+		}
+	}
+
 	//#region guessed settings
 	public guessCASBin(): string | undefined {
 		try {
@@ -307,7 +325,7 @@ export class Settings {
 			await this.set("server", ccl, vscode.ConfigurationTarget.Global);
 		}
 
-		debug(`[cas.Settings] CAS server selected ${this.casServer}`);
+		this.logger.debug`CAS server selected: ${this.casServer}`;
 	}
 	//#endregion
 }

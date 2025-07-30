@@ -1,0 +1,19 @@
+CAS VSCode Extensions, part of the Code Aware Services (CAS) suite
+Copyright (C) 2025 Samsung Electronics Co., Ltd.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Additionally:
+Some files used in this project were taken from Microsoft Visual Studio Code project and are licensed by Microsoft under the MIT license. These files are:
+- extensions/*/src/proposedApis/*.d.ts - used in the build phase only
+- packages/webview/src/lib/vscode.ts - based on code from https://github.com/microsoft/vscode-webview-ui-toolkit-samples/

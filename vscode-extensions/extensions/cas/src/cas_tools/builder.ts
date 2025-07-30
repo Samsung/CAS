@@ -1,5 +1,6 @@
 import { isSubpath } from "@cas/helpers";
 import { CompCommandEntry, CompCommands } from "@cas/types/bas.js";
+import { getLogger } from "@logtape/logtape";
 import { createWriteStream, existsSync, readFileSync } from "fs";
 import * as path from "path";
 import { join } from "shlex";
@@ -8,11 +9,9 @@ import {
 	LanguageClient,
 	LanguageClientOptions,
 	ServerOptions,
-	Trace,
 	TransportKind,
 } from "vscode-languageclient/node";
 import { DBProvider } from "../db";
-import { debug } from "../logger";
 import { Settings } from "../settings";
 
 export class Builder implements vscode.Disposable {
@@ -21,6 +20,7 @@ export class Builder implements vscode.Disposable {
 	db: DBProvider;
 	client: LanguageClient | undefined = undefined;
 	name = "CAS Build Verifier";
+	private readonly logger = getLogger(["CAS", "tools", "builder"]);
 
 	constructor(
 		context: vscode.ExtensionContext,
@@ -30,7 +30,7 @@ export class Builder implements vscode.Disposable {
 		this.s = settings;
 		this.ctx = context;
 		this.db = db;
-		debug("[cas.cas_tools.Builder] - ctor");
+		this.logger.debug`Initializing Builder`;
 
 		let serverModule = context.asAbsolutePath(
 			path.join("dist", "cas_tools", "build_server.js"),
@@ -77,7 +77,7 @@ export class Builder implements vscode.Disposable {
 		this.client.registerProposedFeatures();
 		this.client.start();
 
-		debug("[cas.cas_tools.Builder] - DONE");
+		this.logger.debug`Builder initialization complete`;
 		if (this.client) {
 			context.subscriptions.push(
 				vscode.commands.registerCommand("cas.verify.workspace", () => {
@@ -133,17 +133,17 @@ export class Builder implements vscode.Disposable {
 							`Analysis finished in ${new Date(timeMs).toISOString().slice(11, 19)}`,
 						);
 					});
-				debug(`[cas.cas_tools.Builder] - verifySingle FINISHED`);
+				this.logger.debug`Single file verification completed`;
 			},
 		);
 	}
 
 	async verifyWorkspace() {
-		debug("[cas.cas_tools.Builder] - checkAllCommands");
+		this.logger.debug`Starting workspace verification`;
 		const compCommandsFile: vscode.Uri | undefined =
 			await this.getCompCommandsFilename();
 		if (compCommandsFile) {
-			debug(`[cas.cas_tools.Builder] - Loading ${compCommandsFile} ...`);
+			this.logger.debug`Loading compile commands from ${compCommandsFile}`;
 			let comps = JSON.parse(
 				readFileSync(compCommandsFile.fsPath, "utf-8").replaceAll(
 					"${workspaceFolder}",
@@ -151,7 +151,7 @@ export class Builder implements vscode.Disposable {
 				),
 			).map((a: any) => path.normalize(a.file));
 			if (comps) {
-				debug(`[cas.cas_tools.Builder] - ${compCommandsFile} Loaded`);
+				this.logger.debug`Compile commands loaded successfully`;
 
 				await vscode.window.withProgress(
 					{
@@ -177,7 +177,7 @@ export class Builder implements vscode.Disposable {
 									`Analysis finished in ${new Date(timeMs).toISOString().slice(11, 19)}`,
 								);
 							});
-						debug(`[cas.cas_tools.Builder] - FINISHED`);
+						this.logger.debug`Workspace verification completed`;
 					},
 				);
 			} else {
@@ -208,11 +208,11 @@ export class Builder implements vscode.Disposable {
 	}
 
 	async generateScriptSh(uri?: vscode.Uri) {
-		debug("[cas.cas_tools.Builder] - generateScriptSh");
+		this.logger.debug`Generating shell script`;
 		const compCommandsFile: vscode.Uri | undefined =
 			await this.getCompCommandsFilename();
 		if (compCommandsFile) {
-			debug(`[cas.cas_tools.Builder] - Loading ${compCommandsFile} ...`);
+			this.logger.debug`Loading compile commands from ${compCommandsFile}`;
 			let wsdir = Settings.getWorkspaceDir();
 			let comps: CompCommands = JSON.parse(
 				readFileSync(compCommandsFile.fsPath, "utf-8").replaceAll(
@@ -238,16 +238,18 @@ export class Builder implements vscode.Disposable {
 						`cd ${comp.directory} && ${cmd} || echo "***${comp.file} - FAIL**"\n\n`,
 					);
 				});
-			debug("generateScriptSh DONE");
+			this.logger.debug`Shell script generation completed`;
 		}
 	}
 
 	async generateScriptMk(uri?: vscode.Uri) {
-		debug("[cas.cas_tools.Builder] - generateScriptMk");
+		this.logger.debug`Generating makefile`;
 		const compCommandsFile: vscode.Uri | undefined =
 			await this.getCompCommandsFilename();
 		if (compCommandsFile) {
-			debug(`[cas.cas_tools.Builder] - Loading ${compCommandsFile} ...`);
+			this.logger.debug(
+				(l) => l`Loading compile commands from ${compCommandsFile}`,
+			);
 			let wsdir = Settings.getWorkspaceDir();
 			let comps: CompCommands = JSON.parse(
 				readFileSync(compCommandsFile.fsPath, "utf-8").replaceAll(
@@ -282,7 +284,7 @@ export class Builder implements vscode.Disposable {
 					`comp_${index}:\n\t@(cd ${comp.directory} && ${cmd} )\n\n`,
 				);
 			}
-			debug("generateScriptMk DONE");
+			this.logger.debug`Makefile generation completed`;
 		}
 	}
 }
