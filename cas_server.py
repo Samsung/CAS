@@ -3,11 +3,17 @@ from contextlib import asynccontextmanager
 from copy import copy
 from enum import Enum
 import os
+from enum import Enum
+import os
 import sys
 
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field, RootModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from fastapi_lifespan_manager import LifespanManager, State
 
 try:
     import libetrace as _
@@ -18,7 +24,7 @@ except ModuleNotFoundError:
 
 from argparse import Namespace
 from functools import lru_cache
-from typing import Annotated, Any, Dict, List, Optional, Literal
+from typing import Annotated, Any, Dict, List, Optional, Literal, AsyncIterator
 from typing_extensions import TypedDict
 
 from os import path
@@ -44,13 +50,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
 
-app = FastAPI()
+args: Namespace = Namespace()
+dbs: DBProvider = DBProvider()
+
+lifespan_manager = LifespanManager()
+app = FastAPI(lifespan=lifespan_manager)
 
 static = StaticFiles(directory="client/static")
 app.mount("/static", static, name="static")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@lifespan_manager.add
+async def lifespan(app: FastAPI) -> AsyncIterator[State]:
     # until https://github.com/fastapi/fastapi/issues/1773 is fixed
     for route in app.routes:
         if isinstance(route, APIRoute) and "GET" in route.methods:
@@ -58,7 +68,11 @@ async def lifespan(app: FastAPI):
             new_route.methods = {"HEAD", "OPTIONS"}
             new_route.include_in_schema = False
             app.routes.append(new_route)
-    yield
+    yield {}
+
+@lifespan_manager.add
+async def lifespan(server) -> AsyncIterator[State]:
+    yield {"dbs": dbs}
 
 cas_router = APIRouter(lifespan=lifespan)
 
@@ -71,10 +85,6 @@ bool_args = [ "commands", "show-commands", "details", "t", "cdm", "compilation-d
              "sorted", "sort", "s", "reverse", "relative", "R", "generate", "makefile", "all", "openrefs", "static", "cdb", "download", "proc-tree", "deps-tree",
              "body", "ubody", "declbody", "definition", "skip-linked", "skip-objects", "skip-asm", "deep-comps" ]
 
-args: Namespace = Namespace()
-
-
-dbs: DBProvider = DBProvider()
 
 
 def translate_to_cmdline(url: str, query_str:str, ctx: str, db: str) -> List[str]:
@@ -313,7 +323,7 @@ templates.env.globals["relative_url_for"] = relative_url_for
 
 
 @cas_router.get('/reload_ftdb')
-def reload_ftdb(path: Annotated[str, Query(description="Path the the database file to load")], db: str = ""):
+def reload_ftdb(path: Annotated[str, Query(description="Path of the database file to load")], db: str = ""):
     """Reloads the ftdb database from a new image file"""
     dbs.switch_ftdb(db, path)
     return "DB reloaded"
@@ -860,6 +870,18 @@ def get_app(arg: Namespace | None = None, is_test=False):
     if args.debug:
         print("Debug mode ON")
         app.debug = args.debug
+    if args.mcp or bool(os.environ.get("CAS_MCP", False)):
+        from cas_mcp import mcp
+        streamable = mcp.http_app(transport="streamable-http", path="/")
+        lifespan_manager.add(streamable.lifespan)
+        sse = mcp.http_app(transport="sse", path="/")
+        lifespan_manager.add(sse.lifespan)
+
+        app.mount("/mcp/http", streamable)
+        app.mount("/mcp/sse", sse)
+        if args.dbs:
+            app.mount("/{db}/mcp/http", streamable)
+            app.mount("/{db}/mcp/sse", sse)
     args.ctx  = args.ctx.removesuffix("/")
     app.root_path = args.ctx
     app.include_router(cas_router, prefix="/{db}" if args.dbs else "")
@@ -868,8 +890,8 @@ def get_app(arg: Namespace | None = None, is_test=False):
 def parse_server_args(argv = None):
     global args
     arg_parser = argparse.ArgumentParser(description="CAS server arguments")
-    arg_parser.add_argument("--port", "-p", type=int, default=8080, help="server port")
-    arg_parser.add_argument("--host", type=str, default="127.0.0.1", help="server address")
+    arg_parser.add_argument("--port", "-p", type=int, default=os.environ.get("CAS_PORT", 8080), help="server port")
+    arg_parser.add_argument("--host", type=str, default=os.environ.get("CAS_HOST", "127.0.0.1"), help="server address")
     arg_parser.add_argument("--casdb", type=str, default=os.environ.get("CAS_DB", None), help="server nfsdb")
     arg_parser.add_argument("--ftdb", type=str, default=os.environ.get("CAS_FTDB", None), help="server ftdb")
     arg_parser.add_argument("--debug", action="store_true", help="debug mode")
@@ -878,7 +900,7 @@ def parse_server_args(argv = None):
     arg_parser.add_argument("--ftd", type=str, default=os.environ.get("CAS_FTDBS", None), help="Ftdb directory (subdirs match database names)")
     arg_parser.add_argument("--ctx", type=str, default=os.environ.get("CAS_CTX", "/"), help="Web context")
     arg_parser.add_argument("--workers", type=int, default=os.environ.get("WEB_CONCURRENCY", os.cpu_count() or 1), help="Number of worker processes to run")
-
+    arg_parser.add_argument("--mcp", action="store_true", help="Enable CAS MCP server under `/mcp` and `/sse` endpoints")
     args, unknown = arg_parser.parse_known_args(argv)
     return args, unknown
 def run(args=None):
