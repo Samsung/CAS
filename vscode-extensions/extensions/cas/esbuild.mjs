@@ -1,3 +1,7 @@
+/*
+Modified from code from https://code.visualstudio.com/api/working-with-extensions/bundling-extension
+Original licensed under the MIT License Copyright © 2025 Microsoft
+*/
 import esbuild from "esbuild";
 import copy from "esbuild-plugin-cp";
 import inlineImportPlugin from 'esbuild-plugin-inline-import';

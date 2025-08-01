@@ -10,18 +10,8 @@ const stringWithVariables = v.pipe(v.string(), v.transform(resolve));
 const url = v.pipe(stringWithVariables, v.url());
 const urlOrIp = v.union([
 	url,
-	v.pipe(
-		stringWithVariables,
-		v.regex(
-			/(?:(?:[1-9]|1\d|2[0-4])?\d|25[0-5])(?:\.(?:(?:[1-9]|1\d|2[0-4])?\d|25[0-5])){3}(:\d+)?/,
-		),
-	),
-	v.pipe(
-		stringWithVariables,
-		v.regex(
-			/\[?(?:(?:[\da-f]{1,4}:){7}[\da-f]{1,4}|(?:[\da-f]{1,4}:){1,7}:|(?:[\da-f]{1,4}:){1,6}:[\da-f]{1,4}|(?:[\da-f]{1,4}:){1,5}(?::[\da-f]{1,4}){1,2}|(?:[\da-f]{1,4}:){1,4}(?::[\da-f]{1,4}){1,3}|(?:[\da-f]{1,4}:){1,3}(?::[\da-f]{1,4}){1,4}|(?:[\da-f]{1,4}:){1,2}(?::[\da-f]{1,4}){1,5}|[\da-f]{1,4}:(?::[\da-f]{1,4}){1,6}|:(?:(?::[\da-f]{1,4}){1,7}|:)|fe80:(?::[\da-f]{0,4}){0,4}%[\da-z]+|::(?:f{4}(?::0{1,4})?:)?(?:(?:25[0-5]|(?:2[0-4]|1?\d)?\d)\.){3}(?:25[0-5]|(?:2[0-4]|1?\d)?\d)|(?:[\da-f]{1,4}:){1,4}:(?:(?:25[0-5]|(?:2[0-4]|1?\d)?\d)\.){3}(?:25[0-5]|(?:2[0-4]|1?\d)?\d))\]?(:\d+)?/,
-		),
-	),
+	v.pipe(stringWithVariables, v.regex(v.IPV4_REGEX)),
+	v.pipe(stringWithVariables, v.regex(v.IPV6_REGEX)),
 ]);
 const path = v.union([
 	v.pipe(

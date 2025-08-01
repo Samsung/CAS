@@ -17,3 +17,4 @@ Additionally:
 Some files used in this project were taken from Microsoft Visual Studio Code project and are licensed by Microsoft under the MIT license. These files are:
 - extensions/*/src/proposedApis/*.d.ts - used in the build phase only
 - packages/webview/src/lib/vscode.ts - based on code from https://github.com/microsoft/vscode-webview-ui-toolkit-samples/
+- {packages,extensions}/*/esbuild.{mjs,js} - based on code from https://code.visualstudio.com/api/working-with-extensions/bundling-extension 
